@@ -93,7 +93,8 @@ npm run dist   # Windows NSIS installer in dist/
 
 Packaging uses the runtime binaries in `resources/` and generates the required
 third-party notices. Published pre-releases are built by the release workflow
-and are currently unsigned; Windows will show an unknown-publisher warning. See [Binary setup](docs/binaries.md),
+and are currently unsigned; Windows will show an unknown-publisher warning. See
+[Binary setup](docs/binaries.md),
 [Licensing and notices](docs/licensing.md), and
 [Releasing](docs/releasing.md) for details.
 
