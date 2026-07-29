@@ -119,11 +119,16 @@ jobs:
             }
 
             $env:ELECTRON_RUN_AS_NODE = '1'
-            & $appExe `
-              (Join-Path $installDir 'resources\app.asar\out\main\smoke.js') `
-              (Join-Path $installDir 'resources')
-            if ($LASTEXITCODE -ne 0) {
-              throw "Packaged smoke check exited with code $LASTEXITCODE"
+            $smoke = Start-Process $appExe `
+              -ArgumentList @(
+                (Join-Path $installDir 'resources\app.asar\out\main\smoke.js'),
+                (Join-Path $installDir 'resources')
+              ) `
+              -Wait `
+              -PassThru `
+              -NoNewWindow
+            if ($smoke.ExitCode -ne 0) {
+              throw "Packaged smoke check exited with code $($smoke.ExitCode)"
             }
           } finally {
             Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
