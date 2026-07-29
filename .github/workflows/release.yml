@@ -2,8 +2,14 @@ name: Release
 
 on:
   push:
-    tags: ['v*.*.*']
+    tags: ["v*.*.*"]
   workflow_dispatch:
+    inputs:
+      create_release:
+        description: Create the version tag and a draft pre-release
+        required: true
+        default: false
+        type: boolean
 
 concurrency:
   group: release-${{ github.ref }}
@@ -14,9 +20,11 @@ permissions:
 
 jobs:
   build:
-    name: Build signed installer
+    name: Build unsigned installer
     runs-on: windows-latest
-    environment: release
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -36,20 +44,24 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "v$version"
 
           if ($env:REF_TYPE -eq 'tag') {
             if ($env:REF_NAME -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
               throw "Invalid release tag: $env:REF_NAME"
             }
-            if ($env:REF_NAME.Substring(1) -ne $version) {
+            if ($env:REF_NAME -ne $tag) {
               throw "Tag $env:REF_NAME does not match package.json version $version"
             }
             git merge-base --is-ancestor HEAD origin/main
             if ($LASTEXITCODE -ne 0) {
               throw 'The tagged commit is not in main history'
             }
+          } elseif ($env:REF_NAME -ne 'main') {
+            throw 'Manual release builds must run from main'
           }
 
+          "tag=$tag" >> $env:GITHUB_OUTPUT
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Install dependencies
@@ -57,16 +69,6 @@ jobs:
 
       - name: Fetch pinned runtime binaries
         run: npm run resources
-
-      - name: Require code signing credentials
-        shell: pwsh
-        env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
-        run: |
-          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
-            throw 'Code signing credentials are missing from the release environment'
-          }
 
       - name: Typecheck
         run: npm run typecheck
@@ -80,13 +82,12 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Build and sign installer
+      - name: Build unsigned installer
         env:
-          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist
 
-      - name: Verify installer signature
+      - name: Verify installer is unsigned
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -95,8 +96,8 @@ jobs:
             throw "Expected one installer, found $($installers.Count)"
           }
           $signature = Get-AuthenticodeSignature $installers[0].FullName
-          if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate) {
-            throw 'The installer is not validly signed and timestamped'
+          if ($signature.Status -ne 'NotSigned') {
+            throw "Expected an unsigned installer, found signature status $($signature.Status)"
           }
 
       - name: Smoke-test installed application
@@ -160,9 +161,11 @@ jobs:
           retention-days: 14
 
   publish:
-    name: Create draft release
+    name: Create draft pre-release
     needs: build
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: >-
+      (github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && inputs.create_release)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -183,14 +186,31 @@ jobs:
         with:
           subject-checksums: dist/SHA256SUMS.txt
 
-      - name: Create draft release
+      - name: Create draft pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          TAG: ${{ needs.build.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "$TAG" \
-            --draft \
-            --verify-tag \
-            --title "$TAG" \
-            --notes "Signed Windows installer. Automated packaged checks passed; complete the manual release checklist before publishing." \
-            dist/*.exe dist/SHA256SUMS.txt dist/*-notices.zip
+          cat > release-notes.md <<EOF
+          Kizuna $VERSION is an unsigned Windows pre-release.
+
+          Automated checks, packaged smoke tests, checksums, and build provenance passed.
+          Windows will show an unknown-publisher warning and may display Microsoft Defender SmartScreen.
+          EOF
+
+          args=(
+            release create "$TAG"
+            --draft
+            --prerelease
+            --title "$TAG"
+            --notes-file release-notes.md
+          )
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            args+=(--verify-tag)
+          else
+            args+=(--target "$TARGET_SHA")
+          fi
+          gh "${args[@]}" dist/*.exe dist/SHA256SUMS.txt dist/*-notices.zip
