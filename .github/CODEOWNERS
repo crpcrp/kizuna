@@ -1,3 +1,6 @@
+# Require the repository owner to review changes to every file.
+*                       @crpcrp
+
 # Sensitive repository, release, legal, and security configuration.
 /.github/workflows/     @crpcrp
 /electron-builder.cjs   @crpcrp
