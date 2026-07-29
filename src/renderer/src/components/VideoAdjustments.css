@@ -1,0 +1,109 @@
+/* Non-modal picture-adjustments panel. Colors come only from theme.css
+   semantic variables (test/renderer/themeCss.test.ts enforces this). */
+
+.video-adjustments {
+  position: absolute;
+  top: 48px;
+  right: 12px;
+  z-index: 40;
+  display: none;
+  width: 280px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: var(--surface-panel);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-panel);
+  font-size: 13px;
+}
+
+.video-adjustments.open {
+  display: block;
+}
+
+.video-adjustments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.video-adjustments-title {
+  font-weight: 600;
+}
+
+.video-adjustments-close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.video-adjustments-close:hover {
+  color: var(--text-primary);
+}
+
+.video-adjustments-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.video-adjustments-label {
+  flex: 0 0 78px;
+  color: var(--text-secondary);
+}
+
+.video-adjustments-slider {
+  flex: 1 1 auto;
+  accent-color: var(--accent);
+}
+
+.video-adjustments-value {
+  flex: 0 0 34px;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.video-adjustments-rotate {
+  flex: 1 1 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.video-adjustments-rotate:hover {
+  background: var(--control-hover-bg);
+}
+
+.video-adjustments-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.video-adjustments-reset {
+  padding: 4px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--control-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.video-adjustments-reset:hover:not(:disabled) {
+  background: var(--control-hover-bg);
+}
+
+.video-adjustments-reset:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}

@@ -1,0 +1,179 @@
+/* Menu bar: Media / Audio / Subtitle / Settings, each a themed dropdown. */
+#menu-bar {
+  display: flex;
+  align-items: stretch;
+  height: 32px;
+  border-top: 1px solid var(--border-subtle);
+}
+.menu {
+  position: relative;
+  display: flex;
+}
+.menu-title {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  padding: 0 14px;
+  cursor: pointer;
+}
+.menu-title:hover,
+.menu-title[aria-expanded='true'] {
+  background: var(--hover-bg);
+}
+
+/* Dropdown panel — themed, matching the bar (no native <select> white). */
+.menu-panel {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 200px;
+  max-height: 60vh;
+  overflow-y: auto;
+  z-index: 30;
+  padding: 4px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-menu);
+}
+.menu-panel.open {
+  display: block;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-item:hover:not([disabled]) {
+  background: var(--accent-selected-bg);
+}
+.menu-item[disabled] {
+  color: var(--text-disabled);
+  cursor: default;
+}
+.menu-item-check {
+  width: 1em;
+  flex-shrink: 0;
+  color: var(--accent-strong);
+}
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-subtle);
+}
+
+.menu-section-label {
+  padding: 4px 10px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+.menu-status {
+  padding: 4px 10px;
+  font-size: 0.9em;
+  color: var(--text-soft);
+}
+/* Online-subtitles row: language label grows, badge sits at the trailing edge. */
+.url-subtitle-item .menu-item-label {
+  flex: 1;
+}
+.url-subtitle-badge {
+  flex-shrink: 0;
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+.url-subtitle-badge[data-kind='auto'] {
+  color: var(--accent-strong);
+  border-color: var(--accent-border);
+}
+.url-subtitle-acquiring {
+  flex-shrink: 0;
+  margin-left: 6px;
+  color: var(--text-muted);
+}
+/* Online-subtitles language filter: a full-width search box pinned above the
+ * row list when the catalog is large. */
+.url-subtitle-filter-row {
+  padding: 6px 10px;
+}
+.url-subtitle-filter-row input {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--control-bg);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+.url-subtitle-filter-row input:focus {
+  border-color: var(--accent-border);
+  outline: none;
+}
+.menu-offset-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.menu-offset-label {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+.menu-offset-value {
+  flex: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.menu-offset-input {
+  width: 4.5em;
+  font: inherit;
+  color: inherit;
+  text-align: right;
+  background: var(--control-bg);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.menu-offset-input:focus {
+  border-color: var(--accent-border);
+  outline: none;
+}
+.menu-offset-row button {
+  font: inherit;
+  color: inherit;
+  background: var(--control-bg);
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.menu-offset-row button:hover:not([disabled]) {
+  background: var(--accent-selected-bg);
+}
+.menu-offset-row button[disabled] {
+  color: var(--text-disabled);
+  cursor: default;
+}
+.menu-offset-folder-button {
+  flex: 1;
+}
+#subtitle-offset-folder-row {
+  padding-top: 0;
+}

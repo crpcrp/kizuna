@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+out/
+dist/
+.vite/
+
+# Bundled binaries and first-party assets
+resources/
+
+# Prose docs stay hand-wrapped
+docs/
+*.md
+
+# Generated / machine-owned files
+package-lock.json
+test-results.log
+
+# Test fixtures are byte-for-byte inputs, not source
+test/fixtures/

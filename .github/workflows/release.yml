@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build signed installer
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          lfs: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Verify release ref
+        id: release
+        shell: pwsh
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+
+          if ($env:REF_TYPE -eq 'tag') {
+            if ($env:REF_NAME -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
+              throw "Invalid release tag: $env:REF_NAME"
+            }
+            if ($env:REF_NAME.Substring(1) -ne $version) {
+              throw "Tag $env:REF_NAME does not match package.json version $version"
+            }
+            git merge-base --is-ancestor HEAD origin/main
+            if ($LASTEXITCODE -ne 0) {
+              throw 'The tagged commit is not in main history'
+            }
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch pinned runtime binaries
+        run: npm run resources
+
+      - name: Require code signing credentials
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
+            throw 'Code signing credentials are missing from the release environment'
+          }
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
+
+      - name: Build and sign installer
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: npm run dist
+
+      - name: Verify installer signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installers = @(Get-ChildItem dist\*.exe)
+          if ($installers.Count -ne 1) {
+            throw "Expected one installer, found $($installers.Count)"
+          }
+          $signature = Get-AuthenticodeSignature $installers[0].FullName
+          if ($signature.Status -ne 'Valid' -or -not $signature.TimeStamperCertificate) {
+            throw 'The installer is not validly signed and timestamped'
+          }
+
+      - name: Smoke-test installed application
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = @(Get-ChildItem dist\*.exe)[0].FullName
+          $installDir = Join-Path $env:RUNNER_TEMP "kizuna-smoke-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $appExe = Join-Path $installDir 'kizuna.exe'
+          $uninstaller = Join-Path $installDir 'Uninstall Kizuna.exe'
+
+          try {
+            $install = Start-Process $installer -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+            if ($install.ExitCode -ne 0) {
+              throw "Installer exited with code $($install.ExitCode)"
+            }
+            if (-not (Test-Path $appExe -PathType Leaf)) {
+              throw "Installed executable is missing: $appExe"
+            }
+
+            $env:ELECTRON_RUN_AS_NODE = '1'
+            & $appExe `
+              (Join-Path $installDir 'resources\app.asar\out\main\smoke.js') `
+              (Join-Path $installDir 'resources')
+            if ($LASTEXITCODE -ne 0) {
+              throw "Packaged smoke check exited with code $LASTEXITCODE"
+            }
+          } finally {
+            Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+            if (Test-Path $uninstaller -PathType Leaf) {
+              Start-Process $uninstaller -ArgumentList '/S' -Wait
+            }
+            Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Create release assets
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          Compress-Archive -Path build\notices\* -DestinationPath "dist\kizuna-$env:VERSION-notices.zip"
+          $assets = Get-ChildItem dist\*.exe, dist\*-notices.zip | Sort-Object Name
+          $lines = foreach ($asset in $assets) {
+            "$((Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLower())  $($asset.Name)"
+          }
+          [System.IO.File]::WriteAllText(
+            "$PWD\dist\SHA256SUMS.txt",
+            (($lines -join "`n") + "`n"),
+            [System.Text.ASCIIEncoding]::new()
+          )
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kizuna-windows-release
+          path: |
+            dist/*.exe
+            dist/*-notices.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Create draft release
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kizuna-windows-release
+          path: dist
+
+      - name: Verify checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS.txt
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
+        with:
+          subject-checksums: dist/SHA256SUMS.txt
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --draft \
+            --verify-tag \
+            --title "$TAG" \
+            --notes "Signed Windows installer. Automated packaged checks passed; complete the manual release checklist before publishing." \
+            dist/*.exe dist/SHA256SUMS.txt dist/*-notices.zip

@@ -1,0 +1,108 @@
+name: Bug report
+description: Something in Kizuna behaves differently from what the documentation says.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report a security vulnerability here. Use
+        [private reporting](https://github.com/crpcrp/kizuna/security/advisories/new)
+        as described in
+        [SECURITY.md](https://github.com/crpcrp/kizuna/blob/main/SECURITY.md).
+
+        Do not paste API tokens or passwords or attach copyrighted video, audio,
+        or subtitle files. Describe the media or attach a short clip you made.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues and this is not already reported.
+          required: true
+        - label: This is not a security vulnerability.
+          required: true
+        - label: My report contains no secrets and no copyrighted media.
+          required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, and what you expected instead.
+      placeholder: |
+        Expected: the subtitle sidebar scrolls to the active cue.
+        Actual: it stays at the top until I click a cue manually.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: >
+        Numbered steps starting from a freshly launched app. If it only happens
+        with a particular file, describe the container and codecs rather than
+        attaching the file.
+      placeholder: |
+        1. Open a .mkv with two embedded ASS subtitle tracks.
+        2. Switch to the second track.
+        3. Seek past the halfway point.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where the problem appears. Guessing is fine.
+      options:
+        - Playback (mpv)
+        - Subtitles (parsing, display, sidebar)
+        - Tokenization (MeCab)
+        - Dictionary (Yomitan import or lookup)
+        - Anki / AnkiConnect
+        - WaniKani or knowledge levels
+        - Translation
+        - Install, packaging, or startup
+        - Something else / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Kizuna version or commit
+      description: The installer version, or the commit SHA if you built it yourself.
+      placeholder: 0.0.1, or commit abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver`.
+      placeholder: Windows 11 Pro 26200
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, errors, or screenshots
+      description: >
+        Include relevant output and redact private file paths or data.
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Relevant setup
+      description: >
+        Only include details that may matter, such as runtime binary versions,
+        the dictionary used, or whether Anki was running.
+    validations:
+      required: false

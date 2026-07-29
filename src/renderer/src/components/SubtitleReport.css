@@ -1,0 +1,212 @@
+/* ---- Subtitle report modal (Subtitle > Subtitle report…) ---- */
+#subtitle-report {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-backdrop);
+}
+#subtitle-report.open {
+  display: flex;
+}
+.subtitle-report-panel {
+  position: relative;
+  width: 640px;
+  max-width: 94vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.subtitle-report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+.subtitle-report-header button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px 10px;
+  line-height: 1;
+}
+.subtitle-report-header button:hover {
+  background: var(--hover-bg);
+}
+
+.subtitle-report-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.report-loading {
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+}
+.report-loading p {
+  margin: 0;
+}
+.report-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--text-primary);
+  border-radius: 50%;
+  animation: subtitle-report-spin 0.8s linear infinite;
+}
+
+@keyframes subtitle-report-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-loading-spinner {
+    animation-duration: 1.6s;
+  }
+}
+
+.report-totals {
+  font-weight: 600;
+}
+
+.report-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+.report-section + .report-section {
+  margin-top: 4px;
+}
+
+.report-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--hover-bg);
+  margin: 4px 0 10px;
+}
+.report-bar-segment[data-level='unknown'] {
+  background: var(--level-unknown);
+}
+.report-bar-segment[data-level='inDeck'] {
+  background: var(--level-in-deck);
+}
+.report-bar-segment[data-level='learning'] {
+  background: var(--level-learning);
+}
+.report-bar-segment[data-level='known'] {
+  background: var(--level-known);
+}
+.report-bar-segment[data-level='wellKnown'] {
+  background: var(--level-well-known);
+}
+
+.report-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 16px;
+  margin: 0;
+}
+.report-legend-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.report-legend-row dt {
+  font-weight: 600;
+}
+.report-legend-row dt::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.report-legend-row[data-level='unknown'] dt::before {
+  background: var(--level-unknown);
+}
+.report-legend-row[data-level='inDeck'] dt::before {
+  background: var(--level-in-deck);
+}
+.report-legend-row[data-level='learning'] dt::before {
+  background: var(--level-learning);
+}
+.report-legend-row[data-level='known'] dt::before {
+  background: var(--level-known);
+}
+.report-legend-row[data-level='wellKnown'] dt::before {
+  background: var(--level-well-known);
+}
+.report-legend-row dd {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.report-banner {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+}
+
+.report-error {
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger-text);
+}
+
+.report-provenance {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.report-deck-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.report-deck-table th,
+.report-deck-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.report-top-unknown {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}

@@ -1,0 +1,10 @@
+{
+  "id": "def456",
+  "title": "Auto only",
+  "subtitles": {},
+  "automatic_captions": {
+    "en": [
+      { "ext": "vtt", "url": "https://example.test/auto-en.vtt" }
+    ]
+  }
+}

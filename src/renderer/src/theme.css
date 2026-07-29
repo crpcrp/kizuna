@@ -1,0 +1,175 @@
+/* Semantic color tokens for both themes. This is the ONLY renderer stylesheet
+   allowed to contain raw color literals (enforced by
+   test/renderer/themeCss.test.ts) — every component stylesheet styles with
+   var(--…) so a theme switch is a pure variable swap.
+
+   `:root` carries the dark values, so the first paint (before the theme
+   controller stamps <html data-theme>) matches the historical dark look.
+   The light block must override every variable defined here — the guard test
+   compares the two variable-name sets. `color-scheme` keeps native widgets
+   (scrollbars, checkboxes, radios, number spinners) in step with the theme. */
+
+:root {
+  color-scheme: dark;
+
+  /* Text */
+  --text-primary: #e6e6f0;
+  --text-secondary: rgba(230, 230, 240, 0.85);
+  --text-soft: rgba(230, 230, 240, 0.72);
+  --text-muted: rgba(230, 230, 240, 0.6);
+  --text-disabled: rgba(230, 230, 240, 0.4);
+
+  /* Surfaces. The window is transparent with mpv painting below the DOM, so
+     bars/panels keep their own translucency instead of one opaque page bg. */
+  --surface-bar: rgba(20, 20, 32, 0.92);
+  --surface-bar-opaque: rgba(20, 20, 32, 0.98);
+  --surface-panel: #1a1a28;
+  /* Faint fill of a grouped settings card sitting on --surface-panel. */
+  --surface-card: rgba(255, 255, 255, 0.03);
+  --surface-subtitle: rgba(30, 30, 46, 0.92);
+  --surface-backdrop: rgba(0, 0, 0, 0.5);
+  --surface-busy: rgba(10, 10, 16, 0.72);
+
+  /* Borders and neutral control fills */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --control-bg: rgba(255, 255, 255, 0.08);
+  --control-hover-bg: rgba(255, 255, 255, 0.18);
+  --hover-bg: rgba(255, 255, 255, 0.12);
+
+  /* Accent (selection, focus, links between UI states) */
+  --accent: #7c6fe8;
+  --on-accent: #ffffff;
+  --accent-strong: #a99bff;
+  --accent-selected-bg: rgba(124, 111, 232, 0.35);
+  --accent-soft-bg: rgba(124, 111, 232, 0.2);
+  --accent-faint-bg: rgba(124, 111, 232, 0.1);
+  --accent-border: rgba(124, 111, 232, 0.6);
+  --seekbar-abloop: rgba(124, 111, 232, 0.4);
+
+  /* Hot accent (coral): the "this is on / this is the one you picked" signal —
+     an active toggle switch and the selected Options category tab. Deliberately
+     a second hue from --accent so an enabled setting reads at a glance. */
+  --accent-hot: #ff747c;
+  --on-accent-hot: #ffffff;
+  --accent-hot-soft-bg: rgba(255, 116, 124, 0.15);
+  --accent-hot-selected-bg: rgba(255, 116, 124, 0.28);
+
+  /* Volume slider tint once dragged past 100% into the boost range. */
+  --volume-boost: #e0a13c;
+
+  /* Status: danger / success / priority(common-word) chips */
+  --danger-solid: #c42b1c;
+  --danger-banner-bg: rgba(160, 40, 40, 0.85);
+  --on-danger: #fff;
+  --danger-text: #e08a8a;
+  --danger-bg: rgba(224, 86, 86, 0.2);
+  --danger-hover-bg: rgba(220, 60, 60, 0.35);
+  --danger-border: rgba(220, 60, 60, 0.5);
+  --success-text: #6fce8f;
+  --success-bg: rgba(86, 190, 120, 0.2);
+  --success-hover-bg: rgba(86, 190, 120, 0.35);
+  /* "Not a failure, but not ready either" — e.g. the Missing badge on a
+     dictionary the user has not installed yet. */
+  --warning-text: #e0b23c;
+  --warning-bg: rgba(224, 178, 60, 0.18);
+  --priority: #e0b23c;
+  --on-priority: #4a3a08;
+  --priority-tint: rgba(224, 178, 60, 0.07);
+  --frequency-bg: rgba(76, 175, 150, 0.22);
+  --wanikani-text: #82c7f2;
+  --wanikani-bg: rgba(69, 158, 210, 0.18);
+  --link-text: #8ab4f8;
+  --link-bg: rgba(138, 180, 248, 0.14);
+  --link-border: rgba(138, 180, 248, 0.4);
+  --link-hover-bg: rgba(138, 180, 248, 0.28);
+
+  /* Knowledge-level underlines + sidebar search marks */
+  --level-unknown: rgba(224, 86, 86, 0.75);
+  --level-in-deck: rgba(96, 144, 224, 0.75);
+  --level-learning: rgba(224, 168, 60, 0.75);
+  --level-known: rgba(86, 190, 120, 0.55);
+  --level-well-known: rgba(76, 175, 150, 0.8);
+  --mark-bg: rgba(224, 168, 60, 0.55);
+  --mark-current-bg: rgba(224, 86, 86, 0.75);
+
+  /* Shadows */
+  --shadow-panel: 0 20px 48px rgba(0, 0, 0, 0.55);
+  --shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --text-primary: #1f1f2e;
+  --text-secondary: rgba(31, 31, 46, 0.87);
+  --text-soft: rgba(31, 31, 46, 0.72);
+  --text-muted: rgba(31, 31, 46, 0.6);
+  --text-disabled: rgba(31, 31, 46, 0.38);
+
+  --surface-bar: rgba(245, 245, 250, 0.92);
+  --surface-bar-opaque: rgba(245, 245, 250, 0.98);
+  --surface-panel: #f4f4fa;
+  --surface-card: rgba(20, 20, 40, 0.025);
+  --surface-subtitle: rgba(252, 252, 254, 0.92);
+  --surface-backdrop: rgba(20, 20, 40, 0.4);
+  --surface-busy: rgba(245, 245, 250, 0.78);
+
+  --border-subtle: rgba(20, 20, 40, 0.1);
+  --border-default: rgba(20, 20, 40, 0.18);
+  --control-bg: rgba(20, 20, 40, 0.06);
+  --control-hover-bg: rgba(20, 20, 40, 0.13);
+  --hover-bg: rgba(20, 20, 40, 0.09);
+
+  --accent: #5b4fd1;
+  --on-accent: #ffffff;
+  --accent-strong: #4438b8;
+  --accent-selected-bg: rgba(91, 79, 209, 0.22);
+  --accent-soft-bg: rgba(91, 79, 209, 0.13);
+  --accent-faint-bg: rgba(91, 79, 209, 0.08);
+  --accent-border: rgba(91, 79, 209, 0.55);
+  --seekbar-abloop: rgba(91, 79, 209, 0.32);
+
+  /* Darkened coral: #ff747c is too pale to carry white knob text/contrast on a
+     light panel, so the light theme uses a deeper tone of the same hue. */
+  --accent-hot: #d94a52;
+  --on-accent-hot: #ffffff;
+  --accent-hot-soft-bg: rgba(217, 74, 82, 0.12);
+  --accent-hot-selected-bg: rgba(217, 74, 82, 0.2);
+
+  --volume-boost: #b9761b;
+
+  --danger-solid: #c42b1c;
+  --danger-banner-bg: rgba(190, 50, 42, 0.92);
+  --on-danger: #fff;
+  --danger-text: #b3261e;
+  --danger-bg: rgba(179, 38, 30, 0.1);
+  --danger-hover-bg: rgba(220, 60, 60, 0.25);
+  --danger-border: rgba(190, 50, 42, 0.5);
+  --success-text: #1b7a3d;
+  --success-bg: rgba(27, 122, 61, 0.12);
+  --success-hover-bg: rgba(27, 122, 61, 0.22);
+  --warning-text: #8a5a06;
+  --warning-bg: rgba(199, 144, 24, 0.14);
+  --priority: #e0b23c;
+  --on-priority: #4a3a08;
+  --priority-tint: rgba(199, 144, 24, 0.08);
+  --frequency-bg: rgba(28, 130, 105, 0.14);
+  --wanikani-text: #1567a8;
+  --wanikani-bg: rgba(21, 103, 168, 0.1);
+  --link-text: #1a5dc8;
+  --link-bg: rgba(26, 93, 200, 0.08);
+  --link-border: rgba(26, 93, 200, 0.35);
+  --link-hover-bg: rgba(26, 93, 200, 0.16);
+
+  --level-unknown: rgba(196, 43, 36, 0.8);
+  --level-in-deck: rgba(38, 96, 192, 0.8);
+  --level-learning: rgba(178, 121, 16, 0.8);
+  --level-known: rgba(34, 139, 76, 0.7);
+  --level-well-known: rgba(28, 130, 105, 0.8);
+  --mark-bg: rgba(230, 178, 60, 0.5);
+  --mark-current-bg: rgba(224, 100, 90, 0.65);
+
+  --shadow-panel: 0 20px 48px rgba(30, 30, 60, 0.28);
+  --shadow-menu: 0 12px 32px rgba(30, 30, 60, 0.22);
+}

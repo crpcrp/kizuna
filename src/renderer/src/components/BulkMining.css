@@ -1,0 +1,127 @@
+.bulk-mining {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+.bulk-mining button,
+.bulk-mining input {
+  font: inherit;
+  color: inherit;
+}
+.bulk-mining button {
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.bulk-mining button:hover:not([disabled]) {
+  background: var(--control-hover-bg);
+}
+.bulk-mining button[disabled],
+.bulk-mining input[disabled] {
+  cursor: default;
+  opacity: 0.55;
+}
+.bulk-mining-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+#bulk-mining-threshold,
+#bulk-mining-minimum-count {
+  width: 88px;
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+.bulk-mining-hint,
+.bulk-mining-resolving {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+.bulk-mining-target-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.bulk-mining-selection-actions {
+  display: flex;
+  flex: 0 0 100%;
+  gap: 8px;
+}
+.bulk-mining-advisory {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+.bulk-mining-table-wrap {
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+}
+.bulk-mining-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.bulk-mining-table th,
+.bulk-mining-table td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 6px 8px;
+  text-align: left;
+}
+.bulk-mining-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-panel);
+}
+.bulk-mining-table tr[data-no-entry] {
+  color: var(--text-muted);
+}
+.bulk-mining-pending {
+  color: var(--text-muted);
+}
+.bulk-mining-status[data-status='added'] {
+  color: var(--success-text);
+}
+.bulk-mining-status[data-status='duplicate'],
+.bulk-mining-status[data-status='noEntry'],
+.bulk-mining-status[data-status='cancelled'] {
+  color: var(--text-muted);
+}
+.bulk-mining-status[data-status='error'] {
+  color: var(--danger-text);
+}
+.bulk-mining-status[data-status='mining'] {
+  color: var(--accent-strong);
+}
+.bulk-mining-status {
+  overflow-wrap: anywhere;
+}
+.bulk-mining-word-error,
+.bulk-mining-abort {
+  margin: 8px;
+  color: var(--danger-text);
+}
+.bulk-mining-abort {
+  border: 1px solid var(--danger-border);
+  border-radius: 6px;
+  background: var(--danger-bg);
+  padding: 8px 10px;
+}
+.bulk-mining-progress,
+.bulk-mining-summary {
+  margin: 0;
+  font-weight: 600;
+}
+.bulk-mining-footer {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+}

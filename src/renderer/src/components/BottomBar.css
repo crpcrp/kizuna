@@ -1,0 +1,237 @@
+/* ---- Bottom bar: full-width seek row, time readouts, then a controls row ---- */
+#bottom-bar {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 18px 10px;
+  background: var(--surface-bar);
+  border-top: 1px solid var(--border-subtle);
+  backdrop-filter: blur(10px);
+}
+
+/* Icon buttons: borderless by default, with a soft round hover pad so the whole
+   bar reads as one clean control strip rather than a row of boxed buttons. */
+#bottom-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+#bottom-bar button:hover {
+  background: var(--control-hover-bg);
+  color: var(--text-primary);
+}
+#bottom-bar button:active {
+  transform: scale(0.92);
+}
+
+/* Play/pause is the primary action: a large filled coral circle. */
+#bottom-bar #play-pause {
+  width: 48px;
+  height: 48px;
+  background: var(--accent-hot);
+  color: var(--on-accent-hot);
+}
+#bottom-bar #play-pause:hover {
+  background: var(--accent-hot);
+  color: var(--on-accent-hot);
+  filter: brightness(1.12);
+}
+#bottom-bar #play-pause svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Toggle buttons (mute, the two panel toggles) tint with the accent while on. */
+#bottom-bar button[aria-pressed='true'] {
+  color: var(--accent-strong);
+  background: var(--accent-soft-bg);
+}
+
+/* Speed button: a pill showing the current multiplier, not a glyph circle. */
+#bottom-bar button.speed-control {
+  width: auto;
+  min-width: 46px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Top row: the seek bar owns the full width. */
+.seek-row {
+  display: flex;
+  width: 100%;
+}
+.seek-wrap {
+  --seekbar-thumb-inset: 7px;
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+}
+#seek-slider {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Time readouts under the bar: current left, duration right, badges centered. */
+.seek-times {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.seek-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.time-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  min-width: 3.5em;
+}
+#time-current {
+  text-align: left;
+}
+#time-duration {
+  text-align: right;
+}
+
+/* Bottom row: transport centered via a 1fr / auto / 1fr grid so the utility
+   controls on the right never shift the transport group off-center. */
+.controls-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.transport-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.controls-side {
+  display: flex;
+  align-items: center;
+}
+.controls-left {
+  justify-content: flex-start;
+  gap: 4px;
+}
+.controls-right {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.volume-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.volume-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  min-width: 3.5em;
+}
+input[type='range'] {
+  accent-color: var(--accent);
+  height: 4px;
+  cursor: pointer;
+}
+.seek-track {
+  position: absolute;
+  inset: 0 var(--seekbar-thumb-inset);
+  pointer-events: none;
+}
+.chapter-tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 12px;
+  transform: translate(-1px, -50%);
+  background: var(--text-secondary);
+  pointer-events: none;
+}
+.abloop-range {
+  position: absolute;
+  top: 50%;
+  height: 6px;
+  transform: translateY(-50%);
+  background: var(--seekbar-abloop);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.abloop-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--accent-strong);
+  background: var(--accent-soft-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+#volume-slider {
+  width: 140px;
+  flex-shrink: 0;
+}
+/* Past 100% the slider and readout switch to the boost tint so the amplified
+   range is visually distinct from normal volume. */
+input[type='range'].volume-boosted {
+  accent-color: var(--volume-boost);
+}
+.volume-label.volume-boosted {
+  color: var(--volume-boost);
+}
+
+/* Mini-player: a tighter transport (seek + play/pause + volume + restore) that
+   fits the compact 480px window. The extra jump/fullscreen buttons aren't
+   rendered here, so the layout collapses to just what's present. */
+#bottom-bar.mini-player {
+  gap: 4px;
+  padding: 6px 10px 8px;
+}
+#bottom-bar.mini-player button {
+  width: 34px;
+  height: 34px;
+}
+#bottom-bar.mini-player button svg {
+  width: 18px;
+  height: 18px;
+}
+#bottom-bar.mini-player #play-pause {
+  width: 36px;
+  height: 36px;
+}
+#bottom-bar.mini-player #play-pause svg {
+  width: 18px;
+  height: 18px;
+}
+#bottom-bar.mini-player #volume-slider {
+  width: 64px;
+}
+#bottom-bar.mini-player .time-label {
+  min-width: 2.8em;
+  font-size: 0.8rem;
+}

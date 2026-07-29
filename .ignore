@@ -1,0 +1,5 @@
+# ripgrep-only overrides. These paths are gitignored but deliberately kept
+# searchable — see CLAUDE.md's "Local-only files" note.
+#
+# `.ignore` outranks `.gitignore` for ripgrep and is invisible to git.
+!bugs.json

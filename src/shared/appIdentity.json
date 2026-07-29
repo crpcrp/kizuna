@@ -1,0 +1,8 @@
+{
+  "productName": "Kizuna",
+  "executableName": "kizuna",
+  "appId": "com.crp.kizuna",
+  "userDataDirName": "Kizuna",
+  "repositoryUrl": "https://github.com/crpcrp/kizuna",
+  "vendorRepositoryUrl": "https://github.com/crpcrp/kizuna-vendor"
+}

@@ -1,0 +1,17 @@
+# Every text file is stored and checked out with LF, on every platform.
+#
+# Without this, Git for Windows' default core.autocrlf=true rewrites the working
+# tree to CRLF on checkout. Prettier's endOfLine default is "lf", so
+# `npm run format:check` then fails on literally every file in the repository —
+# which is exactly what the first CI run on windows-latest did. `eol=lf` wins
+# over core.autocrlf, so this fixes it for CI and for any Windows contributor
+# without either having to configure anything.
+#
+# No tracked text file contains a CR today, so this pins the status quo rather
+# than reformatting anything.
+* text=auto eol=lf
+
+# Binary payloads, marked explicitly rather than left to Git's heuristic.
+*.png binary
+*.ico binary
+*.zip binary

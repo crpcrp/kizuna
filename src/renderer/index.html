@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- `style-src 'unsafe-inline'` is required by React inline styles and the
+         per-dictionary <style> blocks (sanitized in WordPopup.scopeDictCss).
+         Scripts deliberately get no 'unsafe-inline' — they fall back to
+         `default-src 'self'`. The 'none' directives are hardening: the app has
+         no plugins, no <base>, and its only <form> submits via preventDefault.
+         `img-src` must spell out `data:`, because seekbar thumbnails arrive as
+         `data:image/jpeg;base64,…` from mediaService.getThumbnail and would
+         otherwise fall back to `default-src 'self'` and be blocked.
+         `frame-ancestors` is deliberately absent: it is ignored when the policy
+         is delivered in a <meta> element (and would only log a console warning),
+         and this document is always the top-level frame of the Electron window.
+         Guarded by test/renderer/indexHtmlCsp.test.ts. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Static HTML cannot import the app-identity module, so this literal is
+         pinned to `productName` by test/appIdentityConfig.test.ts. WindowChrome
+         replaces it with the media-aware title once React mounts. -->
+    <title>Kizuna</title>
+    <!-- Styles are not inlined here: `App.css` holds the shell, and every
+         component imports its own `.css` sibling (e.g. WordPopup.css). -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+  </body>
+</html>

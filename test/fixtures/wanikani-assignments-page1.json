@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1001,
+    "object": "assignment",
+    "url": "https://api.wanikani.com/v2/assignments/1001",
+    "data_updated_at": "2026-06-01T00:00:00.000000Z",
+    "data": {
+      "created_at": "2020-01-01T00:00:00.000000Z",
+      "subject_id": 101,
+      "subject_type": "vocabulary",
+      "srs_stage": 6,
+      "unlocked_at": "2020-01-01T00:00:00.000000Z",
+      "started_at": "2020-01-02T00:00:00.000000Z",
+      "passed_at": "2020-02-01T00:00:00.000000Z",
+      "burned_at": null,
+      "available_at": "2026-06-01T00:00:00.000000Z",
+      "resurrected_at": null,
+      "passed": true,
+      "hidden": false
+    }
+  },
+  {
+    "id": 1002,
+    "object": "assignment",
+    "url": "https://api.wanikani.com/v2/assignments/1002",
+    "data_updated_at": "2026-06-01T00:00:00.000000Z",
+    "data": {
+      "created_at": "2020-01-01T00:00:00.000000Z",
+      "subject_id": 102,
+      "subject_type": "kana_vocabulary",
+      "srs_stage": 1,
+      "unlocked_at": "2026-05-01T00:00:00.000000Z",
+      "started_at": "2026-05-02T00:00:00.000000Z",
+      "passed_at": null,
+      "burned_at": null,
+      "available_at": "2026-06-01T00:00:00.000000Z",
+      "resurrected_at": null,
+      "passed": false,
+      "hidden": false
+    }
+  }
+]

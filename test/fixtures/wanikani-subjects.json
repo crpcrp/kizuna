@@ -1,0 +1,48 @@
+[
+  {
+    "id": 101,
+    "object": "vocabulary",
+    "url": "https://api.wanikani.com/v2/subjects/101",
+    "data_updated_at": "2026-01-01T00:00:00.000000Z",
+    "data": {
+      "characters": "猫",
+      "slug": "猫",
+      "readings": [{ "reading": "ねこ", "primary": true, "accepted_answer": true }]
+    }
+  },
+  {
+    "id": 102,
+    "object": "kana_vocabulary",
+    "url": "https://api.wanikani.com/v2/subjects/102",
+    "data_updated_at": "2026-01-01T00:00:00.000000Z",
+    "data": {
+      "characters": "だから",
+      "slug": "だから"
+    }
+  },
+  {
+    "id": 103,
+    "object": "kanji",
+    "url": "https://api.wanikani.com/v2/subjects/103",
+    "data_updated_at": "2026-01-01T00:00:00.000000Z",
+    "data": {
+      "characters": "犬",
+      "slug": "犬",
+      "readings": [
+        { "reading": "いぬ", "primary": true, "type": "kunyomi", "accepted_answer": true },
+        { "reading": "けん", "primary": false, "type": "onyomi", "accepted_answer": true }
+      ]
+    }
+  },
+  {
+    "id": 104,
+    "object": "radical",
+    "url": "https://api.wanikani.com/v2/subjects/104",
+    "data_updated_at": "2026-01-01T00:00:00.000000Z",
+    "data": {
+      "characters": "亻",
+      "slug": "person-radical",
+      "readings": null
+    }
+  }
+]

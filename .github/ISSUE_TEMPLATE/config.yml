@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability (private)
+    url: https://github.com/crpcrp/kizuna/security/advisories/new
+    about: Never file a vulnerability as a public issue.
+  - name: Setup problem with mpv, FFmpeg, or MeCab
+    url: https://github.com/crpcrp/kizuna/blob/main/docs/binaries.md
+    about: Binary setup and troubleshooting.

@@ -1,0 +1,64 @@
+/* Small opaque card so the text stays visible over transparency.
+   Hidden via :empty when no cue is active, so an empty pill doesn't
+   float over the video between/before/after subtitle lines. Position and
+   font-size are set inline (subtitleBoxStyle) from user-configurable
+   SubtitleStyleSettings; #content is `position: relative` so the box's
+   left/top percentages resolve against it. */
+#subtitle {
+  background: var(--surface-subtitle);
+  padding: 0.4rem 1.25rem;
+  border-radius: 8px;
+  text-align: center;
+  max-width: 80%;
+  cursor: grab;
+}
+#subtitle:active {
+  cursor: grabbing;
+}
+#subtitle:empty {
+  display: none;
+}
+#subtitle.subtitle-selectable,
+#subtitle.subtitle-selectable [data-token] {
+  cursor: text;
+  user-select: text;
+}
+
+/* Tokenized words get their own hoverable-word affordance so it's visually
+   obvious which spans respond to hover/click, distinct from the box's own
+   grab cursor. */
+#subtitle [data-token] {
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background-color 0.1s ease;
+}
+#subtitle [data-token]:hover {
+  background: var(--accent-selected-bg);
+}
+
+/* Reflects whichever word the currently-open popup actually describes — may
+   cover more tokens than the one the pointer is over (a longest-match
+   compound resolved from a single clicked token), so this stays lit
+   independent of live :hover. */
+#subtitle [data-token][data-highlighted] {
+  background: var(--accent-selected-bg);
+}
+
+/* Knowledge-level underline (N4): colors by how well the viewer knows each
+   token's lemma. Underlines (not backgrounds) so they don't collide with the
+   hover/highlight background rules above. */
+#subtitle [data-token][data-level='unknown'] {
+  border-bottom: 2px solid var(--level-unknown);
+}
+#subtitle [data-token][data-level='inDeck'] {
+  border-bottom: 2px solid var(--level-in-deck);
+}
+#subtitle [data-token][data-level='learning'] {
+  border-bottom: 2px solid var(--level-learning);
+}
+#subtitle [data-token][data-level='known'] {
+  border-bottom: 2px solid var(--level-known);
+}
+#subtitle [data-token][data-level='wellKnown'] {
+  border-bottom: 2px solid transparent;
+}

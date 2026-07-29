@@ -1,0 +1,115 @@
+name: CI
+
+# Windows-only by design: Kizuna ships a Windows installer and the pinned
+# runtime binaries in resources.lock.json are win32-x64 builds.
+# Release tags are handled by release.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: nothing here writes to the repository. `pull_request` (never
+# `pull_request_target`) means a fork's run gets this read-only token and no
+# repository secrets, so untrusted code cannot reach anything privileged.
+permissions:
+  contents: read
+
+# Third-party Actions are pinned to immutable commit SHAs, not moving tags, so
+# a compromised or retagged release cannot silently enter this workflow. The
+# trailing comment records the human-readable version each SHA resolves to.
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The mirror carries the LFS payloads; this repository has none, and
+          # checking out with LFS enabled would only waste a request.
+          lfs: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      # setup-node caches npm's downloaded packages. Cache the installed tree
+      # too, because it contains Electron's ABI-specific better-sqlite3 rebuild
+      # and is the slow portion of a clean install. Any OS, Node, or lock-file
+      # change gets a distinct cache entry.
+      - name: Restore installed dependencies
+        id: node_modules
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: node_modules
+          key: node-modules-v1-${{ runner.os }}-node-24-${{ hashFiles('package-lock.json') }}
+
+      # `postinstall` runs electron-rebuild for better-sqlite3, which the suite
+      # needs: scripts/run-tests.mjs executes vitest under Electron's Node ABI.
+      - name: Install dependencies
+        if: steps.node_modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Save installed dependencies
+        if: steps.node_modules.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: node_modules
+          key: ${{ steps.node_modules.outputs.cache-primary-key }}
+
+      # Keyed on the lock file, so a mirror bump is a cache miss and nothing
+      # else is. On a hit, `npm run resources` re-verifies every hash locally
+      # and the git steps become no-ops — Git LFS bandwidth is only spent when
+      # resources.lock.json actually changes. The mirror is public, so this
+      # needs no credential and works the same on a fork.
+      #
+      # The `v2` prefix exists to invalidate caches saved before the fetch
+      # pinned core.autocrlf=false: those hold a checkout whose text files were
+      # rewritten to CRLF, and re-running against them would keep failing
+      # verification since the git steps no-op on an up-to-date checkout. Bump
+      # it again if the fetch ever changes how the working tree is produced.
+      - name: Restore pinned binary mirror
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .vendor-cache
+          key: vendor-v2-${{ hashFiles('resources.lock.json') }}
+
+      - name: Fetch runtime binaries from the pinned mirror
+        run: npm run resources
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      # scripts/run-tests.mjs writes failing test names to test-results.log and
+      # exits non-zero, per AGENTS.md's testing policy. CI running the full
+      # suite here does not change that policy: agents still run only the one
+      # focused test they just created, and the user runs `npm.cmd test`
+      # locally.
+      - name: Test
+        run: npm test
+
+      # Kept only long enough to diagnose the run that produced it; a failing
+      # PR is fixed in days, not months.
+      - name: Upload failing test names
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: test-results
+          path: test-results.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Keep notice generation covered by regular CI.
+      - name: Generate third-party notices
+        run: npm run notices

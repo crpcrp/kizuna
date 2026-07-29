@@ -1,0 +1,26 @@
+rough_functionalities.md
+commands.txt
+bugs.json
+.env
+
+# Dependencies & build output
+node_modules/
+out/
+dist/
+.vite/
+# Generated third-party notices bundle (`npm run notices`, issue #209). The
+# metadata it is generated from — third-party.json, licenses/ — is committed.
+build/
+
+# Bundled binaries (mpv/ffmpeg/mecab) — fetched by `npm run resources`, not committed.
+# Ignore the contents (not the dir itself) so first-party assets can opt back in.
+resources/*
+# …except first-party thumbnail-toolbar icons (committed, see systemMedia.ts)
+!resources/icons/
+
+# Shallow checkout of the pinned binary mirror (see resources.lock.json).
+.vendor-cache/
+
+
+
+test-results.log

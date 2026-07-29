@@ -1,0 +1,16 @@
+{
+  "id": "mno345",
+  "title": "Malformed entries",
+  "subtitles": {
+    "en": [
+      42,
+      null,
+      { "url": "https://example.test/noext.vtt" },
+      { "ext": "", "url": "https://example.test/blank.vtt" },
+      { "ext": "srt", "url": "https://example.test/en.srt" }
+    ],
+    "broken": "not-an-array",
+    "": [{ "ext": "srt" }]
+  },
+  "automatic_captions": 123
+}

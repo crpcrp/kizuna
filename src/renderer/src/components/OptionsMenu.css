@@ -1,0 +1,615 @@
+/* ---- Options dialog (Settings > Options…) ---- */
+#options-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-backdrop);
+}
+#options-overlay.open {
+  display: flex;
+}
+.options-panel {
+  position: relative;
+  width: 940px;
+  max-width: 94vw;
+  height: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.options-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+.options-header button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.options-header button:hover {
+  background: var(--hover-bg);
+}
+
+/* Body: category sidebar on the left, active tab's content on the right. */
+.options-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+}
+.options-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 168px;
+  flex-shrink: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+}
+.options-nav-item {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.options-nav-item:hover {
+  background: var(--hover-bg);
+}
+/* Selected category: the hot accent, so which tab you are in is obvious even
+   at a glance across a 168px-wide sidebar. */
+.options-nav-item.active {
+  background: var(--accent-hot-soft-bg);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.options-nav-item.active:hover {
+  background: var(--accent-hot-selected-bg);
+}
+.options-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.options-tab {
+  display: none;
+}
+.options-tab.active {
+  display: block;
+}
+/* Searching replaces the tab content with the results list, without
+   unmounting the tabs — the active one comes back as soon as the query is
+   cleared. */
+.options-content.searching > .options-tab {
+  display: none;
+}
+
+/* ---- Header search ("Find a setting or feature…") ---- */
+.options-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 320px;
+  margin: 0 12px 0 auto;
+  font: inherit;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.options-search::placeholder {
+  color: var(--text-muted);
+}
+.options-search:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+.options-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.options-search-result {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.options-search-result:hover {
+  background: var(--hover-bg);
+}
+/* Which tab the hit lives in — the point of the search box is that you don't
+   have to know, so the answer is shown rather than hidden. */
+.options-search-result-category {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Transient flash on the row a search result navigated to. Added and removed
+   imperatively by OptionsMenu's highlight effect. */
+.options-row-flash {
+  animation: options-row-flash 1.6s ease-out;
+}
+@keyframes options-row-flash {
+  from {
+    background: var(--accent-soft-bg);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+/* Each settings group is a card: 1px border, 12px radius, faint fill, and an
+   <h3> header bar separated from the rows below it. `overflow: hidden` keeps
+   the first/last row's background inside the rounded corners. */
+.options-section {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: var(--surface-card);
+}
+.options-section:last-child {
+  margin-bottom: 0;
+}
+.options-section h3 {
+  margin: 0;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+/* The card's own horizontal padding, applied to whatever the section puts in
+   its body (rows, hints, the Yomitan import row, the shortcut grid) rather
+   than to a body wrapper element that doesn't exist. Buttons are excluded:
+   they keep their own padding and are inset with a margin instead, so a direct
+   child button doesn't render 32px wider than one inside a row. */
+.options-section > *:not(h3) {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.options-section > button {
+  padding-left: 12px;
+  padding-right: 12px;
+  margin: 0 16px 13px;
+}
+.options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 16px;
+}
+/* Hairline between consecutive rows of the same card. Scoped to direct
+   children so the two-column shortcut grid's rows — which carry their own
+   full border — are left alone. */
+.options-section > .options-row + .options-row {
+  border-top: 1px solid var(--border-subtle);
+}
+/* A row's title block: a `<label htmlFor>`, or a plain `<span>` on boolean rows
+   whose text must not toggle the switch (OptionsToggleRow) — so style the
+   class, never the element. */
+.options-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+/* Secondary line under a setting's label, explaining what it does or what it
+   affects. Shared by every tab — it started as the Appearance choices'
+   (System/Light/Dark) sub-description and is now the one description style. */
+.options-row-description {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+/* Same muted secondary text, but as a paragraph describing a whole card rather
+   than one row (used where the card has no single labelled control). */
+.options-description {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 4px 0 10px;
+}
+.options-help-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 6px;
+  border-radius: 50%;
+  border: 1px solid var(--text-disabled);
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--text-soft);
+  cursor: help;
+}
+.options-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 4px 0 10px;
+}
+.options-error {
+  font-size: 0.8rem;
+  color: var(--danger-text);
+  margin: 4px 0 10px;
+}
+/* A standing advisory about a setting the user chose (not a failure), so it
+   shares the error color but not its role/urgency. */
+.options-warning {
+  font-size: 0.8rem;
+  color: var(--danger-text);
+  margin: 4px 0 10px;
+}
+
+/* A row whose control sits under its label rather than beside it (the mpv
+   extra-args textarea needs the full width). */
+.options-row-stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.options-mpv-args {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 6px;
+  padding: 6px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  resize: vertical;
+}
+.options-mpv-args:focus-visible {
+  outline: 2px solid var(--accent-strong);
+}
+.options-button {
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.options-button:hover {
+  background: var(--control-hover-bg);
+}
+
+/* Readiness pill at the right edge of a row: "Installed" (success tint) or
+   "Missing" (warning tint), used by the MeCab dictionary rows. */
+.state-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.state-badge.installed {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+.state-badge.missing {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+/* "Setup & integrations" states. `ready` matches the dictionary rows' success
+   tint; `unconfigured` shares `missing`'s warning tint (both are "something is
+   not in place"), and `unknown` stays neutral so an unresolved probe never
+   reads as a verdict. */
+.state-badge.ready {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+.state-badge.unconfigured {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+.state-badge.unknown {
+  color: var(--text-muted);
+  background: var(--control-bg);
+}
+
+/* Status dot in front of a setup row's name — the at-a-glance signal; the
+   badge next to it carries the same state in words for screen readers. */
+.setup-row .status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--text-muted);
+}
+.setup-row .status-dot.ready {
+  background: var(--success-text);
+}
+.setup-row .status-dot.missing,
+.setup-row .status-dot.unconfigured {
+  background: var(--warning-text);
+}
+
+/* A dictionary that isn't on disk still gets a row, but it reads as inert. */
+.options-row .menu-item:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+
+/* Yomitan dict row: up/down/remove always sit together at the right
+   edge, regardless of the dictionary title's length (the label above
+   is the only flexible child). */
+.yomitan-dict-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.yomitan-dict-actions button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  color: inherit;
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+}
+.yomitan-dict-actions button:hover:not([disabled]) {
+  background: var(--control-hover-bg);
+}
+.yomitan-dict-actions button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+.yomitan-dict-remove:hover:not([disabled]) {
+  background: var(--danger-hover-bg) !important;
+  border-color: var(--danger-border);
+}
+
+/* Import row: pinned above the dict list, hidden native input + a
+   proper button-styled label so it reads as the primary action. */
+.yomitan-import-row {
+  margin-bottom: 12px;
+}
+.yomitan-import-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.yomitan-import-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--accent-soft-bg);
+  border: 1px dashed var(--accent-border);
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.yomitan-import-button:hover {
+  background: var(--accent-selected-bg);
+}
+.yomitan-import-input:focus-visible + .yomitan-import-button {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+.yomitan-import-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1em;
+  height: 1.1em;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* "Please wait" overlay while a selected zip is being read/imported. */
+.options-import-overlay {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-busy);
+  border-radius: 10px;
+}
+.options-import-overlay.open {
+  display: flex;
+}
+.options-import-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 20px 28px;
+  max-width: 80%;
+}
+.options-import-overlay-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.options-import-count {
+  color: var(--text-soft);
+}
+.options-import-overlay-card .options-import-terms {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+.options-import-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--border-default);
+  border-top-color: var(--accent-strong);
+  animation: options-import-spin 0.8s linear infinite;
+}
+@keyframes options-import-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* ---- Boolean setting switch (OptionsToggle) ----
+   The real checkbox is stretched transparently over the track so it stays
+   clickable, focusable and screen-reader-visible; the pill and its knob are
+   drawn by the sibling track, which turns coral while checked. */
+.options-toggle {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 38px;
+  height: 21px;
+}
+.options-toggle-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.options-toggle-track {
+  position: absolute;
+  inset: 0;
+  /* Purely decorative: without this the track paints over the stretched input
+     and swallows every click on the visible switch. */
+  pointer-events: none;
+  border-radius: 20px;
+  background: var(--control-hover-bg);
+  transition: background 120ms ease;
+}
+.options-toggle-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  content: '';
+  transition:
+    left 120ms ease,
+    background 120ms ease;
+}
+.options-toggle-input:checked + .options-toggle-track {
+  background: var(--accent-hot);
+}
+.options-toggle-input:checked + .options-toggle-track::after {
+  left: 20px;
+  background: var(--on-accent-hot);
+}
+.options-toggle-input:focus-visible + .options-toggle-track {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+/* ---- Shortcuts: two columns of self-contained rebind rows ---- */
+.options-shortcut-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.options-shortcut-row {
+  padding: 8px 11px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-card);
+  font-size: 0.85rem;
+}
+.options-keybind-button {
+  min-width: 90px;
+  font: inherit;
+  color: inherit;
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+.options-keybind-button:hover {
+  background: var(--control-hover-bg);
+}
+/* Underline-color row: swatch, preceded by Reset only while overridden. */
+.options-color-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.options-color-reset {
+  min-width: 0;
+  padding: 3px 8px;
+  font-size: 0.8rem;
+}
+.knowledge-sync-control {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.knowledge-sync-toast {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--accent-soft-bg);
+  font-size: 0.8rem;
+}
+#skip-seconds-input {
+  width: 64px;
+  font: inherit;
+  color: inherit;
+  background: var(--control-bg);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 4px 6px;
+}

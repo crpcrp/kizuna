@@ -1,0 +1,13 @@
+{
+  "id": "jkl012",
+  "title": "Multiple formats",
+  "subtitles": {
+    "en": [
+      { "ext": "vtt", "url": "https://example.test/en.vtt" },
+      { "ext": "srt", "url": "https://example.test/en.srt" },
+      { "ext": "ttml", "url": "https://example.test/en.ttml" },
+      { "ext": "srt", "url": "https://example.test/en-dup.srt" }
+    ]
+  },
+  "automatic_captions": {}
+}

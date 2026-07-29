@@ -1,0 +1,86 @@
+name: Feature request
+description: Propose a capability Kizuna does not have yet.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kizuna is a Windows-first video player for Japanese learning, maintained
+        by one person. Proposals that fit that scope get further than ones that
+        turn it into a general media player. Opening a request is not a
+        commitment that it will be built — the maintainer decides what is in
+        scope and what merges.
+
+        Please do not include secrets or copyrighted media in examples.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues and this is not already requested.
+          required: true
+        - label: My request contains no secrets and no copyrighted media.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >
+        The learning workflow this blocks, and what you do today instead.
+        Describe the difficulty before the solution.
+      placeholder: >
+        Re-watching an episode, I cannot tell which lines I already mined into
+        Anki, so I re-check words I studied last week.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like Kizuna to do
+      description: The behaviour you want, concretely enough to disagree with.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Playback (mpv)
+        - Subtitles (parsing, display, sidebar)
+        - Tokenization (MeCab)
+        - Dictionary (Yomitan import or lookup)
+        - Anki / AnkiConnect
+        - WaniKani or knowledge levels
+        - Translation
+        - Install, packaging, or startup
+        - Something else / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: >
+        Existing settings, other tools, or a smaller version of the same idea —
+        and why they fall short.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you like to implement it?
+      description: >
+        Either answer is fine. If yes, wait for the maintainer to agree on scope
+        before writing code — see CONTRIBUTING.md.
+      options:
+        - 'No, I am proposing the idea'
+        - 'Maybe, with guidance'
+        - 'Yes, I intend to open a pull request'
+    validations:
+      required: true

@@ -1,0 +1,321 @@
+/* ---- Word lookup popup (SubtitleOverlay hover/click -> dict.lookup) ----
+   Anchored so its bottom-center sits above the hovered token instead of
+   on top of it, otherwise it covers the subtitle it's explaining. */
+#word-popup {
+  display: none;
+  position: fixed;
+  z-index: 60;
+  transform: translate(-50%, calc(-100% - 14px));
+}
+#word-popup.open {
+  display: block;
+}
+.word-popup-panel {
+  width: 440px;
+  max-width: 90vw;
+  max-height: 55vh;
+  overflow-y: auto;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  padding: 12px;
+  box-sizing: border-box;
+  position: relative;
+  font-size: 1.15rem;
+}
+.word-popup-close {
+  position: absolute;
+  top: 6px;
+  /* Reserve the Windows scrollbar track so the X stays fully clickable. */
+  right: calc(6px + 17px);
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.word-popup-close:hover {
+  background: var(--hover-bg);
+}
+.word-popup-back {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.word-popup-back:hover {
+  background: var(--hover-bg);
+}
+.word-popup-empty {
+  font-size: 1rem;
+  color: var(--text-muted);
+  padding: 4px 24px 4px 2px;
+}
+.word-popup-row {
+  /* Keep row content clear of the inset close-button hit target. */
+  padding: 8px 48px 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-left: 3px solid transparent;
+}
+.word-popup-row:last-child {
+  border-bottom: none;
+}
+/* High-priority (common-word) entries get their own accent so they
+   read at a glance instead of relying on a small inline marker. */
+.word-popup-row[data-priority='true'] {
+  border-left-color: var(--priority);
+  background: var(--priority-tint);
+}
+.word-popup-headword {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.word-popup-expression {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.word-popup-furigana {
+  font-size: 0.6em;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.word-popup-priority {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--on-priority);
+  background: var(--priority);
+  border-radius: 8px;
+  padding: 1px 7px;
+  white-space: nowrap;
+}
+.word-popup-frequency {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  background: var(--frequency-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.word-popup-pitch-accent {
+  font-size: 0.78rem;
+  color: var(--text-soft);
+  background: var(--control-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.word-popup-dict-badge {
+  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: var(--accent-soft-bg);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.word-popup-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+.word-popup-provenance-badge {
+  font-size: 0.75rem;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.word-popup-provenance-badge--wanikani {
+  color: var(--wanikani-text);
+  background: var(--wanikani-bg);
+}
+.word-popup-provenance-badge--anki {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+/* "＋ Anki" mining action — reuses the dict-badge chip idiom (same
+   border-radius/padding/accent purple) so it reads as part of the same row
+   of small chips instead of a differently-styled button. Sits after the
+   dict badge (the badge's own margin-left:auto already pushed the row's
+   trailing chips to the right). */
+.word-popup-anki-button {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--accent-soft-bg);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.word-popup-anki-button:hover {
+  background: var(--accent-selected-bg);
+}
+/* Shown instead of "＋ Anki" when the word already has a note (see
+   WordPopup.tsx's ankiExisting prop) — reuses the "added" status color so
+   "already known to Anki" reads consistently everywhere in this popup. */
+.word-popup-anki-button--open {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+.word-popup-anki-button--open:hover {
+  background: var(--success-hover-bg);
+}
+/* Transient result shown in place of the button while a mine request is in
+   flight or after it resolves (see WordPopup.tsx's ankiStatus prop). */
+.word-popup-anki-status {
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+.word-popup-anki-status[data-anki-status='added'] {
+  color: var(--success-text);
+  background: var(--success-bg);
+}
+.word-popup-anki-status[data-anki-status='error'] {
+  color: var(--danger-text);
+  background: var(--danger-bg);
+}
+.word-popup-anki-status[data-anki-status='adding'] {
+  color: var(--text-muted);
+  background: var(--accent-faint-bg);
+}
+.word-popup-pos-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.word-popup-pos {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  background: var(--control-bg);
+  border-radius: 8px;
+  padding: 1px 7px;
+}
+
+/* ---- Glossary senses: one numbered badge per top-level glossary
+   entry (mirrors Yomitan's ①② sense numbering), plus a generic
+   renderer for structured-content trees (see WordPopup.tsx) that
+   carries each node's own author-supplied `style` through, which is
+   what visually separates notes/lists/cross-references from plain
+   prose instead of everything running together as one blob. ---- */
+.word-popup-senses {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.word-popup-sense-group {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+.word-popup-sense-number {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: var(--accent-selected-bg);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1;
+  transform: translateY(2px);
+}
+.word-popup-sense-content {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  min-width: 0;
+}
+.word-popup-sense-content ul,
+.word-popup-sense-content ol {
+  margin: 2px 0 2px 1.1em;
+  padding: 0;
+}
+.word-popup-sense-content li {
+  margin: 1px 0;
+}
+.word-popup-sense-content div {
+  margin-top: 3px;
+}
+.word-popup-sense-content > div:first-child {
+  margin-top: 0;
+}
+.word-popup-sense-content table {
+  border-collapse: collapse;
+  margin-top: 4px;
+  font-size: 0.94rem;
+}
+.word-popup-sense-content td,
+.word-popup-sense-content th {
+  border: 1px solid var(--border-default);
+  padding: 2px 6px;
+}
+.word-popup-sense-content summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 0.94rem;
+}
+/* Cross-reference ("see also") style chip. Clickable (navigates the popup to
+   the linked word, see WordPopup.tsx's onLinkClick) when its `href` resolves
+   to an internal term; otherwise a static chip. Bordered + a small arrow
+   glyph so it reads as a distinct marker rather than blending into the
+   surrounding prose. */
+.word-popup-sc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--link-text);
+  background: var(--link-bg);
+  border: 1px solid var(--link-border);
+  border-radius: 6px;
+  padding: 1px 7px;
+  font-weight: 600;
+}
+.word-popup-sc-link::before {
+  content: '\21D2'; /* ⇒ */
+  font-size: 0.9em;
+}
+.word-popup-sc-link--clickable {
+  cursor: pointer;
+}
+.word-popup-sc-link--clickable:hover {
+  background: var(--link-hover-bg);
+}
+
+/* Example-sentence boxes: dictionaries like Jitendex mark these with
+   `data-sc-content="example-sentence"` (and `-a`/`-b` for the JP/EN halves
+   individually — see Jitendex's "Custom Styles in Yomitan" wiki). The
+   `:not(:has(...))` guard styles whichever granularity actually appears in
+   a given dictionary's markup as one box, instead of nesting a box inside a
+   box when both a wrapper and its halves match. */
+.word-popup-sense-content
+  [data-sc-content|='example-sentence']:not(:has([data-sc-content|='example-sentence'])) {
+  display: block;
+  margin-top: 4px;
+  padding: 5px 10px;
+  background: var(--accent-faint-bg);
+  border-left: 3px solid var(--accent-border);
+  border-radius: 0 6px 6px 0;
+  font-size: 0.97rem;
+}
+.word-popup-sense-content [data-sc-content='example-sentence-b'] {
+  color: var(--text-muted);
+  margin-top: 2px;
+}

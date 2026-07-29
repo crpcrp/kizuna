@@ -1,0 +1,28 @@
+/* Custom title bar (window is frameless; app-region set inline in React). */
+#chrome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 32px;
+  padding-left: 12px;
+  user-select: none;
+}
+#chrome-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+#chrome-buttons button {
+  width: 46px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+}
+#chrome-buttons button:hover {
+  background: var(--hover-bg);
+}
+#chrome-close:hover {
+  background: var(--danger-solid);
+  color: var(--on-danger);
+}

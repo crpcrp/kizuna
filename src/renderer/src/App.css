@@ -1,0 +1,164 @@
+/* App shell: page base, the top-controls / content / bottom-bar column, and
+   the fullscreen auto-hide behaviour. Component-specific rules live in the
+   `.css` file next to each component; all color values come from the
+   semantic variables in theme.css (light/dark). */
+
+/* Frameless transparent window: mpv paints BELOW this DOM, so nothing
+   here may cover the full window with an opaque surface. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+#root {
+  height: 100%;
+}
+#app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Top controls: custom title bar + application menu bar ----
+   position+z-index (not just flex order) is required here: #content right
+   below it is `position: relative` (so #subtitle can anchor to it), which
+   promotes #content into the "positioned, z-index:auto" paint layer — a
+   layer that paints ABOVE plain in-flow boxes like an unpositioned
+   #top-controls regardless of DOM order. A dropdown's menu-panel is
+   `position: absolute; top: 100%`, so it extends past #top-controls' own
+   box into that overlap band, and #content (fully transparent, but still
+   hit-tested) was capturing the click instead of the menu item underneath
+   — only in windowed mode, since fullscreen already gives #top-controls its
+   own higher z-index below. See bugs.json: "Settings > Options… does
+   nothing, dropdown just closes". */
+#top-controls {
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  background: var(--surface-bar);
+  backdrop-filter: blur(10px);
+}
+
+/* ---- Media error: dismissible warning for a failed/missing open (see
+   recentFilesController's errorMessage). Non-modal, in-flow banner between
+   the menu bar and the video — never covers the menu's own dropdowns. ---- */
+#media-error {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: var(--danger-banner-bg);
+  color: var(--on-danger);
+}
+#media-error button {
+  flex-shrink: 0;
+  font: inherit;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+#media-error button:hover {
+  background: var(--hover-bg);
+}
+
+/* Global completion feedback stays visible when bulk mining is hidden or its
+   detailed modal is closed; dismissing it never changes controller state. */
+#bulk-mining-completion-toast {
+  position: fixed;
+  z-index: 60;
+  right: 16px;
+  bottom: 64px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--surface-bar);
+  box-shadow: var(--shadow-panel);
+}
+#bulk-mining-completion-toast button {
+  flex-shrink: 0;
+  font: inherit;
+}
+
+/* ---- Player area: #content between the optional left-side playlist stack
+   and the shared right-side stack. Each stack's measured width keeps mpv out
+   from under it — the playlist on the left, the subtitle and mining sidebars
+   on the right, including when both right-side sidebars are present. ---- */
+#player-area {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#right-sidebar-stack,
+#left-sidebar-stack {
+  display: flex;
+  width: 320px;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  box-sizing: border-box;
+  background: var(--surface-bar);
+}
+#right-sidebar-stack {
+  border-left: 1px solid var(--border-subtle);
+}
+#left-sidebar-stack {
+  border-right: 1px solid var(--border-subtle);
+}
+#right-sidebar-stack #subtitle-sidebar,
+#left-sidebar-stack #playlist-sidebar {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  border-left: none;
+}
+#right-sidebar-stack #bulk-mining-sidebar {
+  width: 100%;
+}
+
+/* ---- Content: transparent region over mpv. #subtitle is positioned
+   absolutely within it (see SubtitleOverlay.css) at a user-configurable
+   percentage, so this needs to be the positioned ancestor. ---- */
+#content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---- Fullscreen: chrome/menu + bottom bar auto-hide, reveal on edge ---- */
+#app.fullscreen #top-controls,
+#app.fullscreen #bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  transition: transform 0.18s ease;
+}
+#app.fullscreen #top-controls {
+  top: 0;
+  transform: translateY(-100%);
+}
+#app.fullscreen #bottom-bar {
+  bottom: 0;
+  transform: translateY(100%);
+}
+#app.fullscreen.reveal-top #top-controls {
+  transform: translateY(0);
+}
+#app.fullscreen.reveal-bottom #bottom-bar {
+  transform: translateY(0);
+}

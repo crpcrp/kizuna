@@ -1,0 +1,126 @@
+/* Opaque right-hand column, same idiom as SubtitleSidebar.css: it visually
+   covers the strip mpv insets via video-margin-ratio-right. A column flex
+   layout keeps the header/footer pinned and the entry list scrolling between. */
+/* Rendered as a column-flex child of #right-sidebar-stack (also a column flex):
+   min-height:0 + flex:1 (set in App.css's stack rule) let it shrink to the
+   stack's bounded height so the <ul> below becomes the scroll region instead
+   of the whole panel growing to content height and pushing the footer off. */
+#playlist-sidebar {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-bar);
+  border-left: 1px solid var(--border-subtle);
+}
+
+#playlist-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface-bar-opaque);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.playlist-sidebar-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.playlist-sidebar-count {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-soft);
+}
+
+#playlist-sidebar-empty {
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+#playlist-sidebar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+#playlist-sidebar li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.playlist-sidebar-row {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 0.45rem 0.55rem;
+  margin-bottom: 2px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.playlist-sidebar-row:hover {
+  background: var(--accent-soft-bg);
+}
+.playlist-sidebar-row[data-active] {
+  background: var(--accent-selected-bg);
+}
+.playlist-sidebar-row[data-missing] {
+  color: var(--text-disabled);
+  text-decoration: line-through;
+}
+
+.playlist-sidebar-remove {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-soft);
+  font: inherit;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.playlist-sidebar-remove:hover {
+  background: var(--accent-soft-bg);
+  color: var(--text-primary);
+}
+
+#playlist-sidebar-footer {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-bar-opaque);
+}
+.playlist-sidebar-mode {
+  flex: 1;
+  font: inherit;
+  font-size: 0.82rem;
+  color: inherit;
+  background: var(--control-bg);
+  border: none;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.playlist-sidebar-mode:hover {
+  background: var(--accent-soft-bg);
+}
+.playlist-sidebar-mode[data-active],
+.playlist-sidebar-mode[aria-pressed='true'] {
+  background: var(--accent-selected-bg);
+}
