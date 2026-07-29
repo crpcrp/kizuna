@@ -22,7 +22,7 @@
     "test": "node scripts/run-tests.mjs",
     "test:watch": "vitest",
     "postinstall": "install-electron && electron-rebuild -f -w better-sqlite3",
-    "dist": "npm run notices && electron-vite build && electron-builder --win nsis"
+    "dist": "npm run notices && electron-vite build && electron-builder --win nsis --publish never"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
