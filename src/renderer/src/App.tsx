@@ -1495,7 +1495,6 @@ export default function App({
             speed={state.speed}
             onSetSpeed={(speed) => void playerAdapter.setSpeed(speed)}
             onSetVideoScale={handleSetVideoScale}
-            onScreenshot={() => void handleScreenshot()}
             abLoop={state.abLoopState}
             onCycleAbLoop={handleCycleAbLoop}
             onFrameStep={() => handleFrameStep('forward')}

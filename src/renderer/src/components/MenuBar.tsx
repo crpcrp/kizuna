@@ -113,9 +113,6 @@ export interface MenuBarProps {
    * multiple (1 = original size). No-op if the video's native size isn't
    * known yet (e.g. no file loaded). */
   onSetVideoScale?: (scale: number) => void
-  /** Saves the current frame as a PNG. No menu item renders it — screenshots
-   * are keybinding-only — but the prop stays part of the shared interface. */
-  onScreenshot?: () => void
   /** Current armed A–B loop; drives the Playback-menu item's phase label/check. */
   abLoop?: AbLoopState
   /** Advances the A–B loop cycle (no-loop → A → B → clear). */
@@ -145,8 +142,6 @@ export interface MenuBarProps {
   onOpenWordReport?: () => void
   /** Opens the bulk Anki mining surface. */
   onOpenBulkMining?: () => void
-  /** @deprecated Replaced by onOpenWordReport in R6a; retained until App wiring moves in R6b. */
-  onOpenSubtitleReport?: () => void
   /** Whether the playlist side panel is currently shown. */
   playlistOpen?: boolean
   onTogglePlaylist?: () => void
@@ -305,6 +300,40 @@ function MenuItem({
       onClick={onClick}
     >
       <span className="menu-item-check">{checked ? '✓' : ''}</span>
+      <span className="menu-item-label">{label}</span>
+    </button>
+  )
+}
+
+/** A single unchecked, clickable command row inside a dropdown panel — the
+ * `menuitem` sibling of the checked/radio `MenuItem`. */
+function CommandItem({
+  label,
+  ariaLabel,
+  id,
+  title,
+  disabled,
+  onClick
+}: {
+  label: string
+  ariaLabel: string
+  id?: string
+  title?: string
+  disabled?: boolean
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className="menu-item"
+      role="menuitem"
+      id={id}
+      title={title}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <span className="menu-item-check" />
       <span className="menu-item-label">{label}</span>
     </button>
   )
@@ -612,30 +641,20 @@ export default function MenuBar({
   return (
     <nav id="menu-bar" onPointerDown={(e) => e.stopPropagation()}>
       <Menu id="media" label="Media" open={openMenu === 'media'} onToggle={() => toggle('media')}>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        <CommandItem
+          label="Open file…"
+          ariaLabel="Open file"
           id="open-file"
-          aria-label="Open file"
           disabled={mediaOpening}
           onClick={run(onOpenFile)}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Open file…</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        />
+        <CommandItem
+          label="Open URL…"
+          ariaLabel="Open URL"
           id="open-url"
-          aria-label="Open URL"
           disabled={mediaOpening}
           onClick={run(() => onOpenUrl?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Open URL…</span>
-        </button>
+        />
         <MenuItem
           label="Previous file"
           disabled={mediaOpening || !hasFile}
@@ -653,76 +672,51 @@ export default function MenuBar({
             <MenuItem label="No recent files" disabled />
           ) : (
             recentFiles.map((file) => (
-              <button
+              <CommandItem
                 key={file.path}
-                type="button"
-                className="menu-item"
-                role="menuitem"
+                label={mediaFileBasename(file.path)}
+                ariaLabel={file.path}
                 title={file.path}
-                aria-label={file.path}
                 disabled={mediaOpening}
                 onClick={run(() => onOpenRecent?.(file.path))}
-              >
-                <span className="menu-item-check" />
-                <span className="menu-item-label">{mediaFileBasename(file.path)}</span>
-              </button>
+              />
             ))
           )}
         </div>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        <CommandItem
+          label="Clear recent files"
+          ariaLabel="Clear recent files"
           id="clear-recent-files"
-          aria-label="Clear recent files"
           disabled={recentFiles.length === 0}
           onClick={run(() => onClearRecentFiles?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Clear recent files</span>
-        </button>
+        />
         <div className="menu-separator" />
         <MenuItem
           label="Show playlist"
           checked={playlistOpen}
           onClick={run(() => onTogglePlaylist?.())}
         />
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        <CommandItem
+          label="Add files…"
+          ariaLabel="Add files to playlist"
           id="playlist-add-files"
-          aria-label="Add files to playlist"
           disabled={mediaOpening}
           onClick={run(() => onAddFiles?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Add files…</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        />
+        <CommandItem
+          label="Add folder…"
+          ariaLabel="Add folder to playlist"
           id="playlist-add-folder"
-          aria-label="Add folder to playlist"
           disabled={mediaOpening}
           onClick={run(() => onAddFolder?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Add folder…</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        />
+        <CommandItem
+          label="Save playlist as .m3u…"
+          ariaLabel="Save playlist as M3U"
           id="playlist-save"
-          aria-label="Save playlist as M3U"
           disabled={!hasPlaylist}
           onClick={run(() => onSavePlaylist?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Save playlist as .m3u…</span>
-        </button>
+        />
       </Menu>
 
       <Menu id="video" label="Video" open={openMenu === 'video'} onToggle={() => toggle('video')}>
@@ -753,17 +747,12 @@ export default function MenuBar({
           />
         ))}
         <div className="menu-separator" />
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        <CommandItem
+          label="Adjustments…"
+          ariaLabel="Video adjustments"
           id="open-video-adjustments"
-          aria-label="Video adjustments"
           onClick={run(() => onOpenVideoAdjustments?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Adjustments…</span>
-        </button>
+        />
         <div className="menu-separator" />
         <MenuItem
           label="Always on top"
@@ -848,18 +837,13 @@ export default function MenuBar({
       >
         {onLoadSubtitleFile && (
           <>
-            <button
-              type="button"
-              className="menu-item"
-              role="menuitem"
+            <CommandItem
+              label="Load subtitle file…"
+              ariaLabel="Load subtitle file"
               id="load-subtitle-file"
-              aria-label="Load subtitle file"
               disabled={mediaOpening}
               onClick={run(onLoadSubtitleFile)}
-            >
-              <span className="menu-item-check" />
-              <span className="menu-item-label">Load subtitle file…</span>
-            </button>
+            />
             <div className="menu-separator" />
           </>
         )}
@@ -1015,28 +999,18 @@ export default function MenuBar({
         open={openMenu === 'vocabulary'}
         onToggle={() => toggle('vocabulary')}
       >
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        <CommandItem
+          label="Word report…"
+          ariaLabel="Word report"
           id="open-word-report"
-          aria-label="Word report"
           onClick={run(() => onOpenWordReport?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Word report…</span>
-        </button>
-        <button
-          type="button"
-          className="menu-item"
-          role="menuitem"
+        />
+        <CommandItem
+          label="Bulk Anki mining…"
+          ariaLabel="Bulk Anki mining"
           id="open-bulk-mining"
-          aria-label="Bulk Anki mining"
           onClick={run(() => onOpenBulkMining?.())}
-        >
-          <span className="menu-item-check" />
-          <span className="menu-item-label">Bulk Anki mining…</span>
-        </button>
+        />
       </Menu>
 
       {/* Settings has no dropdown: clicking it opens the Options dialog straight

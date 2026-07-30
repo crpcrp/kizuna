@@ -585,7 +585,6 @@ describe('MenuBar video menu', () => {
         onSelectSubtitle={noop}
         onOpenOptions={noop}
         hasFile
-        onScreenshot={noop}
       />
     )
     expect(html).not.toContain('Save screenshot')
