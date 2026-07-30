@@ -1477,62 +1477,78 @@ export default function App({
         <WindowChrome fullscreen={state.fullscreen} filePath={state.filePath} />
         {!miniPlayerActive && (
           <MenuBar
-            tracks={state.tracks}
-            selectedAudioId={state.selectedAudioId}
-            selectedSubtitleId={state.selectedSubtitleId}
-            hasFile={state.filePath !== undefined}
-            onPrevFile={() => handleNavigateFile('prev')}
-            onNextFile={() => handleNavigateFile('next')}
-            onOpenFile={() => recentFiles.openPicker(openSession())}
-            onSelectAudio={handleSelectAudio}
-            audioDelayMs={state.audioDelayMs}
-            onChangeAudioDelay={handleAudioDelayChange}
-            onSelectSubtitle={handleSelectSubtitle}
-            onLoadSubtitleFile={state.filePath ? () => void handleLoadSubtitleFile() : undefined}
-            externalSubtitleEncoding={state.externalSubtitleEncoding}
-            onChangeExternalSubtitleEncoding={handleChangeExternalSubtitleEncoding}
-            urlSubtitleMenu={urlSubtitleState.menu}
-            preferredUrlSubtitleLanguage={state.preferredUrlSubtitleLanguage}
-            urlSubtitleSelectedId={urlSubtitleState.selectedId}
-            urlSubtitleAcquiring={urlSubtitleState.acquiring}
-            onSelectUrlSubtitle={(selectionId) => urlSubtitleController.select(selectionId)}
-            onSelectUrlSubtitleOff={() => urlSubtitleController.selectOff()}
+            media={{
+              hasFile: state.filePath !== undefined,
+              onPrevFile: () => handleNavigateFile('prev'),
+              onNextFile: () => handleNavigateFile('next'),
+              onOpenFile: () => recentFiles.openPicker(openSession()),
+              playlistOpen,
+              onTogglePlaylist: handleTogglePlaylist,
+              onAddFiles: () => void handleAddFilesToPlaylist(),
+              onAddFolder: () => void handleAddFolderToPlaylist(),
+              onSavePlaylist: handleSavePlaylist,
+              hasPlaylist: playlistState.playlist.entries.length > 0,
+              recentFiles: recentFilesState.recentFiles,
+              mediaOpening: recentFilesState.mediaOpening,
+              onOpenRecent: (path) => recentFiles.openRecent(openSession(), path),
+              onClearRecentFiles: () => recentFiles.clearRecent(window.kizuna),
+              onOpenUrl: () => setOpenUrlDialogOpen(true)
+            }}
+            video={{
+              qualityVisible,
+              quality: displayedYtdlpQuality,
+              qualityReloading,
+              onSetYtdlpQuality: (quality) => void handleSetYtdlpQuality(quality),
+              onSetVideoScale: handleSetVideoScale,
+              onOpenVideoAdjustments: () => setVideoAdjustmentsOpen(true),
+              alwaysOnTop,
+              onToggleAlwaysOnTop: handleToggleAlwaysOnTop,
+              miniPlayer: miniPlayerActive,
+              onToggleMiniPlayer: () => void handleToggleMiniPlayer()
+            }}
+            audio={{
+              tracks: state.tracks,
+              selectedAudioId: state.selectedAudioId,
+              hasFile: state.filePath !== undefined,
+              onSelectAudio: handleSelectAudio,
+              audioDelayMs: state.audioDelayMs,
+              onChangeAudioDelay: handleAudioDelayChange
+            }}
+            subtitle={{
+              tracks: state.tracks,
+              selectedSubtitleId: state.selectedSubtitleId,
+              mediaOpening: recentFilesState.mediaOpening,
+              onSelectSubtitle: handleSelectSubtitle,
+              onLoadSubtitleFile: state.filePath ? () => void handleLoadSubtitleFile() : undefined,
+              externalSubtitleEncoding: state.externalSubtitleEncoding,
+              onChangeExternalSubtitleEncoding: handleChangeExternalSubtitleEncoding,
+              urlSubtitleMenu: urlSubtitleState.menu,
+              preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
+              urlSubtitleSelectedId: urlSubtitleState.selectedId,
+              urlSubtitleAcquiring: urlSubtitleState.acquiring,
+              onSelectUrlSubtitle: (selectionId) => urlSubtitleController.select(selectionId),
+              onSelectUrlSubtitleOff: () => urlSubtitleController.selectOff(),
+              subtitleOffsetMs: state.subtitleOffsetMs,
+              onChangeSubtitleOffset: handleSubtitleOffsetChange,
+              onApplyOffsetToFolder: state.filePath ? handleApplyOffsetToFolder : undefined,
+              sidebarOpen,
+              onToggleSidebar: handleToggleSidebar
+            }}
+            playback={{
+              hasFile: state.filePath !== undefined,
+              speed: state.speed,
+              onSetSpeed: (speed) => void playerAdapter.setSpeed(speed),
+              abLoop: state.abLoopState,
+              onCycleAbLoop: handleCycleAbLoop,
+              onFrameStep: () => handleFrameStep('forward'),
+              onFrameBack: () => handleFrameStep('back')
+            }}
+            vocabulary={{
+              onOpenWordReport: () => setReportOpen(true),
+              onOpenBulkMining: () => void openMining()
+            }}
             onOpenOptions={() => setOptionsOpen(true)}
             onOpenChange={setMenuBarOpen}
-            subtitleOffsetMs={state.subtitleOffsetMs}
-            onChangeSubtitleOffset={handleSubtitleOffsetChange}
-            onApplyOffsetToFolder={state.filePath ? handleApplyOffsetToFolder : undefined}
-            speed={state.speed}
-            onSetSpeed={(speed) => void playerAdapter.setSpeed(speed)}
-            onSetVideoScale={handleSetVideoScale}
-            abLoop={state.abLoopState}
-            onCycleAbLoop={handleCycleAbLoop}
-            onFrameStep={() => handleFrameStep('forward')}
-            onFrameBack={() => handleFrameStep('back')}
-            onOpenVideoAdjustments={() => setVideoAdjustmentsOpen(true)}
-            qualityVisible={qualityVisible}
-            quality={displayedYtdlpQuality}
-            qualityReloading={qualityReloading}
-            onSetYtdlpQuality={(quality) => void handleSetYtdlpQuality(quality)}
-            alwaysOnTop={alwaysOnTop}
-            onToggleAlwaysOnTop={handleToggleAlwaysOnTop}
-            miniPlayer={miniPlayerActive}
-            onToggleMiniPlayer={() => void handleToggleMiniPlayer()}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={handleToggleSidebar}
-            playlistOpen={playlistOpen}
-            onTogglePlaylist={handleTogglePlaylist}
-            onAddFiles={() => void handleAddFilesToPlaylist()}
-            onAddFolder={() => void handleAddFolderToPlaylist()}
-            onSavePlaylist={handleSavePlaylist}
-            hasPlaylist={playlistState.playlist.entries.length > 0}
-            onOpenWordReport={() => setReportOpen(true)}
-            onOpenBulkMining={() => void openMining()}
-            recentFiles={recentFilesState.recentFiles}
-            mediaOpening={recentFilesState.mediaOpening}
-            onOpenRecent={(path) => recentFiles.openRecent(openSession(), path)}
-            onClearRecentFiles={() => recentFiles.clearRecent(window.kizuna)}
-            onOpenUrl={() => setOpenUrlDialogOpen(true)}
           />
         )}
       </div>
