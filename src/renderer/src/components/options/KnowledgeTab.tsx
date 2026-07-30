@@ -6,6 +6,7 @@ import type {
   SyncStatus
 } from '../../../../shared/knowledge'
 import OptionsToggleRow from './OptionsToggleRow'
+import type { SettingEntry } from './types'
 
 /** Adds or removes exactly one deck from the known-decks array based on the
  * checkbox's new checked state, leaving every other entry untouched (the
@@ -100,6 +101,7 @@ export async function runSourceSync(
 }
 
 export interface KnowledgeTabProps {
+  active?: boolean
   wanikaniConfigured: boolean
   onSaveWanikaniToken: (token: string) => void | Promise<void>
   ankiDeckNames: string[]
@@ -114,10 +116,60 @@ export interface KnowledgeTabProps {
   loadError?: string
 }
 
+export const KNOWLEDGE_SETTING_ENTRIES: SettingEntry[] = [
+  {
+    id: 'wanikani-token',
+    label: 'WaniKani personal access token',
+    category: 'knowledge',
+    keywords: ['api', 'wk', 'known words'],
+    targetId: 'wanikani-token-input'
+  },
+  {
+    id: 'knowledge-anki-decks',
+    label: 'Anki known decks',
+    category: 'knowledge',
+    keywords: ['known words', 'source']
+  },
+  {
+    id: 'knowledge-anki-field',
+    label: 'Known-word field',
+    category: 'knowledge',
+    targetId: 'anki-known-field-select'
+  },
+  {
+    id: 'known-interval',
+    label: 'Known after (days)',
+    category: 'knowledge',
+    keywords: ['threshold', 'srs', 'interval'],
+    targetId: 'known-interval-days-input'
+  },
+  {
+    id: 'well-known-interval',
+    label: 'Well-known after (days)',
+    category: 'knowledge',
+    keywords: ['threshold', 'srs', 'interval'],
+    targetId: 'well-known-interval-days-input'
+  },
+  {
+    id: 'knowledge-sync',
+    label: 'Sync known words',
+    category: 'knowledge',
+    keywords: ['refresh', 'wanikani', 'anki']
+  },
+  {
+    id: 'coloring-enabled',
+    label: 'Color subtitle words by knowledge level',
+    category: 'knowledge',
+    keywords: ['underline', 'highlight'],
+    targetId: 'coloring-enabled-checkbox'
+  }
+]
+
 /** "Known words" options tab: WaniKani token, Anki known-decks source,
  * known/well-known thresholds, sync controls, and subtitle coloring. Owns
  * the transient WaniKani token draft input. */
 export default function KnowledgeTab({
+  active = true,
   wanikaniConfigured,
   onSaveWanikaniToken,
   ankiDeckNames,
@@ -177,7 +229,7 @@ export default function KnowledgeTab({
   }
 
   return (
-    <section className="options-tab active" aria-hidden="false">
+    <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       {loadError && (
         <p className="options-error" id="knowledge-load-error" role="alert">
           {loadError}
