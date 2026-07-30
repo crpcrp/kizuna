@@ -3,7 +3,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
-import { cueKey } from '../state/playerActions'
+import { cueKey } from '../state/tokenization'
 import { tokenSpans, tokenLevel } from './SubtitleOverlay'
 import {
   findMatches,

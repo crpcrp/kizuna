@@ -6,11 +6,11 @@ import {
 } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
 import {
-  buildWordLookupRequest,
-  lookupWord,
   type DictLookupBridge,
-  type WordLookupRequest
-} from './playerActions'
+  type WordLookupRequest,
+  buildWordLookupRequest,
+  lookupWord
+} from './wordLookup'
 import {
   deriveVocabularySpans,
   type VocabularySpan,

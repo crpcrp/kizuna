@@ -1,12 +1,7 @@
 import type { KnowledgeLevel, KnowledgeSource, SyncStatus } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
-import {
-  resolveKnownLevels,
-  type Dispatch,
-  type KnowledgeBridge,
-  type SubtitleRequestToken
-} from './playerActions'
-
+import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
+import { type KnowledgeBridge, resolveKnownLevels } from './tokenization'
 export interface KnowledgeSyncBridge extends KnowledgeBridge {
   sync(source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus>
 }

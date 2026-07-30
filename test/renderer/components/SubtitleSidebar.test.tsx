@@ -10,7 +10,7 @@ import SubtitleSidebar, {
   placeTranslationPopup,
   type TranslationPopup
 } from '@src/renderer/src/components/SubtitleSidebar'
-import { cueKey } from '@src/renderer/src/state/playerActions'
+import { cueKey } from '@src/renderer/src/state/tokenization'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import type { SearchMatch } from '@src/renderer/src/state/sidebarSearch'

@@ -4,7 +4,7 @@ import {
   type BannerTimer,
   type RecentFilesBridge
 } from '@src/renderer/src/state/recentFilesController'
-import type { OpenSession } from '@src/renderer/src/state/playerActions'
+import { type OpenSession } from '@src/renderer/src/state/mediaSession'
 import type { Track } from '@src/shared/track'
 import type { Cue } from '@src/shared/cue'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'

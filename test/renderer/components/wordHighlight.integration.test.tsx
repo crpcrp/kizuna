@@ -5,11 +5,8 @@ import { parseMecab } from '@src/main/services/mecab/parseMecab'
 import { lookup, type LookupDb } from '@src/main/services/dict/lookup'
 import SubtitleOverlay from '@src/renderer/src/components/SubtitleOverlay'
 import { CueRowContent } from '@src/renderer/src/components/SubtitleSidebar'
-import {
-  cueKey,
-  lookupWordPopup,
-  type DictLookupBridge
-} from '@src/renderer/src/state/playerActions'
+import { cueKey } from '@src/renderer/src/state/tokenization'
+import { type DictLookupBridge, lookupWordPopup } from '@src/renderer/src/state/wordLookup'
 import type { Token } from '@src/shared/token'
 import { createVocabularySpanController } from '@src/renderer/src/state/vocabularySpanController'
 import type { LookupResult } from '@src/shared/dictionary'

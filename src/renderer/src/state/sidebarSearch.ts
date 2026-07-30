@@ -1,6 +1,5 @@
 import type { Cue } from '../../../shared/cue'
-import { cueKey } from './playerActions'
-
+import { cueKey } from './tokenization'
 /** A single occurrence of the search query within a cue's raw text. */
 export interface SearchMatch {
   cueKey: string

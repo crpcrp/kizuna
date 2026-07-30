@@ -3,7 +3,7 @@ import { findActiveCue, type Cue } from '../../../shared/cue'
 import { isGrammarToken, isSymbolToken, type Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../shared/playerSettings'
-import { cueKey } from '../state/playerActions'
+import { cueKey } from '../state/tokenization'
 import type { VocabularySpan } from '../state/vocabularySpans'
 
 // Presentational overlay: shows whichever cue is active at the current

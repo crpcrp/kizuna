@@ -2,14 +2,13 @@ import type { LookupResult } from '../../../shared/dictionary'
 import type { DuplicatePolicy } from '../../../shared/anki'
 import type { KnowledgeDetails } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import { type AnkiExistingBridge } from './ankiMining'
 import {
-  lookupLinkedWord,
-  lookupWordPopup,
-  type AnkiExistingBridge,
   type DictLookupBridge,
-  type WordPopupPosition
-} from './playerActions'
-
+  type WordPopupPosition,
+  lookupLinkedWord,
+  lookupWordPopup
+} from './wordLookup'
 export interface PopupRequestToken {
   begin(): number
   isCurrent(request: number): boolean

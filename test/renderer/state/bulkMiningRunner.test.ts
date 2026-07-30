@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
 import type { MiningCandidate, ResolvedEntry } from '@src/renderer/src/state/bulkMining'
-import type { DictLookupBridge, SubtitleRequestToken } from '@src/renderer/src/state/playerActions'
+import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
+import { type DictLookupBridge } from '@src/renderer/src/state/wordLookup'
 import { resolveCandidateEntries } from '@src/renderer/src/state/bulkMiningRunner'
 
 function token(overrides: Partial<Token> = {}): Token {

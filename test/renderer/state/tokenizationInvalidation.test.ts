@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
-import {
-  cueKey,
-  tokenizeActiveCue,
-  type SubtitleRequestToken
-} from '@src/renderer/src/state/playerActions'
+import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
+import { cueKey, tokenizeActiveCue } from '@src/renderer/src/state/tokenization'
 import { invalidateTokenizationForDictionaryChange } from '@src/renderer/src/state/tokenizationInvalidation'
 
 const cue: Cue = { start: 0, end: 1, text: '猫' }

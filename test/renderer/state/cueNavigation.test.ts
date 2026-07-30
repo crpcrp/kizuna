@@ -8,7 +8,8 @@ import {
   nextCue,
   prevChapterStart,
   prevCue,
-  replayCue
+  replayCue,
+  seekTargetForCue
 } from '../../../src/renderer/src/state/cueNavigation'
 
 const cues: Cue[] = [
@@ -115,5 +116,19 @@ describe('chapter navigation helpers', () => {
     expect(nextChapterStart(unsorted, 1)).toBe(5)
     expect(nextChapterStart(unsorted, 35)).toBe(60)
     expect(prevChapterStart(unsorted, 95)).toBe(60)
+  })
+})
+
+describe('seekTargetForCue', () => {
+  it('with no offset, returns the cue start', () => {
+    expect(seekTargetForCue({ start: 12.5, end: 14, text: 'x' }, 0)).toBe(12.5)
+  })
+
+  it('adds a positive offset (subtitles delayed) so the cue still becomes active', () => {
+    expect(seekTargetForCue({ start: 10, end: 12, text: 'x' }, 500)).toBe(10.5)
+  })
+
+  it('subtracts a negative offset (subtitles shown earlier)', () => {
+    expect(seekTargetForCue({ start: 10, end: 12, text: 'x' }, -250)).toBe(9.75)
   })
 })

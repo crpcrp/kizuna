@@ -2,13 +2,9 @@ import { useEffect, type Dispatch, type RefObject } from 'react'
 import type { VideoDimensions } from '../../../shared/track'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
 import { loadChaptersForCurrentFile, type ChapterLoadBridge } from './appShell'
-import {
-  applyVideoAdjustments,
-  audioDelayForFile,
-  shouldProbe,
-  subtitleOffsetForFile,
-  type VideoAdjustmentsBridge
-} from './playerActions'
+import { shouldProbe } from './mediaSession'
+import { audioDelayForFile, subtitleOffsetForFile } from './perFileOffsets'
+import { type VideoAdjustmentsBridge, applyVideoAdjustments } from './playbackCommands'
 import type { PlayerAction } from './playerState'
 
 export interface PerFileRestoreBridge {

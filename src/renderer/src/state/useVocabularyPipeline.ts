@@ -10,18 +10,17 @@ import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeDetails, KnowledgeLevel, SyncStatus } from '../../../shared/knowledge'
 import type { PopupSortOrder } from '../../../shared/playerSettings'
+import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
 import {
-  cueKey,
-  tokenizeActiveCue,
-  resolveKnownLevels,
-  tokenizeAllCues,
-  type Dispatch,
-  type DictLookupBridge,
   type KnowledgeBridge,
   type MecabBatchBridge,
   type MecabBridge,
-  type SubtitleRequestToken
-} from './playerActions'
+  cueKey,
+  resolveKnownLevels,
+  tokenizeActiveCue,
+  tokenizeAllCues
+} from './tokenization'
+import { type DictLookupBridge } from './wordLookup'
 import type {
   WholeTrackVocabularyCoordinator,
   WholeTrackVocabularyResult

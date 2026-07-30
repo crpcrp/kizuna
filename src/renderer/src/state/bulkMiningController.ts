@@ -28,7 +28,8 @@ import {
   type EntryResolutionOpts
 } from './bulkMiningRunner'
 import { reportLemmas } from './subtitleReport'
-import type { MineMediaSource, SubtitleRequestToken } from './playerActions'
+import { type MineMediaSource } from './ankiMining'
+import { type SubtitleRequestToken } from './mediaSession'
 import type { KnowledgeDetailsBridge } from './wordPopupActions'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 

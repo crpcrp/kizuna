@@ -6,8 +6,7 @@ import {
   keyToAction,
   type ModifierTracker
 } from '../util/uiHelpers'
-import { performKeyAction, type KeyActionDeps } from './playerActions'
-
+import { type KeyActionDeps, performKeyAction } from './keyActions'
 export type KeyboardShortcutContext = KeyActionDeps & { keyBindings: KeyBindings }
 
 export interface UseKeyboardShortcutsInput {

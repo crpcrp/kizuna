@@ -1,8 +1,7 @@
 import type { LookupResult } from '../../../shared/dictionary'
 import { maxKnowledgeLevel, type KnowledgeLevel } from '../../../shared/knowledge'
 import { isSymbolToken, type Token } from '../../../shared/token'
-import { buildLongestMatchCandidates, resolvePopupHighlightSpan } from './playerActions'
-
+import { buildLongestMatchCandidates, resolvePopupHighlightSpan } from './wordLookup'
 export interface VocabularySpan {
   cueKey: string
   startOffset: number

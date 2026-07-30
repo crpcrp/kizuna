@@ -1,16 +1,15 @@
 import type { FrequencyMode } from '../../../shared/dictionary'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import {
-  addTokenToAnki,
-  checkAnkiExisting,
-  errorMessage,
-  mineMediaContext,
   type AnkiExistingBridge,
   type AnkiMineBridge,
-  type DictLookupBridge,
   type MineMediaSource,
-  type SubtitleRequestToken
-} from './playerActions'
+  addTokenToAnki,
+  checkAnkiExisting,
+  mineMediaContext
+} from './ankiMining'
+import { type SubtitleRequestToken, errorMessage } from './mediaSession'
+import { type DictLookupBridge } from './wordLookup'
 import type { MiningCandidate, MiningWordStatus, ResolvedEntry } from './bulkMining'
 
 export interface EntryResolutionOpts {

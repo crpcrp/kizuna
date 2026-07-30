@@ -29,27 +29,30 @@ import {
   isJapaneseSubtitleTrack,
   type PlayerState
 } from './state/playerState'
+import { type MineMediaSource } from './state/ankiMining'
+import { seekTargetForCue } from './state/cueNavigation'
+import { performFileNavigation } from './state/keyActions'
+import {
+  type OpenMediaResult,
+  type SubtitleRequestToken,
+  errorMessage,
+  shouldProbe
+} from './state/mediaSession'
+import { nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
+import {
+  type FrameStepGuard,
+  applyVideoAdjustments,
+  cycleAbLoopAction,
+  frameStepAction
+} from './state/playbackCommands'
+import { cueKey } from './state/tokenization'
 import {
   loadExternalSubtitle,
   onlineSubtitleTrack,
   selectAudio,
-  selectSubtitle,
-  seekTargetForCue,
-  cueKey,
-  wordPopupPosition,
-  nextSubtitleOffsets,
-  nextAudioDelays,
-  cycleAbLoopAction,
-  frameStepAction,
-  applyVideoAdjustments,
-  performFileNavigation,
-  shouldProbe,
-  errorMessage,
-  type FrameStepGuard,
-  type MineMediaSource,
-  type OpenMediaResult,
-  type SubtitleRequestToken
-} from './state/playerActions'
+  selectSubtitle
+} from './state/trackSelection'
+import { wordPopupPosition } from './state/wordLookup'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
 import {
   appClassName,
@@ -149,7 +152,7 @@ import type { LookupResult, ImportProgress } from '../../shared/dictionary'
 import type { AnkiSettings } from '../../shared/anki'
 
 // Root React component: the runnable player shell. Wires the reducer +
-// orchestration module (state/playerActions.ts) into the presentational
+// orchestration modules (state/mediaOpen.ts and siblings) into the presentational
 // components (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
 //
 // SSR-safety: the render path never touches `window` directly. All bridge
@@ -380,7 +383,7 @@ export default function App({
   )
   // The one OpenSession construction point for App's direct opens (neighbor
   // navigation, playlist, URL dialog, drop, launch delivery) — see
-  // state/playerActions.ts's OpenSession. Rebuilt on every call rather than
+  // state/mediaSession.ts's OpenSession. Rebuilt on every call rather than
   // memoized, so a handler closed over on an earlier render still reads the
   // token refs' current values instead of a stale snapshot.
   const openSession = () => ({
