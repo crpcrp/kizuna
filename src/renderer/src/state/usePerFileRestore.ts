@@ -1,7 +1,6 @@
 import { useEffect, type Dispatch, type RefObject } from 'react'
 import type { VideoDimensions } from '../../../shared/track'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
-import type { AudioDevice } from '../../../shared/audioDevice'
 import { loadChaptersForCurrentFile, type ChapterLoadBridge } from './appShell'
 import {
   applyVideoAdjustments,
@@ -18,9 +17,6 @@ export interface PerFileRestoreBridge {
     setAudioDelay(delayMs: number): Promise<unknown>
     setLoudnessNorm(on: boolean): Promise<unknown>
     setAbLoop(a: number | null, b: number | null): Promise<unknown>
-    getAudioDevices(): Promise<AudioDevice[]>
-    setAudioDevice(name: string): Promise<unknown>
-    setMuted(muted: boolean): Promise<unknown>
     getVideoDimensions(): Promise<VideoDimensions | undefined>
   }
   media: ChapterLoadBridge & {
@@ -39,16 +35,9 @@ export interface UsePerFileRestoreInput {
   folderSubtitleOffsetsRef: RefObject<Record<string, number>>
   audioDelaysRef: RefObject<Record<string, number>>
   videoAdjustmentsRef: RefObject<VideoAdjustments>
-  audioDeviceRefreshVersionRef: RefObject<number>
-  audioDeviceNeedsUnmuteRef: RefObject<boolean>
-  refreshAudioDevice(
-    stored: string,
-    player: PerFileRestoreBridge['player'],
-    onDevices: (devices: AudioDevice[]) => void,
-    reapplyStored: boolean,
-    isCurrent: () => boolean
-  ): Promise<boolean>
-  setAudioDevices(devices: AudioDevice[]): void
+  /** Re-reads mpv's output list and re-sends the stored preference, which a
+   * fresh mpv process has reset. Owned by state/audioDevices.ts. */
+  reapplyAudioDevice(): void
   setVideoDimensions(dimensions: VideoDimensions | undefined): void
 }
 
@@ -64,10 +53,7 @@ export function usePerFileRestore({
   folderSubtitleOffsetsRef,
   audioDelaysRef,
   videoAdjustmentsRef,
-  audioDeviceRefreshVersionRef,
-  audioDeviceNeedsUnmuteRef,
-  refreshAudioDevice,
-  setAudioDevices,
+  reapplyAudioDevice,
   setVideoDimensions
 }: UsePerFileRestoreInput): void {
   // Applies the current file's persisted subtitle offset (its own entry, else
@@ -101,22 +87,7 @@ export function usePerFileRestore({
     // renderer's proxy for "mpv is up", so re-apply the stored loudness and
     // device here. Read from refs to keep this off the effect's deps.
     void bridge.player.setLoudnessNorm(playbackSettingsRef.current.loudnessNormalization)
-    const refreshVersion = ++audioDeviceRefreshVersionRef.current
-    void refreshAudioDevice(
-      playbackSettingsRef.current.audioDevice,
-      bridge.player,
-      setAudioDevices,
-      true,
-      () => audioDeviceRefreshVersionRef.current === refreshVersion
-    ).then(
-      (recovered) => {
-        if (recovered) {
-          audioDeviceNeedsUnmuteRef.current = true
-          dispatch({ type: 'setMuted', value: false })
-        }
-      },
-      () => {}
-    )
+    reapplyAudioDevice()
     // Keyed on loadGeneration, not filePath: reopening the current file (F8
     // second instance, or picking it from Recent) must re-reset speed and
     // re-apply the stored offset/delay even though the path is unchanged.
@@ -134,10 +105,7 @@ export function usePerFileRestore({
     folderSubtitleOffsetsRef,
     audioDelaysRef,
     videoAdjustmentsRef,
-    audioDeviceRefreshVersionRef,
-    audioDeviceNeedsUnmuteRef,
-    refreshAudioDevice,
-    setAudioDevices
+    reapplyAudioDevice
   ])
 
   // Video dimensions depend only on the media identity, never on settings.

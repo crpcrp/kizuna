@@ -102,6 +102,7 @@ import { usePerFileRestore } from './state/usePerFileRestore'
 import { usePlayerEvents } from './state/usePlayerEvents'
 import { useVocabularyPipeline } from './state/useVocabularyPipeline'
 import { useMiniPlayer } from './state/useMiniPlayer'
+import { useAudioDevices } from './state/audioDevices'
 import { createThemeController } from './state/themeController'
 import { createOptionsDataController } from './state/optionsData'
 import {
@@ -136,7 +137,7 @@ import type { Cue } from '../../shared/cue'
 import type { Token } from '../../shared/token'
 import { URL_SUBTITLE_TRACK_ID, type VideoDimensions } from '../../shared/track'
 import type { VideoAdjustments as VideoAdjustmentsValue } from '../../shared/playerSettings'
-import { AUTO_AUDIO_DEVICE, effectiveAudioDevice, type AudioDevice } from '../../shared/audioDevice'
+import { effectiveAudioDevice, type AudioDevice } from '../../shared/audioDevice'
 import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 import type {
   KnowledgeLevel,
@@ -154,50 +155,6 @@ import type { AnkiSettings } from '../../shared/anki'
 // SSR-safety: the render path never touches `window` directly. All bridge
 // access is deferred to event handlers or to the useEffect subscriptions
 // below (effects don't run during renderToStaticMarkup).
-
-/** Minimal player surface needed to refresh and recover an output device. */
-export interface AudioDevicePlayer {
-  getAudioDevices: () => Promise<AudioDevice[]>
-  setAudioDevice: (name: string) => Promise<unknown>
-  setMuted: (muted: boolean) => Promise<unknown>
-}
-
-/**
- * Refreshes mpv's output list and applies only the necessary device change.
- * The persisted preference stays in `stored`; an unavailable preference is
- * applied as `auto` for this session and the output is explicitly unmuted.
- * `reapplyStored` is used after a new mpv load, where an available preference
- * must be sent again even though it did not change during the refresh.
- */
-export async function refreshAudioDevice(
-  stored: string,
-  player: AudioDevicePlayer,
-  onDevices: (devices: AudioDevice[]) => void,
-  reapplyStored: boolean,
-  isCurrent: () => boolean = () => true
-): Promise<boolean> {
-  const devices = await player.getAudioDevices()
-  if (!isCurrent()) return false
-  onDevices(devices)
-
-  const effective = effectiveAudioDevice(stored, devices)
-  const recovered = effective !== stored
-  if (stored !== AUTO_AUDIO_DEVICE && (recovered || reapplyStored)) {
-    await player.setAudioDevice(effective)
-  }
-  if (recovered) await player.setMuted(false)
-  return recovered
-}
-
-/** Applies a user-selected output and restores sound after a prior fallback. */
-export async function applySelectedAudioDevice(
-  name: string,
-  recoverMute: boolean,
-  player: Pick<AudioDevicePlayer, 'setAudioDevice' | 'setMuted'>
-): Promise<void> {
-  await player.setAudioDevice(name)
-  if (recoverMute) await player.setMuted(false)
-}
 
 export interface AppProps {
   /** Optional render seed for deterministic renderer integration tests. */
@@ -546,15 +503,13 @@ export default function App({
   // during a panel transition, so it always describes the picture the user is
   // currently looking at rather than a fabricated scale.
   const videoContentBaselineRef = useRef<VideoContentBaseline | undefined>(undefined)
-  // Output devices from mpv's audio-device-list, refreshed whenever the Audio
-  // menu opens (devices come and go). Empty until first fetched.
-  const [audioDevices, setAudioDevices] = useState<AudioDevice[]>(initialAudioDevices)
-  // Set when a missing saved device forced mpv to auto; the next explicit
-  // device selection should also clear mpv's mute state.
-  const audioDeviceNeedsUnmuteRef = useRef(false)
-  // A device-list refresh can resolve after the user chooses a new output.
-  // Its stale saved preference must not overwrite that explicit selection.
-  const audioDeviceRefreshVersionRef = useRef(0)
+  // mpv output selection (list refresh, explicit picks, per-load re-apply).
+  const audioDeviceController = useAudioDevices({
+    player: kizuna.player,
+    dispatch,
+    storedDeviceRef: stateRef,
+    initialDevices: initialAudioDevices
+  })
   const [alwaysOnTop, setAlwaysOnTop] = useState(false)
   // Compact mini-player (picture-in-picture) mode. `miniPlayer.active` gates the
   // reduced chrome; the ref mirror lets the toggle-fullscreen wrapper read the
@@ -666,10 +621,7 @@ export default function App({
     folderSubtitleOffsetsRef,
     audioDelaysRef,
     videoAdjustmentsRef,
-    audioDeviceRefreshVersionRef,
-    audioDeviceNeedsUnmuteRef,
-    refreshAudioDevice,
-    setAudioDevices,
+    reapplyAudioDevice: audioDeviceController.reapplyAfterLoad,
     setVideoDimensions
   })
 
@@ -733,48 +685,6 @@ export default function App({
   const handleSelectAudio = (id: number): void => {
     const track = state.tracks.find((t) => t.kind === 'audio' && t.id === id)
     if (state.filePath && track) selectAudio(window.kizuna, dispatch, state.filePath, track)
-  }
-
-  // Options > Playback opened: re-reads mpv's device list, since devices appear
-  // and disappear while the app runs. The version counter makes a slow refresh a
-  // no-op once a newer one (or an explicit device pick) has superseded it.
-  // A refresh that recovers a vanished device leaves mpv muted, so the next
-  // successful selection unmutes — tracked via audioDeviceNeedsUnmuteRef.
-  // Identity-stable: OptionsMenu calls it from an effect keyed on this prop,
-  // so a per-render function would re-refresh on every render.
-  const handleAudioDevicesRequest = useCallback((): void => {
-    const refreshVersion = ++audioDeviceRefreshVersionRef.current
-    void refreshAudioDevice(
-      stateRef.current.audioDevice,
-      window.kizuna.player,
-      setAudioDevices,
-      false,
-      () => audioDeviceRefreshVersionRef.current === refreshVersion
-    ).then(
-      (recovered) => {
-        if (recovered) {
-          audioDeviceNeedsUnmuteRef.current = true
-          dispatch({ type: 'setMuted', value: false })
-        }
-      },
-      () => {}
-    )
-  }, [stateRef])
-
-  // Options > Playback > Output device. Bumps the version counter first so an in-flight
-  // refresh cannot clobber this explicit pick, then clears any mute left
-  // behind by an earlier device recovery.
-  const handleSelectAudioDevice = (name: string): void => {
-    audioDeviceRefreshVersionRef.current += 1
-    const recoverMute = audioDeviceNeedsUnmuteRef.current
-    dispatch({ type: 'setAudioDevice', value: name })
-    void applySelectedAudioDevice(name, recoverMute, window.kizuna.player).then(
-      () => {
-        audioDeviceNeedsUnmuteRef.current = false
-        if (recoverMute) dispatch({ type: 'setMuted', value: false })
-      },
-      () => {}
-    )
   }
 
   const handleToggleLoudnessNorm = (): void => {
@@ -1781,12 +1691,12 @@ export default function App({
         skipSeconds={state.skipSeconds}
         rightClickTogglePause={state.rightClickTogglePause}
         autoPlayNext={state.autoPlayNext}
-        audioDevices={audioDevices}
-        selectedAudioDevice={effectiveAudioDevice(state.audioDevice, audioDevices)}
-        onSelectAudioDevice={handleSelectAudioDevice}
+        audioDevices={audioDeviceController.devices}
+        selectedAudioDevice={effectiveAudioDevice(state.audioDevice, audioDeviceController.devices)}
+        onSelectAudioDevice={audioDeviceController.selectDevice}
         loudnessNormalization={state.loudnessNormalization}
         onToggleLoudnessNorm={handleToggleLoudnessNorm}
-        onAudioDevicesRequest={handleAudioDevicesRequest}
+        onAudioDevicesRequest={audioDeviceController.requestDevices}
         screenshotFolder={state.screenshotFolder}
         mpvUserConfig={state.mpvUserConfig}
         mpvExtraArgs={state.mpvExtraArgs}
