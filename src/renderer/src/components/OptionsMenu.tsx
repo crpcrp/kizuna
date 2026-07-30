@@ -36,7 +36,7 @@ export interface OptionsMenuProps {
   onClose: () => void
   onCategoryOpen: (category: OptionsCategory) => void
   keybindings: Omit<KeybindingsTabProps, 'active' | 'open'>
-  playback: Omit<PlaybackTabProps, 'active'>
+  playback: Omit<PlaybackTabProps, 'active' | 'open'>
   appearance: Omit<AppearanceTabProps, 'active'>
   subtitles: Omit<SubtitlesTabProps, 'active'>
   dictionaries: Omit<DictionariesTabProps, 'active'>
@@ -199,7 +199,7 @@ export default function OptionsMenu({
               open={open}
               active={activeCategory === 'keybindings'}
             />
-            <PlaybackTab {...playback} active={activeCategory === 'playback'} />
+            <PlaybackTab {...playback} open={open} active={activeCategory === 'playback'} />
             <AppearanceTab {...appearance} active={activeCategory === 'appearance'} />
             <SubtitlesTab {...subtitles} active={activeCategory === 'subtitles'} />
 
