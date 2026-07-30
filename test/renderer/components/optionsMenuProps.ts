@@ -5,7 +5,10 @@ import {
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SUBTITLE_STYLE
 } from '@src/shared/playerSettings'
-import { DEFAULT_KNOWLEDGE_SETTINGS, DEFAULT_SYNC_STATUS } from '@src/renderer/src/state/appShell'
+import {
+  DEFAULT_KNOWLEDGE_SETTINGS,
+  DEFAULT_SYNC_STATUS
+} from '@src/renderer/src/state/optionsData'
 import { AUTO_AUDIO_DEVICE } from '@src/shared/audioDevice'
 
 // Every required OptionsMenuProps entry at a neutral value, so a test spreads

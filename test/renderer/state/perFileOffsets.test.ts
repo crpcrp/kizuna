@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
+  applyOffsetToFolder,
   applySubtitleOffsetToFolder,
   audioDelayForFile,
   nextAudioDelays,
@@ -110,6 +111,26 @@ describe('applySubtitleOffsetToFolder', () => {
     const next = applySubtitleOffsetToFolder(offsets, folderOffsets, 'a.mkv', 300)
     expect(next.subtitleOffsets).toBe(offsets)
     expect(next.folderSubtitleOffsets).toBe(folderOffsets)
+  })
+})
+
+describe('applyOffsetToFolder', () => {
+  it('updates both refs and persists them in one patch', () => {
+    const refs = {
+      subtitleOffsets: { current: { '/videos/a.mkv': 250, '/videos/b.mkv': -100 } },
+      folderSubtitleOffsets: { current: {} as Record<string, number> }
+    }
+    const persist = vi.fn()
+
+    applyOffsetToFolder(refs, '/videos/a.mkv', 300, persist)
+
+    expect(refs.subtitleOffsets.current).toEqual({})
+    expect(refs.folderSubtitleOffsets.current).toEqual({ '/videos': 300 })
+    expect(persist).toHaveBeenCalledOnce()
+    expect(persist).toHaveBeenCalledWith({
+      subtitleOffsets: {},
+      folderSubtitleOffsets: { '/videos': 300 }
+    })
   })
 })
 

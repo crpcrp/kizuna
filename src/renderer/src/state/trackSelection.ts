@@ -22,6 +22,14 @@ import {
   type SubtitleRequestToken
 } from './mediaSession'
 
+interface SubtitlePickerSessionDeps {
+  expectedFilePath: string
+  currentFilePath: () => string | undefined
+  pickPath: () => Promise<string | undefined>
+  session: OpenSession
+  reportError: (message: string) => void
+}
+
 /**
  * Switches the active audio track in mpv, reflects it in state, then persists
  * the descriptor as the file's manually-chosen audio track. A persistence
@@ -227,6 +235,14 @@ export async function loadExternalSubtitle(
   subtitlePath: string
 ): Promise<string | undefined> {
   return runLoadExternalSubtitle(session, filePath, subtitlePath)
+}
+
+export async function loadSubtitleFromPicker(deps: SubtitlePickerSessionDeps): Promise<void> {
+  const path = await deps.pickPath()
+  if (path === undefined) return
+  if (deps.currentFilePath() !== deps.expectedFilePath) return
+  const warning = await loadExternalSubtitle(deps.session, deps.expectedFilePath, path)
+  if (warning) deps.reportError(warning)
 }
 
 async function runLoadExternalSubtitle(

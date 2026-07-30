@@ -14,6 +14,24 @@ import {
   mineMediaContext
 } from './ankiMining'
 import { type DictLookupBridge } from './wordLookup'
+
+interface ContainerLike {
+  contains(node: Node | null): boolean
+}
+
+export function shouldOpenWordPopup(selection: Pick<Selection, 'isCollapsed'> | null): boolean {
+  return selection?.isCollapsed !== false
+}
+
+export function shouldClosePopupOnPointerDown(
+  popupElement: ContainerLike | null,
+  target: Node | null,
+  modalOpen: boolean
+): boolean {
+  if (modalOpen || !popupElement) return false
+  return !popupElement.contains(target)
+}
+
 export type AnkiPopupStatus = 'idle' | 'adding' | 'added' | 'updated' | 'error'
 
 export interface PopupState {

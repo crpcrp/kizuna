@@ -3,6 +3,11 @@
 
 import { subtitleOffsetFolderKey, subtitleOffsetKey } from '../../../shared/playerSettings'
 
+interface SubtitleOffsetRefs {
+  subtitleOffsets: { current: Record<string, number> }
+  folderSubtitleOffsets: { current: Record<string, number> }
+}
+
 /**
  * Looks up the stored subtitle offset (ms) for `filePath`: the file's own
  * `subtitleOffsets` entry wins; otherwise its folder's `folderSubtitleOffsets`
@@ -47,6 +52,26 @@ export function applySubtitleOffsetToFolder(
     subtitleOffsets,
     folderSubtitleOffsets: { ...folderOffsets, [folderKey]: offsetMs }
   }
+}
+
+export function applyOffsetToFolder(
+  refs: SubtitleOffsetRefs,
+  filePath: string,
+  offsetMs: number,
+  persist: (patch: {
+    subtitleOffsets: Record<string, number>
+    folderSubtitleOffsets: Record<string, number>
+  }) => void
+): void {
+  const next = applySubtitleOffsetToFolder(
+    refs.subtitleOffsets.current,
+    refs.folderSubtitleOffsets.current,
+    filePath,
+    offsetMs
+  )
+  refs.subtitleOffsets.current = next.subtitleOffsets
+  refs.folderSubtitleOffsets.current = next.folderSubtitleOffsets
+  persist(next)
 }
 
 /**

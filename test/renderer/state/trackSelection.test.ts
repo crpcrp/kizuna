@@ -5,6 +5,7 @@ import {
   detectJapaneseCues,
   externalSubtitleTrack,
   loadExternalSubtitle,
+  loadSubtitleFromPicker,
   onlineSubtitleTrack,
   selectAudio,
   selectSubtitle
@@ -445,6 +446,67 @@ describe('loadExternalSubtitle', () => {
     await expect(inFlight).resolves.toBeUndefined()
     expect(dispatch).not.toHaveBeenCalled()
     expect(bridge.mediaHistory.setSubtitleTrack).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadSubtitleFromPicker', () => {
+  it('loads the selected subtitle for the still-current video', async () => {
+    const session = makeSession()
+    const reportError = vi.fn()
+
+    await loadSubtitleFromPicker({
+      expectedFilePath: '/video.mkv',
+      currentFilePath: () => '/video.mkv',
+      pickPath: vi.fn().mockResolvedValue('/video.srt'),
+      session,
+      reportError
+    })
+
+    expect(session.bridge.media.loadExternalSubtitle).toHaveBeenCalledWith('/video.srt', 'auto')
+    expect(reportError).not.toHaveBeenCalled()
+  })
+
+  it('does nothing when cancelled or when the video changed while the dialog was open', async () => {
+    const cancelled = makeSession()
+    await loadSubtitleFromPicker({
+      expectedFilePath: '/video.mkv',
+      currentFilePath: () => '/video.mkv',
+      pickPath: vi.fn().mockResolvedValue(undefined),
+      session: cancelled,
+      reportError: vi.fn()
+    })
+    expect(cancelled.bridge.media.loadExternalSubtitle).not.toHaveBeenCalled()
+
+    const stale = makeSession()
+    await loadSubtitleFromPicker({
+      expectedFilePath: '/video.mkv',
+      currentFilePath: () => '/other.mkv',
+      pickPath: vi.fn().mockResolvedValue('/video.srt'),
+      session: stale,
+      reportError: vi.fn()
+    })
+    expect(stale.bridge.media.loadExternalSubtitle).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a subtitle load warning', async () => {
+    const session = makeSession({
+      bridge: makeBridge({
+        media: {
+          loadExternalSubtitle: vi.fn().mockRejectedValue(new Error('Malformed subtitle'))
+        }
+      })
+    })
+    const reportError = vi.fn()
+
+    await loadSubtitleFromPicker({
+      expectedFilePath: '/video.mkv',
+      currentFilePath: () => '/video.mkv',
+      pickPath: vi.fn().mockResolvedValue('/video.srt'),
+      session,
+      reportError
+    })
+
+    expect(reportError).toHaveBeenCalledWith('Malformed subtitle')
   })
 })
 

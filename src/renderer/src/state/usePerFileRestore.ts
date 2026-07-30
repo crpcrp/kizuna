@@ -1,7 +1,7 @@
 import { useEffect, type Dispatch, type RefObject } from 'react'
+import type { Chapter } from '../../../shared/chapter'
 import type { VideoDimensions } from '../../../shared/track'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
-import { loadChaptersForCurrentFile, type ChapterLoadBridge } from './appShell'
 import { shouldProbe } from './mediaSession'
 import { audioDelayForFile, subtitleOffsetForFile } from './perFileOffsets'
 import { type VideoAdjustmentsBridge, applyVideoAdjustments } from './playbackCommands'
@@ -15,8 +15,23 @@ export interface PerFileRestoreBridge {
     setAbLoop(a: number | null, b: number | null): Promise<unknown>
     getVideoDimensions(): Promise<VideoDimensions | undefined>
   }
-  media: ChapterLoadBridge & {
+  media: {
+    getChapters(filePath: string): Promise<Chapter[]>
     getVideoDimensions(filePath: string): Promise<VideoDimensions | undefined>
+  }
+}
+
+async function loadChaptersForCurrentFile(
+  media: PerFileRestoreBridge['media'],
+  filePath: string,
+  isCurrentFile: () => boolean,
+  dispatch: Dispatch<PlayerAction>
+): Promise<void> {
+  try {
+    const chapters = await media.getChapters(filePath)
+    if (isCurrentFile()) dispatch({ type: 'chaptersLoaded', chapters })
+  } catch {
+    // Chapters are optional decoration; probing failures must not interrupt playback.
   }
 }
 
