@@ -1,5 +1,6 @@
 import type { FrequencyMode } from '../../../shared/dictionary'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
+import { errorMessage } from '../util/errorMessage'
 import {
   type AnkiExistingBridge,
   type AnkiMineBridge,
@@ -8,7 +9,7 @@ import {
   checkAnkiExisting,
   mineMediaContext
 } from './ankiMining'
-import { type SubtitleRequestToken, errorMessage } from './mediaSession'
+import { type SubtitleRequestToken } from './mediaSession'
 import { type DictLookupBridge } from './wordLookup'
 import type { MiningCandidate, MiningWordStatus, ResolvedEntry } from './bulkMining'
 

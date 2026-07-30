@@ -73,12 +73,12 @@ describe('addTokenToAnki', () => {
     expect(outcome).toEqual({ status: 'error', error: 'AnkiConnect not running' })
   })
 
-  it('stringifies a non-Error rejection instead of throwing', async () => {
+  it('falls back to a generic message for a non-Error rejection instead of throwing', async () => {
     const bridge = { addNote: vi.fn().mockRejectedValue('deck not found') }
 
     const outcome = await addTokenToAnki(bridge, token, result, 'sentence')
 
-    expect(outcome).toEqual({ status: 'error', error: 'deck not found' })
+    expect(outcome).toEqual({ status: 'error', error: 'Something went wrong.' })
   })
 })
 

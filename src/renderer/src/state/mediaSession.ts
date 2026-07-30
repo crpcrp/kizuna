@@ -160,16 +160,6 @@ export interface OpenSession {
 }
 
 /**
- * Sanitizes a caught value into a short, user-facing message. Never surfaces
- * `err.stack` or an arbitrary `String(err)` of a non-Error thrown value —
- * both could leak internals into the UI.
- */
-export function errorMessage(err: unknown): string {
-  if (err instanceof Error && err.message) return err.message
-  return 'Something went wrong.'
-}
-
-/**
  * Whether `path` should be probed with the filesystem-oriented tooling
  * (ffprobe track enumeration, video-dimension and chapter reads). Remote URLs
  * (Feature 9) return false: ffprobe can't read them, so their stream info comes

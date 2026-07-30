@@ -14,12 +14,12 @@ import {
   type Track,
   URL_SUBTITLE_TRACK_ID
 } from '../../../shared/track'
+import { errorMessage } from '../util/errorMessage'
 import {
   type Dispatch,
   type OpenSession,
   type PlayerBridge,
-  type SubtitleRequestToken,
-  errorMessage
+  type SubtitleRequestToken
 } from './mediaSession'
 
 /**

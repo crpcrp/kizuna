@@ -1,6 +1,7 @@
 import type { Cue } from '../../../shared/cue'
 import type { KnowledgeDetails, SyncStatus } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import { errorMessage } from '../util/errorMessage'
 import { buildSubtitleReport, reportLemmas, type SubtitleReport } from './subtitleReport'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 import type { KnowledgeDetailsBridge } from './wordPopupActions'
@@ -106,7 +107,7 @@ export function createSubtitleReportController(): SubtitleReportController {
         })
       } catch (err) {
         if (requestToken !== request) return
-        set({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        set({ kind: 'error', message: errorMessage(err) })
       }
     },
 

@@ -32,12 +32,7 @@ import {
 import { type MineMediaSource } from './state/ankiMining'
 import { seekTargetForCue } from './state/cueNavigation'
 import { performFileNavigation } from './state/keyActions'
-import {
-  type OpenMediaResult,
-  type SubtitleRequestToken,
-  errorMessage,
-  shouldProbe
-} from './state/mediaSession'
+import { type OpenMediaResult, type SubtitleRequestToken, shouldProbe } from './state/mediaSession'
 import { nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
 import {
   type FrameStepGuard,
@@ -129,6 +124,7 @@ import { useVideoMargins } from './state/useVideoMargins'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestCallback, useLatestRef } from './state/useLatestRef'
 import { applyLevelColors } from './util/levelColors'
+import { errorMessage } from './util/errorMessage'
 import { isRemoteUrl } from '../../shared/mediaFileTypes'
 import { isExtractorBackedUrl, type YtdlpQuality } from '../../shared/ytdlpQuality'
 import type { KizunaApi } from '../../shared/preloadApi'

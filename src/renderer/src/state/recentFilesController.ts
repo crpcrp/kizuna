@@ -1,11 +1,11 @@
 import type { RecentMediaFile } from '../../../shared/mediaHistory'
+import { errorMessage } from '../util/errorMessage'
 import { loadPath, openAndLoad, openRecentFile } from './mediaOpen'
 import {
   type OpenMediaResult,
   type OpenSession,
   type OpenWarningSink,
-  type RecentMediaBridge,
-  errorMessage
+  type RecentMediaBridge
 } from './mediaSession'
 /** One open's late-warning collector (see `createWarningSink`). */
 interface WarningSink {
