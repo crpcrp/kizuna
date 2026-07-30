@@ -345,4 +345,22 @@ describe('OptionsMenu audio output', () => {
 
     expect(onAudioDevicesRequest).toHaveBeenCalledOnce()
   })
+
+  it('requests a fresh device list when the open dialog is reopened on Playback', () => {
+    const onAudioDevicesRequest = vi.fn()
+    const base = baseOptionsMenuProps()
+    const { rerender } = render(
+      <OptionsMenu {...base} open playback={{ ...base.playback, onAudioDevicesRequest }} />
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
+    expect(onAudioDevicesRequest).toHaveBeenCalledOnce()
+
+    rerender(
+      <OptionsMenu {...base} open={false} playback={{ ...base.playback, onAudioDevicesRequest }} />
+    )
+    rerender(<OptionsMenu {...base} open playback={{ ...base.playback, onAudioDevicesRequest }} />)
+    expect(onAudioDevicesRequest).toHaveBeenCalledTimes(2)
+  })
+
 })
