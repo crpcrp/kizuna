@@ -1,5 +1,5 @@
 import './SubtitleReport.css'
-import { useEffect } from 'react'
+import ModalOverlay from './ModalOverlay'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { SubtitleReportPhase } from '../state/subtitleReportController'
 import {
@@ -224,43 +224,24 @@ export default function SubtitleReport({
   onClose,
   onRetry
 }: SubtitleReportProps): React.JSX.Element {
-  // Escape-to-close, active only while open — same pattern as MenuBar's
-  // outside-click/Escape listener. Not exercisable under SSR (no jsdom); see
-  // the test file's header comment.
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
   return (
-    <div
+    <ModalOverlay
       id="subtitle-report"
-      className={open ? 'subtitle-report-overlay open' : 'subtitle-report-overlay'}
-      role="dialog"
-      aria-label="Subtitle report"
-      aria-hidden={!open}
-      onClick={onClose}
+      open={open}
+      label="Subtitle report"
+      onClose={onClose}
+      headerActions={
+        <button
+          type="button"
+          id="subtitle-report-close"
+          aria-label="Close subtitle report"
+          onClick={onClose}
+        >
+          &#x2715;
+        </button>
+      }
     >
-      <div className="subtitle-report-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="subtitle-report-header">
-          <span>Subtitle report</span>
-          <button
-            type="button"
-            id="subtitle-report-close"
-            aria-label="Close subtitle report"
-            onClick={onClose}
-          >
-            &#x2715;
-          </button>
-        </div>
-        <div className="subtitle-report-body">
-          <ReportBody open={open} phase={phase} onRetry={onRetry} />
-        </div>
-      </div>
-    </div>
+      <ReportBody open={open} phase={phase} onRetry={onRetry} />
+    </ModalOverlay>
   )
 }

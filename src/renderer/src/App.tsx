@@ -17,7 +17,7 @@ import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
 import SubtitleReport from './components/SubtitleReport'
-import BulkMining from './components/BulkMining'
+import BulkMiningModal from './components/BulkMiningModal'
 import VideoAdjustments from './components/VideoAdjustments'
 import OpenUrlDialog from './components/OpenUrlDialog'
 import CardImageCropDialog from './components/CardImageCropDialog'
@@ -87,7 +87,6 @@ import { createSubtitleReportController } from './state/subtitleReportController
 import { createBulkMiningController } from './state/bulkMiningController'
 import type { VocabularySpan } from './state/vocabularySpans'
 import { createWholeTrackVocabularyCoordinator } from './state/wholeTrackVocabulary'
-import { bulkMiningDialogCloseAction } from './state/dialogKey'
 import {
   createBulkMiningCompletionTracker,
   type BulkMiningCompletionEvent
@@ -1409,22 +1408,6 @@ export default function App({
     setMiningPresentation('closed')
   })
 
-  // Re-bound whenever the mining phase changes, so the listener reads the
-  // current phase instead of the one captured when the modal opened. No
-  // behavior change while bulkMiningDialogCloseAction discards on every phase —
-  // it keeps the listener honest if that routing ever stops being uniform.
-  useEffect(() => {
-    if (miningPresentation !== 'modal') return
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.code !== 'Escape') return
-      if (bulkMiningDialogCloseAction('escape', bulkMiningPhase) !== 'discard') return
-      event.preventDefault()
-      closeMining()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [miningPresentation, bulkMiningPhase, closeMining])
-
   const openMining = (): void => {
     if (miningPresentation === 'sidebar') {
       setMiningPresentation(reopenBulkMiningModal(miningPresentation))
@@ -1826,101 +1809,56 @@ export default function App({
       />
 
       {miningPresentation === 'modal' && (
-        <div
-          id="subtitle-report"
-          className="subtitle-report-overlay open"
-          role="dialog"
-          aria-label="Bulk Anki mining"
-          onClick={() => {
-            if (bulkMiningDialogCloseAction('backdrop', bulkMiningPhase) === 'discard')
-              closeMining()
+        <BulkMiningModal
+          phase={bulkMiningPhase}
+          available={japaneseSubtitleSelected && state.cues.length > 0}
+          onClose={closeMining}
+          onHideToSidebar={() =>
+            setMiningPresentation(hideBulkMiningToSidebar(miningPresentation, bulkMiningPhase))
+          }
+          frequencyDictConfigured={state.popupSettings.frequencyDictId !== null}
+          onThresholdChange={(raw) => bulkMiningController.setThreshold(raw)}
+          onMinimumCountChange={(raw) => bulkMiningController.setMinimumCount(raw)}
+          onSortChange={(sort) =>
+            bulkMiningController.setSort(sort, state.popupSettings.frequencyDictId !== null)
+          }
+          onToggle={(lemma) => bulkMiningController.toggle(lemma)}
+          onSelectAll={() =>
+            bulkMiningController.selectAllVisible(state.popupSettings.frequencyDictId !== null)
+          }
+          onSelectNone={() =>
+            bulkMiningController.selectNoneVisible(state.popupSettings.frequencyDictId !== null)
+          }
+          onSetHideTargetDeckMatches={(hide) => bulkMiningController.setHideTargetDeckMatches(hide)}
+          targetDeckName={ankiState.data?.settings.deckName}
+          onStart={() =>
+            void bulkMiningController.start(
+              { dict: window.kizuna.dict, anki: window.kizuna.anki },
+              mineMediaSource()
+            )
+          }
+          onCancel={() => bulkMiningController.cancel()}
+          onBackToList={() =>
+            void bulkMiningController.backToList({
+              dict: window.kizuna.dict,
+              anki: window.kizuna.anki,
+              knowledge: window.kizuna.knowledge
+            })
+          }
+          onRetry={() => {
+            void bulkMiningController.open({
+              bridges: {
+                dict: window.kizuna.dict,
+                anki: window.kizuna.anki,
+                knowledge: window.kizuna.knowledge
+              },
+              snapshot: prepareWholeTrackVocabulary,
+              cues: state.cues,
+              frequencyDictId: state.popupSettings.frequencyDictId,
+              sortOrder: state.popupSettings.sortOrder
+            })
           }}
-        >
-          <div className="subtitle-report-panel" onClick={(event) => event.stopPropagation()}>
-            <div className="subtitle-report-header">
-              <span>Bulk Anki mining</span>
-              {bulkMiningPhase.kind === 'running' ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setMiningPresentation(
-                      hideBulkMiningToSidebar(miningPresentation, bulkMiningPhase)
-                    )
-                  }
-                >
-                  Hide to sidebar
-                </button>
-              ) : (
-                <button type="button" aria-label="Close bulk Anki mining" onClick={closeMining}>
-                  &#x2715;
-                </button>
-              )}
-            </div>
-            <div className="subtitle-report-body">
-              {!japaneseSubtitleSelected || state.cues.length === 0 ? (
-                <p id="bulk-mining-unavailable" role="status">
-                  Select a Japanese subtitle track to mine words.
-                </p>
-              ) : (
-                <BulkMining
-                  phase={bulkMiningPhase}
-                  frequencyDictConfigured={state.popupSettings.frequencyDictId !== null}
-                  onThresholdChange={(raw) => bulkMiningController.setThreshold(raw)}
-                  onMinimumCountChange={(raw) => bulkMiningController.setMinimumCount(raw)}
-                  onSortChange={(sort) =>
-                    bulkMiningController.setSort(sort, state.popupSettings.frequencyDictId !== null)
-                  }
-                  onToggle={(lemma) => bulkMiningController.toggle(lemma)}
-                  onSelectAll={() =>
-                    bulkMiningController.selectAllVisible(
-                      state.popupSettings.frequencyDictId !== null
-                    )
-                  }
-                  onSelectNone={() =>
-                    bulkMiningController.selectNoneVisible(
-                      state.popupSettings.frequencyDictId !== null
-                    )
-                  }
-                  onSetHideTargetDeckMatches={(hide) =>
-                    bulkMiningController.setHideTargetDeckMatches(hide)
-                  }
-                  targetDeckName={ankiState.data?.settings.deckName}
-                  onStart={() =>
-                    void bulkMiningController.start(
-                      {
-                        dict: window.kizuna.dict,
-                        anki: window.kizuna.anki
-                      },
-                      mineMediaSource()
-                    )
-                  }
-                  onCancel={() => bulkMiningController.cancel()}
-                  onClose={closeMining}
-                  onBackToList={() =>
-                    void bulkMiningController.backToList({
-                      dict: window.kizuna.dict,
-                      anki: window.kizuna.anki,
-                      knowledge: window.kizuna.knowledge
-                    })
-                  }
-                  onRetry={() => {
-                    void bulkMiningController.open({
-                      bridges: {
-                        dict: window.kizuna.dict,
-                        anki: window.kizuna.anki,
-                        knowledge: window.kizuna.knowledge
-                      },
-                      snapshot: prepareWholeTrackVocabulary,
-                      cues: state.cues,
-                      frequencyDictId: state.popupSettings.frequencyDictId,
-                      sortOrder: state.popupSettings.sortOrder
-                    })
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
+        />
       )}
       {miningCompletion && (
         <div id="bulk-mining-completion-toast" role="status">

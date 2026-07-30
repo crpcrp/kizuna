@@ -1,0 +1,56 @@
+/* ---- Shared modal chrome (see ModalOverlay.tsx) ---- */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-backdrop);
+}
+.modal-overlay.open {
+  display: flex;
+}
+.modal-panel {
+  position: relative;
+  width: 640px;
+  max-width: 94vw;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  box-shadow: var(--shadow-panel);
+  padding: 16px;
+  box-sizing: border-box;
+}
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-bottom: 12px;
+}
+.modal-header button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 8px 10px;
+  line-height: 1;
+}
+.modal-header button:hover {
+  background: var(--hover-bg);
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
