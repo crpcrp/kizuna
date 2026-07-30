@@ -9,11 +9,11 @@ import { APP_NAME } from '@src/shared/appInfo'
 const noop = (): void => undefined
 
 function renderMenu(translationEnabled = false, onChangeTranslationEnabled = vi.fn()): void {
+  const base = baseOptionsMenuProps()
   render(
     <OptionsMenu
-      {...baseOptionsMenuProps()}
-      translationEnabled={translationEnabled}
-      onChangeTranslationEnabled={onChangeTranslationEnabled}
+      {...base}
+      subtitles={{ ...base.subtitles, translationEnabled, onChangeTranslationEnabled }}
     />
   )
 }
@@ -27,11 +27,11 @@ function renderMenuWithScreenshot(
   screenshotFolder: string | null,
   onChangeScreenshotFolder = vi.fn()
 ): void {
+  const base = baseOptionsMenuProps()
   render(
     <OptionsMenu
-      {...baseOptionsMenuProps()}
-      screenshotFolder={screenshotFolder}
-      onChangeScreenshotFolder={onChangeScreenshotFolder}
+      {...base}
+      playback={{ ...base.playback, screenshotFolder, onChangeScreenshotFolder }}
     />
   )
 }
@@ -76,11 +76,15 @@ function renderMenuWithPreferredUrlSubtitleLanguage(
   preferredUrlSubtitleLanguage: string,
   onChangePreferredUrlSubtitleLanguage = vi.fn()
 ): void {
+  const base = baseOptionsMenuProps()
   render(
     <OptionsMenu
-      {...baseOptionsMenuProps()}
-      preferredUrlSubtitleLanguage={preferredUrlSubtitleLanguage}
-      onChangePreferredUrlSubtitleLanguage={onChangePreferredUrlSubtitleLanguage}
+      {...base}
+      playback={{
+        ...base.playback,
+        preferredUrlSubtitleLanguage,
+        onChangePreferredUrlSubtitleLanguage
+      }}
     />
   )
 }
@@ -114,8 +118,9 @@ describe('OptionsMenu preferred online subtitle language', () => {
   })
 })
 
-function renderMenuWithMpv(overrides: Partial<OptionsMenuProps>): void {
-  render(<OptionsMenu {...baseOptionsMenuProps()} {...overrides} />)
+function renderMenuWithMpv(overrides: Partial<OptionsMenuProps['playback']>): void {
+  const base = baseOptionsMenuProps()
+  render(<OptionsMenu {...base} playback={{ ...base.playback, ...overrides }} />)
 }
 
 describe('OptionsMenu volume boost', () => {
@@ -254,7 +259,7 @@ describe('OptionsMenu rebind lifecycle', () => {
       <OptionsMenu
         {...baseOptionsMenuProps()}
         open={open}
-        onChangeKeyBinding={onChangeKeyBinding}
+        keybindings={{ ...baseOptionsMenuProps().keybindings, onChangeKeyBinding }}
       />
     )
   }
@@ -282,8 +287,11 @@ describe('OptionsMenu audio output', () => {
     { name: 'wasapi/{abc}', description: 'Speakers (Realtek)' }
   ]
 
-  function renderAudio(overrides: Partial<OptionsMenuProps> = {}): void {
-    render(<OptionsMenu {...baseOptionsMenuProps()} audioDevices={devices} {...overrides} />)
+  function renderAudio(overrides: Partial<OptionsMenuProps['playback']> = {}): void {
+    const base = baseOptionsMenuProps()
+    render(
+      <OptionsMenu {...base} playback={{ ...base.playback, audioDevices: devices, ...overrides }} />
+    )
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
   }
 
@@ -328,9 +336,8 @@ describe('OptionsMenu audio output', () => {
 
   it('requests a fresh device list when the Playback tab becomes active', () => {
     const onAudioDevicesRequest = vi.fn()
-    render(
-      <OptionsMenu {...baseOptionsMenuProps()} onAudioDevicesRequest={onAudioDevicesRequest} />
-    )
+    const base = baseOptionsMenuProps()
+    render(<OptionsMenu {...base} playback={{ ...base.playback, onAudioDevicesRequest }} />)
     // Opens on Keybindings, so nothing is requested until Playback is shown.
     expect(onAudioDevicesRequest).not.toHaveBeenCalled()
 
