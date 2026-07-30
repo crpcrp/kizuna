@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Cue } from '@src/shared/cue'
-import { cueKey } from '@src/renderer/src/state/playerActions'
+import { cueKey } from '@src/renderer/src/state/tokenization'
 import {
   findMatches,
   highlightSegments,

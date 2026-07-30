@@ -1,7 +1,8 @@
 import { useEffect, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { PlayerApi } from '../components/BottomBar'
-import { eofAction, performMediaKey, type OpenMediaResult } from './playerActions'
+import { eofAction, performMediaKey } from './keyActions'
+import { type OpenMediaResult } from './mediaSession'
 import type { PlayerAction, PlayerState } from './playerState'
 import {
   INACTIVE_MINI_PLAYER,

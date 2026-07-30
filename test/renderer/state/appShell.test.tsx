@@ -30,7 +30,7 @@ import {
   type RecentFilesBridge
 } from '@src/renderer/src/state/recentFilesController'
 import { appTitle } from '@src/shared/appInfo'
-import type { OpenMediaResult } from '@src/renderer/src/state/playerActions'
+import { type OpenMediaResult } from '@src/renderer/src/state/mediaSession'
 import type { PlayerAction } from '@src/renderer/src/state/playerState'
 import type { Cue } from '@src/shared/cue'
 import type { Track } from '@src/shared/track'

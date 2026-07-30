@@ -480,7 +480,7 @@ export function frequencyModeForDict(db: LookupDb, freqDictId: number): Frequenc
  * Resolve a token to dictionary entries.
  *
  * If `query.longestMatchCandidates` is given (caller-supplied, longest-first —
- * see `buildLongestMatchCandidates` in playerActions.ts), EVERY candidate that
+ * see `buildLongestMatchCandidates` in state/wordLookup.ts), EVERY candidate that
  * hits `terms.expression` contributes its rows, longest candidate first — not
  * just the first one that hits. This lets a single MeCab token (e.g. 閻魔, split
  * apart from a sibling token 大王) resolve to the longer compound headword

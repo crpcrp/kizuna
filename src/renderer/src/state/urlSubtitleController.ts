@@ -5,7 +5,7 @@
 // and warning reporter. No React, no `window`, no Electron here.
 //
 // Async safety uses two monotonic counters, mirroring `SubtitleRequestToken`
-// in playerActions:
+// in state/mediaSession.ts:
 //   • `generation` — bumped on every `load` and `dispose`. Gates inventory
 //     enumeration *and* acquisition, so a URL change or unmount discards every
 //     older async result.

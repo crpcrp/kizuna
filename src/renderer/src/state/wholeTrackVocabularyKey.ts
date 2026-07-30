@@ -1,7 +1,6 @@
 import type { Cue } from '../../../shared/cue'
 import type { FrequencyMode } from '../../../shared/dictionary'
-import { cueKey } from './playerActions'
-
+import { cueKey } from './tokenization'
 export interface WholeTrackVocabularyDependencies {
   filePath: string | null
   subtitleTrackId: number | null

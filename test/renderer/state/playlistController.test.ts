@@ -7,8 +7,7 @@ import {
   createPlaylistController,
   type PlaylistLoadDeps
 } from '@src/renderer/src/state/playlistController'
-import type { OpenMediaResult } from '@src/renderer/src/state/playerActions'
-
+import { type OpenMediaResult } from '@src/renderer/src/state/mediaSession'
 /** A load seam that resolves 'opened' for every path unless overridden. */
 function okLoad(): {
   deps: PlaylistLoadDeps

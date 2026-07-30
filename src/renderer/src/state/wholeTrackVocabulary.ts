@@ -2,15 +2,14 @@ import type { FrequencyMode } from '../../../shared/dictionary'
 import type { Cue } from '../../../shared/cue'
 import type { KnowledgeDetails, KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
 import {
-  cueKey,
-  tokenizeAllCues,
-  type DictLookupBridge,
-  type Dispatch,
   type KnowledgeBridge,
   type MecabBatchBridge,
-  type SubtitleRequestToken
-} from './playerActions'
+  cueKey,
+  tokenizeAllCues
+} from './tokenization'
+import { type DictLookupBridge } from './wordLookup'
 import {
   createVocabularySpanController,
   type VocabularySpanController,

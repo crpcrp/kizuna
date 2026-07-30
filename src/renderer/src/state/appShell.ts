@@ -1,9 +1,6 @@
-import {
-  applySubtitleOffsetToFolder,
-  loadExternalSubtitle,
-  type OpenMediaResult,
-  type OpenSession
-} from './playerActions'
+import { type OpenMediaResult, type OpenSession } from './mediaSession'
+import { applySubtitleOffsetToFolder } from './perFileOffsets'
+import { loadExternalSubtitle } from './trackSelection'
 import { classifyMediaFileName, pickDropTarget } from '../../../shared/mediaFileTypes'
 import { computeVideoWindowSize, clampWindowSize, type WindowSize } from '../util/uiHelpers'
 import { clampSpeed, type PlayerApi } from '../components/BottomBar'
@@ -121,7 +118,7 @@ export function shouldClosePopupOnPointerDown(
 /**
  * Everything the drop handler acts through, injected so its decision logic
  * stays a plain function — no DOM, no bridge (see App.test.tsx). `openPath`
- * and `loadSubtitle` are the recentFilesController / playerActions calls the
+ * and `loadSubtitle` are the recentFilesController / trackSelection calls the
  * Media menu already uses; `pathForFile` is the preload's `webUtils` escape
  * hatch (Electron ≥ 32 removed `File.path`).
  */

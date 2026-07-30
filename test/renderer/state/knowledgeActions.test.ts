@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
-import {
-  resolveKnownLevels,
-  type SubtitleRequestToken
-} from '@src/renderer/src/state/playerActions'
+import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
+import { resolveKnownLevels } from '@src/renderer/src/state/tokenization'
 import {
   refreshKnownLevels,
   syncAndRefreshKnowledge,

@@ -109,3 +109,15 @@ export function nextChapterStart(chapters: Chapter[], timePos: number): number |
   }
   return next
 }
+
+/**
+ * Pure: the absolute playback time (seconds) to seek to so that `cue` becomes
+ * the active/displayed cue under the current subtitle offset. The overlay
+ * looks up the active cue at `offsetTimePos(timePos, offsetMs) = timePos -
+ * offsetMs/1000`, so seeking to `cue.start + offsetMs/1000` lands playback
+ * exactly at the cue's start once the offset is undone — keeping the sidebar's
+ * click-to-seek consistent with the highlighted row.
+ */
+export function seekTargetForCue(cue: Cue, offsetMs: number): number {
+  return cue.start + offsetMs / 1000
+}

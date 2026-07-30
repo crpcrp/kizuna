@@ -26,7 +26,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Area | Renderer/shared | Main process |
 |---|---|---|
 | Application shell and window | `App.tsx`, `components/WindowChrome.tsx`, `state/usePlayerEvents.ts`, `shared/windowBounds.ts` | `index.ts`, `appLifecycle.ts`, `windowOptions.ts` |
-| Playback and player controls | `components/BottomBar.tsx`, `components/MenuBar.tsx`, `state/playerActions.ts`, `shared/playerSettings.ts` | `playerBridge.ts`, `mpv/controller.ts`, `mpv/ipcClient.ts` |
+| Playback and player controls | `components/BottomBar.tsx`, `components/MenuBar.tsx`, `state/playbackCommands.ts`, `state/keyActions.ts`, `state/perFileOffsets.ts`, `shared/playerSettings.ts` | `playerBridge.ts`, `mpv/controller.ts`, `mpv/ipcClient.ts` |
 | Media loading and subtitles | `state/appShell.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
 | Playlists and history | `components/PlaylistSidebar.tsx`, `state/playlist*.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/folderNavigation.ts` |
 | Tokenization | `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |

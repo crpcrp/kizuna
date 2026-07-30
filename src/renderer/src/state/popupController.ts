@@ -6,15 +6,14 @@ import {
   type WordPopupPayload
 } from './wordPopupActions'
 import {
-  addTokenToAnki,
-  checkAnkiExisting,
-  mineMediaContext,
   type AnkiExistingBridge,
   type AnkiMineBridge,
-  type DictLookupBridge,
-  type MineMediaSource
-} from './playerActions'
-
+  type MineMediaSource,
+  addTokenToAnki,
+  checkAnkiExisting,
+  mineMediaContext
+} from './ankiMining'
+import { type DictLookupBridge } from './wordLookup'
 export type AnkiPopupStatus = 'idle' | 'adding' | 'added' | 'updated' | 'error'
 
 export interface PopupState {

@@ -1,6 +1,5 @@
 import type { YtdlpQuality } from '../../../shared/ytdlpQuality'
-import type { OpenMediaResult } from './playerActions'
-
+import { type OpenMediaResult } from './mediaSession'
 /** The small player boundary needed to reload an extractor-backed URL. */
 export interface YtdlpQualityReloadBridge {
   setYtdlpQuality(quality: YtdlpQuality): Promise<unknown>

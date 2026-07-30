@@ -3,8 +3,7 @@ import {
   createYtdlpQualityReloadController,
   type YtdlpQualityReloadBridge
 } from '@src/renderer/src/state/ytdlpQualityReload'
-import type { OpenMediaResult } from '@src/renderer/src/state/playerActions'
-
+import { type OpenMediaResult } from '@src/renderer/src/state/mediaSession'
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void

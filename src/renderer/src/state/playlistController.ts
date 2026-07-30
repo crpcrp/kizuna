@@ -20,8 +20,7 @@ import {
   type RepeatMode,
   type Rng
 } from './playlist'
-import type { OpenMediaResult } from './playerActions'
-
+import { type OpenMediaResult } from './mediaSession'
 export interface PlaylistControllerState {
   playlist: PlaylistState
   /**

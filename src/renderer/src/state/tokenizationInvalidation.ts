@@ -1,16 +1,14 @@
 import type { Cue } from '../../../shared/cue'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
 import {
-  tokenizeActiveCue,
-  tokenizeAllCues,
-  type Dispatch,
   type KnowledgeBridge,
   type MecabBatchBridge,
   type MecabBridge,
-  type SubtitleRequestToken
-} from './playerActions'
-
+  tokenizeActiveCue,
+  tokenizeAllCues
+} from './tokenization'
 export interface TokenizationInvalidationArgs {
   mecab: MecabBridge & MecabBatchBridge
   knowledge: KnowledgeBridge
