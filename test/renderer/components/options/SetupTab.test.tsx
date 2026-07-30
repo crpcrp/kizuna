@@ -10,7 +10,7 @@ import SetupTab, {
   type SetupRow,
   type SetupRowsInput
 } from '@src/renderer/src/components/options/SetupTab'
-import { CATEGORY_ROWS, categoryLabel } from '@src/renderer/src/components/OptionsMenu'
+import { CATEGORY_ROWS, categoryLabel } from '@src/renderer/src/components/options/types'
 import type { McDict } from '@src/shared/mecab'
 import type { DictInfo } from '@src/shared/dictionary'
 import type { SyncStatus } from '@src/shared/knowledge'

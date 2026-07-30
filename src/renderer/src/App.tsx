@@ -12,7 +12,8 @@ import {
 import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
-import OptionsMenu, { type OptionsCategory } from './components/OptionsMenu'
+import OptionsMenu from './components/OptionsMenu'
+import type { OptionsCategory } from './components/options/types'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -1676,95 +1677,115 @@ export default function App({
 
       <OptionsMenu
         open={optionsOpen}
-        keyBindings={state.keyBindings}
-        heldModifiers={modifiers.held}
-        skipSeconds={state.skipSeconds}
-        rightClickTogglePause={state.rightClickTogglePause}
-        autoPlayNext={state.autoPlayNext}
-        audioDevices={audioDeviceController.devices}
-        selectedAudioDevice={effectiveAudioDevice(state.audioDevice, audioDeviceController.devices)}
-        onSelectAudioDevice={audioDeviceController.selectDevice}
-        loudnessNormalization={state.loudnessNormalization}
-        onToggleLoudnessNorm={handleToggleLoudnessNorm}
-        onAudioDevicesRequest={audioDeviceController.requestDevices}
-        screenshotFolder={state.screenshotFolder}
-        mpvUserConfig={state.mpvUserConfig}
-        mpvExtraArgs={state.mpvExtraArgs}
-        mecabDicts={dictionariesData.mecabDicts}
-        currentMecabDictId={dictionariesData.currentMecabDictId}
-        yomitanDicts={dictionariesData.yomitanDicts}
-        dictionariesLoadError={dictionariesState.error}
-        popupSettings={state.popupSettings}
-        subtitleStyle={state.subtitleStyle}
-        subtitleDragEnabled={state.subtitleDragEnabled}
-        translationEnabled={state.translationEnabled}
-        preferredUrlSubtitleLanguage={state.preferredUrlSubtitleLanguage}
-        appearance={state.appearance}
-        levelColors={state.levelColors}
         onClose={() => {
           setOptionsOpen(false)
           void settingsPersistenceRef.current.flush()
         }}
-        onChangeKeyBinding={(action, binding) =>
-          dispatch({ type: 'setKeyBinding', action, binding })
-        }
-        onChangeSkipSeconds={(value) => dispatch({ type: 'setSkipSeconds', value })}
-        onChangeRightClickTogglePause={(value) =>
-          dispatch({ type: 'setRightClickTogglePause', value })
-        }
-        onChangeAutoPlayNext={(value) => dispatch({ type: 'setAutoPlayNext', value })}
-        onChangeScreenshotFolder={(value) => dispatch({ type: 'setScreenshotFolder', value })}
-        onChangeMpvUserConfig={(value) => dispatch({ type: 'setMpvUserConfig', value })}
-        onChangeMpvExtraArgs={(value) => dispatch({ type: 'setMpvExtraArgs', value })}
-        onOpenMpvConfigDir={() => {
-          // openMpvConfigDir resolves the shell.openPath result: a non-empty
-          // string is an OS-level failure message; a rejection means the IPC
-          // itself failed. Surface either through the same error banner load
-          // errors use, so the click never silently no-ops.
-          void window.kizuna.playerSettings.openMpvConfigDir().then(
-            (error) => {
-              if (error) {
-                recentFiles.reportError(`Could not open the mpv config folder: ${error}`)
-              }
-            },
-            () => recentFiles.reportError('Could not open the mpv config folder.')
-          )
+        keybindings={{
+          keyBindings: state.keyBindings,
+          heldModifiers: modifiers.held,
+          onChangeKeyBinding: (action, binding) =>
+            dispatch({ type: 'setKeyBinding', action, binding })
         }}
-        onSelectMecabDict={handleSelectMecabDict}
-        onImportYomitanDict={handleImportYomitanDict}
-        subscribeImportProgress={handleSubscribeImportProgress}
-        onSetYomitanEnabled={handleSetYomitanEnabled}
-        onSetYomitanFallbackOnly={handleSetYomitanFallbackOnly}
-        onReorderYomitanDicts={handleReorderYomitanDicts}
-        onRemoveYomitanDict={handleRemoveYomitanDict}
-        onChangePopupSettings={(value) => dispatch({ type: 'setPopupSettings', value })}
-        onChangeSubtitleStyle={(value) => dispatch({ type: 'setSubtitleStyle', value })}
-        onChangeSubtitleDragEnabled={(value) => dispatch({ type: 'setSubtitleDragEnabled', value })}
-        onChangeTranslationEnabled={(value) => {
-          dispatch({ type: 'setTranslationEnabled', value })
-          settingsPersistenceRef.current.schedule({ translationEnabled: value })
+        playback={{
+          skipSeconds: state.skipSeconds,
+          rightClickTogglePause: state.rightClickTogglePause,
+          autoPlayNext: state.autoPlayNext,
+          preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
+          audioDevices: audioDeviceController.devices,
+          selectedAudioDevice: effectiveAudioDevice(
+            state.audioDevice,
+            audioDeviceController.devices
+          ),
+          onSelectAudioDevice: audioDeviceController.selectDevice,
+          loudnessNormalization: state.loudnessNormalization,
+          onToggleLoudnessNorm: handleToggleLoudnessNorm,
+          screenshotFolder: state.screenshotFolder,
+          mpvUserConfig: state.mpvUserConfig,
+          mpvExtraArgs: state.mpvExtraArgs,
+          onChangeSkipSeconds: (value) => dispatch({ type: 'setSkipSeconds', value }),
+          onChangeRightClickTogglePause: (value) =>
+            dispatch({ type: 'setRightClickTogglePause', value }),
+          onChangeAutoPlayNext: (value) => dispatch({ type: 'setAutoPlayNext', value }),
+          onChangePreferredUrlSubtitleLanguage: (value) => {
+            dispatch({ type: 'setPreferredUrlSubtitleLanguage', value })
+            settingsPersistenceRef.current.schedule({ preferredUrlSubtitleLanguage: value })
+          },
+          onChangeScreenshotFolder: (value) => dispatch({ type: 'setScreenshotFolder', value }),
+          onChangeMpvUserConfig: (value) => dispatch({ type: 'setMpvUserConfig', value }),
+          onChangeMpvExtraArgs: (value) => dispatch({ type: 'setMpvExtraArgs', value }),
+          onOpenMpvConfigDir: () => {
+            void window.kizuna.playerSettings.openMpvConfigDir().then(
+              (error) => {
+                if (error) {
+                  recentFiles.reportError(`Could not open the mpv config folder: ${error}`)
+                }
+              },
+              () => recentFiles.reportError('Could not open the mpv config folder.')
+            )
+          },
+          onAudioDevicesRequest: audioDeviceController.requestDevices
         }}
-        onChangePreferredUrlSubtitleLanguage={(value) => {
-          dispatch({ type: 'setPreferredUrlSubtitleLanguage', value })
-          settingsPersistenceRef.current.schedule({ preferredUrlSubtitleLanguage: value })
+        appearance={{
+          appearance: state.appearance,
+          levelColors: state.levelColors,
+          onChangeAppearance: (value) => dispatch({ type: 'setAppearance', value }),
+          onChangeLevelColor: (level, color) => dispatch({ type: 'setLevelColor', level, color })
         }}
-        onChangeAppearance={(value) => dispatch({ type: 'setAppearance', value })}
-        onChangeLevelColor={(level, color) => dispatch({ type: 'setLevelColor', level, color })}
-        wanikaniConfigured={knowledgeSettings.hasWanikaniToken}
-        onSaveWanikaniToken={handleSaveWanikaniToken}
-        ankiSettings={ankiState.data?.settings}
-        ankiDeckNames={ankiState.data?.deckNames}
-        ankiModelNames={ankiState.data?.modelNames}
-        ankiModelFields={ankiState.data?.modelFields}
-        ankiPing={() => window.kizuna.anki.ping()}
-        onChangeAnkiSettings={handleChangeAnkiSettings}
-        ankiLoadError={ankiState.error}
-        knowledgeSettings={knowledgeSettings}
-        onChangeKnowledgeSettings={handleChangeKnowledgeSettings}
-        knowledgeLoadError={knowledgeState.error}
-        syncStatus={syncStatus}
-        setupStatus={setupState.data}
-        onSyncNow={handleSyncNow}
+        subtitles={{
+          subtitleStyle: state.subtitleStyle,
+          subtitleDragEnabled: state.subtitleDragEnabled,
+          translationEnabled: state.translationEnabled,
+          onChangeSubtitleStyle: (value) => dispatch({ type: 'setSubtitleStyle', value }),
+          onChangeSubtitleDragEnabled: (value) =>
+            dispatch({ type: 'setSubtitleDragEnabled', value }),
+          onChangeTranslationEnabled: (value) => {
+            dispatch({ type: 'setTranslationEnabled', value })
+            settingsPersistenceRef.current.schedule({ translationEnabled: value })
+          }
+        }}
+        dictionaries={{
+          mecabDicts: dictionariesData.mecabDicts,
+          currentMecabDictId: dictionariesData.currentMecabDictId,
+          yomitanDicts: dictionariesData.yomitanDicts,
+          loadError: dictionariesState.error,
+          popupSettings: state.popupSettings,
+          onSelectMecabDict: handleSelectMecabDict,
+          onImportYomitanDict: handleImportYomitanDict,
+          subscribeImportProgress: handleSubscribeImportProgress,
+          onSetYomitanEnabled: handleSetYomitanEnabled,
+          onSetYomitanFallbackOnly: handleSetYomitanFallbackOnly,
+          onReorderYomitanDicts: handleReorderYomitanDicts,
+          onRemoveYomitanDict: handleRemoveYomitanDict,
+          onChangePopupSettings: (value) => dispatch({ type: 'setPopupSettings', value })
+        }}
+        anki={{
+          ankiSettings: ankiState.data?.settings,
+          ankiDeckNames: ankiState.data?.deckNames,
+          ankiModelNames: ankiState.data?.modelNames,
+          ankiModelFields: ankiState.data?.modelFields,
+          ankiPing: () => window.kizuna.anki.ping(),
+          onChangeAnkiSettings: handleChangeAnkiSettings,
+          loadError: ankiState.error
+        }}
+        knowledge={{
+          wanikaniConfigured: knowledgeSettings.hasWanikaniToken,
+          onSaveWanikaniToken: handleSaveWanikaniToken,
+          ankiDeckNames: ankiState.data?.deckNames ?? [],
+          ankiModelFields: ankiState.data?.modelFields ?? [],
+          knowledgeSettings,
+          onChangeKnowledgeSettings: handleChangeKnowledgeSettings,
+          loadError: knowledgeState.error,
+          syncStatus,
+          onSyncNow: handleSyncNow
+        }}
+        setup={{
+          setup: setupState.data,
+          mecabDicts: dictionariesData.mecabDicts,
+          yomitanDicts: dictionariesData.yomitanDicts,
+          wanikaniConfigured: knowledgeSettings.hasWanikaniToken,
+          syncStatus
+        }}
         onCategoryOpen={handleOptionsCategoryOpen}
       />
 
