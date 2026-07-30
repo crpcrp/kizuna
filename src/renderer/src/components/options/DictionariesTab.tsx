@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { PopupSettings } from '../../../../shared/playerSettings'
 import type { McDict } from '../../../../shared/mecab'
 import type { DictInfo, ImportProgress } from '../../../../shared/dictionary'
+import type { SettingEntry } from './types'
 
 /** Progress shown by the "please wait" overlay while importing dictionaries. */
 interface ImportStatus {
@@ -50,6 +51,7 @@ export function parsePopupCountInput(rawValue: string): number | null {
 }
 
 export interface DictionariesTabProps {
+  active?: boolean
   mecabDicts: McDict[]
   currentMecabDictId: 'ipadic' | 'unidic'
   yomitanDicts: DictInfo[]
@@ -69,11 +71,56 @@ export interface DictionariesTabProps {
   onChangePopupSettings: (value: Partial<PopupSettings>) => void
 }
 
+export const DICTIONARIES_SETTING_ENTRIES: SettingEntry[] = [
+  {
+    id: 'mecab-dictionary',
+    label: 'MeCab dictionary',
+    category: 'dictionaries',
+    keywords: ['ipadic', 'unidic', 'parser', 'tokenizer']
+  },
+  {
+    id: 'yomitan-import',
+    label: 'Import Yomitan dictionary',
+    category: 'dictionaries',
+    keywords: ['jmdict', 'zip', 'add dictionary'],
+    targetId: 'yomitan-import-input'
+  },
+  {
+    id: 'popup-freq-dict',
+    label: 'Frequency dictionary',
+    category: 'dictionaries',
+    keywords: ['word popup', 'frequency'],
+    targetId: 'popup-freq-dict-select'
+  },
+  {
+    id: 'popup-sort-order',
+    label: 'Word popup sort order',
+    category: 'dictionaries',
+    keywords: ['ordering'],
+    targetId: 'popup-sort-order-select'
+  },
+  {
+    id: 'popup-max-entries',
+    label: 'Max entries shown in the word popup',
+    category: 'dictionaries',
+    keywords: ['limit'],
+    targetId: 'popup-max-entries-input'
+  },
+  {
+    id: 'popup-max-meanings',
+    label: 'Max meanings per entry',
+    category: 'dictionaries',
+    keywords: ['definitions', 'limit', 'word popup'],
+    targetId: 'popup-max-meanings-input'
+  }
+]
+
 /** "Parser & Dictionaries" options tab: MeCab dictionary selection, Yomitan
  * dictionary import/management, and word-popup display settings. Owns its
  * own import-progress overlay state — App/OptionsMenu don't need to know a
  * multi-file import is in flight. */
 export default function DictionariesTab({
+  active = true,
   mecabDicts,
   currentMecabDictId,
   yomitanDicts,
@@ -114,7 +161,7 @@ export default function DictionariesTab({
   }
 
   return (
-    <section className="options-tab active" aria-hidden="false">
+    <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       <div
         className={importStatus ? 'options-import-overlay open' : 'options-import-overlay'}
         aria-hidden={!importStatus}
