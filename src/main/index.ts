@@ -45,7 +45,8 @@ import {
   resolveImportWorkerPath
 } from './dictBridge'
 import { createWorkerImporter } from './services/dict/workerImporter'
-import { registerAnkiBridge, createAnkiService } from './ankiBridge'
+import { registerAnkiBridge } from './ankiBridge'
+import { createAnkiService } from './services/anki/service'
 import { createSentenceAudioService } from './services/anki/sentenceAudio'
 import { execFfmpeg } from './media/ffmpeg'
 import { registerKnowledgeBridge, createKnowledgeService } from './knowledgeBridge'
