@@ -58,6 +58,12 @@ import type {
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 
+function subscribe<T>(channel: string, callback: (value: T) => void): () => void {
+  const listener = (_event: Electron.IpcRendererEvent, value: T): void => callback(value)
+  ipcRenderer.on(channel, listener)
+  return () => ipcRenderer.removeListener(channel, listener)
+}
+
 const api = {
   // The frameless window has no OS buttons; custom chrome calls these.
   windowControls: {
@@ -66,11 +72,8 @@ const api = {
     setFullscreen: (flag: boolean): void =>
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setFullscreen, flag),
     toggleFullscreen: (): void => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.toggleFullscreen),
-    onFullscreenChange: (cb: (value: boolean) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: boolean): void => cb(value)
-      ipcRenderer.on(WINDOW_CONTROL_CHANNELS.fullscreenChanged, listener)
-      return () => ipcRenderer.removeListener(WINDOW_CONTROL_CHANNELS.fullscreenChanged, listener)
-    },
+    onFullscreenChange: (cb: (value: boolean) => void): (() => void) =>
+      subscribe(WINDOW_CONTROL_CHANNELS.fullscreenChanged, cb),
     setSize: (width: number, height: number): void =>
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
     setAlwaysOnTop: (flag: boolean): void =>
@@ -127,43 +130,20 @@ const api = {
     screenshot: (mediaPath: string, timePos: number): Promise<string> =>
       ipcRenderer.invoke(PLAYER_CHANNELS.screenshot, mediaPath, timePos),
     captureFrame: (): Promise<string | null> => ipcRenderer.invoke(PLAYER_CHANNELS.captureFrame),
-    onTimePos: (cb: (value: number) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: number): void => cb(value)
-      ipcRenderer.on(PLAYER_CHANNELS.timePos, listener)
-      return () => ipcRenderer.removeListener(PLAYER_CHANNELS.timePos, listener)
-    },
-    onDuration: (cb: (value: number) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: number): void => cb(value)
-      ipcRenderer.on(PLAYER_CHANNELS.duration, listener)
-      return () => ipcRenderer.removeListener(PLAYER_CHANNELS.duration, listener)
-    },
-    onEofReached: (cb: (value: unknown) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: unknown): void => cb(value)
-      ipcRenderer.on(PLAYER_CHANNELS.eofReached, listener)
-      return () => ipcRenderer.removeListener(PLAYER_CHANNELS.eofReached, listener)
-    },
-    onPause: (cb: (value: boolean) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: boolean): void => cb(value)
-      ipcRenderer.on(PLAYER_CHANNELS.pause, listener)
-      return () => ipcRenderer.removeListener(PLAYER_CHANNELS.pause, listener)
-    },
-    onMediaKey: (cb: (value: MediaKeyCommand) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: MediaKeyCommand): void => cb(value)
-      ipcRenderer.on(PLAYER_CHANNELS.mediaKey, listener)
-      return () => ipcRenderer.removeListener(PLAYER_CHANNELS.mediaKey, listener)
-    }
+    onTimePos: (cb: (value: number) => void): (() => void) =>
+      subscribe(PLAYER_CHANNELS.timePos, cb),
+    onDuration: (cb: (value: number) => void): (() => void) =>
+      subscribe(PLAYER_CHANNELS.duration, cb),
+    onEofReached: (cb: (value: unknown) => void): (() => void) =>
+      subscribe(PLAYER_CHANNELS.eofReached, cb),
+    onPause: (cb: (value: boolean) => void): (() => void) => subscribe(PLAYER_CHANNELS.pause, cb),
+    onMediaKey: (cb: (value: MediaKeyCommand) => void): (() => void) =>
+      subscribe(PLAYER_CHANNELS.mediaKey, cb)
   },
   launch: {
-    onOpenPath: (cb: (path: string) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, path: string): void => cb(path)
-      ipcRenderer.on(LAUNCH_CHANNELS.openPath, listener)
-      return () => ipcRenderer.removeListener(LAUNCH_CHANNELS.openPath, listener)
-    },
-    onError: (cb: (message: string) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, message: string): void => cb(message)
-      ipcRenderer.on(LAUNCH_CHANNELS.error, listener)
-      return () => ipcRenderer.removeListener(LAUNCH_CHANNELS.error, listener)
-    },
+    onOpenPath: (cb: (path: string) => void): (() => void) =>
+      subscribe(LAUNCH_CHANNELS.openPath, cb),
+    onError: (cb: (message: string) => void): (() => void) => subscribe(LAUNCH_CHANNELS.error, cb),
     rendererReady: (): void => ipcRenderer.send(LAUNCH_CHANNELS.rendererReady)
   },
 
@@ -257,11 +237,8 @@ const api = {
     reorder: (orderedIds: number[]): Promise<void> =>
       ipcRenderer.invoke(DICT_CHANNELS.reorder, orderedIds),
     removeDict: (id: number): Promise<void> => ipcRenderer.invoke(DICT_CHANNELS.remove, id),
-    onImportProgress: (cb: (value: ImportProgress) => void): (() => void) => {
-      const listener = (_e: Electron.IpcRendererEvent, value: ImportProgress): void => cb(value)
-      ipcRenderer.on(DICT_CHANNELS.importProgress, listener)
-      return () => ipcRenderer.removeListener(DICT_CHANNELS.importProgress, listener)
-    }
+    onImportProgress: (cb: (value: ImportProgress) => void): (() => void) =>
+      subscribe(DICT_CHANNELS.importProgress, cb)
   },
   // AnkiConnect bridge: test the connection, populate Options selects from
   // the running Anki (decks/models/fields), add a note from the WordPopup,
