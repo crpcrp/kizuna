@@ -362,5 +362,4 @@ describe('OptionsMenu audio output', () => {
     rerender(<OptionsMenu {...base} open playback={{ ...base.playback, onAudioDevicesRequest }} />)
     expect(onAudioDevicesRequest).toHaveBeenCalledTimes(2)
   })
-
 })
