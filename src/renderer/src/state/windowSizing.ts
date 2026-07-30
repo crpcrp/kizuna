@@ -1,5 +1,29 @@
 import type { VideoDimensions } from '../../../shared/track'
-import { clampWindowSize, computeVideoWindowSize, type WindowSize } from '../util/uiHelpers'
+
+export interface WindowSize {
+  width: number
+  height: number
+}
+
+export function computeVideoWindowSize(
+  video: { width: number; height: number },
+  scale: number,
+  topBarHeight: number,
+  bottomBarHeight: number,
+  leftSidebarWidth = 0,
+  rightSidebarWidth = 0
+): WindowSize {
+  return {
+    width: Math.round(video.width * scale + leftSidebarWidth + rightSidebarWidth),
+    height: Math.round(video.height * scale + topBarHeight + bottomBarHeight)
+  }
+}
+
+export function clampWindowSize(size: WindowSize, maxWidth: number, maxHeight: number): WindowSize {
+  if (size.width <= maxWidth && size.height <= maxHeight) return size
+  const scale = Math.min(maxWidth / size.width, maxHeight / size.height)
+  return { width: Math.round(size.width * scale), height: Math.round(size.height * scale) }
+}
 
 export interface VideoContentBaseline {
   width: number

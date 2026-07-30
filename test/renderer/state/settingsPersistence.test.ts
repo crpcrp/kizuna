@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
 import type { PlayerSettings } from '@src/shared/playerSettings'
-import type { TimerLike } from '@src/renderer/src/util/uiHelpers'
+import type { TimerLike } from '@src/renderer/src/state/settingsPersistence'
 
-/** Deterministic manual-clock TimerLike, mirroring test/renderer/util/uiHelpers.test.ts. */
+/** Deterministic manual-clock TimerLike. */
 function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
   let nextId = 1
   const pending = new Map<number, () => void>()

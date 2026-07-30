@@ -301,7 +301,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     expect(mergeSettings({ player: { skipSeconds: 10 } }).player.skipSeconds).toBe(10)
   })
 
-  it('normalizes popupSettings/subtitleStyle field-by-field via the shared uiHelpers helpers', () => {
+  it('normalizes popupSettings/subtitleStyle field-by-field via the shared settings helpers', () => {
     const merged = mergeSettings({
       player: {
         popupSettings: { maxEntries: 8 },

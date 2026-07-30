@@ -4,6 +4,8 @@ import {
   DEFAULT_APPEARANCE,
   DEFAULT_KEY_BINDINGS,
   DEFAULT_PLAYER_SETTINGS,
+  DEFAULT_POPUP_SETTINGS,
+  DEFAULT_SUBTITLE_STYLE,
   isKeyModifier,
   MPV_EXTRA_ARG_MAX_LENGTH,
   normalizeAppearance,
@@ -12,12 +14,57 @@ import {
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePreferredUrlSubtitleLanguage,
+  normalizePopupSettings,
+  normalizeSubtitleStyle,
   normalizeVideoAdjustments,
   DEFAULT_VIDEO_ADJUSTMENTS,
   isVideoRotate,
   subtitleOffsetFolderKey,
   subtitleOffsetKey
 } from '@src/shared/playerSettings'
+
+describe('normalizePopupSettings', () => {
+  it('uses defaults for missing or invalid values', () => {
+    expect(normalizePopupSettings(undefined, DEFAULT_POPUP_SETTINGS)).toEqual(
+      DEFAULT_POPUP_SETTINGS
+    )
+    const result = normalizePopupSettings(
+      { sortOrder: 'bogus', maxEntries: 0, maxMeanings: Number.NaN },
+      DEFAULT_POPUP_SETTINGS
+    )
+    expect(result).toEqual(DEFAULT_POPUP_SETTINGS)
+  })
+
+  it('passes through valid settings, including an explicit null dictionary', () => {
+    const valid = {
+      frequencyDictId: null,
+      sortOrder: 'occurrence-based' as const,
+      maxEntries: 10,
+      maxMeanings: 4
+    }
+    expect(normalizePopupSettings(valid, DEFAULT_POPUP_SETTINGS)).toEqual(valid)
+  })
+})
+
+describe('normalizeSubtitleStyle', () => {
+  it('uses defaults for missing or out-of-range values', () => {
+    expect(normalizeSubtitleStyle(undefined, DEFAULT_SUBTITLE_STYLE)).toEqual(
+      DEFAULT_SUBTITLE_STYLE
+    )
+    expect(
+      normalizeSubtitleStyle({ fontScale: 10, xPct: -5, yPct: 'bottom' }, DEFAULT_SUBTITLE_STYLE)
+    ).toEqual(DEFAULT_SUBTITLE_STYLE)
+  })
+
+  it('accepts valid settings at the boundaries', () => {
+    expect(
+      normalizeSubtitleStyle({ fontScale: 0.5, xPct: 0, yPct: 100 }, DEFAULT_SUBTITLE_STYLE)
+    ).toEqual({ fontScale: 0.5, xPct: 0, yPct: 100 })
+    expect(
+      normalizeSubtitleStyle({ fontScale: 3, xPct: 100, yPct: 0 }, DEFAULT_SUBTITLE_STYLE)
+    ).toEqual({ fontScale: 3, xPct: 100, yPct: 0 })
+  })
+})
 
 describe('isKeyModifier', () => {
   it('accepts only the left-side Ctrl/Shift codes', () => {

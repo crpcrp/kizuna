@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_KEY_BINDINGS, type KeyBindings } from '@src/shared/playerSettings'
-import { createModifierTracker, type ModifierTracker } from '@src/renderer/src/util/uiHelpers'
+import { createModifierTracker, type ModifierTracker } from '@src/renderer/src/state/keyBindings'
 import {
   useKeyboardShortcuts,
   type KeyboardShortcutContext,

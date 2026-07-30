@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useFullscreenReveal } from '@src/renderer/src/state/useFullscreenReveal'
+import { edgeReveal, useFullscreenReveal } from '@src/renderer/src/state/useFullscreenReveal'
 
 afterEach(() => {
   cleanup()
@@ -82,5 +82,18 @@ describe('useFullscreenReveal', () => {
       moveMouse(10)
     })
     expect(result.current).toEqual({ top: false, bottom: false })
+  })
+})
+
+describe('edgeReveal', () => {
+  it('reveals controls only near the matching edge', () => {
+    expect(edgeReveal(10, 1000)).toEqual({ top: true, bottom: false })
+    expect(edgeReveal(990, 1000)).toEqual({ top: false, bottom: true })
+    expect(edgeReveal(500, 1000)).toEqual({ top: false, bottom: false })
+  })
+
+  it('honors a custom threshold', () => {
+    expect(edgeReveal(150, 1000, 200)).toEqual({ top: true, bottom: false })
+    expect(edgeReveal(850, 1000, 200)).toEqual({ top: false, bottom: true })
   })
 })

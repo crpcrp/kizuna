@@ -1,6 +1,6 @@
 import './OptionsMenu.css'
 import { useEffect, useState } from 'react'
-import { describeKeyBinding, eventKeyBinding } from '../util/uiHelpers'
+import { describeKeyBinding, eventKeyBinding } from '../state/keyBindings'
 import { APP_NAME } from '../../../shared/appInfo'
 import {
   DEFAULT_SUBTITLE_STYLE,

@@ -4,7 +4,7 @@ import {
   SEEK_PREVIEW_OUTER_WIDTH,
   type SeekPreviewState
 } from '../state/seekPreview'
-import { formatTime } from '../util/uiHelpers'
+import { formatTime } from './playbackTime'
 
 // Floating seekbar hover preview: a small frame image plus the hovered
 // timestamp, centered above the cursor where space permits. Purely

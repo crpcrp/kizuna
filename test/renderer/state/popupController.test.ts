@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createHoverDebouncer,
   createPopupController,
   shouldClosePopupOnPointerDown,
-  shouldOpenWordPopup
+  shouldOpenWordPopup,
+  type TimerLike
 } from '@src/renderer/src/state/popupController'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
@@ -54,6 +56,57 @@ function fakeAnkiExisting(existing: { cardId: number } | null) {
 }
 
 const fakeKnowledge = () => ({ detailsFor: vi.fn().mockResolvedValue({}) })
+
+function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
+  let nextId = 1
+  const pending = new Map<number, () => void>()
+  return {
+    setTimeout(handler): unknown {
+      const id = nextId++
+      pending.set(id, handler)
+      return id
+    },
+    clearTimeout(handle): void {
+      pending.delete(handle as number)
+    },
+    flush(): void {
+      const callbacks = [...pending.values()]
+      pending.clear()
+      callbacks.forEach((callback) => callback())
+    },
+    pendingCount(): number {
+      return pending.size
+    }
+  }
+}
+
+describe('popup hover debounce', () => {
+  it('settles with the last item after the delay', () => {
+    const timers = fakeTimers()
+    const settled: string[] = []
+    const debouncer = createHoverDebouncer<string>(200, (item) => settled.push(item), timers)
+
+    debouncer.onEnter('word-a')
+    debouncer.onEnter('word-b')
+
+    expect(timers.pendingCount()).toBe(1)
+    expect(settled).toEqual([])
+    timers.flush()
+    expect(settled).toEqual(['word-b'])
+  })
+
+  it('cancels a pending popup', () => {
+    const timers = fakeTimers()
+    const settled: string[] = []
+    const debouncer = createHoverDebouncer<string>(200, (item) => settled.push(item), timers)
+
+    debouncer.onEnter('word-a')
+    debouncer.cancel()
+    timers.flush()
+
+    expect(settled).toEqual([])
+  })
+})
 
 describe('popupController', () => {
   it('open() shows the popup, resets history and Anki state', async () => {

@@ -15,6 +15,42 @@ import {
 } from './ankiMining'
 import { type DictLookupBridge } from './wordLookup'
 
+export interface TimerLike {
+  setTimeout(handler: () => void, ms: number): unknown
+  clearTimeout(handle: unknown): void
+}
+
+export interface HoverDebouncer<T> {
+  onEnter(item: T): void
+  cancel(): void
+}
+
+export function createHoverDebouncer<T>(
+  delayMs: number,
+  onSettle: (item: T) => void,
+  timers: TimerLike = {
+    setTimeout: (handler, ms) => window.setTimeout(handler, ms),
+    clearTimeout: (handle) => window.clearTimeout(handle as number)
+  }
+): HoverDebouncer<T> {
+  let handle: unknown = null
+  return {
+    onEnter(item: T): void {
+      if (handle !== null) timers.clearTimeout(handle)
+      handle = timers.setTimeout(() => {
+        handle = null
+        onSettle(item)
+      }, delayMs)
+    },
+    cancel(): void {
+      if (handle !== null) {
+        timers.clearTimeout(handle)
+        handle = null
+      }
+    }
+  }
+}
+
 interface ContainerLike {
   contains(node: Node | null): boolean
 }

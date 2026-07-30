@@ -76,8 +76,10 @@ import {
 } from './state/miniPlayer'
 import {
   createPopupController,
+  createHoverDebouncer,
   shouldClosePopupOnPointerDown,
-  shouldOpenWordPopup
+  shouldOpenWordPopup,
+  type HoverDebouncer
 } from './state/popupController'
 import { createSubtitleReportController } from './state/subtitleReportController'
 import { createBulkMiningController } from './state/bulkMiningController'
@@ -124,7 +126,7 @@ import {
   syncKnowledgeAndRefresh
 } from './state/integrationActions'
 import { refreshKnownLevels } from './state/knowledgeActions'
-import { createHoverDebouncer, createModifierTracker, type HoverDebouncer } from './util/uiHelpers'
+import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
 import { useVideoMargins } from './state/useVideoMargins'

@@ -29,7 +29,7 @@ export type PlayerKeyAction =
  * Ctrl/Shift are bindable: a `KeyboardEvent` for a non-modifier key reports
  * only *that* Ctrl/Shift is down, never which one, so the side is knowable
  * solely by tracking the modifier's own keydown/keyup (see
- * `createModifierTracker` in the renderer's `uiHelpers`).
+ * `createModifierTracker` in the renderer's `keyBindings` module).
  */
 export const MODIFIER_CODES = ['ControlLeft', 'ShiftLeft'] as const
 

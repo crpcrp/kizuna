@@ -1,7 +1,22 @@
 import { useEffect, useState } from 'react'
-import { pointerToSubtitlePosition } from '../util/uiHelpers'
 import type { PlayerAction } from './playerState'
 import type { SettingsPersistence } from './settingsPersistence'
+
+export function clampSubtitlePosition(xPct: number, yPct: number): { xPct: number; yPct: number } {
+  return { xPct: Math.min(100, Math.max(0, xPct)), yPct: Math.min(100, Math.max(0, yPct)) }
+}
+
+export function pointerToSubtitlePosition(
+  clientX: number,
+  clientY: number,
+  containerRect: { left: number; top: number; width: number; height: number }
+): { xPct: number; yPct: number } {
+  const xPct =
+    containerRect.width > 0 ? ((clientX - containerRect.left) / containerRect.width) * 100 : 50
+  const yPct =
+    containerRect.height > 0 ? ((clientY - containerRect.top) / containerRect.height) * 100 : 82
+  return clampSubtitlePosition(xPct, yPct)
+}
 
 export interface UseSubtitleDragInput {
   /** The content area subtitles are positioned against; also the drag gesture's coordinate frame. */

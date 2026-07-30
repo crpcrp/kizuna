@@ -1,11 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import type { KeyBindings } from '../../../shared/playerSettings'
-import {
-  eventKeyBinding,
-  isEditableTarget,
-  keyToAction,
-  type ModifierTracker
-} from '../util/uiHelpers'
+import { eventKeyBinding, isEditableTarget, keyToAction, type ModifierTracker } from './keyBindings'
 import { type KeyActionDeps, performKeyAction } from './keyActions'
 export type KeyboardShortcutContext = KeyActionDeps & { keyBindings: KeyBindings }
 

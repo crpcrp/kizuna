@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import { edgeReveal, type EdgeReveal } from '../util/uiHelpers'
+
+export interface EdgeReveal {
+  top: boolean
+  bottom: boolean
+}
+
+export function edgeReveal(clientY: number, innerHeight: number, threshold = 80): EdgeReveal {
+  return {
+    top: clientY <= threshold,
+    bottom: clientY >= innerHeight - threshold
+  }
+}
 
 const HIDDEN_REVEAL: EdgeReveal = { top: false, bottom: false }
 
