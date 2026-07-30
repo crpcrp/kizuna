@@ -109,6 +109,9 @@ describe('usePlayerEvents', () => {
     expect(bridge.launch.onOpenPath).toHaveBeenCalledTimes(1)
     expect(bridge.launch.onError).toHaveBeenCalledTimes(1)
     expect(bridge.launch.rendererReady).toHaveBeenCalledTimes(1)
+    expect((bridge.launch.onOpenPath as unknown as Mock).mock.invocationCallOrder[0]).toBeLessThan(
+      (bridge.launch.rendererReady as unknown as Mock).mock.invocationCallOrder[0]
+    )
   })
 
   it('routes timePos/duration/pause pushes to the exact dispatch action', () => {

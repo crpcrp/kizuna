@@ -164,4 +164,19 @@ describe('usePerFileRestore', () => {
     expect(result.input.setVideoDimensions).not.toHaveBeenCalledWith({ width: 1, height: 1 })
     expect(result.dispatch).not.toHaveBeenCalledWith({ type: 'chaptersLoaded', chapters: [] })
   })
+
+  it('silently ignores optional chapter probe failures', async () => {
+    const result = setup()
+    result.bridge.media.getChapters.mockReset()
+    result.bridge.media.getChapters.mockRejectedValue(new Error('ffprobe failed'))
+    result.input.loadGeneration = 2
+
+    expect(() => result.hook.rerender({ value: result.input })).not.toThrow()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(result.dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'chaptersLoaded' })
+    )
+  })
 })

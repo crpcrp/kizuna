@@ -33,7 +33,7 @@ import { type MineMediaSource } from './state/ankiMining'
 import { seekTargetForCue } from './state/cueNavigation'
 import { performFileNavigation } from './state/keyActions'
 import { type OpenMediaResult, type SubtitleRequestToken, shouldProbe } from './state/mediaSession'
-import { nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
+import { applyOffsetToFolder, nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
 import {
   type FrameStepGuard,
   applyVideoAdjustments,
@@ -43,6 +43,7 @@ import {
 import { cueKey } from './state/tokenization'
 import {
   loadExternalSubtitle,
+  loadSubtitleFromPicker,
   onlineSubtitleTrack,
   selectAudio,
   selectSubtitle
@@ -51,33 +52,33 @@ import { wordPopupPosition } from './state/wordLookup'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
 import {
   appClassName,
-  toggleFromRightClick,
-  toggleSidebar,
-  applyOffsetToFolder,
-  shouldOpenWordPopup,
-  shouldClosePopupOnPointerDown,
-  handleDroppedFiles,
   copySidebarCue,
-  videoScaleWindowSize,
-  videoContentBaseline,
-  sidebarPreservingWindowSize,
-  type VideoContentBaseline,
+  toggleFromRightClick,
+  toggleSidebar
+} from './state/appChrome'
+import { handleDroppedFiles } from './state/dropHandling'
+import {
   appendPathsToPlaylist,
   appendPlaylistFile,
-  loadSubtitleFromPicker,
-  buildPlayerAdapter,
-  DEFAULT_DICTIONARIES_DATA,
-  DEFAULT_KNOWLEDGE_SETTINGS,
-  DEFAULT_SYNC_STATUS,
-  optionsDataBridge,
   type PlaylistAppendDeps
-} from './state/appShell'
+} from './state/playlistAppend'
+import { buildPlayerAdapter } from './state/playerAdapter'
+import {
+  sidebarPreservingWindowSize,
+  videoContentBaseline,
+  videoScaleWindowSize,
+  type VideoContentBaseline
+} from './state/windowSizing'
 import {
   INACTIVE_MINI_PLAYER,
   miniPlayerSubtitleStyle,
   type MiniPlayerState
 } from './state/miniPlayer'
-import { createPopupController } from './state/popupController'
+import {
+  createPopupController,
+  shouldClosePopupOnPointerDown,
+  shouldOpenWordPopup
+} from './state/popupController'
 import { createSubtitleReportController } from './state/subtitleReportController'
 import { createBulkMiningController } from './state/bulkMiningController'
 import type { VocabularySpan } from './state/vocabularySpans'
@@ -101,7 +102,13 @@ import { useVocabularyPipeline } from './state/useVocabularyPipeline'
 import { useMiniPlayer } from './state/useMiniPlayer'
 import { useAudioDevices } from './state/audioDevices'
 import { createThemeController } from './state/themeController'
-import { createOptionsDataController } from './state/optionsData'
+import {
+  createOptionsDataController,
+  DEFAULT_DICTIONARIES_DATA,
+  DEFAULT_KNOWLEDGE_SETTINGS,
+  DEFAULT_SYNC_STATUS,
+  optionsDataBridge
+} from './state/optionsData'
 import {
   loadCategoryDomains,
   selectMecabDict,

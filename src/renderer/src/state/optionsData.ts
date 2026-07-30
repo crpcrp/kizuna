@@ -87,6 +87,51 @@ export interface OptionsDataController {
   subscribe(listener: () => void): () => void
 }
 
+export const DEFAULT_DICTIONARIES_DATA: DictionariesData = {
+  mecabDicts: [],
+  currentMecabDictId: 'ipadic',
+  yomitanDicts: []
+}
+
+export const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
+  hasWanikaniToken: false,
+  ankiKnownDecks: [],
+  ankiKnownField: '',
+  knownIntervalDays: 21,
+  wellKnownIntervalDays: 90,
+  coloringEnabled: true,
+  staleAfterHours: 23
+}
+
+export const DEFAULT_SYNC_STATUS: SyncStatus = {
+  wanikani: { lastSyncAt: null, count: 0, configured: false },
+  anki: { lastSyncAt: null, count: 0, configured: false }
+}
+
+export const optionsDataBridge: OptionsDataBridge = {
+  mecab: {
+    listDicts: () => window.kizuna.mecab.listDicts(),
+    currentDict: () => window.kizuna.mecab.currentDict()
+  },
+  dict: {
+    listDicts: () => window.kizuna.dict.listDicts()
+  },
+  anki: {
+    ping: () => window.kizuna.anki.ping(),
+    getSettings: () => window.kizuna.anki.getSettings(),
+    deckNames: () => window.kizuna.anki.deckNames(),
+    modelNames: () => window.kizuna.anki.modelNames(),
+    modelFieldNames: (modelName) => window.kizuna.anki.modelFieldNames(modelName)
+  },
+  knowledge: {
+    getSettings: () => window.kizuna.knowledge.getSettings(),
+    syncStatus: () => window.kizuna.knowledge.syncStatus()
+  },
+  integration: {
+    binaryStatus: () => window.kizuna.integration.binaryStatus()
+  }
+}
+
 function idleState<T>(): DomainState<T> {
   return { status: 'idle', data: undefined, error: undefined }
 }

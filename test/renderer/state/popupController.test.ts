@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createPopupController } from '@src/renderer/src/state/popupController'
+import {
+  createPopupController,
+  shouldClosePopupOnPointerDown,
+  shouldOpenWordPopup
+} from '@src/renderer/src/state/popupController'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 
@@ -448,6 +452,24 @@ describe('popupController', () => {
       ankiStatus: 'error',
       ankiError: 'overwrite verification failed'
     })
+  })
+})
+
+describe('popup pointer decisions', () => {
+  it('suppresses token lookup for a completed text selection', () => {
+    expect(shouldOpenWordPopup(null)).toBe(true)
+    expect(shouldOpenWordPopup({ isCollapsed: true })).toBe(true)
+    expect(shouldOpenWordPopup({ isCollapsed: false })).toBe(false)
+  })
+
+  it('closes only for an outside pointer-down while no popup-owned modal is open', () => {
+    const inside = {} as Node
+    const outside = {} as Node
+    const popup = { contains: (node: Node | null) => node === inside }
+    expect(shouldClosePopupOnPointerDown(popup, outside, false)).toBe(true)
+    expect(shouldClosePopupOnPointerDown(popup, inside, false)).toBe(false)
+    expect(shouldClosePopupOnPointerDown(popup, outside, true)).toBe(false)
+    expect(shouldClosePopupOnPointerDown(null, outside, false)).toBe(false)
   })
 })
 

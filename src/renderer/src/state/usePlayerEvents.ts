@@ -10,9 +10,26 @@ import {
   type MiniPlayerEffect,
   type MiniPlayerState
 } from './miniPlayer'
-import { registerLaunchOpenHandler } from './appShell'
 import type { RecentFilesController } from './recentFilesController'
 import type { PlaylistController, PlaylistLoadDeps } from './playlistController'
+
+interface LaunchHandlerDeps {
+  bridge: Pick<KizunaApi, 'launch'>
+  openPath: (path: string) => Promise<OpenMediaResult>
+  reportError: (message: string) => void
+}
+
+function registerLaunchOpenHandler(deps: LaunchHandlerDeps): () => void {
+  const off = deps.bridge.launch.onOpenPath((path) => {
+    void deps.openPath(path)
+  })
+  const offError = deps.bridge.launch.onError((message) => deps.reportError(message))
+  deps.bridge.launch.rendererReady()
+  return () => {
+    off()
+    offError()
+  }
+}
 
 export interface UsePlayerEventsInput {
   dispatch: Dispatch<PlayerAction>
