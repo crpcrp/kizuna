@@ -7,18 +7,13 @@
 import { URL_SUBTITLE_CHANNELS } from '../shared/ipcChannels'
 import { isUrlSubtitleDescriptor } from '../shared/urlSubtitles'
 import type { UrlSubtitleAsset, UrlSubtitleInventory } from '../shared/urlSubtitles'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike, IpcMainOnLike } from './ipc'
 
 /** The slice of the URL-subtitle service this bridge needs (fakeable in tests). */
 export interface UrlSubtitleServiceLike {
   enumerate(url: string): Promise<UrlSubtitleInventory>
   acquire(descriptor: { url: string; selectionId: string }): Promise<UrlSubtitleAsset>
   cancel(): void
-}
-
-/** The subset of Electron's ipcMain we need for the cancel (send) channel. */
-export interface IpcMainOnLike<E> {
-  on(channel: string, listener: (event: E, ...args: unknown[]) => void): unknown
 }
 
 /**

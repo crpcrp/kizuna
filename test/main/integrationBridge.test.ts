@@ -5,7 +5,7 @@ import {
   type IntegrationServiceLike
 } from '@src/main/integrationBridge'
 import { INTEGRATION_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 
 type FakeEvent = { senderId: number }
 

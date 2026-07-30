@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerMediaBridge, type MediaServiceLike } from '@src/main/mediaBridge'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MEDIA_CHANNELS } from '@src/shared/ipcChannels'
 import type { Track, VideoDimensions } from '@src/shared/track'
 import type { Cue } from '@src/shared/cue'

@@ -6,6 +6,7 @@
 // injected so tests use fakes, see test/mecabBridge.test.ts and
 // test/mecabService.test.ts).
 
+import type { IpcMainHandleLike } from './ipc'
 import { MECAB_CHANNELS } from '../shared/ipcChannels'
 import type { Token } from '../shared/token'
 import type { McDict } from '../shared/mecab'
@@ -78,15 +79,6 @@ export interface MecabServiceLike {
   listDicts(): McDict[]
   selectDict(id: string): 'ipadic' | 'unidic'
   currentDict(): 'ipadic' | 'unidic'
-}
-
-/** The subset of Electron's ipcMain we need, generic over the event type. */
-export interface IpcMainHandleLike<E> {
-  // `any[]` mirrors Electron's own `ipcMain.handle` signature: each channel
-  // below passes a differently-typed argument list, which `unknown[]` would
-  // reject contravariantly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handle(channel: string, listener: (event: E, ...args: any[]) => unknown): unknown
 }
 
 /**

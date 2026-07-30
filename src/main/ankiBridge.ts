@@ -7,7 +7,7 @@
 // and test/main/ankiBridge.service.test.ts).
 
 import { ANKI_CHANNELS } from '../shared/ipcChannels'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 import type { HttpFetch } from './services/http'
 import type { SettingsStore } from './services/settings'
 import type { Token } from '../shared/token'

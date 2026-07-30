@@ -6,7 +6,7 @@
 
 import { PLAYER_SETTINGS_CHANNELS } from '../shared/ipcChannels'
 import type { PlayerSettings } from '../shared/playerSettings'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 import type { SettingsStore } from './services/settings'
 
 /** The slice of the player-settings service this bridge needs (fakeable in tests). */

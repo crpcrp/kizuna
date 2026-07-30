@@ -6,7 +6,7 @@ import {
   type DictServiceLike
 } from '@src/main/dictBridge'
 import { DICT_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { DictInfo, ImportResult, LookupResult } from '@src/shared/dictionary'
 
 type FakeEvent = { senderId: number }

@@ -10,7 +10,7 @@
 
 import { INTEGRATION_CHANNELS } from '../shared/ipcChannels'
 import type { BundledBinaryStatus } from '../shared/integrationStatus'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 
 /** The slice of the integration service this bridge needs (fakeable in tests). */
 export interface IntegrationServiceLike {

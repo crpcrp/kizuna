@@ -10,7 +10,7 @@ import type { Track, VideoDimensions } from '../shared/track'
 import type { Chapter } from '../shared/chapter'
 import type { Cue } from '../shared/cue'
 import { isSubtitleEncoding, type SubtitleEncoding } from '../shared/subtitleEncoding'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 
 /** The slice of the media service this bridge needs (fakeable in tests). */
 export interface MediaServiceLike {

@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  registerUrlSubtitleBridge,
-  type IpcMainOnLike,
-  type UrlSubtitleServiceLike
-} from '@src/main/urlSubtitleBridge'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import { registerUrlSubtitleBridge, type UrlSubtitleServiceLike } from '@src/main/urlSubtitleBridge'
+import type { IpcMainHandleLike, IpcMainOnLike } from '@src/main/ipc'
 import { URL_SUBTITLE_CHANNELS } from '@src/shared/ipcChannels'
 
 const URL = 'https://www.youtube.com/watch?v=abc123'

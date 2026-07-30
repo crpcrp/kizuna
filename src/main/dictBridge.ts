@@ -8,7 +8,7 @@
 
 import { join } from 'node:path'
 import { DICT_CHANNELS } from '../shared/ipcChannels'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './services/dict/schema'
 import { lookup as runLookup } from './services/dict/lookup'
 import { createDbImporter, type DictionaryImporter } from './services/dict/importer'

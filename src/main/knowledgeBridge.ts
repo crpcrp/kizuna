@@ -7,7 +7,7 @@
 // test/harness/{fakeHttp,fakeAnkiConnect,fakeSecrets}.ts).
 
 import { KNOWLEDGE_CHANNELS } from '../shared/ipcChannels'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 import type { KnowledgeSettings, SettingsStore } from './services/settings'
 import type { SecretCodec } from './services/secrets'
 import { readSecret } from './services/secrets'

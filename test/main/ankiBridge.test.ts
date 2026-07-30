@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerAnkiBridge, type AnkiServiceLike } from '@src/main/ankiBridge'
 import { ANKI_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { AnkiMineResult, AnkiSettings, AnkiPing, MineRequest } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'

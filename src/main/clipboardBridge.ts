@@ -1,5 +1,5 @@
 import { CLIPBOARD_CHANNELS } from '../shared/ipcChannels'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 
 /** The narrow Electron clipboard surface used by the renderer bridge. */
 export interface ClipboardWriter {
