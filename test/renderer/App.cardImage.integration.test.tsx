@@ -2,10 +2,10 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
-import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
+import { defaultAnkiSettings } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import type { KizunaApi } from '@src/shared/preloadApi'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // Regression coverage for the mined-card picture flow (issue: mining silently
 // did nothing whenever a Picture field was mapped). The crop dialog renders
@@ -46,9 +46,9 @@ const RESULT: LookupResult = {
 }
 
 interface Fakes {
-  load: ReturnType<typeof vi.fn>
-  captureFrame: ReturnType<typeof vi.fn>
-  addNote: ReturnType<typeof vi.fn>
+  load: FakeKizunaApi['player']['load']
+  captureFrame: FakeKizunaApi['player']['captureFrame']
+  addNote: FakeKizunaApi['anki']['addNote']
 }
 
 function recent(...paths: string[]): RecentMediaFile[] {
@@ -57,125 +57,52 @@ function recent(...paths: string[]): RecentMediaFile[] {
 
 /** Installs a bridge whose Anki settings map a Picture field (the bug's trigger). */
 function installBridge(): Fakes {
-  const noop = (): void => undefined
-  const fakes: Fakes = {
-    load: vi.fn(async () => undefined),
-    captureFrame: vi.fn(async () => FRAME_BASE64),
-    addNote: vi.fn(async () => ({ noteId: 7, operation: 'added' as const, changedFields: [] }))
-  }
-
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
+  const api = installFakeKizunaApi({
     player: {
-      load: fakes.load,
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      screenshot: vi.fn(async () => undefined),
-      captureFrame: fakes.captureFrame,
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
+      load: vi.fn(async () => undefined),
+      captureFrame: vi.fn(async () => FRAME_BASE64)
     },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
     media: {
-      openFile: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
       enumerateTracks: vi.fn(async () => [
-        { id: 0, kind: 'audio', codec: 'aac', language: 'jpn' },
-        { id: 1, kind: 'subtitle', codec: 'subrip', language: 'jpn' }
+        { id: 0, kind: 'audio' as const, codec: 'aac', language: 'jpn' },
+        { id: 1, kind: 'subtitle' as const, codec: 'subrip', language: 'jpn' }
       ]),
-      loadSubtitle: vi.fn(async () => [{ start: 0, end: 30, text: CUE_TEXT }]),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      folderNeighbors: vi.fn(async () => ({}))
+      loadSubtitle: vi.fn(async () => [{ start: 0, end: 30, text: CUE_TEXT }])
     },
     mediaHistory: {
-      getRecentFiles: vi.fn(async () => recent(EPISODE)),
-      getPlaybackHistory: vi.fn(async () => undefined),
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
+      getRecentFiles: vi.fn(async () => recent(EPISODE))
     },
     mecab: {
       tokenize: vi.fn(async () => [TOKEN]),
-      tokenizeBatch: vi.fn(async () => [[TOKEN]]),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
+      tokenizeBatch: vi.fn(async () => [[TOKEN]])
     },
     dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => [RESULT]),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
+      lookup: vi.fn(async () => [RESULT])
     },
     anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: fakes.addNote,
-      findExisting: vi.fn(async () => null),
-      findTargetDeckMembership: vi.fn(async () => ({})),
-      openCard: vi.fn(async () => undefined),
+      addNote: vi.fn(async () => ({
+        noteId: 7,
+        operation: 'added' as const,
+        changedFields: []
+      })),
       // The Picture mapping is what turns on the crop dialog (popupController's
       // screenshotEnabled) and, before the fix, broke every mine.
       getSettings: vi.fn(async () => ({
-        duplicatePolicy: 'prevent-deck' as const,
-        fieldMap: { word: 'Word', picture: 'Picture' }
-      })),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    playerSettings: {
-      getSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS),
-      setSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS)
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn(), cancel: noop },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+        ...defaultAnkiSettings,
+        fieldMap: {
+          ...defaultAnkiSettings.fieldMap,
+          word: 'Word',
+          picture: 'Picture'
+        }
+      }))
+    }
+  })
 
-  return fakes
+  return {
+    load: api.player.load,
+    captureFrame: api.player.captureFrame,
+    addNote: api.anki.addNote
+  }
 }
 
 /** Opens the recent file, clicks its subtitle word, and mines it into Anki. */

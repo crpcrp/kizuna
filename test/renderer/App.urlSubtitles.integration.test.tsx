@@ -4,13 +4,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
-import type { KizunaApi } from '@src/shared/preloadApi'
 import type {
   UrlSubtitleAsset,
   UrlSubtitleInventory,
   UrlSubtitleTrack
 } from '@src/shared/urlSubtitles'
 import type { Cue } from '@src/shared/cue'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // End-to-end wiring for the Subtitle menu's Online-subtitles section (issue
 // #265). The whole preload bridge is faked with controllable promises for
@@ -39,16 +39,15 @@ function deferred<T>(): { promise: Promise<T>; resolve(v: T): void; reject(e: un
 }
 
 interface UrlFakes {
-  enumerate: ReturnType<typeof vi.fn>
-  acquire: ReturnType<typeof vi.fn>
-  cancel: ReturnType<typeof vi.fn>
-  setSubtitleTrack: ReturnType<typeof vi.fn>
+  enumerate: FakeKizunaApi['urlSubtitles']['enumerate']
+  acquire: FakeKizunaApi['urlSubtitles']['acquire']
+  cancel: FakeKizunaApi['urlSubtitles']['cancel']
+  setSubtitleTrack: FakeKizunaApi['mediaHistory']['setSubtitleTrack']
   enumerateDeferreds: Array<ReturnType<typeof deferred<UrlSubtitleInventory>>>
   acquireDeferreds: Array<ReturnType<typeof deferred<UrlSubtitleAsset>>>
 }
 
 function installBridge(): UrlFakes {
-  const noop = (): void => undefined
   const enumerateDeferreds: Array<ReturnType<typeof deferred<UrlSubtitleInventory>>> = []
   const acquireDeferreds: Array<ReturnType<typeof deferred<UrlSubtitleAsset>>> = []
   const fakes: UrlFakes = {
@@ -68,118 +67,16 @@ function installBridge(): UrlFakes {
     acquireDeferreds
   }
 
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
-    player: {
-      load: vi.fn(async () => undefined),
-      setYtdlpQuality: vi.fn(async () => undefined),
-      cancelLoad: vi.fn(async () => undefined),
-      getTrackList: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      frameStep: vi.fn(async () => undefined),
-      frameBackStep: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
-    },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
-    media: {
-      openFile: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
-      enumerateTracks: vi.fn(async () => []),
-      loadSubtitle: vi.fn(async () => []),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      folderNeighbors: vi.fn(async () => ({})),
-      getChapters: vi.fn(async () => [])
-    },
+  installFakeKizunaApi({
     mediaHistory: {
-      getRecentFiles: vi.fn(async () => []),
-      getPlaybackHistory: vi.fn(async () => undefined),
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
       setSubtitleTrack: fakes.setSubtitleTrack
     },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    playerSettings: {
-      getSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS),
-      setSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS)
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn(), cancel: noop },
     urlSubtitles: {
       enumerate: fakes.enumerate,
       acquire: fakes.acquire,
       cancel: fakes.cancel
-    },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+    }
+  })
 
   return fakes
 }

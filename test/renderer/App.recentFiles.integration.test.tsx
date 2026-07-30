@@ -2,9 +2,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
-import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import type { FileAvailability, KizunaApi } from '@src/shared/preloadApi'
+import type { FileAvailability } from '@src/shared/preloadApi'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // Rendered interaction coverage for the Media menu's recent-files section.
 // Everything below the renderer — dialogs, media, history — is the fake
@@ -31,18 +31,17 @@ interface BridgeOptions {
 }
 
 interface Bridge {
-  getRecentFiles: ReturnType<typeof vi.fn>
-  removeRecentFile: ReturnType<typeof vi.fn>
-  clearRecentFiles: ReturnType<typeof vi.fn>
-  checkFileAvailability: ReturnType<typeof vi.fn>
-  openFile: ReturnType<typeof vi.fn>
-  load: ReturnType<typeof vi.fn>
+  getRecentFiles: FakeKizunaApi['mediaHistory']['getRecentFiles']
+  removeRecentFile: FakeKizunaApi['mediaHistory']['removeRecentFile']
+  clearRecentFiles: FakeKizunaApi['mediaHistory']['clearRecentFiles']
+  checkFileAvailability: FakeKizunaApi['mediaHistory']['checkFileAvailability']
+  openFile: FakeKizunaApi['media']['openFile']
+  load: FakeKizunaApi['player']['load']
   /** Newest-first list the fake's `getRecentFiles` returns; mutable per test. */
   files: RecentMediaFile[]
 }
 
 function installBridge(options: BridgeOptions = {}): Bridge {
-  const noop = (): void => undefined
   const files = [...(options.recentFiles ?? [])]
 
   const bridge: Bridge = {
@@ -69,110 +68,21 @@ function installBridge(options: BridgeOptions = {}): Bridge {
     load: vi.fn(async () => undefined)
   }
 
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
-    launch: {
-      onOpenPath: () => noop,
-      onError: () => noop,
-      rendererReady: noop
-    },
+  installFakeKizunaApi({
     player: {
-      load: bridge.load,
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
+      load: bridge.load
     },
     media: {
       openFile: bridge.openFile,
-      readPlaylist: vi.fn(async () => [...(options.playlistEntries ?? [])]),
-      openSubtitleFile: vi.fn(async () => undefined),
-      enumerateTracks: vi.fn(async () => []),
-      loadSubtitle: vi.fn(async () => []),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined)
+      readPlaylist: vi.fn(async () => [...(options.playlistEntries ?? [])])
     },
     mediaHistory: {
       getRecentFiles: bridge.getRecentFiles,
-      getPlaybackHistory: vi.fn(async () => undefined),
       removeRecentFile: bridge.removeRecentFile,
       clearRecentFiles: bridge.clearRecentFiles,
-      checkFileAvailability: bridge.checkFileAvailability,
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
-    },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    playerSettings: {
-      getSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS),
-      setSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS)
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn() },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+      checkFileAvailability: bridge.checkFileAvailability
+    }
+  })
 
   return bridge
 }

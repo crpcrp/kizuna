@@ -3,8 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import type { KizunaApi } from '@src/shared/preloadApi'
 import type { MediaPlaybackHistory } from '@src/shared/mediaHistory'
+import { installFakeKizunaApi } from '../harness/fakeKizunaApi'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -29,103 +29,15 @@ function installBridge(
   playbackHistory: MediaPlaybackHistory | undefined = undefined
 ): ReturnType<typeof vi.fn> {
   const setSettings = vi.fn(async (patch: Partial<PlayerSettings>) => settings(patch))
-  const noop = (): void => undefined
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
-    player: {
-      load: vi.fn(async () => undefined),
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
-    },
+  installFakeKizunaApi({
     media: {
-      openFile: vi.fn(async () => 'E:\\video\\episode.mkv'),
-      openSubtitleFile: vi.fn(async () => undefined),
-      enumerateTracks: vi.fn(async () => []),
-      loadSubtitle: vi.fn(async () => []),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined)
+      openFile: vi.fn(async () => 'E:\\video\\episode.mkv')
     },
     mediaHistory: {
-      getRecentFiles: vi.fn(async () => []),
-      getPlaybackHistory: vi.fn(async () => playbackHistory),
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
+      getPlaybackHistory: vi.fn(async () => playbackHistory)
     },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    playerSettings: { getSettings: vi.fn(() => settingsRead), setSettings },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn() },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+    playerSettings: { getSettings: vi.fn(() => settingsRead), setSettings }
+  })
   return setSettings
 }
 
