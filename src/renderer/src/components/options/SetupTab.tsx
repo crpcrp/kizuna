@@ -2,7 +2,7 @@ import type { McDict } from '../../../../shared/mecab'
 import type { DictInfo } from '../../../../shared/dictionary'
 import type { SyncStatus } from '../../../../shared/knowledge'
 import type { SetupData } from '../../state/optionsData'
-import type { OptionsCategory } from '../OptionsMenu'
+import type { OptionsCategory, SettingEntry } from './types'
 import { formatLastSynced } from './KnowledgeTab'
 
 /** How a capability reads at a glance.
@@ -206,6 +206,7 @@ export function buildSetupRows({
 }
 
 export interface SetupTabProps extends SetupRowsInput {
+  active?: boolean
   /** Switches the dialog to another tab. The only action on this page; every
    * row is otherwise read-only. */
   onGoToCategory: (category: OptionsCategory) => void
@@ -213,11 +214,35 @@ export interface SetupTabProps extends SetupRowsInput {
   categoryLabel: (category: OptionsCategory) => string
 }
 
+export const SETUP_SETTING_ENTRIES: SettingEntry[] = [
+  {
+    id: 'setup-status',
+    label: 'Setup & integrations status',
+    category: 'setup',
+    keywords: [
+      'ffmpeg',
+      'ffprobe',
+      'yt-dlp',
+      'mpv',
+      'mecab',
+      'unidic',
+      'yomitan',
+      'anki',
+      'wanikani',
+      'diagnostics',
+      'ready',
+      'missing',
+      'installed'
+    ]
+  }
+]
+
 /** "Setup & integrations" options tab: a read-only inventory of every bundled
  * binary and optional integration with a Ready / Missing / Not-configured
  * indicator. It reports; it never configures — the real controls stay on the
  * tabs each row links to. */
 export default function SetupTab({
+  active = true,
   onGoToCategory,
   categoryLabel,
   ...input
@@ -225,7 +250,7 @@ export default function SetupTab({
   const rows = buildSetupRows(input)
 
   return (
-    <section className="options-tab active" aria-hidden="false">
+    <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       <div className="options-section">
         <h3>Setup &amp; integrations</h3>
         <p className="options-description">
