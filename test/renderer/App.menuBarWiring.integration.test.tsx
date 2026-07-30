@@ -5,8 +5,8 @@ import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import type { KizunaApi } from '@src/shared/preloadApi'
 import type { Track } from '@src/shared/track'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // Wiring guard for the MenuBar call site. These assertions are deliberately
 // about *which* bridge call each menu item reaches: the props they travel
@@ -26,146 +26,61 @@ function recent(...paths: string[]): RecentMediaFile[] {
 }
 
 interface Fakes {
-  load: ReturnType<typeof vi.fn>
-  getPlaybackHistory: ReturnType<typeof vi.fn>
-  setYtdlpQuality: ReturnType<typeof vi.fn>
-  frameStep: ReturnType<typeof vi.fn>
-  frameBackStep: ReturnType<typeof vi.fn>
-  setLoudnessNorm: ReturnType<typeof vi.fn>
-  setAudioTrack: ReturnType<typeof vi.fn>
-  setAudioDevice: ReturnType<typeof vi.fn>
-  getAudioDevices: ReturnType<typeof vi.fn>
-  setPlayerSettings: ReturnType<typeof vi.fn>
-  loadSubtitle: ReturnType<typeof vi.fn>
+  load: FakeKizunaApi['player']['load']
+  getPlaybackHistory: FakeKizunaApi['mediaHistory']['getPlaybackHistory']
+  setYtdlpQuality: FakeKizunaApi['player']['setYtdlpQuality']
+  frameStep: FakeKizunaApi['player']['frameStep']
+  frameBackStep: FakeKizunaApi['player']['frameBackStep']
+  setLoudnessNorm: FakeKizunaApi['player']['setLoudnessNorm']
+  setAudioTrack: FakeKizunaApi['player']['setAudioTrack']
+  setAudioDevice: FakeKizunaApi['player']['setAudioDevice']
+  getAudioDevices: FakeKizunaApi['player']['getAudioDevices']
+  setPlayerSettings: FakeKizunaApi['playerSettings']['setSettings']
+  loadSubtitle: FakeKizunaApi['media']['loadSubtitle']
 }
 
 function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fakes {
-  const noop = (): void => undefined
-  const fakes: Fakes = {
-    load: vi.fn(async () => undefined),
-    getPlaybackHistory: vi.fn(async () => undefined),
-    setYtdlpQuality: vi.fn(async () => undefined),
-    frameStep: vi.fn(async () => undefined),
-    frameBackStep: vi.fn(async () => undefined),
-    setLoudnessNorm: vi.fn(async () => undefined),
-    setAudioTrack: vi.fn(async () => undefined),
-    setAudioDevice: vi.fn(async () => undefined),
-    getAudioDevices: vi.fn(async () => [
-      { name: 'auto', description: 'Autoselect device' },
-      { name: 'wasapi/speakers', description: 'Speakers' }
-    ]),
-    setPlayerSettings: vi.fn(async () => settings),
-    loadSubtitle: vi.fn(async () => [])
-  }
-
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
+  const api = installFakeKizunaApi({
     player: {
-      load: fakes.load,
-      setYtdlpQuality: fakes.setYtdlpQuality,
-      cancelLoad: vi.fn(async () => undefined),
-      getVideoDimensions: vi.fn(async () => undefined),
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAudioTrack: fakes.setAudioTrack,
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      frameStep: fakes.frameStep,
-      frameBackStep: fakes.frameBackStep,
-      getAudioDevices: fakes.getAudioDevices,
-      setAudioDevice: fakes.setAudioDevice,
-      setLoudnessNorm: fakes.setLoudnessNorm,
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
+      load: vi.fn(async () => undefined),
+      setYtdlpQuality: vi.fn(async () => undefined),
+      setAudioTrack: vi.fn(async () => undefined),
+      frameStep: vi.fn(async () => undefined),
+      frameBackStep: vi.fn(async () => undefined),
+      getAudioDevices: vi.fn(async () => [
+        { name: 'auto', description: 'Autoselect device' },
+        { name: 'wasapi/speakers', description: 'Speakers' }
+      ]),
+      setAudioDevice: vi.fn(async () => undefined),
+      setLoudnessNorm: vi.fn(async () => undefined)
     },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
     media: {
-      openFile: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
       enumerateTracks: vi.fn(async () => [AUDIO_JP, AUDIO_EN, SUB_JP, SUB_EN]),
-      loadSubtitle: fakes.loadSubtitle,
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      folderNeighbors: vi.fn(async () => ({})),
-      getChapters: vi.fn(async () => [])
+      loadSubtitle: vi.fn(async () => [])
     },
     mediaHistory: {
       getRecentFiles: vi.fn(async () => recent(EPISODE)),
-      getPlaybackHistory: fakes.getPlaybackHistory,
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
-    },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
+      getPlaybackHistory: vi.fn(async () => undefined)
     },
     playerSettings: {
       getSettings: vi.fn(async () => settings),
-      setSettings: fakes.setPlayerSettings
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn(), cancel: noop },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+      setSettings: vi.fn(async () => settings)
+    }
+  })
 
-  return fakes
+  return {
+    load: api.player.load,
+    getPlaybackHistory: api.mediaHistory.getPlaybackHistory,
+    setYtdlpQuality: api.player.setYtdlpQuality,
+    frameStep: api.player.frameStep,
+    frameBackStep: api.player.frameBackStep,
+    setLoudnessNorm: api.player.setLoudnessNorm,
+    setAudioTrack: api.player.setAudioTrack,
+    setAudioDevice: api.player.setAudioDevice,
+    getAudioDevices: api.player.getAudioDevices,
+    setPlayerSettings: api.playerSettings.setSettings,
+    loadSubtitle: api.media.loadSubtitle
+  }
 }
 
 /** Opens the recent episode through the Media menu and waits for its load. */

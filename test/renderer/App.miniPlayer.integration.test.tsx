@@ -3,8 +3,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import type { KizunaApi } from '@src/shared/preloadApi'
 import type { WindowBounds } from '@src/shared/windowBounds'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // Rendered coverage for the mini-player: the Video-menu "Mini player"
 // item and the Ctrl+M key action enter compact mode — saving the current window
@@ -16,132 +16,44 @@ import type { WindowBounds } from '@src/shared/windowBounds'
 const SAVED_BOUNDS: WindowBounds = { x: 100, y: 50, width: 1280, height: 720 }
 
 interface Fakes {
-  getBounds: ReturnType<typeof vi.fn>
-  setBounds: ReturnType<typeof vi.fn>
-  setAlwaysOnTop: ReturnType<typeof vi.fn>
-  setVideoMargins: ReturnType<typeof vi.fn>
-  toggleFullscreen: ReturnType<typeof vi.fn>
+  getBounds: FakeKizunaApi['windowControls']['getBounds']
+  setBounds: FakeKizunaApi['windowControls']['setBounds']
+  setAlwaysOnTop: FakeKizunaApi['windowControls']['setAlwaysOnTop']
+  setVideoMargins: FakeKizunaApi['player']['setVideoMargins']
+  toggleFullscreen: FakeKizunaApi['windowControls']['toggleFullscreen']
   /** Pushes a fullscreen-state change into the renderer, as main would. */
   emitFullscreen?: (value: boolean) => void
 }
 
 function installBridge(): Fakes {
-  const noop = (): void => undefined
   const settings: PlayerSettings = { ...DEFAULT_PLAYER_SETTINGS }
   const fakes: Fakes = {
     getBounds: vi.fn(async () => SAVED_BOUNDS),
-    setBounds: vi.fn(async (request: unknown) => request),
+    setBounds: vi.fn(async () => SAVED_BOUNDS),
     setAlwaysOnTop: vi.fn(),
     setVideoMargins: vi.fn(async () => undefined),
     toggleFullscreen: vi.fn()
   }
 
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
+  installFakeKizunaApi({
     windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
       toggleFullscreen: fakes.toggleFullscreen,
-      onFullscreenChange: (cb: (value: boolean) => void) => {
+      onFullscreenChange: vi.fn((cb: (value: boolean) => void) => {
         fakes.emitFullscreen = cb
-        return noop
-      },
-      setSize: noop,
+        return () => undefined
+      }),
       setAlwaysOnTop: fakes.setAlwaysOnTop,
       getBounds: fakes.getBounds,
       setBounds: fakes.setBounds
     },
     player: {
-      load: vi.fn(async () => undefined),
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: fakes.setVideoMargins,
-      setVideoAdjustments: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      screenshot: vi.fn(async () => ''),
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
-    },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
-    media: {
-      openFile: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
-      enumerateTracks: vi.fn(async () => []),
-      loadSubtitle: vi.fn(async () => []),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      folderNeighbors: vi.fn(async () => ({}))
-    },
-    mediaHistory: {
-      getRecentFiles: vi.fn(async () => []),
-      getPlaybackHistory: vi.fn(async () => undefined),
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
-    },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
+      setVideoMargins: fakes.setVideoMargins
     },
     playerSettings: {
       getSettings: vi.fn(async () => settings),
       setSettings: vi.fn(async () => settings)
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn(), cancel: noop },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+    }
+  })
 
   return fakes
 }

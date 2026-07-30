@@ -8,7 +8,7 @@ import {
   type PlayerSettings
 } from '@src/shared/playerSettings'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import type { KizunaApi } from '@src/shared/preloadApi'
+import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 
 // Rendered coverage for the Audio-menu delay wiring: the file-change effect
 // re-applies the persisted per-file delay to mpv (which retains audio-delay
@@ -22,126 +22,39 @@ function recent(...paths: string[]): RecentMediaFile[] {
 }
 
 interface Fakes {
-  setAudioDelay: ReturnType<typeof vi.fn>
-  setSpeed: ReturnType<typeof vi.fn>
-  load: ReturnType<typeof vi.fn>
-  setSettings: ReturnType<typeof vi.fn>
-  getChapters: ReturnType<typeof vi.fn>
+  setAudioDelay: FakeKizunaApi['player']['setAudioDelay']
+  setSpeed: FakeKizunaApi['player']['setSpeed']
+  load: FakeKizunaApi['player']['load']
+  setSettings: FakeKizunaApi['playerSettings']['setSettings']
+  getChapters: FakeKizunaApi['media']['getChapters']
 }
 
 function installBridge(settings: PlayerSettings): Fakes {
-  const noop = (): void => undefined
-  const fakes: Fakes = {
-    setAudioDelay: vi.fn(async () => undefined),
-    setSpeed: vi.fn(async () => undefined),
-    load: vi.fn(async () => undefined),
-    setSettings: vi.fn(async () => settings),
-    getChapters: vi.fn(async () => [])
-  }
-
-  window.matchMedia = vi.fn(() => ({
-    matches: false,
-    addEventListener: noop,
-    removeEventListener: noop
-  })) as never
-  window.kizuna = {
-    windowControls: {
-      minimize: noop,
-      close: noop,
-      setFullscreen: noop,
-      toggleFullscreen: noop,
-      onFullscreenChange: () => noop,
-      setSize: noop,
-      setAlwaysOnTop: noop
-    },
+  const api = installFakeKizunaApi({
     player: {
-      load: fakes.load,
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: fakes.setSpeed,
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: fakes.setAudioDelay,
-      setAudioTrack: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      onTimePos: () => noop,
-      onDuration: () => noop,
-      onEofReached: () => noop,
-      onPause: () => noop,
-      onMediaKey: () => noop
+      load: vi.fn(async () => undefined),
+      setSpeed: vi.fn(async () => undefined),
+      setAudioDelay: vi.fn(async () => undefined)
     },
-    launch: { onOpenPath: () => noop, onError: () => noop, rendererReady: noop },
     media: {
-      openFile: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
-      enumerateTracks: vi.fn(async () => []),
-      loadSubtitle: vi.fn(async () => []),
-      loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
-      folderNeighbors: vi.fn(async () => ({})),
-      getChapters: fakes.getChapters
+      getChapters: vi.fn(async () => [])
     },
     mediaHistory: {
-      getRecentFiles: vi.fn(async () => recent(EPISODE)),
-      getPlaybackHistory: vi.fn(async () => undefined),
-      removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
-    },
-    mecab: {
-      tokenize: vi.fn(async () => []),
-      tokenizeBatch: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
-    },
-    dict: {
-      importDict: vi.fn(),
-      lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(),
-      setFallbackOnly: vi.fn(),
-      reorder: vi.fn(),
-      removeDict: vi.fn(),
-      onImportProgress: () => noop
-    },
-    anki: {
-      ping: vi.fn(),
-      deckNames: vi.fn(),
-      modelNames: vi.fn(),
-      modelFieldNames: vi.fn(),
-      addNote: vi.fn(),
-      findExisting: vi.fn(),
-      findTargetDeckMembership: vi.fn(),
-      openCard: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
-    },
-    knowledge: {
-      levelsFor: vi.fn(async () => ({})),
-      detailsFor: vi.fn(async () => ({})),
-      sync: vi.fn(),
-      syncStatus: vi.fn(),
-      getSettings: vi.fn(),
-      setSettings: vi.fn()
+      getRecentFiles: vi.fn(async () => recent(EPISODE))
     },
     playerSettings: {
       getSettings: vi.fn(async () => settings),
-      setSettings: fakes.setSettings
-    },
-    clipboard: { writeText: vi.fn(async () => undefined) },
-    translate: { translate: vi.fn(), cancel: noop },
-    files: { pathForFile: vi.fn() }
-  } as unknown as KizunaApi
+      setSettings: vi.fn(async () => settings)
+    }
+  })
 
-  return fakes
+  return {
+    setAudioDelay: api.player.setAudioDelay,
+    setSpeed: api.player.setSpeed,
+    load: api.player.load,
+    setSettings: api.playerSettings.setSettings,
+    getChapters: api.media.getChapters
+  }
 }
 
 /** Opens the given recent file through the Media menu and waits for its load. */
