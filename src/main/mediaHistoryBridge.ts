@@ -6,7 +6,7 @@ import type {
   StoredSubtitleSelection,
   StoredTrackSelection
 } from '../shared/mediaHistory'
-import type { IpcMainHandleLike } from './playerBridge'
+import type { IpcMainHandleLike } from './ipc'
 
 /** Main-owned history and filesystem operations exposed to the renderer. */
 export interface MediaHistoryBridgeService {

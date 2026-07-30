@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerClipboardBridge, type ClipboardWriter } from '@src/main/clipboardBridge'
 import { CLIPBOARD_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 
 type FakeEvent = { senderId: number }
 

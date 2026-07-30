@@ -1,9 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  registerMecabBridge,
-  type MecabServiceLike,
-  type IpcMainHandleLike
-} from '@src/main/mecabBridge'
+import { registerMecabBridge, type MecabServiceLike } from '@src/main/mecabBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MECAB_CHANNELS } from '@src/shared/ipcChannels'
 import type { Token } from '@src/shared/token'
 import type { McDict } from '@src/shared/mecab'

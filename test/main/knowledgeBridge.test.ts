@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerKnowledgeBridge, type KnowledgeServiceLike } from '@src/main/knowledgeBridge'
 import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
 
 type FakeEvent = { senderId: number }

@@ -3,9 +3,9 @@ import {
   registerPlayerBridge,
   isExtractorBackedUrl,
   type PlayerControllerLike,
-  type IpcMainHandleLike,
   type PlayerHistoryObserver
 } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MpvLoadError } from '@src/main/mpv/controller'
 import { ScreenshotFolderError } from '@src/main/services/screenshots'
 import { PLAYER_CHANNELS } from '@src/shared/ipcChannels'

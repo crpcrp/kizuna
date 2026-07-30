@@ -3,6 +3,7 @@
 // "Window model — SINGLE transparent window").
 
 import type { BrowserWindowConstructorOptions } from 'electron'
+import type { IpcMainLike } from './ipc'
 import { PRODUCT_NAME } from '../shared/appIdentity'
 import { WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
 import {
@@ -151,16 +152,6 @@ export interface WindowControlTarget {
   getBounds(): WindowBounds
   setBounds(bounds: WindowBounds): void
   setAlwaysOnTop(flag: boolean): void
-}
-
-/** The subset of Electron's ipcMain we need. The fire-and-forget commands use
- * `on`; `getBounds`/`setBounds` return a value, so they go through `handle`
- * (invoke/handle). Electron types the two callbacks' events differently
- * (`IpcMainEvent` vs `IpcMainInvokeEvent`), so the event type is generic per
- * method — the window resolver only reads the shared `.sender`. */
-export interface IpcMainLike<E, I> {
-  on(channel: string, listener: (event: E, ...args: unknown[]) => void): unknown
-  handle(channel: string, listener: (event: I, ...args: unknown[]) => unknown): unknown
 }
 
 /** One display's usable area (`Electron.Display`'s `workArea`). */

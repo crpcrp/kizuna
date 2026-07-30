@@ -4,7 +4,7 @@ import {
   type PlayerSettingsServiceLike
 } from '@src/main/playerSettingsBridge'
 import { PLAYER_SETTINGS_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 
 type FakeEvent = { senderId: number }

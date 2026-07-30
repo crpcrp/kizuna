@@ -3,7 +3,7 @@ import {
   registerMediaHistoryBridge,
   type MediaHistoryBridgeService
 } from '@src/main/mediaHistoryBridge'
-import type { IpcMainHandleLike } from '@src/main/playerBridge'
+import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MEDIA_HISTORY_CHANNELS } from '@src/shared/ipcChannels'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
