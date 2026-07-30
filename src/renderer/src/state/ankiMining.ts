@@ -12,6 +12,7 @@ import {
 import { type LookupResult } from '../../../shared/dictionary'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { type Token } from '../../../shared/token'
+import { errorMessage } from '../util/errorMessage'
 
 /** Seconds of lead-in/lead-out kept around a mined line, so the clip does not
  * clip the speaker's first or last mora. */
@@ -128,7 +129,7 @@ export async function addTokenToAnki(
     })
     return { status: mined.operation }
   } catch (err) {
-    return { status: 'error', error: err instanceof Error ? err.message : String(err) }
+    return { status: 'error', error: errorMessage(err) }
   }
 }
 

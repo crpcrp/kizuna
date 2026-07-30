@@ -3,6 +3,7 @@ import type { DictInfo } from '../../../shared/dictionary'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import type { BundledBinaryStatus } from '../../../shared/integrationStatus'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
+import { errorMessage } from '../util/errorMessage'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -103,10 +104,6 @@ const STALE = Symbol('stale')
 interface FetchOutcome {
   data: unknown
   error?: string
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 /**

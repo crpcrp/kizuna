@@ -2,6 +2,7 @@ import type { FrequencyMode } from '../../../shared/dictionary'
 import type { Cue } from '../../../shared/cue'
 import { ANKI_MEMBERSHIP_BATCH_LIMIT, type AnkiMembershipMatches } from '../../../shared/anki'
 import type { KnowledgeDetails } from '../../../shared/knowledge'
+import { errorMessage } from '../util/errorMessage'
 import {
   defaultSelection,
   deriveMiningCandidates,
@@ -214,7 +215,7 @@ export function createBulkMiningController(): BulkMiningController {
         })
       } catch (err) {
         if (requestToken.current !== request) return
-        set({ kind: 'error', message: err instanceof Error ? err.message : String(err) })
+        set({ kind: 'error', message: errorMessage(err) })
         return
       }
     },

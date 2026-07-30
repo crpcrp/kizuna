@@ -7,12 +7,12 @@ import { classifyMediaFileName } from '../../../shared/mediaFileTypes'
 import { type MediaPlaybackHistory, getResumePosition } from '../../../shared/mediaHistory'
 import { type FileAvailability } from '../../../shared/preloadApi'
 import { type Track, soleUrlAudioTrack } from '../../../shared/track'
+import { errorMessage } from '../util/errorMessage'
 import { defaultSubtitleId } from './playerState'
 import {
   type OpenMediaResult,
   type OpenSession,
   type RecentMediaBridge,
-  errorMessage,
   matchStoredTrack,
   noWarningSink,
   shouldProbe
