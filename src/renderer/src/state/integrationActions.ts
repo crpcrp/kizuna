@@ -1,4 +1,4 @@
-import type { OptionsCategory } from '../components/OptionsMenu'
+import type { OptionsCategory } from '../components/options/types'
 import type { OptionsDataController, OptionsDomain } from './optionsData'
 import type { AnkiSettings } from '../../../shared/anki'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
