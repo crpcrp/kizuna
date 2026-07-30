@@ -1,14 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import OptionsMenu, {
-  ACTION_ROWS,
+import OptionsMenu, { type OptionsMenuProps } from '@src/renderer/src/components/OptionsMenu'
+import { ACTION_ROWS } from '@src/renderer/src/components/options/KeybindingsTab'
+import {
   APPEARANCE_ROWS,
   UNDERLINE_COLOR_ROWS,
-  UnderlineColorRows,
+  UnderlineColorRows
+} from '@src/renderer/src/components/options/AppearanceTab'
+import {
   parseFontScalePercent,
   parsePositionPercent
-} from '@src/renderer/src/components/OptionsMenu'
+} from '@src/renderer/src/components/options/SubtitlesTab'
 import { DEFAULT_LEVEL_COLOR_HEX } from '@src/renderer/src/util/levelColors'
 import { baseOptionsMenuProps } from './optionsMenuProps'
 import {
@@ -24,11 +27,9 @@ import type { DictInfo } from '@src/shared/dictionary'
 // The rebind-capture and Escape-close keydown listeners are client-only effects;
 // they aren't exercised here, same as MenuBar's outside-click listener.
 //
-// This file only covers the dialog shell and the Keybindings/Playback/
-// Subtitles tabs, which stay inline in OptionsMenu. The Dictionaries/Anki/
-// Known-words tabs are separate components (each conditionally mounted only
-// while its category is active) with their own mirrored tests under
-// test/renderer/components/options/.
+// This file covers the dialog shell and the four always-mounted core tabs.
+// The integration tabs are conditionally mounted only while their category is
+// active and have their own focused tests under test/renderer/components/options/.
 
 function noop(): void {}
 
@@ -38,13 +39,33 @@ const IPADIC_ONLY: McDict[] = [
 
 const NO_YOMITAN_DICTS: DictInfo[] = []
 
-function renderMenu(overrides: Partial<React.ComponentProps<typeof OptionsMenu>> = {}): string {
+type MenuOverrides = Omit<
+  Partial<OptionsMenuProps>,
+  'keybindings' | 'playback' | 'appearance' | 'subtitles' | 'dictionaries'
+> & {
+  keybindings?: Partial<OptionsMenuProps['keybindings']>
+  playback?: Partial<OptionsMenuProps['playback']>
+  appearance?: Partial<OptionsMenuProps['appearance']>
+  subtitles?: Partial<OptionsMenuProps['subtitles']>
+  dictionaries?: Partial<OptionsMenuProps['dictionaries']>
+}
+
+function renderMenu(overrides: MenuOverrides = {}): string {
+  const base = baseOptionsMenuProps()
   return renderToStaticMarkup(
     <OptionsMenu
-      {...baseOptionsMenuProps()}
-      mecabDicts={IPADIC_ONLY}
-      yomitanDicts={NO_YOMITAN_DICTS}
+      {...base}
       {...overrides}
+      keybindings={{ ...base.keybindings, ...overrides.keybindings }}
+      playback={{ ...base.playback, ...overrides.playback }}
+      appearance={{ ...base.appearance, ...overrides.appearance }}
+      subtitles={{ ...base.subtitles, ...overrides.subtitles }}
+      dictionaries={{
+        ...base.dictionaries,
+        mecabDicts: IPADIC_ONLY,
+        yomitanDicts: NO_YOMITAN_DICTS,
+        ...overrides.dictionaries
+      }}
     />
   )
 }
@@ -74,13 +95,15 @@ describe('OptionsMenu markup', () => {
 
   it('labels a modifier-chord binding with its modifier', () => {
     const html = renderMenu({
-      keyBindings: { ...DEFAULT_KEY_BINDINGS, skipBack: 'ControlLeft+ArrowLeft' }
+      keybindings: {
+        keyBindings: { ...DEFAULT_KEY_BINDINGS, skipBack: 'ControlLeft+ArrowLeft' }
+      }
     })
     expect(html).toContain('>Ctrl + ←<')
   })
 
   it('renders the skip-seconds input with the current value', () => {
-    const html = renderMenu({ skipSeconds: 12 })
+    const html = renderMenu({ playback: { skipSeconds: 12 } })
     expect(html).toMatch(/id="skip-seconds-input"[^>]*value="12"/)
   })
 
@@ -88,7 +111,7 @@ describe('OptionsMenu markup', () => {
     const htmlDefault = renderMenu()
     expect(htmlDefault).toMatch(/id="right-click-toggle-pause-checkbox"[^>]*checked=""/)
 
-    const htmlDisabled = renderMenu({ rightClickTogglePause: false })
+    const htmlDisabled = renderMenu({ playback: { rightClickTogglePause: false } })
     expect(htmlDisabled).toContain('id="right-click-toggle-pause-checkbox"')
     expect(htmlDisabled).not.toMatch(/id="right-click-toggle-pause-checkbox"[^>]*checked=""/)
   })
@@ -103,7 +126,12 @@ describe('OptionsMenu markup', () => {
     const onChangeKeyBinding = vi.fn()
     const onChangeSkipSeconds = vi.fn()
     const onCategoryOpen = vi.fn()
-    renderMenu({ onClose, onChangeKeyBinding, onChangeSkipSeconds, onCategoryOpen })
+    renderMenu({
+      onClose,
+      onCategoryOpen,
+      keybindings: { onChangeKeyBinding },
+      playback: { onChangeSkipSeconds }
+    })
     expect(onClose).not.toHaveBeenCalled()
     expect(onChangeKeyBinding).not.toHaveBeenCalled()
     expect(onChangeSkipSeconds).not.toHaveBeenCalled()
@@ -158,7 +186,7 @@ describe('OptionsMenu Appearance tab', () => {
   })
 
   it('checks the radio matching the appearance prop', () => {
-    const html = renderMenu({ appearance: 'dark' })
+    const html = renderMenu({ appearance: { appearance: 'dark' } })
     expect(html).toMatch(/id="appearance-dark"[^>]*checked=""/)
     expect(html).not.toMatch(/id="appearance-system"[^>]*checked=""/)
   })
@@ -211,7 +239,7 @@ describe('OptionsMenu underline colors', () => {
   })
 
   it('shows an override as the input value', () => {
-    const html = renderMenu({ levelColors: { learning: '#123456' } })
+    const html = renderMenu({ appearance: { levelColors: { learning: '#123456' } } })
     expect(html).toMatch(/id="level-color-learning"[^>]*value="#123456"/)
     // Untouched levels still show their default.
     expect(html).toMatch(
@@ -257,7 +285,7 @@ describe('OptionsMenu underline colors', () => {
   it('renders Reset only for an overridden level, and it clears the override', () => {
     expect(renderMenu()).not.toContain('Reset Unknown underline color')
 
-    const html = renderMenu({ levelColors: { unknown: '#abcdef' } })
+    const html = renderMenu({ appearance: { levelColors: { unknown: '#abcdef' } } })
     expect(html).toContain('aria-label="Reset Unknown underline color"')
     expect(html).not.toContain('aria-label="Reset Known underline color"')
 
@@ -309,7 +337,7 @@ describe('OptionsMenu Subtitles tab', () => {
     subtitleStyle = DEFAULT_SUBTITLE_STYLE,
     onChangeSubtitleStyle = noop
   ): string {
-    return renderMenu({ subtitleStyle, onChangeSubtitleStyle })
+    return renderMenu({ subtitles: { subtitleStyle, onChangeSubtitleStyle } })
   }
 
   it('renders font-size and position inputs with the current values', () => {
@@ -334,7 +362,7 @@ describe('OptionsMenu Subtitles tab', () => {
 
   it('renders the subtitle drag toggle enabled by default and accepts the disabled value', () => {
     expect(renderMenu()).toMatch(/id="subtitle-drag-enabled"[^>]*checked=""/)
-    expect(renderMenu({ subtitleDragEnabled: false })).toMatch(
+    expect(renderMenu({ subtitles: { subtitleDragEnabled: false } })).toMatch(
       /id="subtitle-drag-enabled"(?![^>]*checked)/
     )
   })
