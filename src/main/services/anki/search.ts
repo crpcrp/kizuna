@@ -5,7 +5,7 @@
 import type { DuplicatePolicy } from '../../../shared/anki'
 
 /** Escapes a value for embedding in a double-quoted Anki search clause. */
-export function escapeAnkiSearchValue(value: string): string {
+function escapeAnkiSearchValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
