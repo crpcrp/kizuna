@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import type { AnkiField, AnkiSettings, AnkiPing } from '../../../../shared/anki'
+import {
+  defaultAnkiSettings,
+  type AnkiField,
+  type AnkiSettings,
+  type AnkiPing
+} from '../../../../shared/anki'
+import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
 /** Splits a comma-separated tags input into trimmed, non-empty tags. */
@@ -42,10 +48,11 @@ const ANKI_FIELD_ROWS: { field: AnkiField; label: string }[] = [
 ]
 
 export interface AnkiTabProps {
-  ankiSettings: AnkiSettings
-  ankiDeckNames: string[]
-  ankiModelNames: string[]
-  ankiModelFields: string[]
+  active?: boolean
+  ankiSettings?: AnkiSettings
+  ankiDeckNames?: string[]
+  ankiModelNames?: string[]
+  ankiModelFields?: string[]
   ankiPing: () => Promise<AnkiPing>
   onChangeAnkiSettings: (patch: Partial<AnkiSettings>) => void
   /** User-facing error from the last anki-domain load (e.g. "Is Anki
@@ -53,17 +60,78 @@ export interface AnkiTabProps {
   loadError?: string
 }
 
+export const ANKI_SETTING_ENTRIES: SettingEntry[] = [
+  {
+    id: 'anki-url',
+    label: 'AnkiConnect URL',
+    category: 'anki',
+    keywords: ['connection', 'localhost', 'port'],
+    targetId: 'anki-url-input'
+  },
+  {
+    id: 'anki-api-key',
+    label: 'AnkiConnect API key',
+    category: 'anki',
+    keywords: ['password', 'secret'],
+    targetId: 'anki-api-key-input'
+  },
+  {
+    id: 'anki-deck',
+    label: 'Anki deck',
+    category: 'anki',
+    keywords: ['mining', 'target deck'],
+    targetId: 'anki-deck-select'
+  },
+  {
+    id: 'anki-model',
+    label: 'Anki note type',
+    category: 'anki',
+    keywords: ['model', 'template'],
+    targetId: 'anki-model-select'
+  },
+  {
+    id: 'anki-test-connection',
+    label: 'Test Anki connection',
+    category: 'anki',
+    keywords: ['ping', 'check'],
+    targetId: 'anki-test-connection'
+  },
+  {
+    id: 'anki-fields',
+    label: 'Anki field mapping',
+    category: 'anki',
+    keywords: ['word', 'reading', 'sentence', 'audio', 'screenshot', 'frequency', 'pitch accent']
+  },
+  {
+    id: 'anki-duplicate-policy',
+    label: 'Duplicate policy',
+    category: 'anki',
+    keywords: ['skip', 'allow', 'existing note'],
+    targetId: 'anki-duplicate-policy-select'
+  },
+  { id: 'anki-tags', label: 'Anki tags', category: 'anki', targetId: 'anki-tags-input' },
+  {
+    id: 'anki-include-audio',
+    label: 'Include word audio (JapanesePod101)',
+    category: 'anki',
+    keywords: ['pronunciation', 'sound'],
+    targetId: 'anki-include-audio-checkbox'
+  }
+]
+
 /** "Anki" options tab: AnkiConnect connection, note-type field mapping, and
  * card-creation settings. Owns the transient "Test connection" result. */
 export default function AnkiTab({
+  active = true,
   ankiSettings,
-  ankiDeckNames,
-  ankiModelNames,
-  ankiModelFields,
+  ankiDeckNames = [],
+  ankiModelNames = [],
+  ankiModelFields = [],
   ankiPing,
   onChangeAnkiSettings,
   loadError
 }: AnkiTabProps): React.JSX.Element {
+  ankiSettings ??= defaultAnkiSettings
   const [ankiPingResult, setAnkiPingResult] = useState<AnkiPing | null>(null)
   // The API key is a secret credential whose change triggers a network reload
   // (deckNames/modelNames). Mirroring the WaniKani token field, it lives in a
@@ -75,7 +143,7 @@ export default function AnkiTab({
   const apiKeyConfigured = ankiSettings.apiKey !== ''
 
   return (
-    <section className="options-tab active" aria-hidden="false">
+    <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       {loadError && (
         <p className="options-error" id="anki-load-error" role="alert">
           {loadError}
