@@ -10,6 +10,7 @@ import OptionsToggleRow from './OptionsToggleRow'
 
 export interface PlaybackTabProps {
   active: boolean
+  open: boolean
   skipSeconds: number
   rightClickTogglePause: boolean
   autoPlayNext: boolean
@@ -116,6 +117,7 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
 /** Playback behavior, audio output, and advanced mpv settings. */
 export default function PlaybackTab({
   active,
+  open,
   skipSeconds,
   rightClickTogglePause,
   autoPlayNext,
@@ -145,8 +147,8 @@ export default function PlaybackTab({
   const [mpvExtraArgsDraft, setMpvExtraArgsDraft] = useState<string | null>(null)
 
   useEffect(() => {
-    if (active) onAudioDevicesRequest()
-  }, [active, onAudioDevicesRequest])
+    if (open && active) onAudioDevicesRequest()
+  }, [open, active, onAudioDevicesRequest])
 
   const commitScreenshotFolder = (): void => {
     if (screenshotFolderDraft === null) return
