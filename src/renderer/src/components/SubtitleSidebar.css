@@ -1,5 +1,5 @@
 /* Opaque right-hand column so it visually covers the blank strip mpv leaves
-   via video-margin-ratio-right (see uiHelpers.computeVideoMargins) — the
+   via video-margin-ratio-right (see useVideoMargins.computeVideoMargins) — the
    video's own picture is inset out from under it, not painted underneath. */
 #subtitle-sidebar {
   width: 320px;

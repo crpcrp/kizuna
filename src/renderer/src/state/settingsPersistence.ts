@@ -1,5 +1,9 @@
 import type { PlayerSettings } from '../../../shared/playerSettings'
-import type { TimerLike } from '../util/uiHelpers'
+
+export interface TimerLike {
+  setTimeout(handler: () => void, ms: number): unknown
+  clearTimeout(handle: unknown): void
+}
 
 /** Shape of `window.kizuna.playerSettings.setSettings`. */
 export type SettingsWriter = (patch: Partial<PlayerSettings>) => Promise<PlayerSettings>

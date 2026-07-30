@@ -8,7 +8,7 @@ import {
   type UseSettingsLifecycleInput
 } from '@src/renderer/src/state/useSettingsLifecycle'
 import { createSettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
-import type { TimerLike } from '@src/renderer/src/util/uiHelpers'
+import type { TimerLike } from '@src/renderer/src/state/settingsPersistence'
 
 function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
   let nextId = 1

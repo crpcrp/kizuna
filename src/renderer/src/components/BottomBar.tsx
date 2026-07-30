@@ -4,7 +4,7 @@ import { DEFAULT_SKIP_SECONDS, SPEED_MAX, SPEED_MIN } from '../../../shared/play
 import { SPEED_PRESETS } from './MenuBar'
 import type { Chapter } from '../../../shared/chapter'
 import type { AbLoopState } from '../state/playerState'
-import { formatTime } from '../util/uiHelpers'
+import { formatTime } from './playbackTime'
 import SeekPreview from './SeekPreview'
 import {
   HIDDEN_PREVIEW,

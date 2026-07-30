@@ -1,6 +1,32 @@
 import { useEffect } from 'react'
-import { computeVideoMargins } from '../util/uiHelpers'
 import type { BulkMiningPresentation } from './bulkMiningPresentation'
+
+export interface VideoMargins {
+  top: number
+  bottom: number
+  right: number
+  left: number
+}
+
+export function computeVideoMargins(
+  topBarHeight: number,
+  bottomBarHeight: number,
+  windowHeight: number,
+  fullscreen: boolean,
+  sidebarWidth = 0,
+  windowWidth = 0,
+  leftWidth = 0
+): VideoMargins {
+  if (fullscreen || windowHeight <= 0) return { top: 0, bottom: 0, right: 0, left: 0 }
+  const clamp = (px: number, base: number): number =>
+    base <= 0 ? 0 : Math.max(0, Math.min(0.45, px / base))
+  return {
+    top: clamp(topBarHeight, windowHeight),
+    bottom: clamp(bottomBarHeight, windowHeight),
+    right: clamp(sidebarWidth, windowWidth),
+    left: clamp(leftWidth, windowWidth)
+  }
+}
 
 export interface VideoMarginsPlayer {
   setVideoMargins: (top: number, bottom: number, right?: number, left?: number) => Promise<unknown>
