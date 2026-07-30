@@ -29,9 +29,6 @@ function setup(
       setAudioDelay: vi.fn().mockResolvedValue(undefined),
       setLoudnessNorm: vi.fn().mockResolvedValue(undefined),
       setAbLoop: vi.fn().mockResolvedValue(undefined),
-      getAudioDevices: vi.fn().mockResolvedValue([]),
-      setAudioDevice: vi.fn().mockResolvedValue(undefined),
-      setMuted: vi.fn().mockResolvedValue(undefined),
       setVideoAdjustments: vi.fn().mockResolvedValue(undefined),
       getVideoDimensions: vi.fn(playerGetVideoDimensions)
     },
@@ -57,10 +54,7 @@ function setup(
     folderSubtitleOffsetsRef: { current: {} },
     audioDelaysRef: { current: {} },
     videoAdjustmentsRef: { current: initialPlayerState.videoAdjustments },
-    audioDeviceRefreshVersionRef: { current: 0 },
-    audioDeviceNeedsUnmuteRef: { current: false },
-    refreshAudioDevice: vi.fn().mockResolvedValue(false),
-    setAudioDevices: vi.fn(),
+    reapplyAudioDevice: vi.fn(),
     setVideoDimensions: vi.fn()
   }
   const hook = renderHook(({ value }) => usePerFileRestore(value), {
