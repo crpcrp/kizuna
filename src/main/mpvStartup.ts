@@ -1,8 +1,6 @@
-// Feature 2 — mpv startup orchestration, extracted from index.ts so the
-// config-enabled / no-config-retry / warning-banner paths are unit-testable
-// without an Electron BrowserWindow or a real mpv process (AGENTS.md law 2/3).
-// Every side effect (spawn+connect, dir creation, error reporting, logging) is
-// injected.
+// Extracted from index.ts so the config-enabled/no-config-retry/warning paths are testable
+// without an Electron BrowserWindow or a real mpv process. Every side effect
+// (spawn+connect, dir creation, error reporting, logging) is injected.
 
 /** Argv-shaping options forwarded to `MpvController.start`. */
 export interface MpvStartOptions {
@@ -10,7 +8,7 @@ export interface MpvStartOptions {
   hwnd: bigint | string
   userConfigDir?: string
   extraArgs?: string[]
-  /** Bundled yt-dlp path (Feature 9); enables mpv's ytdl hook when present. */
+  /** Bundled yt-dlp path; enables mpv's ytdl hook when present. */
   ytdlpPath?: string
 }
 
@@ -22,7 +20,7 @@ export const MPV_CONFIG_ERROR_MESSAGE =
 export interface StartMpvWithConfigDeps {
   mpvPath: string
   hwnd: bigint | string
-  /** Bundled yt-dlp path (Feature 9); forwarded to every `start` attempt so mpv
+  /** Bundled yt-dlp path; forwarded to every `start` attempt so mpv
    * gets the ytdl hook. Undefined when the binary isn't bundled — mpv still
    * plays direct-stream URLs, only extractor-backed ones stop resolving. */
   ytdlpPath?: string

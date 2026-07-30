@@ -1,10 +1,5 @@
-// Player IPC bridge: wires the mpv controller's command surface to
-// ipcMain.handle channels and forwards its property observers back to the
-// renderer. Pure injectable wiring — the ipcMain-like object, the mpv
-// controller and the push function are all injected so tests exercise this
-// with fakes instead of live Electron/mpv (AGENTS.md law 3). Electron glue
-// (preload contextBridge + real webContents.send) is wired up in a later
-// subtask.
+// IPC, controller, and renderer-push dependencies are injected for tests;
+// index.ts supplies the Electron and mpv implementations.
 
 import type { IpcMainHandleLike } from './ipc'
 import { PLAYER_CHANNELS } from '../shared/ipcChannels'

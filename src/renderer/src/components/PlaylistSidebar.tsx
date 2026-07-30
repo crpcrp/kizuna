@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { mediaFileBasename } from '../../../shared/mediaHistory'
 import type { RepeatMode } from '../state/playlist'
 
-// Presentational play-queue panel (Feature 1, slice 5): the same slide-in
+// Presentational play-queue panel: the same slide-in
 // column pattern as SubtitleSidebar. Lists every queued entry with the active
 // one highlighted; double-click plays a row; rows drag to reorder; each row has
 // a remove button; the footer cycles repeat and toggles shuffle. All state is

@@ -1,6 +1,5 @@
-// Test harness — fake `DictionaryImporter` (AGENTS.md law 3: no real
-// unzip/DB transaction). Records calls and returns a scripted result, so
-// tests can prove `createDictService` delegates through the boundary
+// Records calls and returns a scripted result, so tests can prove
+// `createDictService` delegates through the boundary
 // instead of importing directly.
 
 import type { DictionaryImporter } from '../../src/main/services/dict/importer'

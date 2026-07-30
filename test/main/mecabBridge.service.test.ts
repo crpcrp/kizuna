@@ -26,7 +26,6 @@ const sampleToken: Token = {
   startOffset: 0
 }
 
-/** Fake A4 tokenizeFn: records the cfg it was called with. */
 function fakeTokenizeFn() {
   const calls: Array<{ cfg: MecabConfig; text: string }> = []
   const tokenizeFn = vi.fn(async (cfg: MecabConfig, text: string) => {
@@ -109,7 +108,7 @@ describe('createMecabService', () => {
     expect(calls[0].cfg).toEqual({ mecabPath: 'mecab.exe', dicdir: UNIDIC_DIR, flavor: 'unidic' })
   })
 
-  it('listDicts lists both dicts per B2, flagging the absent unidic as not installed', () => {
+  it('listDicts lists both dicts, flagging the absent unidic as not installed', () => {
     const { tokenizeFn } = fakeTokenizeFn()
     const settings = createSettingsStore(fakeIo(undefined))
     const service = createMecabService({

@@ -1,5 +1,5 @@
-// Phase 3 · I2 — pure policy for turning WaniKani/Anki source data into a
-// KnowledgeLevel, and for merging/staleness across sources. No DB, no HTTP.
+// Pure policy for turning WaniKani/Anki source data into a KnowledgeLevel,
+// and for merging/staleness across sources. No DB, no HTTP.
 
 import { maxKnowledgeLevel, type KnowledgeLevel } from '../../../shared/knowledge'
 import type { AnkiCardInfo } from '../anki/ankiConnect'

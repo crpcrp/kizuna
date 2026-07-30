@@ -1,8 +1,8 @@
-// Priority 8.2 — worker-backed `DictionaryImporter`. Runs each import in its
-// own node:worker_threads Worker (see importWorker.ts) so the unzip/parse/
+// Worker-backed `DictionaryImporter`. Runs each import in its own
+// node:worker_threads Worker (see importWorker.ts) so the unzip/parse/
 // insert transaction never blocks the Electron main loop. Worker creation is
-// injected as a `WorkerFactory` so tests never launch a real worker
-// (AGENTS.md law 3) — see test/harness/fakeWorker.ts.
+// injected as a `WorkerFactory` so tests never launch a real worker — see
+// test/harness/fakeWorker.ts.
 
 import type { ImportResult } from '../../../shared/dictionary'
 import type { DictionaryImporter } from './importer'

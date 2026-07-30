@@ -1,8 +1,8 @@
 // Injectable main-process
 // service that enumerates and acquires subtitle assets for the currently loaded
-// extractor-backed URL. Every external boundary is injected (AGENTS.md law 3):
-// the yt-dlp subprocess (`exec`), the filesystem (`fs`), the timeout timer, and
-// the subtitle parser. No live binary, network, or uncontrolled filesystem is
+// extractor-backed URL. Every external boundary is injected: the yt-dlp
+// subprocess (`exec`), the filesystem (`fs`), the timeout timer, and the
+// subtitle parser. No live binary, network, or uncontrolled filesystem is
 // ever touched in tests.
 //
 // Security posture:

@@ -1,7 +1,5 @@
-// Shared ipcMain-like test seams: the narrow structural slices of Electron's
-// ipcMain that bridges depend on instead of importing Electron directly, so
-// tests exercise bridge registration with fakes (AGENTS.md law 3). This is
-// the single home for these types — bridges must not redeclare them.
+// Narrow ipcMain-like interfaces let bridge tests avoid a live Electron
+// process. Bridges share these definitions instead of redeclaring them.
 
 /** The subset of Electron's ipcMain we need, generic over the event type. */
 export interface IpcMainHandleLike<E> {

@@ -1,4 +1,3 @@
-// Phase 2 · Task D1 — SQLite schema for Yomitan dictionary storage.
 // Pure DDL strings + an `initSchema(db)` that applies them. The DB handle is
 // injected (never constructed here) so tests can pass an in-memory
 // better-sqlite3 instance and production code passes the real file handle.

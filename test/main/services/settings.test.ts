@@ -86,7 +86,7 @@ describe('mergeSettings — media history', () => {
   })
 })
 
-describe('mergeSettings — Phase 3 anki/knowledge sub-objects (G3)', () => {
+describe('mergeSettings — anki/knowledge sub-objects', () => {
   it('upgrades a v1 file (only mecabDictId + dictOrder) with anki/knowledge/player defaults', () => {
     expect(mergeSettings({ mecabDictId: 'unidic', dictOrder: [1] })).toEqual({
       ...defaultSettings,

@@ -1,5 +1,5 @@
-// Phase 3 · N1 (types) / I2 — knowledge-level vocabulary shared by main,
-// preload, and renderer. Pure type + const, no imports.
+// Knowledge-level vocabulary shared by main, preload, and renderer. Pure
+// type + const, no imports.
 //
 // `inDeck` = the word has an Anki card in a configured known deck, but the card
 // is still new or buried — mined, not yet learned. It outranks

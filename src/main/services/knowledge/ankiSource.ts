@@ -1,9 +1,8 @@
-// Phase 3 · K1 — Anki known-words reader: reads every card in a configured
-// deck and full-replaces the 'anki' source in the knowledge DB. Shape mirrors
+// Reads every card in a configured deck and full-replaces the 'anki' source in
+// the knowledge DB. Shape mirrors
 // wanikani/sync.ts's syncWaniKani (client + db + now -> { count, syncedAt }),
 // but pulls from AnkiConnect's findCards/cardsInfo instead of WaniKani's
-// paginated API (AGENTS.md law 3 — no live AnkiConnect in a test, see
-// test/harness/fakeAnkiConnect.ts).
+// paginated API.
 
 import type { AnkiCardInfo, AnkiClient } from '../anki/ankiConnect'
 import type { KnowledgeDb, KnownRow } from './store'

@@ -10,7 +10,7 @@ import {
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { KizunaApi } from '@src/shared/preloadApi'
 
-// Rendered coverage for F10.2's Audio-menu delay wiring: the file-change effect
+// Rendered coverage for the Audio-menu delay wiring: the file-change effect
 // re-applies the persisted per-file delay to mpv (which retains audio-delay
 // across loadfile), and the menu's ± controls both drive mpv and persist. The
 // whole preload bridge is faked; no production code outside src/ runs.

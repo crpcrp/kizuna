@@ -19,7 +19,7 @@ export interface RefreshKnownLevelsArgs {
 
 export interface SyncAndRefreshKnowledgeArgs extends RefreshKnownLevelsArgs {
   knowledge: KnowledgeSyncBridge
-  /** Undefined preserves the combined startup/manual sync until I4.4 wires source-specific controls. */
+  /** Omit to sync every knowledge source. */
   source?: KnowledgeSource
   /** Settings changes force a fresh sync rather than returning a cooldown status. */
   force?: boolean

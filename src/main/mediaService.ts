@@ -1,11 +1,5 @@
-// Phase 1 · Task 4 (S10c) — real MediaService: the Electron-glue counterpart
-// to mediaBridge.ts's MediaServiceLike, mirroring startPlayer's pattern in
-// index.ts (S6c). Composes S8b's enumerateTracks and S10a's loadSubtitleCues
-// with a real (or injected) open-file dialog.
-//
-// ffprobePath/ffmpegPath resolution here is a TEMPORARY dev hook (mirrors
-// index.ts's KIZUNA_MPV_PATH comment) — real binary-path resolution
-// (packaged vs dev, via process.resourcesPath) is deferred to S15.
+// index.ts supplies packaged or development binary paths through
+// resourcePaths.ts.
 
 import { basename, dirname, join } from 'node:path'
 import { readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises'
@@ -62,7 +56,7 @@ export interface MediaHistoryFolderStore {
  * where `container` picks the extension ('ass' -> '.ass', 'srt' -> '.srt') and
  * `token` is an unguessable crypto-random hex suffix.
  *
- * The random token is the security-relevant part (finding L2): the path used
+ * The random token is the security-relevant part: the path used
  * to be fully predictable from the media filename, so on a shared temp dir a
  * local attacker could pre-create it as a symlink and have ffmpeg's `-y`
  * overwrite clobber a victim file (or read the subtitle another user left

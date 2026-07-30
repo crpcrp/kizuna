@@ -194,7 +194,7 @@ describe('tokenSpans (pure)', () => {
   })
 })
 
-describe('SubtitleOverlay onWordHover/onWordClick event param (E4, additive)', () => {
+describe('SubtitleOverlay optional event parameters', () => {
   const cue: Cue = { start: 0, end: 2, text: '猫' }
   const token = makeToken({
     surface: '猫',
@@ -319,7 +319,7 @@ describe('SubtitleOverlay markup with tokens', () => {
   })
 })
 
-describe('SubtitleOverlay knowledge-level coloring (N3)', () => {
+describe('SubtitleOverlay knowledge-level coloring', () => {
   const tokenCues: Cue[] = [{ start: 0, end: 2, text: '猫は可愛い' }]
   const tokens: Token[] = [
     makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),

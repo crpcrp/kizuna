@@ -44,7 +44,7 @@ export interface SubtitleOverlayProps {
   vocabularySpans?: VocabularySpan[]
   /** Font scale + box position; defaults to DEFAULT_SUBTITLE_STYLE when omitted. */
   style?: SubtitleStyleSettings
-  /** `event` is additive (E4): callers that only need the token may omit it. */
+  /** The event is optional for callers that only need the token. */
   onWordHover?: (token: Token, event?: React.MouseEvent) => void
   onWordClick?: (token: Token, event?: React.MouseEvent) => void
   /** Fired when the pointer leaves a token span, so the caller can cancel a

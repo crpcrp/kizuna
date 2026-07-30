@@ -890,7 +890,7 @@ describe('lookup with frequency options', () => {
     db.close()
   })
 
-  it('applies the B1 ranking contract within match groups without exposing ranking metadata', () => {
+  it('ranks results by frequency within match groups without exposing ranking metadata', () => {
     const db = new Database(':memory:')
     initSchema(db)
     const insertDict = db.prepare(

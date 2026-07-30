@@ -1,4 +1,4 @@
-// Phase 3 · G2 — secrets boundary. Keeps Electron's `safeStorage` out of the
+// Secrets boundary. Keeps Electron's `safeStorage` out of the
 // services; a `SecretCodec` is injected exactly like `FfmpegExec`/`MecabExec`.
 
 export interface SecretCodec {

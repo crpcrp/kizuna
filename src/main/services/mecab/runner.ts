@@ -1,7 +1,7 @@
-// Phase 2 · Task A4 — harnessed MeCab runner: spawns mecab (or, in tests, an
-// injected fake) and turns the result into `Token[]` via buildMecabArgs +
-// parseMecab. Mirrors ffprobe.ts/ffmpeg.ts's Exec-injection pattern
-// (AGENTS.md law 3) — see test/harness/fakeMecab.ts.
+// Harnessed MeCab runner: spawns mecab (or, in tests, an injected fake) and
+// turns the result into `Token[]` via buildMecabArgs + parseMecab. Mirrors
+// ffprobe.ts/ffmpeg.ts's Exec-injection pattern — see
+// test/harness/fakeMecab.ts.
 
 import { execFile } from 'node:child_process'
 import type { DictFlavor, Token } from '../../../shared/token'

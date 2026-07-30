@@ -12,13 +12,8 @@ import {
 import type { Token } from '../../../shared/token'
 
 // Word lookup popup: shown near a token the user clicked/hovered while a
-// video is playing. Purely presentational — takes `results` and `position`
-// as plain props (no IPC/bridge access inside), matching the plan's
-// "Injectable data, no IPC inside" requirement for this slice (E3). Wiring
-// it up to `window.kizuna.dict.lookup(...)` from App.tsx is a later slice
-// (E4). Always rendered; CSS toggles visibility via the `open` class /
-// `aria-hidden`, same pattern as OptionsMenu and MenuBar's dropdown panels,
-// so it stays testable via SSR without simulating show/hide timing.
+// video is playing. It takes data as props and remains mounted while CSS
+// controls visibility, which keeps rendering deterministic in tests.
 
 export interface WordPopupProps {
   results: LookupResult[]

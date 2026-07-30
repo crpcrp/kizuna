@@ -1,9 +1,9 @@
-// F7 — Windows system media integration: keyboard media keys, taskbar progress,
+// Windows system media integration: keyboard media keys, taskbar progress,
 // and thumbnail-toolbar buttons. Electron-free like powerSave.ts: every OS
 // surface (globalShortcut, BrowserWindow.setProgressBar / setThumbarButtons) and
 // the renderer push are injected, so the service is exercised with fakes and no
-// live Electron (AGENTS.md law 3). index.ts constructs it with the real pieces,
-// injecting no-op thumbar/progress functions on non-Windows.
+// live Electron. index.ts constructs it with the real pieces, injecting
+// no-op thumbar/progress functions on non-Windows.
 
 import { PLAYER_CHANNELS } from '../../shared/ipcChannels'
 import type { MediaKeyCommand } from '../../shared/mediaKey'

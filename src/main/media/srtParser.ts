@@ -1,8 +1,6 @@
-// Phase 1 · Task 4 (S7a) — SRT subtitle parser.
-//
 // Turns raw .srt text into shared `Cue[]` (start/end in seconds). Pure,
 // synchronous, no I/O — the file is read and handed in as a string by the
-// caller (ffmpeg extraction lands in a later subtask).
+// caller.
 
 import type { Cue } from '../../shared/cue'
 

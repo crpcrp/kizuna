@@ -10,9 +10,9 @@ import {
   type SubtitleReport as Report
 } from '../state/subtitleReport'
 
-// Presentational modal for the F1 subtitle report. Always rendered, visibility toggled by
+// Presentational modal for the subtitle report. Always rendered, visibility toggled by
 // the `open` class — same testable-without-a-live-DOM pattern as
-// OptionsMenu. All data arrives via props; the controller (slice 2) owns
+// OptionsMenu. All data arrives via props; subtitleReportController.ts owns
 // every async/staleness concern.
 
 export interface SubtitleReportProps {

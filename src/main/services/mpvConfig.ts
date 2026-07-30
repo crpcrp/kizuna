@@ -1,8 +1,8 @@
-// Feature 2 — Kizuna-owned mpv config directory (`<userData>/mpv`). Users drop
+// Kizuna-owned mpv config directory (`<userData>/mpv`). Users drop
 // mpv.conf/input.conf/scripts/shaders here exactly as they would for standalone
 // mpv. The path math is pure; the create/reveal side effects go through injected
-// `fs`/`shell` boundaries so tests use fakes (AGENTS.md law 3) — no real disk or
-// Electron `shell` in a unit test.
+// `fs`/`shell` boundaries so tests use fakes — no real disk or Electron
+// `shell` in a unit test.
 
 import { join } from 'node:path'
 

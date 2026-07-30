@@ -1,7 +1,7 @@
-// Priority 8.1 — importer boundary. `createDictService` delegates import
-// work through this interface so 8.2 can swap in a worker-backed
-// implementation without touching lookup/list/order/remove, which keep
-// using the main-process DB handle directly.
+// Importer boundary. `createDictService` delegates import
+// work through this interface so `workerImporter.ts` can swap in a
+// worker-backed implementation without touching lookup/list/order/remove,
+// which keep using the main-process DB handle directly.
 
 import { importDictionary, type ImportDb } from './yomitanImport'
 import type { ImportResult } from '../../../shared/dictionary'

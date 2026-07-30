@@ -1,5 +1,3 @@
-// Test harness — fake HTTP boundary (AGENTS.md law 3: no live network calls).
-//
 // Mirrors fakeFfmpeg.ts/fakeMecab.ts: matches on URL against a route table,
 // records every request (method, headers, body), and returns canned
 // status/headers/JSON. A route may be a single response (returned for every

@@ -1,4 +1,4 @@
-// Phase 3 · I3 — knowledge DB access. The DB handle is injected (never
+// Knowledge DB access. The DB handle is injected (never
 // constructed here); callers run `initSchema(db)` once at service creation,
 // mirroring services/dict/lookup.ts's relationship to dict/schema.ts.
 

@@ -1,8 +1,5 @@
-// Screenshot capture (F11): pure path-building helpers plus a small service
-// that wires them to the injected mpv/filesystem boundaries. The controller
-// command, folder resolution, `fs.existsSync`, and `fs.mkdirSync` are all
-// injected (AGENTS.md law 3), so the whole flow is unit-testable without a
-// live mpv or real disk.
+// mpv and filesystem operations are injected so screenshot tests do not need a
+// live player or real disk.
 
 import { join } from 'node:path'
 
@@ -97,7 +94,7 @@ export interface FrameCaptureService {
  * that same path (`takeScreenshot`) against an injected temporary directory and
  * deletes the file in `finally` — on success and on failure alike. Every
  * boundary (mpv, temp dir, read, delete, name suffix) is injected so the flow
- * is unit-testable without a live mpv or real disk (AGENTS.md law 3).
+ * is unit-testable without a live mpv or real disk.
  */
 export function createFrameCaptureService(deps: {
   takeScreenshot(path: string): Promise<unknown> // real impl: controller.screenshotToFile

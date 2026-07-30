@@ -30,7 +30,7 @@ export interface SubtitleReportOpenInput {
   snapshot: WholeTrackSnapshotSource
 }
 
-/** Compatibility shape until R17b changes App to pass the coordinator promise. */
+/** Legacy input accepted when the caller already has a token cache. */
 export interface LegacySubtitleReportOpenInput {
   bridges: SubtitleReportBridges
   cues: Cue[]

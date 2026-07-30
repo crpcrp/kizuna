@@ -1,4 +1,4 @@
-// Phase 2 · Task B2 — MeCab dictionary registry. Pure resolver: no disk access
+// MeCab dictionary registry. Pure resolver: no disk access
 // itself; the caller injects an `exists` boundary so this stays unit-testable.
 
 import type { McDict } from '../../../shared/mecab'

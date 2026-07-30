@@ -1,5 +1,3 @@
-// Test harness — fake mecab exec (AGENTS.md law 3: no live binaries).
-//
 // Mirrors fakeFfprobe.ts: no real process is spawned. Given a canned stdout
 // string (or an error to throw), returns a `MecabExec` that records every
 // (mecabPath, args, input) call it received.

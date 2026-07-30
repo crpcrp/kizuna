@@ -1,5 +1,3 @@
-// Test harness — fake yt-dlp exec (AGENTS.md law 3: no live binaries).
-//
 // Records every (ytdlpPath, args) call and the AbortSignal it was handed, then
 // resolves with a canned stdout string or rejects with a canned error. A queue
 // form lets a single test drive an enumerate call and a following acquire call

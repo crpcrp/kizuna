@@ -3,8 +3,8 @@
 // write into its media folder.
 //
 // `buildFfmpegAudioClipArgs` stays pure. `createSentenceAudioService` is the
-// only place that touches a process or the filesystem, and both are injected
-// (AGENTS.md law 3), so tests never spawn ffmpeg — see
+// only place that touches a process or the filesystem, and both are
+// injected, so tests never spawn ffmpeg — see
 // test/main/services/anki/sentenceAudio.test.ts.
 
 import { join } from 'node:path'

@@ -22,7 +22,7 @@ import { isRemoteUrl } from './mediaFileTypes'
 export type StoredSubtitleSelection =
   | { mode: 'off' }
   | { mode: 'track'; track: StoredTrackSelection }
-  /** A standalone subtitle file the user dropped in or picked (F18); `path`
+  /** A standalone subtitle file the user dropped in or picked; `path`
    *  is the sidecar file, not the video. Its synthetic track has no stream
    *  index, so it cannot be stored as a `track` selection. */
   | { mode: 'external'; path: string; encoding: SubtitleEncoding }

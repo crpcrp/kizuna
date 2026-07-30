@@ -1,6 +1,4 @@
-// Test harness — fake `WorkerFactory`/`WorkerLike` (AGENTS.md law 3: never
-// launch a real worker_threads Worker in tests). Lets a test drive the
-// message/error/exit paths of createWorkerImporter by hand.
+// Lets tests drive createWorkerImporter's message/error/exit paths directly.
 
 import type {
   WorkerFactory,

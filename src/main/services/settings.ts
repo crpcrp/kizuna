@@ -1,7 +1,7 @@
-// Phase 2 · Task B3 — JSON settings store. Pure merge/select logic is split
-// from I/O so it's unit-testable without touching real disk (AGENTS.md law 3);
-// the store is handed an injected `{ read, write }` boundary, mirroring the
-// Exec-injection pattern used by mecab/runner.ts.
+// JSON settings store. Pure merge/select logic is split from I/O so it's
+// unit-testable without touching real disk; the store is handed an
+// injected `{ read, write }` boundary, mirroring the Exec-injection pattern
+// used by mecab/runner.ts.
 
 import {
   DEFAULT_PLAYER_SETTINGS,

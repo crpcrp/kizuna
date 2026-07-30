@@ -309,7 +309,7 @@ export default function App({
     ankiError,
     ankiExisting
   } = popupState
-  // F1 subtitle report orchestration — see state/subtitleReportController.ts.
+  // Subtitle report orchestration — see state/subtitleReportController.ts.
   const [reportController] = useState(createSubtitleReportController)
   const reportPhase = useSyncExternalStore(
     reportController.subscribe,
@@ -366,7 +366,7 @@ export default function App({
     () => urlSubtitleController.getState(),
     () => urlSubtitleController.getState()
   )
-  // Renderer-owned play queue (Feature 1). Loading routes through the same
+  // Renderer-owned play queue. Loading routes through the same
   // recent-files open pipeline so subtitles/tracks/history stay consistent.
   // Declared ahead of openSession because its onPlaylistPicked reads this
   // controller.
@@ -932,7 +932,7 @@ export default function App({
     void window.kizuna.media.savePlaylist(playlistController.getState().playlist.entries)
   }
 
-  // Opens a network stream (Feature 9). Routes through the same open pipeline
+  // Opens a network stream. Routes through the same open pipeline
   // as files, so the `mediaOpening` lock, recents refresh and error banner all
   // apply; loadPath skips ffprobe for the URL. The dialog closes only on a
   // successful open — a failure/timeout/cancel keeps it up so the error banner
@@ -947,7 +947,7 @@ export default function App({
   // video is playing *now* instead of trusting the closure it captured.
   const currentFilePathRef = useLatestRef(state.filePath)
 
-  // Drag-and-drop (F17/F18): a dropped video opens like a Media-menu pick; a
+  // Drag-and-drop: a dropped video opens like a Media-menu pick; a
   // dropped .srt/.ass/.ssa becomes the current video's subtitle track.
   const handleDrop = (files: File[]): Promise<void> => {
     const filePath = state.filePath
@@ -1095,7 +1095,7 @@ export default function App({
   const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
 
   // Active-cue tokenization, tokenize-all (sidebar), whole-track vocabulary,
-  // and F1 subtitle-report recomputation — see state/useVocabularyPipeline.ts.
+  // and subtitle-report recomputation — see state/useVocabularyPipeline.ts.
   const { prepareWholeTrackVocabulary, vocabularySpans } = useVocabularyPipeline({
     dispatch,
     bridges: {
@@ -1292,8 +1292,8 @@ export default function App({
     return () => document.removeEventListener('mousedown', handlePointerDown)
   }, [wordPopup, closeWordPopup, cardImageRequest])
 
-  // Switches the active MeCab dictionary: persists the choice (via B3
-  // settings, inside selectDict on the main side), then invalidates every
+  // Switches the active MeCab dictionary: persists the choice (via the
+  // settings store, inside selectDict on the main side), then invalidates every
   // cached tokenization (a cue's tokens depend on which dictionary produced
   // them) and re-tokenizes the currently-displayed cue so the subtitle
   // reflects the new dictionary immediately.

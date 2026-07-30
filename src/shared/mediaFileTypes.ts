@@ -10,7 +10,7 @@ export type DroppedFileKind = 'video' | 'subtitle' | 'playlist' | 'unknown'
 
 /**
  * True when `path` is an `http:`/`https:` network URL rather than a local
- * filesystem path. Feature 9's single source of truth for the remote/local
+ * filesystem path. The single source of truth for the remote/local
  * branch: every call site that would otherwise probe with ffprobe, normalize as
  * a filesystem path, or touch `fs` checks this first. Only the two web schemes
  * count — `file:`, `ftp:`, bare hostnames, and Windows drive paths
@@ -45,8 +45,9 @@ export function classifyMediaFileName(fileName: string): DroppedFileKind {
 /**
  * Picks what a multi-file drop should act on. Precedence: the first video (it
  * always wins — dropping a video next to its subtitle should play the video,
- * with F18 handling the sidecar), else the first `.m3u`/`.m3u8` playlist (its
- * entries are appended to the queue), else the first subtitle, else undefined.
+ * with the subtitle handled as a sidecar), else the first `.m3u`/`.m3u8`
+ * playlist (its entries are appended to the queue), else the first
+ * subtitle, else undefined.
  */
 export function pickDropTarget(
   fileNames: string[]

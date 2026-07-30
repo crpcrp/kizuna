@@ -274,9 +274,8 @@ describe('resolveKnownLevels', () => {
 // These two functions back App.tsx's word-hover/word-click -> WordPopup
 // flow (see App.tsx's showWordPopup). Extracted here — same "injected
 // bridge, no DOM/Electron" shape as every other function in this file — so
-// that flow is actually unit-tested, per AGENTS.md law #2: previously it
-// lived entirely inline inside App.tsx's component closure, untestable
-// without a live DOM.
+// that flow is actually unit-tested: previously it lived entirely inline
+// inside App.tsx's component closure, untestable without a live DOM.
 
 describe('tokenizeAllCues', () => {
   const cueA: Cue = { start: 0, end: 1, text: '猫' }

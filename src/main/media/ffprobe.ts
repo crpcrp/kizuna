@@ -1,10 +1,4 @@
-// Phase 1 · Task 4 (S8a/S8b) — ffprobe args builder + stream JSON parser,
-// plus the subprocess wiring that connects them.
-//
-// buildFfprobeArgs/parseFfprobeTracks (S8a) stay pure, synchronous, no I/O.
-// enumerateTracks (S8b) is the only place that touches a real process, and
-// even that is injected as `exec` so tests never spawn ffprobe.exe
-// (AGENTS.md law 3) — see test/harness/fakeFfprobe.ts.
+// The process runner is injected so enumeration tests do not spawn ffprobe.
 
 import { execFile } from 'node:child_process'
 import type { Chapter } from '../../shared/chapter'
@@ -150,9 +144,8 @@ export function parseFfprobeVideoDimensions(stdout: string): VideoDimensions | u
 
 /**
  * Runs ffprobe and captures its stdout. Injected into `enumerateTracks` so
- * tests can supply a fake instead of spawning a real process (AGENTS.md law
- * 3). `ffprobePath` is the path/command to invoke; `args` is argv (no
- * ffprobe path element).
+ * tests can supply a fake instead of spawning a real process. `ffprobePath`
+ * is the path/command to invoke; `args` is argv (no ffprobe path element).
  */
 export type FfprobeExec = (ffprobePath: string, args: string[]) => Promise<string>
 

@@ -1,11 +1,11 @@
-// Feature 10 (seekbar hover thumbnails) · slice 4 — renderer state.
+// Seekbar hover thumbnails — renderer state.
 //
 // Owns the hover→preview lifecycle for the seekbar: it debounces the (cheap,
 // synchronous) cursor tracking from the (expensive, async) thumbnail fetch,
 // keeps a single request in flight, and drops stale responses by comparing the
 // bucket that was requested against the newest one. The timer and the fetch are
 // both injected so the whole thing is unit-testable without a clock, a browser,
-// or the preload bridge (AGENTS.md law 3).
+// or the preload bridge.
 
 /** Injected timer seam — mirrors `subtitleSearchDebounce`'s `SearchTimer`. */
 export interface PreviewTimer {

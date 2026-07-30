@@ -54,7 +54,7 @@ async function runLoadPath(
   try {
     ;[tracks, history] = await Promise.all([
       // ffprobe is filesystem-oriented; a URL's streams come from mpv below.
-      // History is URL-safe (Feature 9 slice 1), so resume/track restore stays.
+      // History is URL-safe, so resume/track restore stays.
       probe ? bridge.media.enumerateTracks(filePath) : Promise.resolve<Track[]>([]),
       bridge.mediaHistory.getPlaybackHistory(filePath)
     ])

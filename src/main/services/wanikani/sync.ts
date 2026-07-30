@@ -1,6 +1,6 @@
-// Phase 3 · J3 — WaniKani sync: pull all started assignments + their
-// subjects, map to KnownRows, and full-replace the 'wanikani' source in the
-// knowledge DB (see docs/phase-3-plan.md "Databases" for why full-replace).
+// WaniKani sync: pull all started assignments + their subjects, map to
+// KnownRows, and full-replace the 'wanikani' source in the knowledge DB
+// (see `replaceSource` in knowledge/store.ts for why full-replace).
 
 import type { WaniKaniClient } from './client'
 import type { WkAssignment, WkSubject } from './map'
@@ -31,8 +31,9 @@ function chunk<T>(items: T[], size: number): T[][] {
 /**
  * Pulls every started vocabulary/kana_vocabulary assignment, resolves their
  * subjects in id-chunked batches, and replaces the whole 'wanikani' slice of
- * `known_words` in one go. A full pull, not incremental — see the plan doc
- * for why an `updated_after` sync isn't worth it at this scale.
+ * `known_words` in one go. A full pull, not incremental: WaniKani's assignment
+ * counts are small enough (thousands, not millions) that an `updated_after`
+ * sync would add complexity without a meaningful speedup.
  *
  * Kept deliberately light on requests: `subject_types` filters kanji/radical
  * out server-side (never fetched at all), both endpoints are asked for their

@@ -162,7 +162,7 @@ export interface OpenSession {
 /**
  * Whether `path` should be probed with the filesystem-oriented tooling
  * (ffprobe track enumeration, video-dimension and chapter reads). Remote URLs
- * (Feature 9) return false: ffprobe can't read them, so their stream info comes
+ * return false: ffprobe can't read them, so their stream info comes
  * from mpv's `track-list` instead and their video-dimension/chapter probes are
  * skipped. Every renderer call site that probes branches on this.
  */

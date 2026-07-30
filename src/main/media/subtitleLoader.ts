@@ -1,12 +1,3 @@
-// Phase 1 · Task 4 (S10a) — subtitle-load composition.
-//
-// Composes S9's extraction (`extractSubtitleTrack`) with S7's parsers
-// (`parseSrt`/`parseAss`) into a single function that turns "a chosen
-// subtitle stream in an MKV" into `Cue[]`. Both process exec (ffmpeg) and
-// disk reads are injected so tests never spawn a real binary or touch the
-// filesystem (AGENTS.md law 3) — see test/harness/fakeFfmpeg.ts and the
-// fake `readFile` used in test/subtitleLoader.test.ts.
-
 import { readFile } from 'node:fs/promises'
 import type { Cue } from '../../shared/cue'
 import { extractSubtitleTrack, type FfmpegExec } from './ffmpeg'
@@ -51,7 +42,7 @@ export function pickParser(outputPath: string): (content: string) => Cue[] {
 
 /**
  * Loads cues for a chosen subtitle stream in an MKV: extracts the stream to
- * `outputPath` via ffmpeg (S9's `extractSubtitleTrack`, using the injected
+ * `outputPath` via ffmpeg (`extractSubtitleTrack`, using the injected
  * `exec`), reads the extracted file back via the injected `readFile`, then
  * parses its contents into `Cue[]` using the parser selected by
  * `outputPath`'s extension (`pickParser`). Any rejection from `exec` or

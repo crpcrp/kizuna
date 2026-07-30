@@ -227,7 +227,6 @@ export function normalizeVideoAdjustments(
   }
 }
 
-/** mpv `speed` property bounds/step exposed in the UI (F3). */
 export const SPEED_MIN = 0.25
 export const SPEED_MAX = 3
 export const SPEED_STEP = 0.25

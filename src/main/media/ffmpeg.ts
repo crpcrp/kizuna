@@ -1,10 +1,4 @@
-// Phase 1 · Task 4 (S9) — ffmpeg subtitle extraction: args builder + the
-// subprocess wiring that runs it.
-//
-// buildFfmpegExtractArgs stays pure, synchronous, no I/O. extractSubtitleTrack
-// is the only place that touches a real process, and even that is injected as
-// `exec` so tests never spawn ffmpeg.exe (AGENTS.md law 3) — see
-// test/harness/fakeFfmpeg.ts.
+// The process runner is injected so extraction tests do not spawn ffmpeg.
 
 import { execFile } from 'node:child_process'
 
@@ -14,10 +8,10 @@ import { execFile } from 'node:child_process'
  * and destination subtitle formats already match bit-for-bit (e.g. an ASS
  * stream copied into a `.ass` file); it fails when the container/extension
  * implies a different text format than the source stream actually is. Since
- * S10's caller picks `outputPath`'s extension based on the *desired* output
- * format (mirroring the track's reported codec), we force ffmpeg to convert
- * (or losslessly copy, when they coincide) to that exact format explicitly
- * rather than trusting a blind `copy` to always match.
+ * the caller (subtitleLoader.ts) picks `outputPath`'s extension based on the
+ * *desired* output format (mirroring the track's reported codec), we force
+ * ffmpeg to convert (or losslessly copy, when they coincide) to that exact
+ * format explicitly rather than trusting a blind `copy` to always match.
  */
 function subtitleCodecForOutput(outputPath: string): string {
   const ext = outputPath.split('.').pop()?.toLowerCase()
@@ -32,7 +26,7 @@ function subtitleCodecForOutput(outputPath: string): string {
  *   ffmpeg -v error -y -i <inputPath> -map 0:<streamIndex> -c:s <codec> <outputPath>
  *
  * `streamIndex` is the *absolute* input stream index as reported by
- * ffprobe's `-show_streams` (S8's `Track.id`), matching ffmpeg's
+ * ffprobe's `-show_streams` (`Track.id`), matching ffmpeg's
  * `-map 0:<index>` stream-specifier semantics (index into input file 0,
  * not a subtitle-relative index). `-v error` suppresses ffmpeg's banner and
  * progress noise; `-y` overwrites `outputPath` if it already exists.
@@ -58,7 +52,7 @@ export function buildFfmpegExtractArgs(
 
 /**
  * Runs ffmpeg to completion. Injected into `extractSubtitleTrack` so tests
- * can supply a fake instead of spawning a real process (AGENTS.md law 3).
+ * can supply a fake instead of spawning a real process.
  * Unlike `FfprobeExec`, extraction writes its result to `outputPath` rather
  * than stdout, so this resolves with no value on success.
  */

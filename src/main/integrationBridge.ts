@@ -1,8 +1,5 @@
-// Integration-status IPC bridge: a single read-only query telling
-// the Options dialog's "Setup & integrations" tab which optional bundled
-// binaries are actually on disk. Mirrors playerSettingsBridge.ts's
-// registerXBridge + createXService pattern; the `exists` probe is injected, so
-// no test ever touches the real filesystem (AGENTS.md law 3).
+// Reports which optional bundled binaries exist for the Options dialog.
+// The filesystem probe is injected for tests.
 //
 // Only the *optional* binaries are reported. mpv is not: without it the app has
 // no playback engine at all and never reaches this dialog, and MeCab's
