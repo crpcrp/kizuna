@@ -1,5 +1,3 @@
-// Test harness — fake ffprobe exec: no live binaries.
-//
 // Mirrors the spirit of fakeMpvServer.ts: no real process is spawned.
 // Given a canned stdout string (or an error to throw), returns an
 // `FfprobeExec` that records every (ffprobePath, args) call it received.

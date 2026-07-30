@@ -1,5 +1,3 @@
-// Test harness — fake secrets codec: no live safeStorage.
-//
 // A reversing "encryption": encrypt reverses the string, decrypt reverses it
 // back. Cheap to assert round-trips without touching Electron's safeStorage.
 

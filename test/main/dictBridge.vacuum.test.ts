@@ -1,8 +1,3 @@
-// Dictionary removal must not rewrite the whole dict.db file on every call.
-// These cover `reclaimFreedPages` directly: the cheap incremental path,
-// deferred handling for dict.db files created before incremental vacuuming
-// was added, and that WAL remains free of a synchronous full rewrite.
-
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

@@ -1,11 +1,3 @@
-// Subtitle-load composition: combines subtitle-track extraction
-// (`extractSubtitleTrack`) with the SRT/ASS parsers (`parseSrt`/`parseAss`)
-// into a single function that turns "a chosen subtitle stream in an MKV"
-// into `Cue[]`. Both process exec (ffmpeg) and disk reads are injected so
-// tests never spawn a real binary or touch the filesystem — see
-// test/harness/fakeFfmpeg.ts and the fake `readFile` used in
-// test/subtitleLoader.test.ts.
-
 import { readFile } from 'node:fs/promises'
 import type { Cue } from '../../shared/cue'
 import { extractSubtitleTrack, type FfmpegExec } from './ffmpeg'

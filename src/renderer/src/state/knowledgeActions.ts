@@ -19,7 +19,7 @@ export interface RefreshKnownLevelsArgs {
 
 export interface SyncAndRefreshKnowledgeArgs extends RefreshKnownLevelsArgs {
   knowledge: KnowledgeSyncBridge
-  /** Undefined syncs every knowledge source together (the combined startup/manual sync); pass a specific source to sync only that one. */
+  /** Omit to sync every knowledge source. */
   source?: KnowledgeSource
   /** Settings changes force a fresh sync rather than returning a cooldown status. */
   force?: boolean

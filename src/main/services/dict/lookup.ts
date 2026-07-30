@@ -1,4 +1,3 @@
-// Dictionary lookup service.
 // Composes a small Yomitan-style deinflection table with a `terms`/`dictionaries`
 // query so a token's lemma (or reading) resolves to definitions, falling back to
 // deinflected candidates when the surface form itself isn't a dictionary headword.

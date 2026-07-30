@@ -1,5 +1,3 @@
-// Test harness — fake ffmpeg exec: no live binaries.
-//
 // Mirrors fakeFfprobe.ts: no real process is spawned. Returns an
 // `FfmpegExec` that records every (ffmpegPath, args) call it received, and
 // either resolves (extraction "succeeded") or rejects with a canned error.

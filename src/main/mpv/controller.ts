@@ -1,9 +1,6 @@
-// mpv process controller: spawn args + command surface.
-//
 // Owns mpv.exe's lifecycle and translates high-level playback calls into mpv
 // JSON IPC command arrays. Dependencies (spawn, IPC client) are injected so
-// tests use fakes instead of a real mpv process. Instantiated as a singleton
-// and registered with the player IPC bridge in src/main/index.ts.
+// tests use fakes instead of a real mpv process.
 
 import {
   isVideoRotate,

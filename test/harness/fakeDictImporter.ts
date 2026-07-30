@@ -1,4 +1,3 @@
-// Test harness — fake `DictionaryImporter`: no real unzip/DB transaction.
 // Records calls and returns a scripted result, so tests can prove
 // `createDictService` delegates through the boundary
 // instead of importing directly.

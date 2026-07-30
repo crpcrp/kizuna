@@ -1,9 +1,5 @@
-// Player-settings IPC bridge: exposes the `player` settings block
-// (keybindings, skip amount, popup/subtitle display — the Options menu's
-// contents) over IPC so the renderer persists them via settings.json instead
-// of localStorage. Mirrors knowledgeBridge.ts's registerXBridge + createXService
-// pattern — the settings store is injected so tests use fakes instead of a
-// real settings.json file.
+// Exposes player settings over IPC. The store is injected so tests do not touch
+// a real settings.json file.
 
 import { PLAYER_SETTINGS_CHANNELS } from '../shared/ipcChannels'
 import type { PlayerSettings } from '../shared/playerSettings'

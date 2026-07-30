@@ -1,9 +1,4 @@
-// ffmpeg subtitle extraction: args builder + the subprocess wiring that
-// runs it.
-//
-// buildFfmpegExtractArgs stays pure, synchronous, no I/O. extractSubtitleTrack
-// is the only place that touches a real process, and even that is injected as
-// `exec` so tests never spawn ffmpeg.exe — see test/harness/fakeFfmpeg.ts.
+// The process runner is injected so extraction tests do not spawn ffmpeg.
 
 import { execFile } from 'node:child_process'
 

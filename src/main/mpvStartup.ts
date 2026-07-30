@@ -1,5 +1,4 @@
-// mpv startup orchestration, extracted from index.ts so the
-// config-enabled / no-config-retry / warning-banner paths are unit-testable
+// Extracted from index.ts so the config-enabled/no-config-retry/warning paths are testable
 // without an Electron BrowserWindow or a real mpv process. Every side effect
 // (spawn+connect, dir creation, error reporting, logging) is injected.
 

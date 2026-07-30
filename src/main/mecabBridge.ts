@@ -1,9 +1,5 @@
-// MeCab IPC bridge: wires the tokenize/listDicts/selectDict commands to
-// ipcMain.handle channels, and composes the tokenizer, dict registry, and
-// settings store into one injectable service. Mirrors playerBridge.ts's
-// registerXBridge pattern — no live mecab binary or real disk is touched
-// here; every dependency below is injected so tests use fakes, see
-// test/mecabBridge.test.ts and test/mecabService.test.ts.
+// Process and filesystem boundaries are injected so service tests do not
+// require MeCab or a real settings file.
 
 import type { IpcMainHandleLike } from './ipc'
 import { MECAB_CHANNELS } from '../shared/ipcChannels'
@@ -96,17 +92,16 @@ export function registerMecabBridge<E>(ipc: IpcMainHandleLike<E>, service: Mecab
 export interface CreateMecabServiceDeps {
   mecabPath: string
   dictPaths: { ipadicDir: string; unidicDir?: string; userUnidicDir?: string }
-  /** Injected exists boundary — never real `fs.existsSync` inside a test. */
+  /** Filesystem probe, injected for tests. */
   exists: (p: string) => boolean
   settings: SettingsStore
-  /** Injected tokenize function; defaults to the real runner (never used in tests). */
+  /** Defaults to the real MeCab runner. */
   tokenizeFn?: (cfg: MecabConfig, text: string) => Promise<Token[]>
   mecabExec?: MecabExec
 }
 
 /**
- * Composes the tokenize runner, dict registry, and settings store into a
- * MecabServiceLike: the currently-selected dict id (read from settings) picks
+ * The currently selected dictionary id picks
  * which registered `McDict` drives tokenize's dicdir/flavor, falling back to
  * the first available dict (IPADIC) if the persisted id isn't installed.
  */

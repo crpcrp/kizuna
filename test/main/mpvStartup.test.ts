@@ -98,7 +98,7 @@ describe('startMpvWithConfig', () => {
     expect(reportConfigError).toHaveBeenCalledWith(MPV_CONFIG_ERROR_MESSAGE)
   })
 
-  it('forwards the yt-dlp path to the clean-start attempt (ytdl hook)', async () => {
+  it('forwards the yt-dlp path to the clean-start attempt', async () => {
     const { deps, start } = makeDeps({
       ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe',
       settings: { mpvUserConfig: false, mpvExtraArgs: [] }

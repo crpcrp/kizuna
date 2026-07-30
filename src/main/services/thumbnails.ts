@@ -1,5 +1,3 @@
-// Seekbar hover thumbnails — service core.
-//
 // Pure path/bucket helpers plus a small service that wires them to the
 // injected ffmpeg/filesystem boundaries: `exec` runs ffmpeg (reusing the
 // `FfmpegExec` seam from media/ffmpeg.ts, so tests use
@@ -257,9 +255,7 @@ export function createThumbnailService(deps: {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Thumbnail cache LRU eviction.
-//
 // The cache grows one file-dir per opened media file (see thumbnailCachePath),
 // and a replaced/re-encoded file leaves its old dir orphaned. To bound disk
 // use, a startup sweep deletes the least-recently-used file-dirs until the

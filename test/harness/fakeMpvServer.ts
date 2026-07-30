@@ -1,5 +1,3 @@
-// Test harness — fake mpv JSON IPC server: no live binaries.
-//
 // A net.Server on a unique per-instance named pipe that parses newline-JSON
 // commands and lets tests script replies and push events. All mpv IPC tests
 // go through this instead of mpv.exe.

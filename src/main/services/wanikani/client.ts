@@ -1,5 +1,4 @@
-// WaniKani API v2 client. Thin paginated reader over the injected HttpFetch
-// boundary — no live WaniKani in a test, see test/harness/fakeHttp.ts.
+// HttpFetch is injected so client tests do not call WaniKani.
 
 import type { HttpFetch } from '../http'
 

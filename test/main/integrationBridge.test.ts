@@ -26,7 +26,6 @@ const PATHS = {
   ytdlpPath: 'C:\\res\\yt-dlp\\yt-dlp.exe'
 }
 
-/** Existence probe over an explicit present-set — never the real filesystem. */
 function existsIn(present: string[]) {
   return vi.fn((path: string) => present.includes(path))
 }

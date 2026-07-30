@@ -1,10 +1,4 @@
-// ffprobe args builder + stream JSON parser, plus the subprocess wiring
-// that connects them.
-//
-// buildFfprobeArgs/parseFfprobeTracks stay pure, synchronous, no I/O.
-// enumerateTracks is the only place that touches a real process, and
-// even that is injected as `exec` so tests never spawn ffprobe.exe —
-// see test/harness/fakeFfprobe.ts.
+// The process runner is injected so enumeration tests do not spawn ffprobe.
 
 import { execFile } from 'node:child_process'
 import type { Chapter } from '../../shared/chapter'

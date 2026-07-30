@@ -26,7 +26,6 @@ const sampleToken: Token = {
   startOffset: 0
 }
 
-/** Fake tokenizeFn: records the cfg it was called with. */
 function fakeTokenizeFn() {
   const calls: Array<{ cfg: MecabConfig; text: string }> = []
   const tokenizeFn = vi.fn(async (cfg: MecabConfig, text: string) => {

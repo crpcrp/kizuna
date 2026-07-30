@@ -1,8 +1,5 @@
-// The code that actually runs inside the import worker
-// thread. Split into a pure, testable `runImportInWorker` (no
-// parentPort/workerData) and a thin real entry point below it that only
-// runs when node:worker_threads loads this file as a worker — never
-// exercised in tests.
+// The import logic is separated from the worker_threads entry point so it can
+// be tested without parentPort or workerData.
 
 import { parentPort, workerData } from 'node:worker_threads'
 import Database from 'better-sqlite3'

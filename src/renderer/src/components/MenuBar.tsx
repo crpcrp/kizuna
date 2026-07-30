@@ -159,7 +159,6 @@ export interface MenuBarProps {
   mediaOpening?: boolean
   onOpenRecent?: (path: string) => void
   onClearRecentFiles?: () => void
-  /** Opens the "Open URL…" dialog for network streams. */
   onOpenUrl?: () => void
 }
 

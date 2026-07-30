@@ -30,12 +30,7 @@ export interface SubtitleReportOpenInput {
   snapshot: WholeTrackSnapshotSource
 }
 
-/**
- * Legacy input shape kept for backward compatibility and test coverage.
- * App.tsx now passes `SubtitleReportOpenInput` (see `useVocabularyPipeline.ts`
- * and `App.tsx`'s `reportController.open` calls), which derives the report
- * from an injected whole-track vocabulary snapshot instead of raw cues.
- */
+/** Legacy input accepted when the caller already has a token cache. */
 export interface LegacySubtitleReportOpenInput {
   bridges: SubtitleReportBridges
   cues: Cue[]

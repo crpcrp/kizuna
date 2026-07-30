@@ -1,5 +1,3 @@
-// Prevent display sleep while a file is loaded and unpaused.
-
 /** The slice of Electron's powerSaveBlocker this service needs. */
 export interface PowerSaveBlockerLike {
   start(type: 'prevent-display-sleep'): number

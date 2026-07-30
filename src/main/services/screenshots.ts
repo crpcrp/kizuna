@@ -1,8 +1,5 @@
-// Screenshot capture: pure path-building helpers plus a small service that
-// wires them to the injected mpv/filesystem boundaries. The controller
-// command, folder resolution, `fs.existsSync`, and `fs.mkdirSync` are all
-// injected, so the whole flow is unit-testable without a live mpv or real
-// disk.
+// mpv and filesystem operations are injected so screenshot tests do not need a
+// live player or real disk.
 
 import { join } from 'node:path'
 

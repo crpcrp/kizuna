@@ -1,10 +1,5 @@
-// Knowledge IPC bridge: levelsFor/sync/syncStatus, plus the full `knowledge`
-// settings block (an earlier version of this bridge covered only the
-// WaniKani token). Composes the knowledge store, WaniKani sync, and Anki
-// sync into one injectable service. Mirrors ankiBridge.ts's registerXBridge
-// + createXService pattern — WaniKani, AnkiConnect, and safeStorage are all
-// reached through injected fakes in tests, see
-// test/harness/{fakeHttp,fakeAnkiConnect,fakeSecrets}.ts.
+// WaniKani, AnkiConnect, and safeStorage are injected so service tests do not
+// require live integrations.
 
 import { KNOWLEDGE_CHANNELS } from '../shared/ipcChannels'
 import type { IpcMainHandleLike } from './ipc'
@@ -96,8 +91,7 @@ function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSe
 }
 
 /**
- * Composes the knowledge store, WaniKani sync, and Anki sync into a
- * KnowledgeServiceLike. `setSettings` intercepts a plaintext `wanikaniToken`
+ * `setSettings` intercepts a plaintext `wanikaniToken`
  * exactly like the earlier token-only slice — it never reaches settings.json
  * or the renderer in plaintext. `sync` is guarded by an in-flight promise so
  * a double "Sync now" click plus the startup `syncIfStale()` never race the

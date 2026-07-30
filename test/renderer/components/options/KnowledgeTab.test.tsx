@@ -64,7 +64,7 @@ describe('describeTokenStorage', () => {
     expect(unknown).toContain('stored locally')
   })
 
-  it('discloses the WaniKani transmission in every state (an earlier claim that the token never leaves the device was false)', () => {
+  it('discloses the WaniKani transmission in every state', () => {
     for (const state of [true, false, undefined]) {
       expect(describeTokenStorage(state)).toContain('sent only to WaniKani over HTTPS')
       expect(describeTokenStorage(state)).not.toContain('never leaves this device')

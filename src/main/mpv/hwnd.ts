@@ -1,5 +1,3 @@
-// HWND extraction for mpv `--wid` embedding.
-
 /**
  * Reads a Win32 HWND out of the Buffer that Electron's
  * `BrowserWindow.getNativeWindowHandle()` returns — an 8-byte little-endian

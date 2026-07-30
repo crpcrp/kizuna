@@ -1,9 +1,5 @@
-// Dictionary IPC bridge: wires the importDict/lookup/listDicts/setEnabled/
-// reorder commands to ipcMain.handle channels, and composes the schema,
-// yomitan import, and lookup pieces into one injectable service. Mirrors
-// mecabBridge.ts's registerXBridge pattern — no live DB file or process is
-// touched here; every dependency below is injected so tests use
-// fakes/in-memory DBs, see test/dictBridge.test.ts and test/dictService.test.ts.
+// Database and importer boundaries are injected so bridge and service tests can
+// use in-memory databases.
 
 import { join } from 'node:path'
 import { DICT_CHANNELS } from '../shared/ipcChannels'
@@ -145,8 +141,7 @@ export function reclaimFreedPages(db: DictDb): 'incremental' | 'deferred' {
 
 export interface CreateDictServiceDeps {
   db: DictDb
-  /** Defaults to a main-thread importer backed by `db`; see workerImporter.ts
-   * for a worker-thread-backed one. */
+  /** Defaults to an in-process importer; index.ts supplies the worker-backed importer. */
   importer?: DictionaryImporter
 }
 
@@ -161,8 +156,7 @@ interface DictRow {
 }
 
 /**
- * Composes the schema, yomitan import, and lookup pieces into a
- * DictServiceLike backed by `deps.db`. Eagerly runs `initSchema` so
+ * Eagerly runs `initSchema` so
  * `listDicts`/`lookup` don't fail against a brand-new DB file before any
  * import has happened (mirrors `importDictionary`'s own defensive call).
  */

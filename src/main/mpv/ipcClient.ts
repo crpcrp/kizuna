@@ -1,5 +1,3 @@
-// mpv JSON IPC client over a Windows named pipe.
-//
 // Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
 // node:net only. Ported/hardened from the throwaway spike's pingMpvIpc().
 // No process spawning here — `MpvController` in controller.ts owns mpv.exe.

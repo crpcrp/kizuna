@@ -194,7 +194,7 @@ describe('tokenSpans (pure)', () => {
   })
 })
 
-describe('SubtitleOverlay onWordHover/onWordClick event param (additive, optional)', () => {
+describe('SubtitleOverlay optional event parameters', () => {
   const cue: Cue = { start: 0, end: 2, text: '猫' }
   const token = makeToken({
     surface: '猫',

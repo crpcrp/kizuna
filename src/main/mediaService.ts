@@ -1,10 +1,5 @@
-// Real MediaService: the Electron-glue counterpart to mediaBridge.ts's
-// MediaServiceLike, mirroring startPlayer's pattern in index.ts. Composes
-// enumerateTracks and loadSubtitleCues with a real (or injected) open-file
-// dialog.
-//
-// ffprobePath/ffmpegPath are passed in by the caller; index.ts resolves
-// them for packaged vs dev via `resolveBinaryPaths` in resourcePaths.ts.
+// index.ts supplies packaged or development binary paths through
+// resourcePaths.ts.
 
 import { basename, dirname, join } from 'node:path'
 import { readFile, readdir, rm, stat, unlink, writeFile } from 'node:fs/promises'

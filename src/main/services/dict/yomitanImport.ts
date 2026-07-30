@@ -1,6 +1,3 @@
-// Pure parsers for Yomitan dictionary files (index.json, term_bank_N.json),
-// plus the `importDictionary` composition (unzip → parse → one DB transaction).
-
 import { Unzip as FflateUnzip, UnzipInflate, UnzipPassThrough } from 'fflate'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './schema'
 import type { FrequencyMode, ImportResult } from '../../../shared/dictionary'
@@ -92,7 +89,7 @@ function normalizeGlossaryEntry(entry: unknown): string {
   return ''
 }
 
-/** Joins normalized senses with a newline so WordPopup.tsx can render one sense per line. */
+/** Joins normalized senses with newlines. */
 function normalizeGlossary(glossary: unknown): string {
   if (!Array.isArray(glossary)) return ''
   return glossary
