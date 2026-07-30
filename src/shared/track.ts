@@ -33,7 +33,7 @@ export const URL_SUBTITLE_TRACK_ID = -2
 
 /**
  * Pure. Defensively parses mpv's `track-list` property into `Track[]` — the
- * URL path (Feature 9), where ffprobe never runs, so the audio-track menu is
+ * URL playback path, where ffprobe never runs, so the audio-track menu is
  * populated from mpv instead. mpv returns an array of entries shaped like
  * `{ id, type: 'audio'|'sub'|'video'|…, codec, lang, title }`; anything else —
  * a non-array, a null entry, one without a numeric `id`, or a `type` that

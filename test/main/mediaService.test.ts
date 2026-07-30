@@ -1,9 +1,9 @@
-// Phase 1 · Task 4 (S10c) — unit test for mediaService.ts's pure helper.
+// Unit test for mediaService.ts's pure helper.
 //
 // Only `subtitleTempPath` is unit-tested here (pure, deterministic). The
 // Electron-bound factory (`createMediaService`, real dialog/ffprobe/ffmpeg
 // exec) is glue verified structurally, not with a fabricated test — mirrors
-// how S6c's startPlayer wiring in index.ts is untested (AGENTS.md law 3).
+// how the `startPlayer` wiring in index.ts is untested.
 
 import { describe, it, expect, vi } from 'vitest'
 import { dirname, join } from 'node:path'
@@ -207,7 +207,7 @@ const ASS =
   '[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
   'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,こんばんは\n'
 
-/** The subtitle file's contents are injected — no real disk read (AGENTS.md law 3). */
+/** The subtitle file's contents are injected — no real disk read. */
 function createSubtitleService(readExternalFileImpl: ReadBinaryFile) {
   return createMediaService({
     ffprobePath: 'ffprobe',

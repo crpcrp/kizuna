@@ -16,7 +16,7 @@ import {
 import type { ConnectOptions, MpvMessage } from '@src/main/mpv/ipcClient'
 import type { YtdlpQuality } from '@src/shared/ytdlpQuality'
 
-/** Fake IPC client (AGENTS.md law 3) — records every call, never touches a pipe. */
+/** Fake IPC client — records every call, never touches a pipe. */
 class FakeClient implements MpvClientLike {
   connectedTo: string | null = null
   sent: unknown[][] = []

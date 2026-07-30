@@ -1,4 +1,4 @@
-// Test harness — fake AnkiConnect server (AGENTS.md law 3: no live Anki).
+// Test harness — fake AnkiConnect server: no live Anki.
 //
 // Every AnkiConnect action POSTs to the same URL, so this can't reuse
 // fakeHttp's per-URL routing directly; instead it decodes the posted

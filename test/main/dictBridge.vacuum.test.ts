@@ -1,7 +1,7 @@
-// Red-team review I4 — dictionary removal must not rewrite the whole dict.db
-// file on every call. These cover `reclaimFreedPages` directly: the cheap
-// incremental path, deferred handling for pre-I4 dict.db files, and that WAL
-// remains free of a synchronous full rewrite.
+// Dictionary removal must not rewrite the whole dict.db file on every call.
+// These cover `reclaimFreedPages` directly: the cheap incremental path,
+// deferred handling for dict.db files created before incremental vacuuming
+// was added, and that WAL remains free of a synchronous full rewrite.
 
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -88,7 +88,7 @@ describe('reclaimFreedPages', () => {
     db.close()
   })
 
-  it('defers conversion for a pre-I4 (auto_vacuum = NONE) DB', () => {
+  it('defers conversion for a legacy (auto_vacuum = NONE) DB', () => {
     const db = new Database(':memory:')
     seedAndDelete(db)
     expect(db.pragma('auto_vacuum', { simple: true })).toBe(0)

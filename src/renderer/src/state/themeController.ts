@@ -1,8 +1,8 @@
 // Renderer theme controller: resolves the persisted `appearance` setting
 // ('system' | 'light' | 'dark') to the concrete theme the DOM should carry.
 // No React or DOM imports — the matchMedia boundary and the apply sink are
-// both injected, so it's directly unit-testable (AGENTS.md law 3), mirroring
-// the injected-boundary pattern of settingsPersistence.ts.
+// both injected, so it's directly unit-testable, mirroring the
+// injected-boundary pattern of settingsPersistence.ts.
 
 import type { Appearance } from '../../../shared/playerSettings'
 

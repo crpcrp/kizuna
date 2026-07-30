@@ -2,9 +2,10 @@
 // ipcMain.handle channels and forwards its property observers back to the
 // renderer. Pure injectable wiring — the ipcMain-like object, the mpv
 // controller and the push function are all injected so tests exercise this
-// with fakes instead of live Electron/mpv (AGENTS.md law 3). Electron glue
-// (preload contextBridge + real webContents.send) is wired up in a later
-// subtask.
+// with fakes instead of live Electron/mpv. The real preload contextBridge
+// and `webContents.send` wiring live in src/main/index.ts
+// (`registerPlayerBridge` is called with a push function backed by
+// `sendToWindow`).
 
 import type { IpcMainHandleLike } from './ipc'
 import { PLAYER_CHANNELS } from '../shared/ipcChannels'

@@ -1,4 +1,4 @@
-// M3U / M3U8 playlist parse + serialize (Feature 1, slice 2). Pure and
+// M3U / M3U8 playlist parse + serialize. Pure and
 // serializable so both the main process (file IO in mediaService) and the
 // renderer can use it. Relative entries resolve against the playlist file's
 // folder by reusing the lexical path normalizer from mediaHistory.
@@ -26,8 +26,8 @@ const URL_ENTRY = /^[a-z][a-z0-9+.-]*:\/\//i
  * Parses M3U/M3U8 text into media entries. Comment/directive lines
  * (`#EXTM3U`, `#EXTINF`, …) and blank lines are skipped; a leading BOM and
  * CRLF line endings are tolerated; relative local entries resolve against
- * `baseDir` (the playlist file's folder). Since Feature 9 (network streaming)
- * landed, `http(s)://` stream entries pass through verbatim — they are already
+ * `baseDir` (the playlist file's folder). `http(s)://` stream entries pass
+ * through verbatim for network streaming — they are already
  * canonical, so no filesystem normalization or `baseDir` resolution applies
  * (mirrors `normalizeMediaPath`'s own URL guard). URL entries with any other
  * scheme (`ftp://`, `file://`, …) are not openable and are skipped.

@@ -6,7 +6,7 @@ import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/player
 import type { KizunaApi } from '@src/shared/preloadApi'
 import type { WindowBounds } from '@src/shared/windowBounds'
 
-// Rendered coverage for Feature 8 (mini-player): the Video-menu "Mini player"
+// Rendered coverage for the mini-player: the Video-menu "Mini player"
 // item and the Ctrl+M key action enter compact mode — saving the current window
 // bounds, forcing always-on-top on, asking main for the mini corner, hiding the
 // MenuBar, and swapping the BottomBar's fullscreen button for a restore button —

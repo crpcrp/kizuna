@@ -1,8 +1,10 @@
-// Phase 1 · Task 4 (S7a) — SRT subtitle parser.
+// SRT subtitle parser.
 //
 // Turns raw .srt text into shared `Cue[]` (start/end in seconds). Pure,
 // synchronous, no I/O — the file is read and handed in as a string by the
-// caller (ffmpeg extraction lands in a later subtask).
+// caller. `subtitleLoader.ts`'s `loadSubtitleCues` reaches this parser after
+// ffmpeg extracts an embedded subtitle track; `mediaService.ts`'s
+// `loadExternalSubtitle` reaches it directly for standalone subtitle files.
 
 import type { Cue } from '../../shared/cue'
 

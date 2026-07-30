@@ -1,8 +1,8 @@
 // URL-subtitle IPC bridge (yt-dlp): wires the UrlSubtitleService's enumerate/
 // acquire/cancel surface to ipcMain channels. Pure injectable wiring — the
-// ipcMain-like object and the service are injected so tests exercise this with
-// fakes instead of live Electron/yt-dlp (AGENTS.md law 3). Every untrusted
-// payload is validated here, in main, before it reaches the service.
+// ipcMain-like object and the service are injected so tests exercise this
+// with fakes instead of live Electron/yt-dlp. Every untrusted payload is
+// validated here, in main, before it reaches the service.
 
 import { URL_SUBTITLE_CHANNELS } from '../shared/ipcChannels'
 import { isUrlSubtitleDescriptor } from '../shared/urlSubtitles'

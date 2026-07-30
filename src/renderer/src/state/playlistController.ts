@@ -1,4 +1,4 @@
-// Playlist controller (Feature 1, slice 4). Bridges the pure queue model in
+// Playlist controller. Bridges the pure queue model in
 // `playlist.ts` to the media open pipeline and to the EOF push. It is a small
 // subscribable store (same shape as recentFilesController): the renderer reads
 // `getState()` and re-renders on `subscribe`, while `App.tsx` wires the load

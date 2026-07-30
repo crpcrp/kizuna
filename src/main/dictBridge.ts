@@ -1,10 +1,9 @@
-// Phase 2 · Task E2 — dictionary IPC bridge: wires the importDict/lookup/
-// listDicts/setEnabled/reorder commands to ipcMain.handle channels, and
-// composes D1 (schema) + D3 (yomitan import) + E1 (lookup) into one
-// injectable service. Mirrors mecabBridge.ts's registerXBridge pattern
-// (AGENTS.md law 3 — no live DB file or process is touched here; every
-// dependency below is injected so tests use fakes/in-memory DBs, see
-// test/dictBridge.test.ts and test/dictService.test.ts).
+// Dictionary IPC bridge: wires the importDict/lookup/listDicts/setEnabled/
+// reorder commands to ipcMain.handle channels, and composes the schema,
+// yomitan import, and lookup pieces into one injectable service. Mirrors
+// mecabBridge.ts's registerXBridge pattern — no live DB file or process is
+// touched here; every dependency below is injected so tests use
+// fakes/in-memory DBs, see test/dictBridge.test.ts and test/dictService.test.ts.
 
 import { join } from 'node:path'
 import { DICT_CHANNELS } from '../shared/ipcChannels'
@@ -109,7 +108,7 @@ const AUTO_VACUUM_INCREMENTAL = 2
  * `journal_mode = WAL` writes the database header, and once that header exists
  * SQLite will not change the auto-vacuum mode without a full `VACUUM`. Setting
  * it afterwards silently leaves a fresh install on `auto_vacuum = NONE`, which
- * is exactly the full-rewrite cost I4 removes.
+ * is exactly the full-rewrite cost `reclaimFreedPages`'s incremental path avoids.
  *
  * WAL + a busy timeout keep this connection's reads from blocking on — or being
  * blocked by — the import worker's writes to the same file.
@@ -125,7 +124,7 @@ export function configureDictConnection(db: DictDb): void {
  * only moves the free pages the DB already tracks, so it costs time
  * proportional to what was deleted — unlike `VACUUM`, which rewrites the whole
  * file and can block the main process for seconds on a large multi-dictionary
- * install (red-team review I4).
+ * install.
  *
  * Incremental vacuuming needs `auto_vacuum = INCREMENTAL`, and SQLite only
  * switches that mode through a full `VACUUM`. A dict.db created before this
@@ -146,7 +145,8 @@ export function reclaimFreedPages(db: DictDb): 'incremental' | 'deferred' {
 
 export interface CreateDictServiceDeps {
   db: DictDb
-  /** Defaults to a main-thread importer backed by `db` (see 8.2 for a worker-backed one). */
+  /** Defaults to a main-thread importer backed by `db`; see workerImporter.ts
+   * for a worker-thread-backed one. */
   importer?: DictionaryImporter
 }
 
@@ -161,7 +161,7 @@ interface DictRow {
 }
 
 /**
- * Composes D1 (schema) + D3 (yomitan import) + E1 (lookup) into a
+ * Composes the schema, yomitan import, and lookup pieces into a
  * DictServiceLike backed by `deps.db`. Eagerly runs `initSchema` so
  * `listDicts`/`lookup` don't fail against a brand-new DB file before any
  * import has happened (mirrors `importDictionary`'s own defensive call).

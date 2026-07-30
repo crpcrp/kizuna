@@ -1,6 +1,6 @@
-// Tests for the playlist controller (Feature 1, slice 4). The load seam is a
-// fake that returns canned OpenMediaResults, so no live player is involved
-// (AGENTS.md law 3). Shuffle uses an injected deterministic rng.
+// Tests for the playlist controller. The load seam is a
+// fake that returns canned OpenMediaResults, so no live player is involved.
+// Shuffle uses an injected deterministic rng.
 
 import { describe, it, expect, vi } from 'vitest'
 import {
@@ -182,7 +182,7 @@ describe('playlist controller — explicit navigation', () => {
     expect(controller.getState().playlist.currentIndex).toBe(1)
   })
 
-  it('advances normally over an http(s) URL entry (Feature 9 stream in a queue)', async () => {
+  it('advances normally over an http(s) URL entry (stream in a queue)', async () => {
     const url = 'https://host/stream.m3u8'
     const controller = createPlaylistController()
     controller.addPaths([A, url, C])

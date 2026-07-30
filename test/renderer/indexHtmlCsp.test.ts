@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT } from '@test/paths'
 
-// Guards the renderer Content-Security-Policy (red-team review I2). The policy
+// Guards the renderer Content-Security-Policy. The policy
 // lives in a <meta> tag in index.html, so nothing in tsc or a component test
 // notices if a directive is dropped or if 'unsafe-inline' leaks into scripts.
 

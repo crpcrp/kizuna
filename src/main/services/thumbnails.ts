@@ -1,8 +1,8 @@
-// Feature 10 (seekbar hover thumbnails) · slice 1 — service core.
+// Seekbar hover thumbnails — service core.
 //
 // Pure path/bucket helpers plus a small service that wires them to the
-// injected ffmpeg/filesystem boundaries (AGENTS.md law 3): `exec` runs ffmpeg
-// (reusing the `FfmpegExec` seam from media/ffmpeg.ts, so tests use
+// injected ffmpeg/filesystem boundaries: `exec` runs ffmpeg (reusing the
+// `FfmpegExec` seam from media/ffmpeg.ts, so tests use
 // test/harness/fakeFfmpeg.ts), and every `fs` touch is injected too. No live
 // binary, no real disk, in tests.
 
@@ -45,7 +45,8 @@ export function seekTimeForBucket(bucket: number, durationSec: number): number {
  * The hash folds the file's identity (canonical path plus `size`/`mtimeMs`
  * from one `fs.stat`) into the directory name, so a file replaced or
  * re-encoded at the same path hashes to a fresh directory instead of serving
- * stale frames; the orphaned old directory is reclaimed by eviction (slice 2).
+ * stale frames; the orphaned old directory is reclaimed by LRU eviction (see
+ * below).
  * `canonicalPath` reuses `subtitleOffsetKey`, the established generic path
  * canonicalizer (separator folding + Windows lowercasing).
  */
@@ -257,7 +258,7 @@ export function createThumbnailService(deps: {
 }
 
 // ---------------------------------------------------------------------------
-// Feature 10 · slice 2 — LRU eviction.
+// Thumbnail cache LRU eviction.
 //
 // The cache grows one file-dir per opened media file (see thumbnailCachePath),
 // and a replaced/re-encoded file leaves its old dir orphaned. To bound disk

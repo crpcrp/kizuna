@@ -1,4 +1,4 @@
-// Test harness — fake ffprobe exec (AGENTS.md law 3: no live binaries).
+// Test harness — fake ffprobe exec: no live binaries.
 //
 // Mirrors the spirit of fakeMpvServer.ts: no real process is spawned.
 // Given a canned stdout string (or an error to throw), returns an

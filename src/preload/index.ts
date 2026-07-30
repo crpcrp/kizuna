@@ -195,8 +195,8 @@ const api = {
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, selection)
   },
   // MeCab tokenization bridge: tokenize cue text, list installed
-  // dictionaries, and switch the active dictionary (persisted in B3
-  // settings).
+  // dictionaries, and switch the active dictionary (persisted via the
+  // settings store).
   mecab: {
     tokenize: (text: string): Promise<Token[]> => ipcRenderer.invoke(MECAB_CHANNELS.tokenize, text),
     tokenizeBatch: (texts: string[]): Promise<Token[][]> =>

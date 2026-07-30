@@ -218,7 +218,7 @@ describe('MenuBar "Load subtitle file…"', () => {
     expect(html).not.toContain('Load subtitle file…')
   })
 
-  // A6: a media open in flight is about to replace the video, so the dialog
+  // A media open in flight is about to replace the video, so the dialog
   // must not be opened against the outgoing one.
   it('disables the item while mediaOpening, enables it otherwise', () => {
     const render = (mediaOpening: boolean): string =>

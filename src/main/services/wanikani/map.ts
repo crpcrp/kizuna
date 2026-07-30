@@ -1,5 +1,4 @@
-// Phase 3 · J2 — pure mapping from raw WaniKani API pages to KnownRow. No
-// HTTP, no DB.
+// Pure mapping from raw WaniKani API pages to KnownRow. No HTTP, no DB.
 
 import type { KnownRow } from '../knowledge/store'
 import { levelFromSrsStage } from '../knowledge/levels'

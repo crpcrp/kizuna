@@ -1,4 +1,4 @@
-// Pure play-queue model (Feature 1, slice 1). Renderer-owned state: an ordered
+// Pure play-queue model. Renderer-owned state: an ordered
 // list of absolute media paths with a current index, plus repeat/shuffle modes.
 // Main stays stateless about it — the renderer drives `player:load`. No I/O,
 // no Electron; every function is a pure state transition so it is fully unit

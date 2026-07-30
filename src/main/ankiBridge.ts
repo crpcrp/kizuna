@@ -2,9 +2,9 @@
 // modelFieldNames/addNote/getSettings/setSettings commands to ipcMain.handle
 // channels, and composes the client, note builder, and settings
 // store into one injectable service. Mirrors dictBridge.ts's registerXBridge
-// pattern (AGENTS.md law 3 — no live AnkiConnect is touched here; every
-// dependency is injected so tests use fakes, see test/main/ankiBridge.test.ts
-// and test/main/ankiBridge.service.test.ts).
+// pattern — no live AnkiConnect is touched here; every dependency is
+// injected so tests use fakes, see test/main/ankiBridge.test.ts and
+// test/main/ankiBridge.service.test.ts.
 
 import { ANKI_CHANNELS } from '../shared/ipcChannels'
 import type { IpcMainHandleLike } from './ipc'
@@ -339,7 +339,7 @@ function validateOverwriteFields(
 }
 
 /**
- * Composes H1 (AnkiConnect client) + H3 (note builder) + the settings store
+ * Composes the AnkiConnect client, note builder, and settings store
  * into an AnkiServiceLike. Word audio stays a JapanesePod101 URL AnkiConnect
  * fetches itself; only sentence audio reaches for ffmpeg, through the injected
  * `sentenceAudio` service.

@@ -1,4 +1,4 @@
-// Phase 2 · Task A2 — dictionary-format-aware MeCab output parser. Pure,
+// Dictionary-format-aware MeCab output parser. Pure,
 // synchronous, no I/O: turns mecab's node-per-line stdout into `Token[]`.
 //
 // MeCab's default output is `surface\tfeature,feature,...` per line,

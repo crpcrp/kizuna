@@ -72,7 +72,7 @@ export interface UseVocabularyPipelineInput {
 
 export interface UseVocabularyPipelineResult {
   /** Prepares (or reuses) the current whole-track vocabulary snapshot — shared by
-   * bulk mining, the F1 subtitle report, and their retry actions. */
+   * bulk mining, the subtitle report, and their retry actions. */
   prepareWholeTrackVocabulary: () => Promise<WholeTrackVocabularyResult>
   /** Every accepted vocabulary span across all cues, flattened for the sidebar. */
   vocabularySpans: VocabularySpan[]
@@ -80,7 +80,7 @@ export interface UseVocabularyPipelineResult {
 
 /**
  * Owns the active-cue tokenization, tokenize-all (sidebar), whole-track
- * vocabulary, and F1 subtitle-report recomputation cluster. See
+ * vocabulary, and subtitle-report recomputation cluster. See
  * `docs/codebase-map.md` for the invariants this preserves.
  */
 export function useVocabularyPipeline({
@@ -169,7 +169,7 @@ export function useVocabularyPipeline({
   // every timePos tick. tokenizeActiveCue itself caches by cue key, so
   // scrubbing back to an already-tokenized cue is a synchronous dispatch.
   // Chained after it, resolveKnownLevels resolves each token's knowledge
-  // level (for SubtitleOverlay's coloring, added in a later slice) — it
+  // level (used for SubtitleOverlay's coloring) — it
   // needs tokenizeActiveCue's resolved token list, not state.activeTokens,
   // since that dispatch hasn't landed yet within this same effect tick.
   useEffect(() => {
@@ -269,8 +269,8 @@ export function useVocabularyPipeline({
     // wholeTrackVocabularyKey is listed although the body never reads it: the
     // effect above invalidates the coordinator (and bumps the span epoch) when
     // that key changes, and this callback must take a new identity at the same
-    // moment so its consumers — the span effect and the F1 report effect below
-    // — re-run against the invalidated snapshot instead of the stale one.
+    // moment so its consumers — the span effect and the subtitle-report effect
+    // below — re-run against the invalidated snapshot instead of the stale one.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above.
   }, [
     dispatch,
@@ -303,7 +303,7 @@ export function useVocabularyPipeline({
     setVocabularySpansByCue
   ])
 
-  // (Re)computes the F1 subtitle report while its modal is open, sharing
+  // (Re)computes the subtitle report while its modal is open, sharing
   // tokenCache/knownLevelsCache/allCuesToken with the sidebar effect above
   // (see tokenizeAllCues). Keyed on state.cues and the Japanese-track flag
   // so switching files or subtitle tracks while the modal is open

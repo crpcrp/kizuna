@@ -1,8 +1,8 @@
-// Priority 8.2 — the code that actually runs inside the import worker
+// The code that actually runs inside the import worker
 // thread. Split into a pure, testable `runImportInWorker` (no
 // parentPort/workerData) and a thin real entry point below it that only
-// runs when node:worker_threads loads this file as a worker (AGENTS.md law
-// 3 — never exercised in tests).
+// runs when node:worker_threads loads this file as a worker — never
+// exercised in tests.
 
 import { parentPort, workerData } from 'node:worker_threads'
 import Database from 'better-sqlite3'

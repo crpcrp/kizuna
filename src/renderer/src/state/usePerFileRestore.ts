@@ -157,7 +157,7 @@ export function usePerFileRestore({
   }, [loadGeneration, filePath, bridge.player])
 
   useEffect(() => {
-    // Chapters come from ffprobe too, so skip them for remote URLs (Feature 9).
+    // Chapters come from ffprobe too, so skip them for remote URLs.
     if (!filePath || !shouldProbe(filePath)) return
     let active = true
     void loadChaptersForCurrentFile(bridge.media, filePath, () => active, dispatch)

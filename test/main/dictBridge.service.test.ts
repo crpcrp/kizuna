@@ -250,7 +250,7 @@ describe('createDictService', () => {
     db.close()
   })
 
-  it('removeDict reclaims incrementally instead of rewriting the whole file (I4)', async () => {
+  it('removeDict reclaims incrementally instead of rewriting the whole file', async () => {
     const db = new Database(':memory:')
     const service = createDictService({ db })
     const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))

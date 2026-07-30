@@ -538,7 +538,7 @@ describe('scopeDictCss', () => {
 
   it('does not let a `}` in the dictionary CSS escape the @scope block', () => {
     // A `}` would, if injected verbatim, close the @scope block early and let
-    // `html{display:none}` apply app-wide (Finding M1). Sanitization drops the
+    // `html{display:none}` apply app-wide. Sanitization drops the
     // brace and the non-`[data-sc-*]` `html` rule entirely.
     const scoped = scopeDictCss(1, '} html{display:none}')
     expect(scoped).not.toMatch(/(^|})\s*html\s*\{/)

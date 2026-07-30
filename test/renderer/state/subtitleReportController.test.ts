@@ -102,7 +102,7 @@ describe('createSubtitleReportController preparation', () => {
     expect(second.getState().kind).toBe('ready')
   })
 
-  it('keeps the pre-R17b App input compatible without calling a tokenizer', async () => {
+  it('accepts a pre-populated token cache without calling a tokenizer', async () => {
     const controller = createSubtitleReportController()
     const cached = new Map([['0:1:cue', [token('cached')]]])
 

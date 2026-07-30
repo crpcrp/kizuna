@@ -195,7 +195,7 @@ function startMpvForWindow(
 }
 
 /**
- * Builds the system-media controller (Feature 7) with the real Electron
+ * Builds the system-media controller with the real Electron
  * surfaces for `win`: the app-global media-key shortcuts, this window's taskbar
  * progress bar, and — on Windows only — its thumbnail-toolbar buttons (the API
  * is a no-op elsewhere, so it's injected as an empty function off-Windows).
@@ -312,7 +312,7 @@ function startMedia(ffprobePath: string, ffmpegPath: string, history: MediaHisto
 }
 
 /**
- * Feature 10 slice 2 — LRU-caps the seekbar-thumbnail cache at startup. The
+ * LRU-caps the seekbar-thumbnail cache at startup. The
  * pure eviction lives in services/thumbnails.ts; here we supply the real
  * node:fs directory walk, tolerating an absent cache dir (first run) by
  * treating a missing/unreadable listing as empty.
@@ -359,9 +359,9 @@ function sweepThumbnails(): void {
 
 /**
  * Constructs the settings store backed by a settings.json file in the user's
- * app-data directory. Hoisted out of `startMecab` (Phase 3 · G4) so Phase 3's
- * `startAnki`/`startKnowledge` share the same store instance instead of each
- * reading/parsing settings.json independently.
+ * app-data directory. Hoisted out of `startMecab` so `startAnki` and
+ * `startKnowledge` share the same store instance instead of each reading/
+ * parsing settings.json independently.
  */
 function createAppSettingsStore(): SettingsStore {
   const settingsPath = join(app.getPath('userData'), 'settings.json')
@@ -384,7 +384,7 @@ function startMecab(binaryPaths: BinaryPaths, settings: SettingsStore): void {
 /**
  * Registers the dict IPC bridge (importDict/lookup/listDicts/setEnabled/
  * reorder), backed by a dict.db SQLite file in the user's app-data
- * directory. Imports run in a worker thread (Priority 8) via
+ * directory. Imports run in a worker thread via
  * `createWorkerImporter`, which opens its own connection to the same file;
  * `configureDictConnection` sets this connection's pragmas (incremental
  * auto-vacuum, then WAL + a busy timeout so its reads don't block on — or get
@@ -436,9 +436,9 @@ function startAnki(settings: SettingsStore, ffmpegPath: string): void {
 
 /**
  * Registers the knowledge IPC bridge (levelsFor/sync/syncStatus/settings),
- * backed by a separate `knowledge.db` (kept apart from `dict.db` — see
- * docs/phase-3-plan.md "Databases") and the shared settings store. The
- * WaniKani token is encrypted via Electron's `safeStorage` (Windows DPAPI).
+ * backed by a separate `knowledge.db` (kept apart from `dict.db` since they
+ * have unrelated lifecycles) and the shared settings store. The WaniKani
+ * token is encrypted via Electron's `safeStorage` (Windows DPAPI).
  * `syncIfStale()` runs once, fire-and-forget, so a stale cache colors
  * subtitles from a fresh sync without the user having to click "Sync now".
  */
@@ -459,7 +459,7 @@ function startKnowledge(settings: SettingsStore): void {
 }
 
 /**
- * Registers the URL-subtitle IPC bridge (Feature 9): enumerate/acquire the
+ * Registers the URL-subtitle IPC bridge: enumerate/acquire the
  * provided/auto subtitle tracks of the active extractor URL through the bundled
  * yt-dlp, into a main-owned cache dir below `userData`. yt-dlp only runs for
  * extractor-backed URLs when the binary exists; here we supply the real
@@ -540,7 +540,7 @@ if (!gotSingleInstanceLock) {
       resourcesPath: process.resourcesPath,
       appRoot: app.getAppPath()
     })
-    // Probe the bundled yt-dlp once at startup (Feature 9): only pass its path
+    // Probe the bundled yt-dlp once at startup: only pass its path
     // to mpv's ytdl hook when the binary actually exists, so a dev checkout
     // without it doesn't hand mpv a dangling path.
     const ytdlpPath = fs.existsSync(binaryPaths.ytdlpPath) ? binaryPaths.ytdlpPath : undefined

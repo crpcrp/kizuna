@@ -1,4 +1,4 @@
-// Phase 2 · Task A3 — MeCab argv builder. Pure, synchronous, no I/O.
+// MeCab argv builder. Pure, synchronous, no I/O.
 
 /**
  * Builds the argv for running MeCab against a given dictionary directory,

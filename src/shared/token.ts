@@ -1,5 +1,6 @@
-// Phase 2 · Task A1 — shared MeCab token type. Pure data, mirrors cue.ts;
-// no functions here, so no standalone test (covered indirectly by A2/A4).
+// Shared MeCab token type. Pure data, mirrors cue.ts;
+// no functions here, so no standalone test (covered indirectly by
+// parseMecab.ts/mecab/runner.ts's tests).
 
 /** Which MeCab dictionary produced a token, since the feature-CSV layout differs. */
 export type DictFlavor = 'ipadic' | 'unidic'

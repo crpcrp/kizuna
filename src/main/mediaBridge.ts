@@ -1,9 +1,9 @@
 // Media IPC bridge: wires file-selection/track-enumeration/subtitle-loading
 // commands to ipcMain.handle channels. Pure injectable wiring — the
 // ipcMain-like object and the media service are both injected so tests
-// exercise this with fakes instead of live Electron/ffprobe (AGENTS.md law
-// 3). Electron glue (real dialog.showOpenDialog, ffprobe/parser wiring) is
-// implemented in a later subtask.
+// exercise this with fakes instead of live Electron/ffprobe. The real
+// dialog.showOpenDialog/ffprobe/parser wiring is composed in
+// `startMedia` in src/main/index.ts.
 
 import { MEDIA_CHANNELS } from '../shared/ipcChannels'
 import type { Track, VideoDimensions } from '../shared/track'

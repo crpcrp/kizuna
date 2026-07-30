@@ -1,8 +1,8 @@
-// Phase 1 · Task 3 — mpv JSON IPC client over a Windows named pipe.
+// mpv JSON IPC client over a Windows named pipe.
 //
 // Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
 // node:net only. Ported/hardened from the throwaway spike's pingMpvIpc().
-// No process spawning here — the controller (a later slice) owns mpv.exe.
+// No process spawning here — `MpvController` in controller.ts owns mpv.exe.
 
 import { connect, type Socket } from 'node:net'
 import { EventEmitter } from 'node:events'

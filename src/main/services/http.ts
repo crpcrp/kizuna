@@ -1,5 +1,5 @@
-// Phase 3 · G1 — HTTP boundary. Narrow contract (not `typeof fetch`) so a
-// fake never has to implement all of `Response` (AGENTS.md law 3).
+// HTTP boundary. Narrow contract (not `typeof fetch`) so a
+// fake never has to implement all of `Response`.
 
 export interface HttpResponse {
   status: number

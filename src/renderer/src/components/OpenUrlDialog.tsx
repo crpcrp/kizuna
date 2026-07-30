@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './OpenUrlDialog.css'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 
-// Modal for Media → "Open URL…" (Feature 9). A single text field validated as an
+// Modal for Media → "Open URL…". A single text field validated as an
 // http(s) URL, a recent-URLs shortcut list, and a loading state with a Cancel
 // button. While a stream load is in flight the input is replaced by a
 // "Loading stream…" card whose Cancel aborts the load (wired to

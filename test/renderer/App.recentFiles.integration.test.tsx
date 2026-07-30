@@ -6,9 +6,9 @@ import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { FileAvailability, KizunaApi } from '@src/shared/preloadApi'
 
-// Rendered interaction coverage for the Media menu's recent-files section
-// (plan slice M2). Everything below the renderer — dialogs, media, history —
-// is the fake preload bridge; no production code is exercised outside src/.
+// Rendered interaction coverage for the Media menu's recent-files section.
+// Everything below the renderer — dialogs, media, history — is the fake
+// preload bridge; no production code is exercised outside src/.
 
 const EPISODE_5 = 'C:\\Media\\Episode05.mkv'
 const EPISODE_4 = 'C:\\Media\\episode04.mkv'

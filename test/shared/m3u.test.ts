@@ -34,7 +34,7 @@ describe('parseM3u', () => {
     ])
   })
 
-  it('passes http(s) URL entries through verbatim alongside local entries (Feature 9)', () => {
+  it('passes http(s) URL entries through verbatim alongside local entries', () => {
     const text = '#EXTINF:0,Live\nhttps://host/stream.m3u8\nlocal.mkv'
     const expected = ['https://host/stream.m3u8', '/media/local.mkv']
     expect(parseM3u(text, '/media', { platform: 'posix' })).toEqual(expected)

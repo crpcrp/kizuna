@@ -1,6 +1,6 @@
 // AnkiConnect client (write path). Pure envelope helpers
-// first, then a thin client over the injected HttpFetch boundary (AGENTS.md
-// law 3 — no live AnkiConnect in a test, see test/harness/fakeAnkiConnect.ts).
+// first, then a thin client over the injected HttpFetch boundary — no live
+// AnkiConnect in a test, see test/harness/fakeAnkiConnect.ts.
 
 import type { HttpFetch } from '../http'
 import type { AnkiMediaAttachment } from './audioSource'
@@ -38,7 +38,7 @@ export function parseResponse(raw: unknown): unknown {
   return result
 }
 
-/** One row of `cardsInfo`'s response — only the fields Phase 3 reads. */
+/** One row of `cardsInfo`'s response — only the fields this app reads. */
 export interface AnkiCardInfo {
   cardId: number
   note: number

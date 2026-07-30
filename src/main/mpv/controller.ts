@@ -1,8 +1,9 @@
-// Phase 1 · Tasks 2–3 — mpv process controller: spawn args + command surface.
+// mpv process controller: spawn args + command surface.
 //
 // Owns mpv.exe's lifecycle and translates high-level playback calls into mpv
 // JSON IPC command arrays. Dependencies (spawn, IPC client) are injected so
-// tests use fakes per AGENTS.md law 3. Not yet wired into Electron IPC.
+// tests use fakes instead of a real mpv process. Instantiated as a singleton
+// and registered with the player IPC bridge in src/main/index.ts.
 
 import {
   isVideoRotate,
@@ -34,7 +35,7 @@ export class MpvLoadError extends Error {
 }
 
 /**
- * `loadFile` rejection when a URL open (Feature 9) never settled within its
+ * `loadFile` rejection when a URL open never settled within its
  * `timeoutMs`: mpv accepted `loadfile` but emitted neither `file-loaded` nor
  * `end-file`, so the load path sent `['stop']` to unstick it. Extends
  * `MpvLoadError` because the stop drops mpv to idle exactly like a real load
@@ -89,7 +90,7 @@ export interface BuildMpvArgsOptions {
    */
   extraArgs?: string[]
   /**
-   * Absolute path to the bundled `yt-dlp` binary (Feature 9). When set, the
+   * Absolute path to the bundled `yt-dlp` binary. When set, the
    * forced block enables mpv's ytdl hook and points it at this binary so
    * pasted stream/YouTube URLs resolve. Left undefined in a dev checkout with
    * no bundled binary — mpv still plays direct-stream URLs without ytdl.
@@ -190,7 +191,7 @@ export function buildMpvArgs({
     userConfigDir === undefined
       ? ['--no-config'] // block mpv from reading the user's global config
       : ['--config=yes', `--config-dir=${userConfigDir}`]
-  // ytdl hook (Feature 9): only when the binary is bundled. Points mpv's
+  // ytdl hook: only when the binary is bundled. Points mpv's
   // ytdl_hook at our yt-dlp so pasted URLs resolve; part of the forced block so
   // user extraArgs can't accidentally disable streaming.
   const ytdlArgs =
@@ -211,7 +212,7 @@ export function buildMpvArgs({
     '--keep-open=yes', // spike-proven: playback end must not kill the window
     '--no-osc', // spike-proven: our DOM draws all controls
     '--no-input-default-bindings', // spike-proven: keyboard is ours
-    '--sid=no', // subtitles render in the DOM, never by mpv (plan Phase 2)
+    '--sid=no', // subtitles render in the DOM, never by mpv
     '--volume-max=200', // raise mpv's software-boost ceiling so setVolume can go past 100
     ...ytdlArgs
   ]
@@ -249,7 +250,7 @@ export interface LoadFileOptions {
   /**
    * When set, the load rejects with `MpvLoadTimeoutError` if mpv emits neither
    * `file-loaded` nor `end-file` within this many milliseconds — the stalled-URL
-   * case (Feature 9) that would otherwise leave the promise pending forever.
+   * case that would otherwise leave the promise pending forever.
    * Local opens omit it and keep the original no-timeout behavior.
    */
   timeoutMs?: number
@@ -486,8 +487,8 @@ export class MpvController {
 
   /**
    * Reads mpv's `track-list` (audio/subtitle/video streams of the current
-   * file or URL). Feature 9 uses this for URL playback, where ffprobe never
-   * runs, to populate the audio-track menu. The reply is parsed defensively —
+   * file or URL). URL playback uses this, where ffprobe never runs, to
+   * populate the audio-track menu. The reply is parsed defensively —
    * a non-array/garbage payload yields `[]` rather than throwing.
    */
   async getTrackList(): Promise<Track[]> {

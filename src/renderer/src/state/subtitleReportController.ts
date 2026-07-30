@@ -30,7 +30,12 @@ export interface SubtitleReportOpenInput {
   snapshot: WholeTrackSnapshotSource
 }
 
-/** Compatibility shape until R17b changes App to pass the coordinator promise. */
+/**
+ * Legacy input shape kept for backward compatibility and test coverage.
+ * App.tsx now passes `SubtitleReportOpenInput` (see `useVocabularyPipeline.ts`
+ * and `App.tsx`'s `reportController.open` calls), which derives the report
+ * from an injected whole-track vocabulary snapshot instead of raw cues.
+ */
 export interface LegacySubtitleReportOpenInput {
   bridges: SubtitleReportBridges
   cues: Cue[]

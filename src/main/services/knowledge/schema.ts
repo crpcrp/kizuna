@@ -1,7 +1,8 @@
-// Phase 3 · I1 — SQLite schema for the knowledge DB (`knowledge.db`, separate
-// from `dict.db` — see docs/phase-3-plan.md "Databases"). Same idiom as
-// services/dict/schema.ts: pure DDL strings + an idempotent `initSchema(db)`.
-// The DB handle is injected so tests use an in-memory better-sqlite3 instance.
+// SQLite schema for the knowledge DB (`knowledge.db`, kept separate from
+// the dictionary DB `dict.db` since they have unrelated lifecycles). Same
+// idiom as services/dict/schema.ts: pure DDL strings + an idempotent
+// `initSchema(db)`. The DB handle is injected so tests use an in-memory
+// better-sqlite3 instance.
 
 /** Structural subset of better-sqlite3's `Database` this module needs. */
 export interface DbLike {

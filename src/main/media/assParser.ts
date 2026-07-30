@@ -1,4 +1,4 @@
-// Phase 1 · Task 4 (S7b) — ASS/SSA subtitle parser.
+// ASS/SSA subtitle parser.
 //
 // Turns raw .ass/.ssa text into shared `Cue[]` (start/end in seconds). Pure,
 // synchronous, no I/O — the file is read and handed in as a string by the

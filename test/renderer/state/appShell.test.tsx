@@ -590,7 +590,7 @@ describe('handleDroppedFiles', () => {
     expect(empty.reportError).not.toHaveBeenCalled()
   })
 
-  // A5: the drop path holds no `mediaOpening` snapshot of its own — the
+  // The drop path holds no `mediaOpening` snapshot of its own — the
   // controller's synchronous guard is the single authority for open exclusion.
   it('lets the controller refuse a second drop made before the first open settles', async () => {
     const audioTrack: Track = { id: 1, kind: 'audio', codec: 'aac' }
@@ -833,7 +833,7 @@ describe('loadSubtitleFromPicker', () => {
     expect(deps.reportError).toHaveBeenCalledWith('No subtitles found in this file.')
   })
 
-  // A6: the video can be swapped out (drop, recent-file open) while the native
+  // The video can be swapped out (drop, recent-file open) while the native
   // dialog is up. The subtitle then belongs to a file that is no longer playing.
   it('drops the picked file silently when the video changed while the dialog was open', async () => {
     let deferred!: (path: string) => void

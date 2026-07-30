@@ -153,7 +153,7 @@ export const LAUNCH_CHANNELS = {
 /**
  * MeCab tokenization bridge: renderer→main invoke/handle channels for
  * tokenizing text, listing available dictionaries, and switching the active
- * dictionary (persisted via the B3 settings store).
+ * dictionary (persisted via the settings store, see services/settings.ts).
  */
 export const MECAB_CHANNELS = {
   tokenize: 'mecab:tokenize',

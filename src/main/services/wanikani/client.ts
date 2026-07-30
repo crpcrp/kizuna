@@ -1,6 +1,5 @@
-// Phase 3 · J1 — WaniKani API v2 client. Thin paginated reader over the
-// injected HttpFetch boundary (AGENTS.md law 3 — no live WaniKani in a test,
-// see test/harness/fakeHttp.ts).
+// WaniKani API v2 client. Thin paginated reader over the injected HttpFetch
+// boundary — no live WaniKani in a test, see test/harness/fakeHttp.ts.
 
 import type { HttpFetch } from '../http'
 
