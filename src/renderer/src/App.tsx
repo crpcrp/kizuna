@@ -30,40 +30,16 @@ import {
   isJapaneseSubtitleTrack,
   type PlayerState
 } from './state/playerState'
-import { type MineMediaSource } from './state/ankiMining'
 import { seekTargetForCue } from './state/cueNavigation'
-import { type SubtitleRequestToken } from './state/mediaSession'
 import { cycleAbLoopAction } from './state/playbackCommands'
 import { cueKey } from './state/tokenization'
-import { wordPopupPosition } from './state/wordLookup'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
-import { appClassName, copySidebarCue, toggleFromRightClick } from './state/appChrome'
+import { appClassName, toggleFromRightClick } from './state/appChrome'
 import { buildPlayerAdapter } from './state/playerAdapter'
 import { miniPlayerSubtitleStyle } from './state/miniPlayer'
-import {
-  createPopupController,
-  createHoverDebouncer,
-  shouldClosePopupOnPointerDown,
-  shouldOpenWordPopup,
-  type HoverDebouncer
-} from './state/popupController'
-import { createSubtitleReportController } from './state/subtitleReportController'
-import { createBulkMiningController } from './state/bulkMiningController'
-import type { VocabularySpan } from './state/vocabularySpans'
-import { createWholeTrackVocabularyCoordinator } from './state/wholeTrackVocabulary'
-import {
-  createBulkMiningCompletionTracker,
-  type BulkMiningCompletionEvent
-} from './state/bulkMiningCompletion'
-import {
-  hideBulkMiningToSidebar,
-  reopenBulkMiningModal,
-  type BulkMiningPresentation
-} from './state/bulkMiningPresentation'
 import { createSettingsPersistence } from './state/settingsPersistence'
 import { useSettingsLifecycle } from './state/useSettingsLifecycle'
 import { usePlayerEvents } from './state/usePlayerEvents'
-import { useVocabularyPipeline } from './state/useVocabularyPipeline'
 import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
 import { createThemeController } from './state/themeController'
 import {
@@ -75,45 +51,35 @@ import {
 } from './state/optionsData'
 import {
   loadCategoryDomains,
-  selectMecabDict,
   importYomitanDict,
   setYomitanEnabled,
   setYomitanFallbackOnly,
   reorderYomitanDicts,
   removeYomitanDict,
-  saveWanikaniToken,
-  changeAnkiSettings,
-  changeKnowledgeSettings,
-  shouldResyncAnkiForKnowledgePatch,
-  syncKnowledgeAndRefresh
+  changeAnkiSettings
 } from './state/integrationActions'
-import { refreshKnownLevels } from './state/knowledgeActions'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
-import { useLatestCallback, useLatestRef } from './state/useLatestRef'
+import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
+import { useVocabularyMining } from './state/useVocabularyMining'
 import { applyLevelColors } from './util/levelColors'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
-import type { Token } from '../../shared/token'
 import { type AudioDevice } from '../../shared/audioDevice'
-import type {
-  KnowledgeLevel,
-  KnowledgeSource,
-  PublicKnowledgeSettings,
-  SyncStatus
-} from '../../shared/knowledge'
-import type { LookupResult, ImportProgress } from '../../shared/dictionary'
+import type { ImportProgress } from '../../shared/dictionary'
 import type { AnkiSettings } from '../../shared/anki'
 
 // Root React component: the runnable player shell. Wires the reducer + the
 // feature hooks that own each workflow (state/useMediaSession.ts for media,
-// state/usePlaybackWindow.ts for playback and window, and their siblings) into
-// the presentational components (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
+// state/usePlaybackWindow.ts for playback and window,
+// state/useVocabularyMining.ts for vocabulary and mining, and their siblings)
+// into the presentational components
+// (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
 //
 // SSR-safety: the render path never touches `window` directly. All bridge
 // access is deferred to event handlers or to the useEffect subscriptions
@@ -145,12 +111,6 @@ export default function App({
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
   const [optionsOpen, setOptionsOpen] = useState(false)
-  // A captured frame awaiting the user's crop decision, together with the
-  // dictionary entry whose mine triggered it (see handleAddToAnki).
-  const [cardImageRequest, setCardImageRequest] = useState<{
-    imageBase64: string
-    result: LookupResult
-  } | null>(null)
   // The per-cue loop is stored together with the cue list it was picked from,
   // so a new list (file or subtitle-track switch) drops it by derivation
   // instead of through a reset effect.
@@ -172,16 +132,6 @@ export default function App({
     state,
     stateRef
   })
-  // Per-cue tokenization cache + a request-token guard against stale MeCab
-  // resolutions. Held in refs so they persist
-  // across renders without themselves triggering one.
-  const tokenCache = useRef(new Map<string, Token[]>())
-  const tokenizeToken = useRef<SubtitleRequestToken>({ current: 0 })
-  // Lemma -> resolved knowledge level, warmed across the whole episode (never
-  // cleared per cue, unlike tokenCache) plus a request-token guard against a
-  // stale resolveKnownLevels resolution, mirroring tokenizeToken above.
-  const knownLevelsCache = useRef(new Map<string, KnowledgeLevel>())
-  const knownLevelsToken = useRef<SubtitleRequestToken>({ current: 0 })
   // Whether the all-subtitles side panel (SubtitleSidebar) is shown. Restored
   // from settings.json on mount by useSettingsLifecycle; toggled and persisted
   // by usePlaybackWindow, which also compensates the window size for it.
@@ -189,18 +139,6 @@ export default function App({
   // Whether the playlist (play-queue) side panel is shown, restored and
   // toggled exactly like sidebarOpen above.
   const [playlistOpen, setPlaylistOpen] = useState(false)
-  // Request-token guards for tokenizeAllCues' batch tokenize + level
-  // resolution, separate from tokenizeActiveCue's own tokens/knownLevelsToken
-  // above so opening/closing the sidebar never invalidates an in-flight
-  // active-cue tokenization (or vice versa) despite sharing tokenCache/
-  // knownLevelsCache as the underlying caches.
-  const allCuesToken = useRef<SubtitleRequestToken>({ current: 0 })
-  const allCuesLevelsToken = useRef<SubtitleRequestToken>({ current: 0 })
-  const wholeTrackVocabularyRef = useRef(createWholeTrackVocabularyCoordinator())
-  const vocabularySpanEpoch = useRef(0)
-  const [vocabularySpansByCue, setVocabularySpansByCue] = useState<
-    Record<string, VocabularySpan[]>
-  >({})
   // Options dialog's optional-integration data (MeCab/Yomitan dictionaries,
   // Anki connection + deck/model/field lists, knowledge settings + sync
   // status) — cached per-domain, isolated on failure. See state/optionsData.ts.
@@ -240,38 +178,6 @@ export default function App({
     },
     [optionsData]
   )
-  // Popup request/history/Anki-mining orchestration — see state/popupController.ts.
-  const [popupController] = useState(createPopupController)
-  const popupState = useSyncExternalStore(
-    popupController.subscribe,
-    () => popupController.getState(),
-    () => popupController.getState()
-  )
-  const {
-    popup: wordPopup,
-    history: popupHistory,
-    ankiStatus,
-    ankiError,
-    ankiExisting
-  } = popupState
-  // Subtitle report orchestration — see state/subtitleReportController.ts.
-  const [reportController] = useState(createSubtitleReportController)
-  const reportPhase = useSyncExternalStore(
-    reportController.subscribe,
-    () => reportController.getState(),
-    () => reportController.getState()
-  )
-  const [reportOpen, setReportOpen] = useState(false)
-  const [bulkMiningController] = useState(createBulkMiningController)
-  const bulkMiningPhase = useSyncExternalStore(
-    bulkMiningController.subscribe,
-    () => bulkMiningController.getState(),
-    () => bulkMiningController.getState()
-  )
-  const [miningPresentation, setMiningPresentation] = useState<BulkMiningPresentation>('closed')
-  const miningSessionToken = useRef(0)
-  const miningCompletionTrackerRef = useRef(createBulkMiningCompletionTracker())
-  const [miningCompletion, setMiningCompletion] = useState<BulkMiningCompletionEvent | null>(null)
   // Coalesces rapid PlayerSettings patches (subtitle-drag mousemove ticks,
   // Options-menu edits) into a single debounced write instead of one IPC
   // round-trip (and synchronous writeFileSync) per intermediate value. See
@@ -308,6 +214,31 @@ export default function App({
     setPlaylistOpen,
     reportError: mediaSession.banner.reportError
   })
+
+  const activeCue = findActiveCue(state.cues, offsetTimePos(state.timePos, state.subtitleOffsetMs))
+  const activeCueKey = activeCue ? cueKey(activeCue) : undefined
+  const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
+
+  // Vocabulary and mining lifecycle: tokenization/knowledge caches, the word
+  // popup and its Anki mine, the subtitle report, bulk mining, and the
+  // sidebar's copy/translate actions — see state/useVocabularyMining.ts.
+  const vocabulary = useVocabularyMining({
+    bridge: kizuna,
+    dispatch,
+    player: playerAdapter,
+    state,
+    pausedRef,
+    activeCue,
+    activeCueKey,
+    japaneseSubtitleSelected,
+    sidebarOpen,
+    optionsData,
+    dictionarySettings: dictionariesState.data,
+    targetDeckName: ankiState.data?.settings.deckName
+  })
+  // Bulk mining's compact surface reserves right-stack width like a panel, so
+  // the window-sizing feature below has to know which surface is showing.
+  const miningPresentation = vocabulary.mining.presentation
 
   // Playback and window lifecycle: audio/subtitle menu commands, per-file
   // values, panel sizing, video scale, fullscreen, mini player, and picture
@@ -381,9 +312,6 @@ export default function App({
     if (target !== undefined) void window.kizuna.player.seek(target, true)
   }, [state.timePos, loopCue, state.subtitleOffsetMs])
 
-  const activeCue = findActiveCue(state.cues, offsetTimePos(state.timePos, state.subtitleOffsetMs))
-  const activeCueKey = activeCue ? cueKey(activeCue) : undefined
-
   const handleToggleLoopLine = (): void => {
     if (loopCue) {
       setLoopCue(null)
@@ -445,50 +373,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended:
-      optionsOpen ||
-      reportOpen ||
-      mediaSession.openUrl.open ||
-      cardImageRequest !== null ||
-      miningPresentation === 'modal'
-  })
-
-  const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
-
-  // Active-cue tokenization, tokenize-all (sidebar), whole-track vocabulary,
-  // and subtitle-report recomputation — see state/useVocabularyPipeline.ts.
-  const { prepareWholeTrackVocabulary, vocabularySpans } = useVocabularyPipeline({
-    dispatch,
-    bridges: {
-      mecab: kizuna.mecab,
-      knowledge: kizuna.knowledge,
-      dict: kizuna.dict
-    },
-    cues: state.cues,
-    activeCue,
-    activeCueKey,
-    allCueTokens: state.allCueTokens,
-    activeTokens: state.activeTokens,
-    japaneseSubtitleSelected,
-    sidebarOpen,
-    reportOpen,
-    filePath: state.filePath,
-    selectedSubtitleId: state.selectedSubtitleId,
-    frequencyDictId: state.popupSettings.frequencyDictId,
-    sortOrder: state.popupSettings.sortOrder,
-    dictionarySettings: dictionariesState.data,
-    knowledgeEpoch: state.knowledgeEpoch,
-    tokenCacheRef: tokenCache,
-    tokenizeTokenRef: tokenizeToken,
-    knownLevelsCacheRef: knownLevelsCache,
-    knownLevelsTokenRef: knownLevelsToken,
-    allCuesTokenRef: allCuesToken,
-    allCuesLevelsTokenRef: allCuesLevelsToken,
-    wholeTrackVocabularyRef,
-    vocabularySpanEpochRef: vocabularySpanEpoch,
-    vocabularySpansByCue,
-    setVocabularySpansByCue,
-    reportController
+    suspended: optionsOpen || mediaSession.openUrl.open || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -496,187 +381,6 @@ export default function App({
   // cue is resolved (see seekTargetForCue).
   const handleSelectSidebarCue = (cue: Cue): void => {
     window.kizuna.player.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
-  }
-
-  const handleCopySidebarCue = (cue: Cue): void => {
-    void copySidebarCue(window.kizuna.clipboard.writeText, cue)
-  }
-
-  const handleTranslateSidebarCue = (cue: Cue, requestId: string): Promise<string> =>
-    window.kizuna.translate.translate(cue.text, requestId)
-
-  // Looks up a token's dictionary entries and opens/pins the word popup at the
-  // triggering mouse event's viewport coordinates. Shared by both hover (preview)
-  // and click (pin) — hover shows it as the mouse passes over a word, click
-  // re-fetches at the click position so a keyboard/touch-less pointer still gets
-  // an anchored popup even if hover never fired (e.g. touch input).
-  const showWordPopup = async (token: Token, event?: React.MouseEvent): Promise<void> => {
-    // Anchor above the whole subtitle box (not the hovered word) so the
-    // popup never covers a different subtitle line than the one that was
-    // hovered. Read synchronously, before the await, since the DOM node's
-    // rect can change while the lookup is in flight.
-    const subtitleRect = document.getElementById('subtitle')?.getBoundingClientRect()
-    const position = wordPopupPosition(subtitleRect, event)
-    await popupController.open(window.kizuna.dict, window.kizuna.anki, window.kizuna.knowledge, {
-      token,
-      position,
-      frequencyDictId: state.popupSettings.frequencyDictId,
-      sortOrder: state.popupSettings.sortOrder,
-      cueTokens: state.activeTokens,
-      sentence: activeCue?.text ?? '',
-      cueStart: activeCue?.start,
-      cueEnd: activeCue?.end
-    })
-  }
-
-  // Navigates the open popup to a glossary cross-reference link's target
-  // term (WordPopup's onLinkClick) — see popupController.openLink.
-  const handleWordLinkClick = async (term: string): Promise<void> => {
-    await popupController.openLink(
-      window.kizuna.dict,
-      term,
-      state.popupSettings.frequencyDictId,
-      state.popupSettings.sortOrder
-    )
-  }
-
-  // Restores the previous popup payload pushed by handleWordLinkClick.
-  const handleWordPopupBack = (): void => {
-    popupController.back()
-  }
-
-  // Where a mined line's audio could be clipped from. `mineMediaContext`
-  // rejects a remote URL, a missing audio selection, and unusable cue timing,
-  // so this can be passed unconditionally.
-  const mineMediaSource = (): MineMediaSource => ({
-    filePath: state.filePath,
-    audioStreamIndex: state.selectedAudioId,
-    subtitleOffsetMs: state.subtitleOffsetMs
-  })
-
-  // Mines the clicked/selected dictionary entry into Anki. Word audio is
-  // derived entirely from `wordPopup.token` by the main-process note builder.
-  // A picture is different: it must be captured from mpv now, so when the user
-  // enabled screenshots and mapped a Picture field and a video is loaded, the
-  // frame is grabbed first and the mine waits on the crop dialog's decision. A
-  // failed capture (or an audio-only file) mines the card exactly as before.
-  const handleAddToAnki = async (result: LookupResult): Promise<void> => {
-    const imageBase64 = await popupController.captureCardImage(
-      window.kizuna.player,
-      state.filePath !== undefined
-    )
-    if (imageBase64) {
-      setCardImageRequest({ imageBase64, result })
-      return
-    }
-    await popupController.addToAnki(window.kizuna.anki, result, undefined, mineMediaSource())
-  }
-
-  // The crop dialog's outcome: a base64 JPEG mines the card with it, null mines
-  // it without a picture. Cancel closes the dialog without mining at all.
-  const handleCardImageSubmit = (jpegBase64: string | null): void => {
-    const request = cardImageRequest
-    setCardImageRequest(null)
-    if (!request) return
-    void popupController.addToAnki(
-      window.kizuna.anki,
-      request.result,
-      jpegBase64 ? { dataBase64: jpegBase64 } : undefined,
-      mineMediaSource()
-    )
-  }
-
-  // "Open in Anki" button's click handler — opens the already-mined word's
-  // card in Anki's Browse window (see ankiExisting/showWordPopup).
-  const handleOpenAnkiCard = async (cardId: number): Promise<void> => {
-    await popupController.openCard(window.kizuna.anki, cardId)
-  }
-
-  // Always call through this stable wrapper (not showWordPopup directly) from
-  // the hover debouncer below, so the debounced callback — created once and
-  // never recreated — still sees the latest popupSettings/state on every settle.
-  const showWordPopupLatest = useLatestCallback(showWordPopup)
-
-  // Hover-intent: onMouseEnter fires per token the pointer passes over, but a
-  // token merely swept past while moving the mouse elsewhere should never
-  // replace the currently-shown popup — only a token the pointer rests on
-  // for HOVER_DELAY_MS does. Click bypasses the delay (explicit action).
-  const HOVER_DELAY_MS = 250
-  const [hoverDebouncer] = useState<HoverDebouncer<{ token: Token; event?: React.MouseEvent }>>(
-    () =>
-      createHoverDebouncer(HOVER_DELAY_MS, ({ token, event }) => {
-        void showWordPopupLatest(token, event)
-      })
-  )
-  useEffect(() => () => hoverDebouncer.cancel(), [hoverDebouncer])
-
-  const onWordHover = (token: Token, event?: React.MouseEvent): void => {
-    hoverDebouncer.onEnter({ token, event })
-  }
-  const onWordLeave = (): void => {
-    hoverDebouncer.cancel()
-  }
-  const onWordClick = (token: Token, event?: React.MouseEvent): void => {
-    hoverDebouncer.cancel()
-    if (!shouldOpenWordPopup(window.getSelection())) return
-    void showWordPopup(token, event)
-  }
-
-  // Shared by WordPopup's own close button and the outside-click effect
-  // below, so both paths tear down the same state (the pending hover timer,
-  // plus any link-navigation history) instead of drifting apart.
-  const closeWordPopup = useLatestCallback((): void => {
-    hoverDebouncer.cancel()
-    popupController.close()
-  })
-
-  // Closes the popup on a mousedown anywhere outside its own DOM node (e.g.
-  // on the video/subtitle area) — WordPopup always renders in the DOM (CSS
-  // toggles visibility), so '#word-popup' is a stable query target whether
-  // or not it's currently open. Only listens while a popup is actually open,
-  // and never while the mined-card picture dialog owns the interaction (see
-  // shouldClosePopupOnPointerDown).
-  useEffect(() => {
-    if (!wordPopup) return
-    const handlePointerDown = (event: MouseEvent): void => {
-      if (
-        shouldClosePopupOnPointerDown(
-          document.getElementById('word-popup'),
-          event.target as Node,
-          cardImageRequest !== null
-        )
-      ) {
-        closeWordPopup()
-      }
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    return () => document.removeEventListener('mousedown', handlePointerDown)
-  }, [wordPopup, closeWordPopup, cardImageRequest])
-
-  // Switches the active MeCab dictionary: persists the choice (via the
-  // settings store, inside selectDict on the main side), then invalidates every
-  // cached tokenization (a cue's tokens depend on which dictionary produced
-  // them) and re-tokenizes the currently-displayed cue so the subtitle
-  // reflects the new dictionary immediately.
-  const handleSelectMecabDict = async (id: 'ipadic' | 'unidic'): Promise<void> => {
-    await selectMecabDict({
-      mecab: window.kizuna.mecab,
-      knowledge: window.kizuna.knowledge,
-      dispatch,
-      activeCue,
-      cues: state.cues,
-      sidebarOpen,
-      tokenCache: tokenCache.current,
-      knownLevelsCache: knownLevelsCache.current,
-      activeToken: tokenizeToken.current,
-      allCuesToken: allCuesToken.current,
-      allCuesLevelsToken: allCuesLevelsToken.current,
-      optionsData,
-      id
-    })
-    wholeTrackVocabularyRef.current.invalidate()
-    vocabularySpanEpoch.current++
-    setVocabularySpansByCue({})
   }
 
   // Imports a Yomitan dictionary zip (bytes already read by OptionsMenu's
@@ -705,114 +409,9 @@ export default function App({
     await removeYomitanDict(window.kizuna.dict, optionsData, id)
   }
 
-  const handleSaveWanikaniToken = async (token: string): Promise<void> => {
-    await saveWanikaniToken(window.kizuna.knowledge, optionsData, token)
-    if (token === '') {
-      // Clearing the token already purged the WaniKani rows main-side — there
-      // is nothing to sync, but cached levels must drop immediately.
-      await refreshKnownLevels({
-        knowledge: window.kizuna.knowledge,
-        dispatch,
-        activeTokens: state.activeTokens,
-        allCueTokens: state.allCueTokens,
-        sidebarOpen,
-        knownLevelsCache: knownLevelsCache.current,
-        activeLevelsToken: knownLevelsToken.current,
-        allCuesLevelsToken: allCuesLevelsToken.current
-      })
-      return
-    }
-    // A new token syncs right away: an invalid one errors out and leaves zero
-    // WaniKani words (the purge above the sync), never the old token's data.
-    await handleSyncNow('wanikani', true)
-  }
-
   const handleChangeAnkiSettings = async (patch: Partial<AnkiSettings>): Promise<void> => {
     await changeAnkiSettings(window.kizuna.anki, optionsData, patch)
   }
-
-  const handleChangeKnowledgeSettings = async (
-    patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
-  ): Promise<void> => {
-    await changeKnowledgeSettings(window.kizuna.knowledge, optionsData, patch)
-    if (shouldResyncAnkiForKnowledgePatch(patch)) {
-      await handleSyncNow('anki', true)
-    }
-  }
-
-  const handleSyncNow = async (source: KnowledgeSource, force?: boolean): Promise<SyncStatus> => {
-    return syncKnowledgeAndRefresh({
-      knowledge: window.kizuna.knowledge,
-      dispatch,
-      activeTokens: state.activeTokens,
-      allCueTokens: state.allCueTokens,
-      sidebarOpen,
-      knownLevelsCache: knownLevelsCache.current,
-      activeLevelsToken: knownLevelsToken.current,
-      allCuesLevelsToken: allCuesLevelsToken.current,
-      optionsData,
-      source,
-      force
-    })
-  }
-  const handleSyncNowRef = useLatestRef(handleSyncNow)
-
-  const closeMining = useLatestCallback((): void => {
-    miningSessionToken.current++
-    bulkMiningController.close()
-    miningCompletionTrackerRef.current.reset()
-    setMiningCompletion(null)
-    setMiningPresentation('closed')
-  })
-
-  const openMining = (): void => {
-    if (miningPresentation === 'sidebar') {
-      setMiningPresentation(reopenBulkMiningModal(miningPresentation))
-      return
-    }
-    if (miningPresentation === 'modal') return
-    ++miningSessionToken.current
-    setReportOpen(false)
-    reportController.close()
-    setMiningPresentation('modal')
-    void bulkMiningController.open({
-      bridges: {
-        dict: window.kizuna.dict,
-        anki: window.kizuna.anki,
-        knowledge: window.kizuna.knowledge
-      },
-      snapshot: prepareWholeTrackVocabulary,
-      cues: state.cues,
-      frequencyDictId: state.popupSettings.frequencyDictId,
-      sortOrder: state.popupSettings.sortOrder
-    })
-  }
-
-  // A file or subtitle-track switch invalidates the mining session, including
-  // one currently hidden in the compact sidebar. Run as the cleanup of the
-  // outgoing cue list/track so the teardown fires on exactly the same
-  // transitions, without the effect body itself writing state.
-  const invalidateMiningRef = useLatestRef((): void => {
-    miningSessionToken.current++
-    if (miningPresentation !== 'closed') closeMining()
-  })
-  useEffect(
-    () => () => invalidateMiningRef.current(),
-    [state.cues, japaneseSubtitleSelected, invalidateMiningRef]
-  )
-
-  useEffect(() => {
-    const controller = bulkMiningController
-    return controller.subscribe(() => {
-      const phase = controller.getState()
-      const event = miningCompletionTrackerRef.current.observe(phase)
-      if (phase.kind === 'running') setMiningCompletion(null)
-      if (!event) return
-      setMiningCompletion(event)
-      if (event.shouldPause && !pausedRef.current) void playerAdapter.setPause(true)
-      if (event.shouldRefreshKnowledge) void handleSyncNowRef.current('anki', true)
-    })
-  }, [playerAdapter, bulkMiningController, handleSyncNowRef, pausedRef])
 
   return (
     <div
@@ -858,10 +457,7 @@ export default function App({
               abLoop: state.abLoopState,
               onCycleAbLoop: handleCycleAbLoop
             }}
-            vocabulary={{
-              onOpenWordReport: () => setReportOpen(true),
-              onOpenBulkMining: () => void openMining()
-            }}
+            vocabulary={vocabulary.vocabularyMenu}
             onOpenOptions={() => setOptionsOpen(true)}
             onOpenChange={setMenuBarOpen}
           />
@@ -912,12 +508,8 @@ export default function App({
                 ? state.knownLevels
                 : undefined
             }
-            vocabularySpans={activeCueKey ? vocabularySpansByCue[activeCueKey] : undefined}
+            {...vocabulary.subtitleOverlay}
             style={miniPlayerSubtitleStyle(state.subtitleStyle, miniPlayerActive)}
-            highlightedTokens={japaneseSubtitleSelected ? wordPopup?.highlightedTokens : undefined}
-            onWordHover={japaneseSubtitleSelected ? onWordHover : undefined}
-            onWordClick={japaneseSubtitleSelected ? onWordClick : undefined}
-            onWordLeave={japaneseSubtitleSelected ? onWordLeave : undefined}
             onDragStart={state.subtitleDragEnabled ? handleSubtitleDragStart : undefined}
             dragEnabled={state.subtitleDragEnabled}
           />
@@ -937,26 +529,12 @@ export default function App({
                       ? state.knownLevels
                       : undefined
                   }
-                  vocabularySpans={vocabularySpans}
+                  {...vocabulary.subtitleSidebar}
                   onSelectCue={handleSelectSidebarCue}
-                  onCopyCue={handleCopySidebarCue}
-                  onTranslateCue={state.translationEnabled ? handleTranslateSidebarCue : undefined}
-                  createTranslationRequestId={
-                    state.translationEnabled ? () => crypto.randomUUID() : undefined
-                  }
-                  onCancelTranslation={
-                    state.translationEnabled
-                      ? (requestId) => window.kizuna.translate.cancel(requestId)
-                      : undefined
-                  }
                 />
               )}
               {miningPresentation === 'sidebar' && (
-                <BulkMiningSidebar
-                  phase={bulkMiningPhase}
-                  onReopen={() => setMiningPresentation(reopenBulkMiningModal(miningPresentation))}
-                  onCancel={() => bulkMiningController.cancel()}
-                />
+                <BulkMiningSidebar {...vocabulary.mining.sidebar} />
               )}
             </aside>
           )}
@@ -1067,7 +645,7 @@ export default function App({
           yomitanDicts: dictionariesData.yomitanDicts,
           loadError: dictionariesState.error,
           popupSettings: state.popupSettings,
-          onSelectMecabDict: handleSelectMecabDict,
+          onSelectMecabDict: vocabulary.knowledgeOptions.onSelectMecabDict,
           onImportYomitanDict: handleImportYomitanDict,
           subscribeImportProgress: handleSubscribeImportProgress,
           onSetYomitanEnabled: handleSetYomitanEnabled,
@@ -1087,14 +665,14 @@ export default function App({
         }}
         knowledge={{
           wanikaniConfigured: knowledgeSettings.hasWanikaniToken,
-          onSaveWanikaniToken: handleSaveWanikaniToken,
+          onSaveWanikaniToken: vocabulary.knowledgeOptions.onSaveWanikaniToken,
           ankiDeckNames: ankiState.data?.deckNames ?? [],
           ankiModelFields: ankiState.data?.modelFields ?? [],
           knowledgeSettings,
-          onChangeKnowledgeSettings: handleChangeKnowledgeSettings,
+          onChangeKnowledgeSettings: vocabulary.knowledgeOptions.onChangeKnowledgeSettings,
           loadError: knowledgeState.error,
           syncStatus,
-          onSyncNow: handleSyncNow
+          onSyncNow: vocabulary.knowledgeOptions.onSyncNow
         }}
         setup={{
           setup: setupState.data,
@@ -1107,108 +685,30 @@ export default function App({
       />
 
       <WordPopup
-        results={wordPopup?.results ?? []}
-        position={wordPopup?.position ?? null}
-        onClose={closeWordPopup}
+        {...vocabulary.wordPopup}
         maxEntries={state.popupSettings.maxEntries}
         maxMeanings={state.popupSettings.maxMeanings}
-        token={wordPopup?.token}
-        sentence={wordPopup?.sentence}
-        onAddToAnki={handleAddToAnki}
-        ankiStatus={ankiStatus}
-        ankiError={ankiError}
-        ankiExisting={ankiExisting}
-        duplicatePolicy={popupState.duplicatePolicy}
-        onOpenAnkiCard={handleOpenAnkiCard}
-        onLinkClick={handleWordLinkClick}
-        onBack={handleWordPopupBack}
-        canGoBack={popupHistory.length > 0}
-        provenanceByExpression={wordPopup?.provenanceByExpression}
       />
 
-      {cardImageRequest && (
+      {vocabulary.cardImageDialog.imageBase64 !== undefined && (
         <CardImageCropDialog
           open
-          imageBase64={cardImageRequest.imageBase64}
-          onSubmit={handleCardImageSubmit}
-          onCancel={() => setCardImageRequest(null)}
+          imageBase64={vocabulary.cardImageDialog.imageBase64}
+          onSubmit={vocabulary.cardImageDialog.onSubmit}
+          onCancel={vocabulary.cardImageDialog.onCancel}
         />
       )}
 
-      <SubtitleReport
-        open={reportOpen && miningPresentation !== 'modal'}
-        phase={reportPhase}
-        onClose={() => {
-          setReportOpen(false)
-          reportController.close()
-        }}
-        onRetry={() => {
-          void reportController.open({
-            bridges: { knowledge: window.kizuna.knowledge },
-            snapshot: prepareWholeTrackVocabulary
-          })
-        }}
-      />
+      <SubtitleReport {...vocabulary.report} />
 
-      {miningPresentation === 'modal' && (
-        <BulkMiningModal
-          phase={bulkMiningPhase}
-          available={japaneseSubtitleSelected && state.cues.length > 0}
-          onClose={closeMining}
-          onHideToSidebar={() =>
-            setMiningPresentation(hideBulkMiningToSidebar(miningPresentation, bulkMiningPhase))
-          }
-          frequencyDictConfigured={state.popupSettings.frequencyDictId !== null}
-          onThresholdChange={(raw) => bulkMiningController.setThreshold(raw)}
-          onMinimumCountChange={(raw) => bulkMiningController.setMinimumCount(raw)}
-          onSortChange={(sort) =>
-            bulkMiningController.setSort(sort, state.popupSettings.frequencyDictId !== null)
-          }
-          onToggle={(lemma) => bulkMiningController.toggle(lemma)}
-          onSelectAll={() =>
-            bulkMiningController.selectAllVisible(state.popupSettings.frequencyDictId !== null)
-          }
-          onSelectNone={() =>
-            bulkMiningController.selectNoneVisible(state.popupSettings.frequencyDictId !== null)
-          }
-          onSetHideTargetDeckMatches={(hide) => bulkMiningController.setHideTargetDeckMatches(hide)}
-          targetDeckName={ankiState.data?.settings.deckName}
-          onStart={() =>
-            void bulkMiningController.start(
-              { dict: window.kizuna.dict, anki: window.kizuna.anki },
-              mineMediaSource()
-            )
-          }
-          onCancel={() => bulkMiningController.cancel()}
-          onBackToList={() =>
-            void bulkMiningController.backToList({
-              dict: window.kizuna.dict,
-              anki: window.kizuna.anki,
-              knowledge: window.kizuna.knowledge
-            })
-          }
-          onRetry={() => {
-            void bulkMiningController.open({
-              bridges: {
-                dict: window.kizuna.dict,
-                anki: window.kizuna.anki,
-                knowledge: window.kizuna.knowledge
-              },
-              snapshot: prepareWholeTrackVocabulary,
-              cues: state.cues,
-              frequencyDictId: state.popupSettings.frequencyDictId,
-              sortOrder: state.popupSettings.sortOrder
-            })
-          }}
-        />
-      )}
-      {miningCompletion && (
+      {miningPresentation === 'modal' && <BulkMiningModal {...vocabulary.mining.modal} />}
+      {vocabulary.mining.completion && (
         <div id="bulk-mining-completion-toast" role="status">
-          <span>{miningCompletion.text}</span>
+          <span>{vocabulary.mining.completion.text}</span>
           <button
             type="button"
             aria-label="Dismiss mining completion"
-            onClick={() => setMiningCompletion(null)}
+            onClick={vocabulary.mining.dismissCompletion}
           >
             Dismiss
           </button>
