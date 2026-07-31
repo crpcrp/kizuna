@@ -10,8 +10,7 @@ import {
   type MiniPlayerEffect,
   type MiniPlayerState
 } from './miniPlayer'
-import type { RecentFilesController } from './recentFilesController'
-import type { PlaylistController, PlaylistLoadDeps } from './playlistController'
+import type { MediaSessionEvents } from './useMediaSession'
 
 interface LaunchHandlerDeps {
   bridge: Pick<KizunaApi, 'launch'>
@@ -35,12 +34,8 @@ export interface UsePlayerEventsInput {
   dispatch: Dispatch<PlayerAction>
   bridge: KizunaApi
   playerAdapter: PlayerApi
-  /** Opens the same-folder neighbor in `direction` (EOF folder auto-advance, media keys). */
-  handleOpenNeighbor: (direction: 'prev' | 'next') => Promise<void>
   stateRef: RefObject<Pick<PlayerState, 'autoPlayNext' | 'filePath' | 'paused'>>
-  recentFiles: RecentFilesController
-  playlistController: PlaylistController
-  playlistLoadDeps: () => PlaylistLoadDeps
+  mediaSession: MediaSessionEvents
   miniPlayerRef: RefObject<MiniPlayerState>
   setMiniPlayer: Dispatch<SetStateAction<MiniPlayerState>>
   setAlwaysOnTop: Dispatch<SetStateAction<boolean>>
@@ -48,10 +43,6 @@ export interface UsePlayerEventsInput {
     nextState: MiniPlayerState,
     effect: MiniPlayerEffect | null
   ) => Promise<unknown>
-  /** The shared App-level OpenSession/openPath closure (see App.tsx) — a
-   * launch-delivered path is opened through the same pipeline as every
-   * other direct open. */
-  openPath: (path: string) => Promise<OpenMediaResult>
 }
 
 /** Wires mpv/window event pushes and file-association launch delivery. */
@@ -59,16 +50,12 @@ export function usePlayerEvents({
   dispatch,
   bridge,
   playerAdapter,
-  handleOpenNeighbor,
   stateRef,
-  recentFiles,
-  playlistController,
-  playlistLoadDeps,
+  mediaSession,
   miniPlayerRef,
   setMiniPlayer,
   setAlwaysOnTop,
-  applyMiniPlayerEffect,
-  openPath
+  applyMiniPlayerEffect
 }: UsePlayerEventsInput): void {
   const prevEofRef = useRef(false)
   const deferredFullscreenMiniExitRef = useRef<MiniPlayerEffect | null>(null)
@@ -101,11 +88,11 @@ export function usePlayerEvents({
     const offEof = bridge.player.onEofReached((value) => {
       if (typeof value !== 'boolean') return
       const current = stateRef.current
-      const mediaOpening = recentFiles.getState().mediaOpening
+      const mediaOpening = mediaSession.isMediaOpening()
       // The queue drives EOF only while the file that just ended is its current
       // entry — queueing files behind an unrelated video must not hijack that
       // video's EOF (which would skip entry 0 from a phantom currentIndex).
-      const queueDriving = playlistController.isPlaybackCurrent(current.filePath)
+      const queueDriving = mediaSession.isPlaylistPlaybackCurrent(current.filePath)
       // An explicit queue takes EOF precedence regardless of autoPlayNext (it is
       // gated only by the open lock); folder auto-advance stays gated by autoPlayNext.
       const action = eofAction(
@@ -117,9 +104,9 @@ export function usePlayerEvents({
         queueDriving
       )
       if (action === 'playlist') {
-        void playlistController.handleEof(playlistLoadDeps())
+        void mediaSession.handlePlaylistEof()
       } else if (action === 'folder') {
-        void handleOpenNeighbor('next')
+        void mediaSession.handleOpenNeighbor('next')
       }
       prevEofRef.current = value
     })
@@ -131,11 +118,11 @@ export function usePlayerEvents({
       performMediaKey(command, {
         player: playerAdapter,
         paused: stateRef.current.paused,
-        playlistActive: playlistController.isPlaybackCurrent(stateRef.current.filePath),
-        onNextFile: () => void handleOpenNeighbor('next'),
-        onPrevFile: () => void handleOpenNeighbor('prev'),
-        onPlaylistNext: () => void playlistController.next(playlistLoadDeps()),
-        onPlaylistPrev: () => void playlistController.prev(playlistLoadDeps())
+        playlistActive: mediaSession.isPlaylistPlaybackCurrent(stateRef.current.filePath),
+        onNextFile: () => void mediaSession.handleOpenNeighbor('next'),
+        onPrevFile: () => void mediaSession.handleOpenNeighbor('prev'),
+        onPlaylistNext: () => void mediaSession.nextPlaylist(),
+        onPlaylistPrev: () => void mediaSession.previousPlaylist()
       })
     )
     return () => {
@@ -146,20 +133,17 @@ export function usePlayerEvents({
       offEof()
       offMediaKey()
     }
-    // Only handleOpenNeighbor and playerAdapter can actually re-fire this: the
-    // rest are render-stable (the preload bridge, refs, the reducer's dispatch,
-    // state setters, and the useState-held / useLatestCallback controllers).
+    // The player adapter and media-session event group are render-stable; the
+    // remaining values are the preload bridge, refs, reducer dispatch and
+    // state setters.
   }, [
-    handleOpenNeighbor,
     playerAdapter,
     bridge.player,
     bridge.windowControls,
     dispatch,
     stateRef,
     miniPlayerRef,
-    recentFiles,
-    playlistController,
-    playlistLoadDeps,
+    mediaSession,
     setMiniPlayer,
     setAlwaysOnTop,
     applyMiniPlayerEffect
@@ -169,9 +153,9 @@ export function usePlayerEvents({
     () =>
       registerLaunchOpenHandler({
         bridge,
-        openPath,
-        reportError: (message) => recentFiles.reportError(message)
+        openPath: mediaSession.openPath,
+        reportError: mediaSession.reportError
       }),
-    [bridge, openPath, recentFiles]
+    [bridge, mediaSession]
   )
 }

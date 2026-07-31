@@ -32,8 +32,7 @@ import {
 } from './state/playerState'
 import { type MineMediaSource } from './state/ankiMining'
 import { seekTargetForCue } from './state/cueNavigation'
-import { performFileNavigation } from './state/keyActions'
-import { type OpenMediaResult, type SubtitleRequestToken, shouldProbe } from './state/mediaSession'
+import { type SubtitleRequestToken, shouldProbe } from './state/mediaSession'
 import { applyOffsetToFolder, nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
 import {
   type FrameStepGuard,
@@ -42,13 +41,7 @@ import {
   frameStepAction
 } from './state/playbackCommands'
 import { cueKey } from './state/tokenization'
-import {
-  loadExternalSubtitle,
-  loadSubtitleFromPicker,
-  onlineSubtitleTrack,
-  selectAudio,
-  selectSubtitle
-} from './state/trackSelection'
+import { selectAudio } from './state/trackSelection'
 import { wordPopupPosition } from './state/wordLookup'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
 import {
@@ -57,12 +50,6 @@ import {
   toggleFromRightClick,
   toggleSidebar
 } from './state/appChrome'
-import { handleDroppedFiles } from './state/dropHandling'
-import {
-  appendPathsToPlaylist,
-  appendPlaylistFile,
-  type PlaylistAppendDeps
-} from './state/playlistAppend'
 import { buildPlayerAdapter } from './state/playerAdapter'
 import {
   sidebarPreservingWindowSize,
@@ -95,8 +82,6 @@ import {
   reopenBulkMiningModal,
   type BulkMiningPresentation
 } from './state/bulkMiningPresentation'
-import { createRecentFilesController } from './state/recentFilesController'
-import { createUrlSubtitleController } from './state/urlSubtitleController'
 import { createSettingsPersistence } from './state/settingsPersistence'
 import { useSettingsLifecycle } from './state/useSettingsLifecycle'
 import { usePerFileRestore } from './state/usePerFileRestore'
@@ -133,20 +118,16 @@ import { useFullscreenReveal } from './state/useFullscreenReveal'
 import { useVideoMargins } from './state/useVideoMargins'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestCallback, useLatestRef } from './state/useLatestRef'
+import { useMediaSession } from './state/useMediaSession'
 import { applyLevelColors } from './util/levelColors'
 import { errorMessage } from './util/errorMessage'
-import { isRemoteUrl } from '../../shared/mediaFileTypes'
-import { isExtractorBackedUrl, type YtdlpQuality } from '../../shared/ytdlpQuality'
 import type { KizunaApi } from '../../shared/preloadApi'
-import { createPlaylistController, type PlaylistLoadDeps } from './state/playlistController'
-import { createYtdlpQualityReloadController } from './state/ytdlpQualityReload'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
 import type { Token } from '../../shared/token'
-import { URL_SUBTITLE_TRACK_ID, type VideoDimensions } from '../../shared/track'
+import { type VideoDimensions } from '../../shared/track'
 import type { VideoAdjustments as VideoAdjustmentsValue } from '../../shared/playerSettings'
 import { effectiveAudioDevice, type AudioDevice } from '../../shared/audioDevice'
-import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 import type {
   KnowledgeLevel,
   KnowledgeSource,
@@ -188,14 +169,9 @@ export default function App({
   const [state, dispatch] = useReducer(playerReducer, initialState)
   const playerAdapter = useMemo(() => buildPlayerAdapter(dispatch), [dispatch])
   const pausedRef = useLatestRef(state.paused)
-  const [ytdlpQuality, setYtdlpQuality] = useState<{ path: string; value: YtdlpQuality } | null>(
-    null
-  )
-  const [qualityReloading, setQualityReloading] = useState(false)
   const reveal = useFullscreenReveal(state.fullscreen)
   const [optionsOpen, setOptionsOpen] = useState(false)
   const [videoAdjustmentsOpen, setVideoAdjustmentsOpen] = useState(false)
-  const [openUrlDialogOpen, setOpenUrlDialogOpen] = useState(false)
   // A captured frame awaiting the user's crop decision, together with the
   // dictionary entry whose mine triggered it (see handleAddToAnki).
   const [cardImageRequest, setCardImageRequest] = useState<{
@@ -215,25 +191,19 @@ export default function App({
   // would otherwise slide the bar away mid-click. Keeping it revealed here
   // is OR'd into the top-controls reveal below.
   const [menuBarOpen, setMenuBarOpen] = useState(false)
-  // Shared across openAndLoad's auto-selected default and manual subtitle
-  // picks so a slower in-flight ffmpeg extraction can't clobber a newer one.
-  const subtitleToken = useRef<SubtitleRequestToken>({ current: 0 })
-  // Per-track extracted-cue cache, keyed by track id. openAndLoad clears it
-  // on every new file; re-picking a track already extracted for the current
-  // file is then a synchronous dispatch instead of another ffmpeg run.
-  // openAndLoad also warms this cache in the background for every non-default
-  // subtitle track, so a later manual switch is usually already cached.
-  const subtitleCueCache = useRef(new Map<number, Cue[]>())
-  // Guards openAndLoad's background cache warm-up: bumped once per file open
-  // so a still-running extraction from a previously opened file can't write
-  // stale cues into the cache after a newer file has cleared it.
-  const fileLoadToken = useRef<SubtitleRequestToken>({ current: 0 })
   // Drops frame-step presses while a previous step's IPC invoke is still in
   // flight, so holding the key down can't flood mpv's command queue.
   const frameStepGuard = useRef<FrameStepGuard>({ inFlight: false })
   const stateRef = useLatestRef(state)
+  const mediaSession = useMediaSession({
+    bridge: kizuna,
+    dispatch,
+    player: playerAdapter,
+    state,
+    stateRef
+  })
   // Per-cue tokenization cache + a request-token guard against stale MeCab
-  // resolutions, mirroring subtitleToken above. Held in refs so they persist
+  // resolutions. Held in refs so they persist
   // across renders without themselves triggering one.
   const tokenCache = useRef(new Map<string, Token[]>())
   const tokenizeToken = useRef<SubtitleRequestToken>({ current: 0 })
@@ -337,127 +307,6 @@ export default function App({
   const miningSessionToken = useRef(0)
   const miningCompletionTrackerRef = useRef(createBulkMiningCompletionTracker())
   const [miningCompletion, setMiningCompletion] = useState<BulkMiningCompletionEvent | null>(null)
-  // Media menu's recent-files list, open/loading flag, and dismissible media
-  // error surface — see state/recentFilesController.ts.
-  const [recentFiles] = useState(createRecentFilesController)
-  const recentFilesState = useSyncExternalStore(
-    recentFiles.subscribe,
-    () => recentFiles.getState(),
-    () => recentFiles.getState()
-  )
-  // Online (yt-dlp URL) subtitle catalog for the Subtitle menu. Session-only:
-  // acquired cues feed the same DOM cue lifecycle as
-  // external/local subtitles (onlineSubtitleLoaded/onlineSubtitleCleared), but
-  // nothing here is persisted to MediaHistory. The bridge reads window at call
-  // time; `cancel` is optional-chained so a preload without the surface (some
-  // test fakes) degrades to a hidden section instead of throwing.
-  const [urlSubtitleController] = useState(() =>
-    createUrlSubtitleController({
-      bridge: {
-        enumerate: (url) => window.kizuna.urlSubtitles.enumerate(url),
-        acquire: (descriptor) => window.kizuna.urlSubtitles.acquire(descriptor),
-        cancel: () => window.kizuna.urlSubtitles?.cancel?.()
-      },
-      sink: {
-        injectCues: (asset) =>
-          dispatch({
-            type: 'onlineSubtitleLoaded',
-            track: onlineSubtitleTrack(asset.cues),
-            cues: asset.cues
-          }),
-        clear: () => dispatch({ type: 'onlineSubtitleCleared' })
-      },
-      onWarning: (message) => recentFiles.reportError(message),
-      preferredLanguage: () => stateRef.current.preferredUrlSubtitleLanguage
-    })
-  )
-  const urlSubtitleState = useSyncExternalStore(
-    urlSubtitleController.subscribe,
-    () => urlSubtitleController.getState(),
-    () => urlSubtitleController.getState()
-  )
-  // Renderer-owned play queue. Loading routes through the same
-  // recent-files open pipeline so subtitles/tracks/history stay consistent.
-  // Declared ahead of openSession because its onPlaylistPicked reads this
-  // controller.
-  const [playlistController] = useState(createPlaylistController)
-  const playlistState = useSyncExternalStore(
-    playlistController.subscribe,
-    () => playlistController.getState(),
-    () => playlistController.getState()
-  )
-  // The one OpenSession construction point for App's direct opens (neighbor
-  // navigation, playlist, URL dialog, drop, launch delivery) — see
-  // state/mediaSession.ts's OpenSession. Rebuilt on every call rather than
-  // memoized, so a handler closed over on an earlier render still reads the
-  // token refs' current values instead of a stale snapshot.
-  const openSession = () => ({
-    bridge: window.kizuna,
-    dispatch,
-    subtitleToken: subtitleToken.current,
-    cueCache: subtitleCueCache.current,
-    fileToken: fileLoadToken.current,
-    onPlaylistPicked: (paths: string[]) => {
-      playlistController.clear()
-      playlistController.addPaths(paths)
-    }
-  })
-  // Stable identity (see useLatestCallback) so the mount-once listeners and the
-  // memoized navigation callbacks below can depend on it without re-subscribing
-  // every render; each call still builds a fresh OpenSession.
-  const openPath = useLatestCallback((path: string): Promise<OpenMediaResult> =>
-    recentFiles.openPath(openSession(), path)
-  )
-  const [ytdlpQualityController] = useState(() =>
-    createYtdlpQualityReloadController({
-      setYtdlpQuality: (quality) => window.kizuna.player.setYtdlpQuality(quality),
-      openUrl: (url) => openPath(url),
-      seek: (seconds, absolute) => window.kizuna.player.seek(seconds, absolute),
-      setPause: (paused) => window.kizuna.player.setPause(paused),
-      cancelLoad: () => window.kizuna.player.cancelLoad()
-    })
-  )
-  const qualityVisible = isExtractorBackedUrl(state.filePath)
-  const displayedYtdlpQuality =
-    ytdlpQuality && ytdlpQuality.path === state.filePath ? ytdlpQuality.value : ('best' as const)
-  const handleSetYtdlpQuality = useLatestCallback(async (quality: YtdlpQuality): Promise<void> => {
-    const current = stateRef.current
-    if (!isExtractorBackedUrl(current.filePath)) return
-    setQualityReloading(true)
-    try {
-      const result = await ytdlpQualityController.reload({
-        quality,
-        url: current.filePath,
-        timePos: current.timePos,
-        paused: current.paused
-      })
-      if (result === 'reloaded' && stateRef.current.filePath === current.filePath) {
-        setYtdlpQuality({ path: current.filePath, value: quality })
-      }
-    } catch (error) {
-      recentFiles.reportError(errorMessage(error))
-    } finally {
-      setQualityReloading(false)
-    }
-  })
-  // A subsequent direct open or unmount makes any pending quality reload stale
-  // and tells mpv to abort its extractor request.
-  useEffect(
-    () => () => {
-      void ytdlpQualityController.cancel()
-    },
-    [state.filePath, ytdlpQualityController]
-  )
-  // Begins the online-subtitle lifecycle for each loaded media. Keyed on
-  // loadGeneration too, so reopening the same URL (e.g. a quality reload)
-  // re-enumerates. A non-extractor URL or local file hides the section; the
-  // controller's generation bump discards any in-flight enumerate/acquire from
-  // the previous media.
-  useEffect(() => {
-    urlSubtitleController.load(state.filePath)
-  }, [state.filePath, state.loadGeneration, urlSubtitleController])
-  // App cleanup invalidates any pending online-subtitle work and aborts the bridge.
-  useEffect(() => () => urlSubtitleController.dispose(), [urlSubtitleController])
   // Coalesces rapid PlayerSettings patches (subtitle-drag mousemove ticks,
   // Options-menu edits) into a single debounced write instead of one IPC
   // round-trip (and synchronous writeFileSync) per intermediate value. See
@@ -551,53 +400,19 @@ export default function App({
   // also the drag-to-reposition gesture's coordinate frame.
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const handleOpenNeighbor = useCallback(
-    async (direction: 'prev' | 'next'): Promise<void> => {
-      const current = stateRef.current
-      if (!current.filePath || recentFiles.getState().mediaOpening) return
-      const neighbors = await window.kizuna.media.folderNeighbors(current.filePath)
-      const target = direction === 'next' ? neighbors.next : neighbors.prev
-      if (!target) return
-      void openPath(target)
-    },
-    [openPath, recentFiles, stateRef]
-  )
-
-  // The load seam the playlist controller drives: the same open pipeline the
-  // Media menu / drops use, so a queued file gets subtitles, tracks and history.
-  const playlistLoadDeps = useLatestCallback((): PlaylistLoadDeps => ({
-    load: (path) => openPath(path),
-    play: () => playerAdapter.setPause(false)
-  }))
-
   // mpv/window event pushes (time/duration/pause/EOF/fullscreen/media keys)
   // and file-association launch delivery.
   usePlayerEvents({
     dispatch,
     bridge: kizuna,
     playerAdapter,
-    handleOpenNeighbor,
     stateRef,
-    recentFiles,
-    playlistController,
-    playlistLoadDeps,
+    mediaSession: mediaSession.events,
     miniPlayerRef,
     setMiniPlayer,
     setAlwaysOnTop,
-    applyMiniPlayerEffect,
-    openPath
+    applyMiniPlayerEffect
   })
-
-  // Fetches the recent-files list once on mount. A failure surfaces as a
-  // dismissible warning and leaves the list empty; it must not block
-  // playback (see recentFilesController.init).
-  useEffect(() => {
-    void recentFiles.init(window.kizuna)
-  }, [recentFiles])
-
-  // Cancels a pending transient-banner auto-dismiss timer (e.g. a screenshot
-  // "saved" message) so it cannot fire and touch state after unmount.
-  useEffect(() => () => recentFiles.dispose(), [recentFiles])
 
   const settingsReady = useSettingsLifecycle({
     dispatch,
@@ -610,7 +425,7 @@ export default function App({
     videoAdjustmentsRef,
     setSidebarOpen,
     setPlaylistOpen,
-    reportError: recentFiles.reportError
+    reportError: mediaSession.banner.reportError
   })
 
   // Applies the current file's persisted subtitle offset (its own entry, else
@@ -699,47 +514,6 @@ export default function App({
     const next = !state.loudnessNormalization
     dispatch({ type: 'setLoudnessNormalization', value: next })
     void window.kizuna.player.setLoudnessNorm(next)
-  }
-
-  // Subtitle menu > track list; `null` turns subtitles off. An id with no
-  // matching subtitle track is ignored, but `null` is a real choice — hence
-  // the `!== undefined` check rather than a truthiness test.
-  const handleSelectSubtitle = (id: number | null): void => {
-    if (!state.filePath) return
-    // The plain "Off" row also turns an active online subtitle off, routing
-    // through the controller so its cues are cleared and pending acquisition
-    // invalidated — session-only, so nothing is persisted.
-    if (id === null && state.selectedSubtitleId === URL_SUBTITLE_TRACK_ID) {
-      urlSubtitleController.selectOff()
-      return
-    }
-    const track =
-      id === null ? null : state.tracks.find((t) => t.kind === 'subtitle' && t.id === id)
-    if (track === undefined) return
-    selectSubtitle(
-      window.kizuna,
-      dispatch,
-      state.filePath,
-      track,
-      subtitleToken.current,
-      subtitleCueCache.current,
-      state.externalSubtitlePath,
-      state.externalSubtitleEncoding
-    )
-  }
-
-  // Subtitle menu > Encoding: re-decodes the loaded external subtitle file
-  // with the chosen codepage. Only meaningful while an external subtitle is
-  // loaded; embedded tracks carry their own encoding.
-  const handleChangeExternalSubtitleEncoding = (encoding: SubtitleEncoding): void => {
-    if (!state.filePath || !state.externalSubtitlePath) return
-    void loadExternalSubtitle(
-      { ...openSession(), externalSubtitleEncoding: encoding },
-      state.filePath,
-      state.externalSubtitlePath
-    ).then((warning) => {
-      if (warning) recentFiles.reportError(warning)
-    })
   }
 
   // Video menu > frame stepping, shared by both directions. The guard drops
@@ -904,108 +678,6 @@ export default function App({
     settingsPersistenceRef.current.schedule({ playlistOpen: next })
   }
 
-  const handleNavigateFile = useCallback(
-    (direction: 'prev' | 'next'): void => {
-      performFileNavigation(direction, {
-        playlistActive: playlistController.isPlaybackCurrent(stateRef.current.filePath),
-        onNextFile: () => void handleOpenNeighbor('next'),
-        onPrevFile: () => void handleOpenNeighbor('prev'),
-        onPlaylistNext: () => void playlistController.next(playlistLoadDeps()),
-        onPlaylistPrev: () => void playlistController.prev(playlistLoadDeps())
-      })
-    },
-    [handleOpenNeighbor, playlistController, playlistLoadDeps, stateRef]
-  )
-
-  // Binds the queue seams (`appendPathsToPlaylist`/`appendPlaylistFile` are pure
-  // module functions) to the live preload API and playlist controller.
-  const playlistAppendDeps = (): PlaylistAppendDeps => ({
-    readPlaylist: (path) => window.kizuna.media.readPlaylist(path),
-    addPaths: async (paths) => {
-      await playlistController.addPathsAndMaybePlay(
-        paths,
-        stateRef.current.filePath !== undefined,
-        playlistLoadDeps()
-      )
-    }
-  })
-
-  const handleAddFilesToPlaylist = async (): Promise<void> => {
-    await appendPathsToPlaylist(await window.kizuna.media.openFiles(), playlistAppendDeps())
-  }
-
-  const handleAddFolderToPlaylist = async (): Promise<void> => {
-    await appendPathsToPlaylist(await window.kizuna.media.openFolder(), playlistAppendDeps())
-  }
-
-  const handleSavePlaylist = (): void => {
-    void window.kizuna.media.savePlaylist(playlistController.getState().playlist.entries)
-  }
-
-  // Opens a network stream. Routes through the same open pipeline
-  // as files, so the `mediaOpening` lock, recents refresh and error banner all
-  // apply; loadPath skips ffprobe for the URL. The dialog closes only on a
-  // successful open — a failure/timeout/cancel keeps it up so the error banner
-  // is visible and the user can retry. Cancel and the load timeout both release
-  // the lock through the pipeline's own finally.
-  const handleOpenUrl = async (url: string): Promise<void> => {
-    const result = await openPath(url)
-    if (result.status === 'opened') setOpenUrlDialogOpen(false)
-  }
-
-  // Mirrored every render so a command awaiting a native dialog can ask which
-  // video is playing *now* instead of trusting the closure it captured.
-  const currentFilePathRef = useLatestRef(state.filePath)
-
-  // Drag-and-drop: a dropped video opens like a Media-menu pick; a
-  // dropped .srt/.ass/.ssa becomes the current video's subtitle track.
-  const handleDrop = (files: File[]): Promise<void> => {
-    const filePath = state.filePath
-    return handleDroppedFiles(files, {
-      hasVideo: filePath !== undefined,
-      currentFilePath: () => currentFilePathRef.current,
-      pathForFile: (file) => window.kizuna.files.pathForFile(file),
-      openPath: (path) => openPath(path),
-      loadSubtitle: (videoPath, path) => loadExternalSubtitle(openSession(), videoPath, path),
-      appendPlaylistFile: (path) => appendPlaylistFile(path, playlistAppendDeps()),
-      reportError: (message) => recentFiles.reportError(message)
-    })
-  }
-  // Mirrored every render (like showWordPopupRef) so the mount-once listeners
-  // below always call the handler bound to the current state.
-  const handleDropRef = useLatestRef(handleDrop)
-
-  // Subtitle menu > "Load subtitle file…" — the dialog twin of dropping a
-  // subtitle file. The menu item is hidden without a video (see the MenuBar
-  // prop below); the guard here is what makes that a type-level fact.
-  const handleLoadSubtitleFile = (): Promise<void> => {
-    const filePath = state.filePath
-    if (filePath === undefined) return Promise.resolve()
-    return loadSubtitleFromPicker({
-      expectedFilePath: filePath,
-      currentFilePath: () => currentFilePathRef.current,
-      pickPath: () => window.kizuna.media.openSubtitleFile(),
-      session: openSession(),
-      reportError: (message) => recentFiles.reportError(message)
-    })
-  }
-
-  // preventDefault on *both* events, or Chromium navigates the window to the
-  // dropped file instead of handing it to us.
-  useEffect(() => {
-    const onDragOver = (event: DragEvent): void => event.preventDefault()
-    const onDrop = (event: DragEvent): void => {
-      event.preventDefault()
-      void handleDropRef.current(Array.from(event.dataTransfer?.files ?? []))
-    }
-    window.addEventListener('dragover', onDragOver)
-    window.addEventListener('drop', onDrop)
-    return () => {
-      window.removeEventListener('dragover', onDragOver)
-      window.removeEventListener('drop', onDrop)
-    }
-  }, [handleDropRef])
-
   useEffect(() => {
     if (!loopCue) return
     const target = loopSeekTarget(loopCue, state.timePos, state.subtitleOffsetMs)
@@ -1046,9 +718,9 @@ export default function App({
     if (!state.filePath) return
     try {
       const path = await window.kizuna.player.screenshot(state.filePath, state.timePos)
-      recentFiles.reportTransient(`Screenshot saved: ${path}`)
+      mediaSession.banner.reportTransient(`Screenshot saved: ${path}`)
     } catch (err) {
-      recentFiles.reportError(errorMessage(err))
+      mediaSession.banner.reportError(errorMessage(err))
     }
   }
   const keyContext: KeyboardShortcutContext = {
@@ -1082,8 +754,8 @@ export default function App({
         frameStepGuard.current
       ),
     onNavigateLine: () => setLoopCue(null),
-    onPrevFile: () => handleNavigateFile('prev'),
-    onNextFile: () => handleNavigateFile('next'),
+    onPrevFile: () => mediaSession.navigate('prev'),
+    onNextFile: () => mediaSession.navigate('next'),
     onScreenshot: () => void handleScreenshot(),
     onToggleMiniPlayer: () => void handleToggleMiniPlayer(),
     keyBindings: state.keyBindings
@@ -1097,7 +769,7 @@ export default function App({
     suspended:
       optionsOpen ||
       reportOpen ||
-      openUrlDialogOpen ||
+      mediaSession.openUrl.open ||
       cardImageRequest !== null ||
       miningPresentation === 'modal'
   })
@@ -1478,27 +1150,12 @@ export default function App({
         {!miniPlayerActive && (
           <MenuBar
             media={{
-              hasFile: state.filePath !== undefined,
-              onPrevFile: () => handleNavigateFile('prev'),
-              onNextFile: () => handleNavigateFile('next'),
-              onOpenFile: () => recentFiles.openPicker(openSession()),
+              ...mediaSession.mediaMenu,
               playlistOpen,
-              onTogglePlaylist: handleTogglePlaylist,
-              onAddFiles: () => void handleAddFilesToPlaylist(),
-              onAddFolder: () => void handleAddFolderToPlaylist(),
-              onSavePlaylist: handleSavePlaylist,
-              hasPlaylist: playlistState.playlist.entries.length > 0,
-              recentFiles: recentFilesState.recentFiles,
-              mediaOpening: recentFilesState.mediaOpening,
-              onOpenRecent: (path) => recentFiles.openRecent(openSession(), path),
-              onClearRecentFiles: () => recentFiles.clearRecent(window.kizuna),
-              onOpenUrl: () => setOpenUrlDialogOpen(true)
+              onTogglePlaylist: handleTogglePlaylist
             }}
             video={{
-              qualityVisible,
-              quality: displayedYtdlpQuality,
-              qualityReloading,
-              onSetYtdlpQuality: (quality) => void handleSetYtdlpQuality(quality),
+              ...mediaSession.qualityMenu,
               onSetVideoScale: handleSetVideoScale,
               onOpenVideoAdjustments: () => setVideoAdjustmentsOpen(true),
               alwaysOnTop,
@@ -1515,19 +1172,11 @@ export default function App({
               onChangeAudioDelay: handleAudioDelayChange
             }}
             subtitle={{
+              ...mediaSession.subtitleMenu,
               tracks: state.tracks,
               selectedSubtitleId: state.selectedSubtitleId,
-              mediaOpening: recentFilesState.mediaOpening,
-              onSelectSubtitle: handleSelectSubtitle,
-              onLoadSubtitleFile: state.filePath ? () => void handleLoadSubtitleFile() : undefined,
               externalSubtitleEncoding: state.externalSubtitleEncoding,
-              onChangeExternalSubtitleEncoding: handleChangeExternalSubtitleEncoding,
-              urlSubtitleMenu: urlSubtitleState.menu,
               preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
-              urlSubtitleSelectedId: urlSubtitleState.selectedId,
-              urlSubtitleAcquiring: urlSubtitleState.acquiring,
-              onSelectUrlSubtitle: (selectionId) => urlSubtitleController.select(selectionId),
-              onSelectUrlSubtitleOff: () => urlSubtitleController.selectOff(),
               subtitleOffsetMs: state.subtitleOffsetMs,
               onChangeSubtitleOffset: handleSubtitleOffsetChange,
               onApplyOffsetToFolder: state.filePath ? handleApplyOffsetToFolder : undefined,
@@ -1553,10 +1202,10 @@ export default function App({
         )}
       </div>
 
-      {recentFilesState.errorMessage && (
+      {mediaSession.banner.message && (
         <div id="media-error" role="alert">
-          <span>{recentFilesState.errorMessage}</span>
-          <button type="button" aria-label="Dismiss" onClick={() => recentFiles.dismissError()}>
+          <span>{mediaSession.banner.message}</span>
+          <button type="button" aria-label="Dismiss" onClick={mediaSession.banner.dismiss}>
             ×
           </button>
         </div>
@@ -1566,16 +1215,16 @@ export default function App({
         {playlistOpen && !state.fullscreen && !miniPlayerActive && (
           <aside id="left-sidebar-stack" ref={leftSidebarStackRef} aria-label="Playlist">
             <PlaylistSidebar
-              entries={playlistState.playlist.entries}
-              currentIndex={playlistState.playlist.currentIndex}
-              missing={playlistState.missing}
-              repeat={playlistState.playlist.repeat}
-              shuffle={playlistState.playlist.shuffle}
-              onPlay={(index) => void playlistController.playAt(index, playlistLoadDeps())}
-              onRemove={(index) => playlistController.removeAt(index)}
-              onMove={(from, to) => playlistController.moveEntry(from, to)}
-              onSetRepeat={(mode) => playlistController.setRepeat(mode)}
-              onToggleShuffle={() => playlistController.setShuffle(!playlistState.playlist.shuffle)}
+              entries={mediaSession.playlist.state.playlist.entries}
+              currentIndex={mediaSession.playlist.state.playlist.currentIndex}
+              missing={mediaSession.playlist.state.missing}
+              repeat={mediaSession.playlist.state.playlist.repeat}
+              shuffle={mediaSession.playlist.state.playlist.shuffle}
+              onPlay={mediaSession.playlist.play}
+              onRemove={mediaSession.playlist.remove}
+              onMove={mediaSession.playlist.move}
+              onSetRepeat={mediaSession.playlist.setRepeat}
+              onToggleShuffle={mediaSession.playlist.toggleShuffle}
             />
           </aside>
         )}
@@ -1683,12 +1332,12 @@ export default function App({
       />
 
       <OpenUrlDialog
-        open={openUrlDialogOpen}
-        loading={recentFilesState.mediaOpening}
-        recentUrls={recentFilesState.recentFiles.map((file) => file.path).filter(isRemoteUrl)}
-        onSubmit={(url) => void handleOpenUrl(url)}
-        onCancelLoad={() => void window.kizuna.player.cancelLoad()}
-        onClose={() => setOpenUrlDialogOpen(false)}
+        open={mediaSession.openUrl.open}
+        loading={mediaSession.openUrl.loading}
+        recentUrls={mediaSession.openUrl.recentUrls}
+        onSubmit={mediaSession.openUrl.submit}
+        onCancelLoad={mediaSession.openUrl.cancelLoad}
+        onClose={mediaSession.openUrl.close}
       />
 
       <OptionsMenu
@@ -1734,10 +1383,10 @@ export default function App({
             void window.kizuna.playerSettings.openMpvConfigDir().then(
               (error) => {
                 if (error) {
-                  recentFiles.reportError(`Could not open the mpv config folder: ${error}`)
+                  mediaSession.banner.reportError(`Could not open the mpv config folder: ${error}`)
                 }
               },
-              () => recentFiles.reportError('Could not open the mpv config folder.')
+              () => mediaSession.banner.reportError('Could not open the mpv config folder.')
             )
           },
           onAudioDevicesRequest: audioDeviceController.requestDevices

@@ -5,11 +5,7 @@ import type { Mock } from 'vitest'
 import { usePlayerEvents, type UsePlayerEventsInput } from '@src/renderer/src/state/usePlayerEvents'
 import { INACTIVE_MINI_PLAYER } from '@src/renderer/src/state/miniPlayer'
 import type { KizunaApi } from '@src/shared/preloadApi'
-import type { RecentFilesController } from '@src/renderer/src/state/recentFilesController'
-import type {
-  PlaylistController,
-  PlaylistLoadDeps
-} from '@src/renderer/src/state/playlistController'
+import type { MediaSessionEvents } from '@src/renderer/src/state/useMediaSession'
 import type { PlayerApi } from '@src/renderer/src/components/BottomBar'
 
 /** A minimal `onX(cb) => unsub` registry: tracks active listeners per event
@@ -53,17 +49,16 @@ function setup() {
       rendererReady: vi.fn()
     }
   } as unknown as KizunaApi
-  const recentFiles = {
-    getState: vi.fn(() => ({ mediaOpening: false })),
+  const mediaSession: MediaSessionEvents = {
     openPath: vi.fn().mockResolvedValue({ status: 'opened' }),
+    handleOpenNeighbor: vi.fn().mockResolvedValue(undefined),
+    isMediaOpening: vi.fn(() => false),
+    isPlaylistPlaybackCurrent: vi.fn(() => false),
+    handlePlaylistEof: vi.fn().mockResolvedValue(true),
+    nextPlaylist: vi.fn().mockResolvedValue(undefined),
+    previousPlaylist: vi.fn().mockResolvedValue(undefined),
     reportError: vi.fn()
-  } as unknown as RecentFilesController
-  const playlistController = {
-    isPlaybackCurrent: vi.fn(() => false),
-    handleEof: vi.fn().mockResolvedValue(true),
-    next: vi.fn().mockResolvedValue(undefined),
-    prev: vi.fn().mockResolvedValue(undefined)
-  } as unknown as PlaylistController
+  }
   const playerAdapter: PlayerApi = {
     setPause: vi.fn().mockResolvedValue(undefined),
     seek: vi.fn().mockResolvedValue(undefined),
@@ -71,25 +66,19 @@ function setup() {
     setSpeed: vi.fn().mockResolvedValue(undefined),
     setMuted: vi.fn().mockResolvedValue(undefined)
   }
-  const loadDeps: PlaylistLoadDeps = { load: vi.fn(), play: vi.fn() }
-  const openPath = vi.fn().mockResolvedValue({ status: 'opened' })
   const input: UsePlayerEventsInput = {
     dispatch,
     bridge,
     playerAdapter,
-    handleOpenNeighbor: vi.fn().mockResolvedValue(undefined),
     stateRef: { current: { autoPlayNext: false, filePath: '/a.mkv', paused: false } },
-    recentFiles,
-    playlistController,
-    playlistLoadDeps: vi.fn(() => loadDeps),
+    mediaSession,
     miniPlayerRef: { current: INACTIVE_MINI_PLAYER },
     setMiniPlayer: vi.fn(),
     setAlwaysOnTop: vi.fn(),
-    applyMiniPlayerEffect: vi.fn().mockResolvedValue(undefined),
-    openPath
+    applyMiniPlayerEffect: vi.fn().mockResolvedValue(undefined)
   }
   const hook = renderHook(({ value }) => usePlayerEvents(value), { initialProps: { value: input } })
-  return { registry, bridge, recentFiles, playlistController, playerAdapter, loadDeps, input, hook }
+  return { registry, bridge, mediaSession, playerAdapter, input, hook }
 }
 
 afterEach(() => {
@@ -125,18 +114,18 @@ describe('usePlayerEvents', () => {
   })
 
   it('routes an EOF rising edge to folder auto-advance when autoPlayNext is on and the queue is idle', () => {
-    const { registry, input } = setup()
+    const { registry, input, mediaSession } = setup()
     input.stateRef.current.autoPlayNext = true
     registry.emit('eof', true)
-    expect(input.handleOpenNeighbor).toHaveBeenCalledWith('next')
+    expect(mediaSession.handleOpenNeighbor).toHaveBeenCalledWith('next')
   })
 
   it('routes an EOF rising edge to the play queue when it owns playback, regardless of autoPlayNext', () => {
-    const { registry, input, playlistController, loadDeps } = setup()
-    ;(playlistController.isPlaybackCurrent as Mock).mockReturnValue(true)
+    const { registry, mediaSession } = setup()
+    ;(mediaSession.isPlaylistPlaybackCurrent as Mock).mockReturnValue(true)
     registry.emit('eof', true)
-    expect(playlistController.handleEof).toHaveBeenCalledWith(loadDeps)
-    expect(input.handleOpenNeighbor).not.toHaveBeenCalled()
+    expect(mediaSession.handlePlaylistEof).toHaveBeenCalledTimes(1)
+    expect(mediaSession.handleOpenNeighbor).not.toHaveBeenCalled()
   })
 
   it('routes the stop media key through the player adapter', () => {
@@ -147,24 +136,24 @@ describe('usePlayerEvents', () => {
   })
 
   it('routes the next media key to the play queue when it is active, else the folder neighbor', () => {
-    const { registry, input, playlistController, loadDeps } = setup()
+    const { registry, mediaSession } = setup()
     registry.emit('mediaKey', 'next')
-    expect(input.handleOpenNeighbor).toHaveBeenCalledWith('next')
-    ;(playlistController.isPlaybackCurrent as Mock).mockReturnValue(true)
+    expect(mediaSession.handleOpenNeighbor).toHaveBeenCalledWith('next')
+    ;(mediaSession.isPlaylistPlaybackCurrent as Mock).mockReturnValue(true)
     registry.emit('mediaKey', 'next')
-    expect(playlistController.next).toHaveBeenCalledWith(loadDeps)
+    expect(mediaSession.nextPlaylist).toHaveBeenCalledTimes(1)
   })
 
   it('delivers a launch-open path through the shared openPath closure', () => {
     const { registry, input } = setup()
     registry.emit('openPath', '/opened/from/launch.mkv')
-    expect(input.openPath).toHaveBeenCalledWith('/opened/from/launch.mkv')
+    expect(input.mediaSession.openPath).toHaveBeenCalledWith('/opened/from/launch.mkv')
   })
 
-  it('reports a launch error through recentFiles.reportError', () => {
-    const { registry, recentFiles } = setup()
+  it('reports a launch error through the media session', () => {
+    const { registry, mediaSession } = setup()
     registry.emit('launchError', 'could not open the launch file')
-    expect(recentFiles.reportError).toHaveBeenCalledWith('could not open the launch file')
+    expect(mediaSession.reportError).toHaveBeenCalledWith('could not open the launch file')
   })
 
   it('does not duplicate subscriptions on a rerender with stable dependencies', () => {

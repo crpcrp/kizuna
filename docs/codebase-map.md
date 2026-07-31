@@ -27,13 +27,13 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 |---|---|---|
 | Application shell and window | `App.tsx`, `components/WindowChrome.tsx`, `state/appChrome.ts`, `state/windowSizing.ts`, `state/usePlayerEvents.ts`, `shared/windowBounds.ts` | `index.ts`, `appLifecycle.ts`, `windowOptions.ts` |
 | Playback and player controls | `components/BottomBar.tsx`, `components/MenuBar.tsx`, `state/playerAdapter.ts`, `state/playbackCommands.ts`, `state/keyActions.ts`, `state/perFileOffsets.ts`, `shared/playerSettings.ts` | `playerBridge.ts`, `mpv/controller.ts`, `mpv/ipcClient.ts` |
-| Media loading and subtitles | `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
-| Playlists and history | `components/PlaylistSidebar.tsx`, `state/playlistController.ts`, `state/playlistAppend.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/folderNavigation.ts` |
+| Media loading and subtitles | `state/useMediaSession.ts`, `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
+| Playlists and history | `state/useMediaSession.ts`, `components/PlaylistSidebar.tsx`, `state/playlistController.ts`, `state/playlistAppend.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/folderNavigation.ts` |
 | Tokenization | `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |
 | Dictionaries and word lookup | `components/WordPopup.tsx`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
 | Knowledge tracking | subtitle components, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
 | Anki card creation | word and subtitle-report UI, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
-| Network media and subtitles | `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
+| Network media and subtitles | `state/useMediaSession.ts`, `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `state/ytdlpQualityReload.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
 | Settings and appearance | `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `electron-builder.cjs` |
 
