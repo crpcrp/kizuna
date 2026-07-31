@@ -1,19 +1,10 @@
 import './theme.css'
 import './App.css'
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore
-} from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
-import type { OptionsCategory } from './components/options/types'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -41,23 +32,9 @@ import { createSettingsPersistence } from './state/settingsPersistence'
 import { useSettingsLifecycle } from './state/useSettingsLifecycle'
 import { usePlayerEvents } from './state/usePlayerEvents'
 import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
-import { createThemeController } from './state/themeController'
-import {
-  createOptionsDataController,
-  DEFAULT_DICTIONARIES_DATA,
-  DEFAULT_KNOWLEDGE_SETTINGS,
-  DEFAULT_SYNC_STATUS,
-  optionsDataBridge
-} from './state/optionsData'
-import {
-  loadCategoryDomains,
-  importYomitanDict,
-  setYomitanEnabled,
-  setYomitanFallbackOnly,
-  reorderYomitanDicts,
-  removeYomitanDict,
-  changeAnkiSettings
-} from './state/integrationActions'
+import { useAppearance } from './state/useAppearance'
+import { useOptionsDialog } from './state/useOptionsDialog'
+import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
@@ -65,20 +42,18 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
-import { applyLevelColors } from './util/levelColors'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
 import { type AudioDevice } from '../../shared/audioDevice'
-import type { ImportProgress } from '../../shared/dictionary'
-import type { AnkiSettings } from '../../shared/anki'
 
 // Root React component: the runnable player shell. Wires the reducer + the
 // feature hooks that own each workflow (state/useMediaSession.ts for media,
 // state/usePlaybackWindow.ts for playback and window,
-// state/useVocabularyMining.ts for vocabulary and mining, and their siblings)
-// into the presentational components
+// state/useVocabularyMining.ts for vocabulary and mining,
+// state/useOptionsDialog.ts for settings and optional integrations, and their
+// siblings) into the presentational components
 // (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
 //
 // SSR-safety: the render path never touches `window` directly. All bridge
@@ -110,7 +85,6 @@ export default function App({
   const playerAdapter = useMemo(() => buildPlayerAdapter(dispatch), [dispatch])
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
-  const [optionsOpen, setOptionsOpen] = useState(false)
   // The per-cue loop is stored together with the cue list it was picked from,
   // so a new list (file or subtitle-track switch) drops it by derivation
   // instead of through a reset effect.
@@ -139,45 +113,6 @@ export default function App({
   // Whether the playlist (play-queue) side panel is shown, restored and
   // toggled exactly like sidebarOpen above.
   const [playlistOpen, setPlaylistOpen] = useState(false)
-  // Options dialog's optional-integration data (MeCab/Yomitan dictionaries,
-  // Anki connection + deck/model/field lists, knowledge settings + sync
-  // status) — cached per-domain, isolated on failure. See state/optionsData.ts.
-  const [optionsData] = useState(() => createOptionsDataController(optionsDataBridge))
-  const dictionariesState = useSyncExternalStore(
-    optionsData.subscribe,
-    () => optionsData.getState('dictionaries'),
-    () => optionsData.getState('dictionaries')
-  )
-  const ankiState = useSyncExternalStore(
-    optionsData.subscribe,
-    () => optionsData.getState('anki'),
-    () => optionsData.getState('anki')
-  )
-  const knowledgeState = useSyncExternalStore(
-    optionsData.subscribe,
-    () => optionsData.getState('knowledge'),
-    () => optionsData.getState('knowledge')
-  )
-  const setupState = useSyncExternalStore(
-    optionsData.subscribe,
-    () => optionsData.getState('setup'),
-    () => optionsData.getState('setup')
-  )
-  const dictionariesData = dictionariesState.data ?? DEFAULT_DICTIONARIES_DATA
-  const knowledgeSettings = knowledgeState.data?.settings ?? DEFAULT_KNOWLEDGE_SETTINGS
-  const syncStatus = knowledgeState.data?.syncStatus ?? DEFAULT_SYNC_STATUS
-
-  // Lazily loads an Options category's domain(s) when it's shown (see
-  // OptionsMenu's onCategoryOpen and domainsForCategory in integrationActions),
-  // instead of fetching every optional integration at app startup. A
-  // cached/ready domain is a no-op; one domain's rejection never blocks the
-  // others — see optionsData.ts's per-domain error isolation.
-  const handleOptionsCategoryOpen = useCallback(
-    (category: OptionsCategory): void => {
-      loadCategoryDomains(optionsData, category)
-    },
-    [optionsData]
-  )
   // Coalesces rapid PlayerSettings patches (subtitle-drag mousemove ticks,
   // Options-menu edits) into a single debounced write instead of one IPC
   // round-trip (and synchronous writeFileSync) per intermediate value. See
@@ -185,18 +120,17 @@ export default function App({
   const settingsPersistenceRef = useRef(
     createSettingsPersistence((patch) => window.kizuna.playerSettings.setSettings(patch))
   )
-  // Resolves the appearance setting ('system'|'light'|'dark') to the concrete
-  // theme and stamps it on <html data-theme="…">, which is what the semantic
-  // CSS variables in App.css key off. In system mode it also follows OS
-  // prefers-color-scheme changes — see state/themeController.ts.
-  const [themeController] = useState(() =>
-    createThemeController(
-      (theme) => {
-        document.documentElement.dataset.theme = theme
-      },
-      (query) => window.matchMedia(query)
-    )
-  )
+  // Options dialog lifecycle: its open state, the per-domain optional-integration
+  // data behind it (dictionaries, Anki, knowledge, setup), and the dictionary/Anki
+  // actions that refresh what they changed — see state/useOptionsDialog.ts.
+  const options = useOptionsDialog({
+    bridge: kizuna,
+    settingsPersistenceRef,
+    reportError: mediaSession.banner.reportError
+  })
+  // Applies the appearance settings ('system'|'light'|'dark' theme, underline
+  // color overrides) to <html> — see state/useAppearance.ts.
+  useAppearance({ appearance: state.appearance, levelColors: state.levelColors })
   // The per-file playback values applied after every load, hydrated from
   // settings.json below and owned by usePlaybackWindow afterwards.
   const perFileValues = usePerFileValues(state.videoAdjustments)
@@ -218,6 +152,12 @@ export default function App({
   const activeCue = findActiveCue(state.cues, offsetTimePos(state.timePos, state.subtitleOffsetMs))
   const activeCueKey = activeCue ? cueKey(activeCue) : undefined
   const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
+  // Known-word underlines are painted only for a Japanese subtitle track, and
+  // only while the Known-words option has coloring switched on.
+  const coloredLevels =
+    japaneseSubtitleSelected && options.data.knowledgeSettings.coloringEnabled
+      ? state.knownLevels
+      : undefined
 
   // Vocabulary and mining lifecycle: tokenization/knowledge caches, the word
   // popup and its Anki mine, the subtitle report, bulk mining, and the
@@ -232,9 +172,9 @@ export default function App({
     activeCueKey,
     japaneseSubtitleSelected,
     sidebarOpen,
-    optionsData,
-    dictionarySettings: dictionariesState.data,
-    targetDeckName: ankiState.data?.settings.deckName
+    optionsData: options.controller,
+    dictionarySettings: options.data.dictionaries,
+    targetDeckName: options.data.anki?.settings.deckName
   })
   // Bulk mining's compact surface reserves right-stack width like a panel, so
   // the window-sizing feature below has to know which surface is showing.
@@ -275,25 +215,6 @@ export default function App({
     mediaSession: mediaSession.events,
     ...playbackWindow.playerEvents
   })
-
-  // Paints the user's underline-color overrides onto <html> as inline custom
-  // properties, which outrank both theme.css blocks — so an override holds
-  // across a light/dark switch, and a cleared one falls back to the theme.
-  useEffect(() => {
-    applyLevelColors(document.documentElement.style, state.levelColors)
-  }, [state.levelColors])
-
-  // Applies the appearance setting to the DOM whenever it changes (initial
-  // mount applies the default until loadSettings lands, so the window is
-  // never themeless). Disposes the OS-change listener on unmount.
-  useEffect(() => {
-    themeController.setAppearance(state.appearance)
-  }, [state.appearance, themeController])
-  useEffect(() => {
-    return () => {
-      themeController.dispose()
-    }
-  }, [themeController])
 
   const [modifiers] = useState(createModifierTracker)
 
@@ -373,7 +294,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: optionsOpen || mediaSession.openUrl.open || vocabulary.modalOpen
+    suspended: options.open || mediaSession.openUrl.open || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -383,35 +304,21 @@ export default function App({
     window.kizuna.player.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
   }
 
-  // Imports a Yomitan dictionary zip (bytes already read by OptionsMenu's
-  // native file input), then refreshes the list so the new dictionary
-  // appears immediately.
-  const handleImportYomitanDict = async (bytes: Uint8Array): Promise<void> => {
-    await importYomitanDict(window.kizuna.dict, optionsData, bytes)
-  }
-
-  const handleSubscribeImportProgress = (cb: (progress: ImportProgress) => void): (() => void) =>
-    window.kizuna.dict.onImportProgress(cb)
-
-  const handleSetYomitanEnabled = async (id: number, enabled: boolean): Promise<void> => {
-    await setYomitanEnabled(window.kizuna.dict, optionsData, id, enabled)
-  }
-
-  const handleSetYomitanFallbackOnly = async (id: number, fallbackOnly: boolean): Promise<void> => {
-    await setYomitanFallbackOnly(window.kizuna.dict, optionsData, id, fallbackOnly)
-  }
-
-  const handleReorderYomitanDicts = async (orderedIds: number[]): Promise<void> => {
-    await reorderYomitanDicts(window.kizuna.dict, optionsData, orderedIds)
-  }
-
-  const handleRemoveYomitanDict = async (id: number): Promise<void> => {
-    await removeYomitanDict(window.kizuna.dict, optionsData, id)
-  }
-
-  const handleChangeAnkiSettings = async (patch: Partial<AnkiSettings>): Promise<void> => {
-    await changeAnkiSettings(window.kizuna.anki, optionsData, patch)
-  }
+  // The Options dialog's props, assembled from their owners: reducer-backed
+  // settings, the dialog's own integration data/actions, the playback feature's
+  // mpv-output rows, and the vocabulary feature's cache-invalidating rows.
+  const optionsMenu = buildOptionsMenuProps({
+    open: options.open,
+    settings: state,
+    dispatch,
+    heldModifiers: modifiers.held,
+    data: options.data,
+    actions: options.actions,
+    onClose: options.closeDialog,
+    onCategoryOpen: options.onCategoryOpen,
+    playback: playbackWindow.optionsPlayback,
+    knowledge: vocabulary.knowledgeOptions
+  })
 
   return (
     <div
@@ -458,7 +365,7 @@ export default function App({
               onCycleAbLoop: handleCycleAbLoop
             }}
             vocabulary={vocabulary.vocabularyMenu}
-            onOpenOptions={() => setOptionsOpen(true)}
+            onOpenOptions={options.openDialog}
             onOpenChange={setMenuBarOpen}
           />
         )}
@@ -503,11 +410,7 @@ export default function App({
             cues={state.cues}
             timePos={offsetTimePos(state.timePos, state.subtitleOffsetMs)}
             tokens={japaneseSubtitleSelected ? state.activeTokens : undefined}
-            levels={
-              japaneseSubtitleSelected && knowledgeSettings.coloringEnabled
-                ? state.knownLevels
-                : undefined
-            }
+            levels={coloredLevels}
             {...vocabulary.subtitleOverlay}
             style={miniPlayerSubtitleStyle(state.subtitleStyle, miniPlayerActive)}
             onDragStart={state.subtitleDragEnabled ? handleSubtitleDragStart : undefined}
@@ -524,11 +427,7 @@ export default function App({
                   cues={state.cues}
                   activeCueKey={activeCueKey}
                   tokens={japaneseSubtitleSelected ? state.allCueTokens : {}}
-                  levels={
-                    japaneseSubtitleSelected && knowledgeSettings.coloringEnabled
-                      ? state.knownLevels
-                      : undefined
-                  }
+                  levels={coloredLevels}
                   {...vocabulary.subtitleSidebar}
                   onSelectCue={handleSelectSidebarCue}
                 />
@@ -578,111 +477,7 @@ export default function App({
         onClose={mediaSession.openUrl.close}
       />
 
-      <OptionsMenu
-        open={optionsOpen}
-        onClose={() => {
-          setOptionsOpen(false)
-          void settingsPersistenceRef.current.flush()
-        }}
-        keybindings={{
-          keyBindings: state.keyBindings,
-          heldModifiers: modifiers.held,
-          onChangeKeyBinding: (action, binding) =>
-            dispatch({ type: 'setKeyBinding', action, binding })
-        }}
-        playback={{
-          ...playbackWindow.optionsPlayback,
-          skipSeconds: state.skipSeconds,
-          rightClickTogglePause: state.rightClickTogglePause,
-          autoPlayNext: state.autoPlayNext,
-          preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
-          screenshotFolder: state.screenshotFolder,
-          mpvUserConfig: state.mpvUserConfig,
-          mpvExtraArgs: state.mpvExtraArgs,
-          onChangeSkipSeconds: (value) => dispatch({ type: 'setSkipSeconds', value }),
-          onChangeRightClickTogglePause: (value) =>
-            dispatch({ type: 'setRightClickTogglePause', value }),
-          onChangeAutoPlayNext: (value) => dispatch({ type: 'setAutoPlayNext', value }),
-          onChangePreferredUrlSubtitleLanguage: (value) => {
-            dispatch({ type: 'setPreferredUrlSubtitleLanguage', value })
-            settingsPersistenceRef.current.schedule({ preferredUrlSubtitleLanguage: value })
-          },
-          onChangeScreenshotFolder: (value) => dispatch({ type: 'setScreenshotFolder', value }),
-          onChangeMpvUserConfig: (value) => dispatch({ type: 'setMpvUserConfig', value }),
-          onChangeMpvExtraArgs: (value) => dispatch({ type: 'setMpvExtraArgs', value }),
-          onOpenMpvConfigDir: () => {
-            void window.kizuna.playerSettings.openMpvConfigDir().then(
-              (error) => {
-                if (error) {
-                  mediaSession.banner.reportError(`Could not open the mpv config folder: ${error}`)
-                }
-              },
-              () => mediaSession.banner.reportError('Could not open the mpv config folder.')
-            )
-          }
-        }}
-        appearance={{
-          appearance: state.appearance,
-          levelColors: state.levelColors,
-          onChangeAppearance: (value) => dispatch({ type: 'setAppearance', value }),
-          onChangeLevelColor: (level, color) => dispatch({ type: 'setLevelColor', level, color })
-        }}
-        subtitles={{
-          subtitleStyle: state.subtitleStyle,
-          subtitleDragEnabled: state.subtitleDragEnabled,
-          translationEnabled: state.translationEnabled,
-          onChangeSubtitleStyle: (value) => dispatch({ type: 'setSubtitleStyle', value }),
-          onChangeSubtitleDragEnabled: (value) =>
-            dispatch({ type: 'setSubtitleDragEnabled', value }),
-          onChangeTranslationEnabled: (value) => {
-            dispatch({ type: 'setTranslationEnabled', value })
-            settingsPersistenceRef.current.schedule({ translationEnabled: value })
-          }
-        }}
-        dictionaries={{
-          mecabDicts: dictionariesData.mecabDicts,
-          currentMecabDictId: dictionariesData.currentMecabDictId,
-          yomitanDicts: dictionariesData.yomitanDicts,
-          loadError: dictionariesState.error,
-          popupSettings: state.popupSettings,
-          onSelectMecabDict: vocabulary.knowledgeOptions.onSelectMecabDict,
-          onImportYomitanDict: handleImportYomitanDict,
-          subscribeImportProgress: handleSubscribeImportProgress,
-          onSetYomitanEnabled: handleSetYomitanEnabled,
-          onSetYomitanFallbackOnly: handleSetYomitanFallbackOnly,
-          onReorderYomitanDicts: handleReorderYomitanDicts,
-          onRemoveYomitanDict: handleRemoveYomitanDict,
-          onChangePopupSettings: (value) => dispatch({ type: 'setPopupSettings', value })
-        }}
-        anki={{
-          ankiSettings: ankiState.data?.settings,
-          ankiDeckNames: ankiState.data?.deckNames,
-          ankiModelNames: ankiState.data?.modelNames,
-          ankiModelFields: ankiState.data?.modelFields,
-          ankiPing: () => window.kizuna.anki.ping(),
-          onChangeAnkiSettings: handleChangeAnkiSettings,
-          loadError: ankiState.error
-        }}
-        knowledge={{
-          wanikaniConfigured: knowledgeSettings.hasWanikaniToken,
-          onSaveWanikaniToken: vocabulary.knowledgeOptions.onSaveWanikaniToken,
-          ankiDeckNames: ankiState.data?.deckNames ?? [],
-          ankiModelFields: ankiState.data?.modelFields ?? [],
-          knowledgeSettings,
-          onChangeKnowledgeSettings: vocabulary.knowledgeOptions.onChangeKnowledgeSettings,
-          loadError: knowledgeState.error,
-          syncStatus,
-          onSyncNow: vocabulary.knowledgeOptions.onSyncNow
-        }}
-        setup={{
-          setup: setupState.data,
-          mecabDicts: dictionariesData.mecabDicts,
-          yomitanDicts: dictionariesData.yomitanDicts,
-          wanikaniConfigured: knowledgeSettings.hasWanikaniToken,
-          syncStatus
-        }}
-        onCategoryOpen={handleOptionsCategoryOpen}
-      />
+      <OptionsMenu {...optionsMenu} />
 
       <WordPopup
         {...vocabulary.wordPopup}
