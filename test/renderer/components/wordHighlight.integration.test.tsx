@@ -11,6 +11,7 @@ import { type DictLookupBridge, lookupWordPopup } from '@src/renderer/src/state/
 import type { Token } from '@src/shared/token'
 import { createVocabularySpanController } from '@src/renderer/src/state/vocabularySpanController'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const ROWS = ['生き返る', '生き', '何とかなる', '何とか', '行きたければ', '行き'].map(
   (expression, index) => ({
@@ -134,22 +135,13 @@ describe('compound knowledge projection rendering', () => {
     { surface: '様', reading: 'さま', lemma: '様', pos: '名詞', startOffset: 3 }
   ]
   async function resolvedSpans() {
-    const compound: LookupResult = {
+    const compound: LookupResult = makeLookupResult({
       expression: '神様',
       matchedSurface: '神様',
       reading: '神様',
       glossary: '',
-      dictTitle: 'Fake Dict',
-      dictId: 1,
-      stylesCss: null,
-      frequency: null,
-      frequencyDisplay: null,
-      pitchAccent: null,
-      defTags: '',
-      termTags: '',
-      score: 0,
-      rules: ''
-    }
+      dictTitle: 'Fake Dict'
+    })
     const result = await createVocabularySpanController().resolve({
       dict: { lookup: (lemma) => Promise.resolve(lemma === '神' ? [compound] : []) },
       knowledge: { detailsFor: () => Promise.resolve({ 神様: { level: 'known', sources: [] } }) },

@@ -10,6 +10,7 @@ import {
 import { createSettingsFile, type SettingsFileSystem } from '@src/main/services/settingsFile'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import { defaultAnkiSettings } from '@src/shared/anki'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 describe('mergeSettings', () => {
   it('returns defaults for undefined/null input', () => {
@@ -637,16 +638,6 @@ describe('selectDict', () => {
 })
 
 describe('createSettingsStore', () => {
-  function fakeIo(initial?: string): { read(): string | undefined; write(s: string): void } {
-    let stored = initial
-    return {
-      read: () => stored,
-      write: (s: string) => {
-        stored = s
-      }
-    }
-  }
-
   it('reads undefined io as defaults', () => {
     const store = createSettingsStore(fakeIo(undefined))
     expect(store.get()).toEqual(defaultSettings)

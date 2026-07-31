@@ -34,6 +34,7 @@ import type {
   KnowledgeDetails,
   KnowledgeLevel,
   KnowledgeSource,
+  KnowledgeTuning,
   PublicKnowledgeSettings,
   SyncStatus
 } from './knowledge'
@@ -198,7 +199,7 @@ export interface KizunaApi {
     syncStatus(): Promise<SyncStatus>
     getSettings(): Promise<PublicKnowledgeSettings>
     setSettings(
-      patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>> & {
+      patch: Partial<KnowledgeTuning> & {
         wanikaniToken?: string
       }
     ): Promise<PublicKnowledgeSettings>

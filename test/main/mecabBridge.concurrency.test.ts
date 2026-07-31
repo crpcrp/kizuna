@@ -1,19 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mapWithConcurrency } from '@src/main/mecabBridge'
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (error: unknown) => void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
+import { deferred } from '@test/harness/deferred'
 
 describe('mapWithConcurrency', () => {
   it('never starts more tasks than the concurrency limit', async () => {

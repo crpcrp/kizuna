@@ -20,6 +20,7 @@ import {
 } from '@test/harness/fakeAnkiConnect'
 import { WANIKANI_BASE } from '@src/main/services/wanikani/client'
 import type { HttpFetch } from '@src/main/services/http'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
   let resolve!: () => void
@@ -28,16 +29,6 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
       resolve = done
     }),
     resolve
-  }
-}
-
-function fakeIo(initial?: string): { read(): string | undefined; write(s: string): void } {
-  let stored = initial
-  return {
-    read: () => stored,
-    write: (s: string) => {
-      stored = s
-    }
   }
 }
 

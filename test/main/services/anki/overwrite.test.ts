@@ -14,23 +14,10 @@ import {
   type FakeAnkiConnectRoute,
   type FakeAnkiConnectRouteFn
 } from '@test/harness/fakeAnkiConnect'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const token: Token = { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 }
-const result: LookupResult = {
-  expression: '猫',
-  reading: 'ねこ',
-  glossary: 'cat',
-  dictTitle: 'yomitan-sample',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 
 const configuredAnkiSettings = {

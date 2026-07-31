@@ -4,6 +4,7 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
 import type { MiningCandidate, ResolvedEntry } from '@src/renderer/src/state/bulkMining'
 import { runBulkMining, type BulkMineBridges } from '@src/renderer/src/state/bulkMiningRunner'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function token(lemma: string): Token {
   return {
@@ -20,21 +21,7 @@ function candidate(lemma: string): MiningCandidate {
 }
 
 function entry(expression: string): LookupResult {
-  return {
-    expression,
-    reading: '',
-    glossary: '',
-    dictTitle: 'test',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+  return makeLookupResult({ expression, reading: '', glossary: '' })
 }
 
 function settings(overrides: Partial<AnkiSettings> = {}): AnkiSettings {

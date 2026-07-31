@@ -11,6 +11,7 @@ import type {
   VocabularySpanController,
   VocabularySpanEpoch
 } from '@src/renderer/src/state/vocabularySpanController'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const epoch: VocabularySpanEpoch = {
   file: 1,
@@ -23,22 +24,12 @@ const cues: Cue[] = [{ start: 0, end: 1, text: 'word' }]
 const tokens: Token[] = [
   { surface: 'word', reading: '', lemma: 'word', pos: 'noun', startOffset: 0 }
 ]
-const result: LookupResult = {
+const result: LookupResult = makeLookupResult({
   expression: 'word',
   matchedSurface: 'word',
   reading: '',
-  glossary: '',
-  dictTitle: 'test',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+  glossary: ''
+})
 
 function input(overrides: Partial<WholeTrackVocabularyInput> = {}): WholeTrackVocabularyInput {
   return {

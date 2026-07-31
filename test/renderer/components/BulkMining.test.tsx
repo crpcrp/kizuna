@@ -3,6 +3,7 @@ import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BulkMining, { type BulkMiningProps } from '@src/renderer/src/components/BulkMining'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const token = (surface: string, lemma = surface) => ({
   surface,
@@ -11,21 +12,8 @@ const token = (surface: string, lemma = surface) => ({
   pos: 'noun' as const,
   startOffset: 0
 })
-const entry = (frequency: number | null, frequencyDisplay: string | null = null): LookupResult => ({
-  expression: 'x',
-  reading: '',
-  glossary: '',
-  dictTitle: 'test',
-  dictId: 1,
-  stylesCss: null,
-  frequency,
-  frequencyDisplay,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-})
+const entry = (frequency: number | null, frequencyDisplay: string | null = null): LookupResult =>
+  makeLookupResult({ expression: 'x', reading: '', glossary: '', frequency, frequencyDisplay })
 const candidates = [
   { lemma: '食べる', token: token('食べた', '食べる'), sentence: '食べた', count: 2 },
   { lemma: '猫', token: token('猫'), sentence: '猫', count: 1 }

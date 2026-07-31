@@ -1,36 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerUrlSubtitleBridge, type UrlSubtitleServiceLike } from '@src/main/urlSubtitleBridge'
-import type { IpcMainHandleLike, IpcMainOnLike } from '@src/main/ipc'
 import { URL_SUBTITLE_CHANNELS } from '@src/shared/ipcChannels'
+import { fakeIpc } from '@test/harness/fakeIpcMain'
 
 const URL = 'https://www.youtube.com/watch?v=abc123'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type HandleFn = (event: unknown, ...args: any[]) => unknown
-type OnFn = (event: unknown, ...args: unknown[]) => void
-
-/** Fake ipcMain: records enumerate/acquire handles and the cancel listener. */
-function fakeIpc(): {
-  ipc: IpcMainHandleLike<unknown> & IpcMainOnLike<unknown>
-  handlers: Map<string, HandleFn>
-  listeners: Map<string, OnFn>
-  invoke(channel: string, ...args: unknown[]): unknown
-  send(channel: string, ...args: unknown[]): void
-} {
-  const handlers = new Map<string, HandleFn>()
-  const listeners = new Map<string, OnFn>()
-  const ipc: IpcMainHandleLike<unknown> & IpcMainOnLike<unknown> = {
-    handle: (channel, listener) => handlers.set(channel, listener),
-    on: (channel, listener) => listeners.set(channel, listener)
-  }
-  return {
-    ipc,
-    handlers,
-    listeners,
-    invoke: (channel, ...args) => handlers.get(channel)!({}, ...args),
-    send: (channel, ...args) => listeners.get(channel)?.({}, ...args)
-  }
-}
 
 function fakeService(): UrlSubtitleServiceLike {
   return {

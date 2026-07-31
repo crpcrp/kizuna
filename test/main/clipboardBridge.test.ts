@@ -1,17 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerClipboardBridge, type ClipboardWriter } from '@src/main/clipboardBridge'
 import { CLIPBOARD_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
-
-type FakeEvent = { senderId: number }
-
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => handlers.set(channel, listener)
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc } from '@test/harness/fakeIpcMain'
 
 describe('registerClipboardBridge', () => {
   it('forwards the exact text to the injected clipboard writer', () => {

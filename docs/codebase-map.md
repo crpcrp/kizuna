@@ -60,6 +60,13 @@ Keep the production adapter in the main process behind a narrow injected
 interface. Tests should use a fake in `test/harness/` or a committed fixture,
 not a live binary, account, or network service.
 
+Reach for the shared harness before writing a local fake or fixture:
+`fakeIpcMain.ts` (records the handlers a bridge registers), `fakeSettingsIo.ts`
+(in-memory settings file), `deferred.ts` (a promise the test settles),
+`dictFixtures.ts` (`makeLookupResult`, `makeDictInfo`), and
+`fakeKizunaApi.ts` (the typed preload API). Extend one of these rather than
+copying it, so a change to the shape stays a single edit.
+
 ### Add persisted settings
 
 Define defaults and normalization in `src/main/services/settings.ts`, preserve

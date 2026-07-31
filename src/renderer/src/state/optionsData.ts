@@ -2,7 +2,11 @@ import type { McDict } from '../../../shared/mecab'
 import type { DictInfo } from '../../../shared/dictionary'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import type { BundledBinaryStatus } from '../../../shared/integrationStatus'
-import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
+import {
+  DEFAULT_KNOWLEDGE_TUNING,
+  type PublicKnowledgeSettings,
+  type SyncStatus
+} from '../../../shared/knowledge'
 import { errorMessage } from '../util/errorMessage'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
@@ -95,12 +99,7 @@ export const DEFAULT_DICTIONARIES_DATA: DictionariesData = {
 
 export const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
   hasWanikaniToken: false,
-  ankiKnownDecks: [],
-  ankiKnownField: '',
-  knownIntervalDays: 21,
-  wellKnownIntervalDays: 90,
-  coloringEnabled: true,
-  staleAfterHours: 23
+  ...DEFAULT_KNOWLEDGE_TUNING
 }
 
 export const DEFAULT_SYNC_STATUS: SyncStatus = {

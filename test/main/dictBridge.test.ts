@@ -6,52 +6,13 @@ import {
   type DictServiceLike
 } from '@src/main/dictBridge'
 import { DICT_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { DictInfo, ImportResult, LookupResult } from '@src/shared/dictionary'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors mecabBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import { makeDictInfo, makeLookupResult } from '@test/harness/dictFixtures'
 
 const sampleImportResult: ImportResult = { dictId: 1, termCount: 6, metaCount: 0 }
-const sampleLookupResults: LookupResult[] = [
-  {
-    expression: '猫',
-    reading: 'ねこ',
-    glossary: 'cat',
-    dictTitle: 'yomitan-sample',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
-]
-const sampleDicts: DictInfo[] = [
-  {
-    id: 1,
-    title: 'yomitan-sample',
-    revision: 'jmdict4',
-    enabled: true,
-    fallbackOnly: false,
-    priority: 0,
-    schemaVersion: 1,
-    needsReimport: false
-  }
-]
+const sampleLookupResults: LookupResult[] = [makeLookupResult({ dictTitle: 'yomitan-sample' })]
+const sampleDicts: DictInfo[] = [makeDictInfo({ title: 'yomitan-sample', revision: 'jmdict4' })]
 
 /** Fake dict service: records calls. `onProgressToEmit`, if given, is
  * synchronously forwarded to the caller's onProgress on every importDict

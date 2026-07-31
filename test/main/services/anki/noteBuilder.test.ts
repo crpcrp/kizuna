@@ -11,6 +11,7 @@ import { JPOD101_NO_AUDIO_MD5 } from '@src/main/services/anki/audioSource'
 import type { AnkiSettings } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const token: Token = {
   surface: '食べる',
@@ -20,21 +21,12 @@ const token: Token = {
   startOffset: 2
 }
 
-const lookupResult: LookupResult = {
+const lookupResult: LookupResult = makeLookupResult({
   expression: '食べる',
   reading: 'たべる',
   glossary: 'to eat',
-  dictTitle: 'yomitan-sample',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+  dictTitle: 'yomitan-sample'
+})
 
 const settings: AnkiSettings = {
   url: 'http://127.0.0.1:8765',

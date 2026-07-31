@@ -7,6 +7,7 @@ import {
   type VocabularySpanEpoch
 } from '@src/renderer/src/state/vocabularySpanController'
 import { deriveMiningCandidates } from '@src/renderer/src/state/bulkMining'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const epoch: VocabularySpanEpoch = {
   file: 1,
@@ -22,22 +23,8 @@ const token = (surface: string, startOffset: number): Token => ({
   reading: '',
   pos: 'noun'
 })
-const result = (expression: string, matchedSurface = expression): LookupResult => ({
-  expression,
-  matchedSurface,
-  reading: expression,
-  glossary: '',
-  dictTitle: 'test',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-})
+const result = (expression: string, matchedSurface = expression): LookupResult =>
+  makeLookupResult({ expression, matchedSurface, reading: expression, glossary: '' })
 const deferred = <T>() => {
   let resolve!: (value: T) => void
   return {

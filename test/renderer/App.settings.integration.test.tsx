@@ -5,20 +5,7 @@ import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import type { MediaPlaybackHistory } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi } from '../harness/fakeKizunaApi'
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(reason?: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
+import { deferred } from '@test/harness/deferred'
 
 function settings(patch: Partial<PlayerSettings> = {}): PlayerSettings {
   return { ...DEFAULT_PLAYER_SETTINGS, ...patch }

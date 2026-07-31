@@ -8,24 +8,11 @@ import {
 } from '@src/renderer/src/state/ankiMining'
 import { type LookupResult } from '@src/shared/dictionary'
 import { type Token } from '@src/shared/token'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 describe('addTokenToAnki', () => {
   const token: Token = { surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }
-  const result: LookupResult = {
-    expression: '猫',
-    reading: 'ねこ',
-    glossary: 'cat',
-    dictTitle: 'JMdict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+  const result: LookupResult = makeLookupResult({ dictTitle: 'JMdict' })
 
   it('calls addNote with { token, result, sentence } and preserves its operation', async () => {
     const addNote = vi

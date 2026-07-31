@@ -20,15 +20,10 @@ import {
 } from '../../shared/playerSettings'
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
 import { normalizeMediaHistory, type MediaHistory } from '../../shared/mediaHistory'
+import { DEFAULT_KNOWLEDGE_TUNING, type KnowledgeTuning } from '../../shared/knowledge'
 
-export interface KnowledgeSettings {
+export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
-  ankiKnownDecks: string[]
-  ankiKnownField: string
-  knownIntervalDays: number
-  wellKnownIntervalDays: number
-  coloringEnabled: boolean
-  staleAfterHours: number
 }
 
 export interface Settings {
@@ -42,12 +37,7 @@ export interface Settings {
 
 export const defaultKnowledgeSettings: KnowledgeSettings = {
   wanikaniTokenEnc: '',
-  ankiKnownDecks: [],
-  ankiKnownField: '',
-  knownIntervalDays: 21,
-  wellKnownIntervalDays: 90,
-  coloringEnabled: true,
-  staleAfterHours: 23
+  ...DEFAULT_KNOWLEDGE_TUNING
 }
 
 export const defaultSettings: Settings = {

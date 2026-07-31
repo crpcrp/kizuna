@@ -5,24 +5,11 @@ import {
   type PlayerControllerLike,
   type PlayerHistoryObserver
 } from '@src/main/playerBridge'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MpvLoadError } from '@src/main/mpv/controller'
 import { ScreenshotFolderError } from '@src/main/services/screenshots'
 import { PLAYER_CHANNELS } from '@src/shared/ipcChannels'
 import type { YtdlpQuality } from '@src/shared/ytdlpQuality'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel. */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 /** Fake mpv controller: records calls and captures observe callbacks. */
 function fakeController() {

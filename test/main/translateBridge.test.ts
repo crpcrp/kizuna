@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { registerTranslateBridge } from '@src/main/translateBridge'
 import { TRANSLATE_CHANNELS } from '@src/shared/ipcChannels'
 import type { Translator } from '@src/main/services/translate/googleTranslate'
-
-type Listener = (event: FakeEvent, payload: unknown) => unknown
+import { fakeIpc } from '@test/harness/fakeIpcMain'
+import { deferred } from '@test/harness/deferred'
 
 class FakeSender {
   private destroyed?: () => void
@@ -21,36 +21,13 @@ class FakeSender {
 
 type FakeEvent = { sender: FakeSender }
 
-function fakeIpc() {
-  const handlers = new Map<string, Listener>()
-  const listeners = new Map<string, Listener>()
-  return {
-    ipc: {
-      handle: (channel: string, listener: Listener) => handlers.set(channel, listener),
-      on: (channel: string, listener: Listener) => listeners.set(channel, listener)
-    },
-    handlers,
-    listeners
-  }
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
-
 function event(id = 1): FakeEvent {
   return { sender: new FakeSender(id) }
 }
 
 describe('registerTranslateBridge', () => {
   it('forwards the request text and controller signal on the dedicated channel', async () => {
-    const { ipc, handlers, listeners } = fakeIpc()
+    const { ipc, handlers, listeners } = fakeIpc<FakeEvent>(event())
     const translator: Translator = { translate: vi.fn().mockResolvedValue('A cat.') }
     registerTranslateBridge(ipc, translator)
 
@@ -68,7 +45,7 @@ describe('registerTranslateBridge', () => {
   })
 
   it('rejects empty IDs and ignores cancellation for unknown IDs', async () => {
-    const { ipc, handlers, listeners } = fakeIpc()
+    const { ipc, handlers, listeners } = fakeIpc<FakeEvent>(event())
     const translator: Translator = { translate: vi.fn().mockResolvedValue('unused') }
     registerTranslateBridge(ipc, translator)
     const sender = event()
@@ -83,7 +60,7 @@ describe('registerTranslateBridge', () => {
 
   it('aborts and rejects a never-settling translation at the injected timeout', async () => {
     vi.useFakeTimers()
-    const { ipc, handlers } = fakeIpc()
+    const { ipc, handlers } = fakeIpc<FakeEvent>(event())
     const translator: Translator = { translate: vi.fn(() => new Promise<string>(() => {})) }
     registerTranslateBridge(ipc, translator, { timeoutMs: 10 })
     const request = handlers.get(TRANSLATE_CHANNELS.translate)!(event(), {
@@ -100,7 +77,7 @@ describe('registerTranslateBridge', () => {
   })
 
   it('cancels only the identified request and rejects immediately without provider cooperation', async () => {
-    const { ipc, handlers, listeners } = fakeIpc()
+    const { ipc, handlers, listeners } = fakeIpc<FakeEvent>(event())
     const first = deferred<string>()
     const second = deferred<string>()
     const translator: Translator = {
@@ -128,7 +105,7 @@ describe('registerTranslateBridge', () => {
   })
 
   it('rejects duplicate IDs, then cleans up resolved and rejected requests for reuse', async () => {
-    const { ipc, handlers } = fakeIpc()
+    const { ipc, handlers } = fakeIpc<FakeEvent>(event())
     const translator: Translator = {
       translate: vi
         .fn()
@@ -155,7 +132,7 @@ describe('registerTranslateBridge', () => {
   })
 
   it('aborts and rejects every sender request when its WebContents is destroyed', async () => {
-    const { ipc, handlers } = fakeIpc()
+    const { ipc, handlers } = fakeIpc<FakeEvent>(event())
     const translator: Translator = { translate: vi.fn(() => new Promise<string>(() => {})) }
     registerTranslateBridge(ipc, translator)
     const sender = event(7)

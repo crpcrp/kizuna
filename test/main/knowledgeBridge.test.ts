@@ -1,21 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerKnowledgeBridge, type KnowledgeServiceLike } from '@src/main/knowledgeBridge'
 import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors ankiBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const EMPTY_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },

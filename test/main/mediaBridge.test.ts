@@ -1,23 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerMediaBridge, type MediaServiceLike } from '@src/main/mediaBridge'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MEDIA_CHANNELS } from '@src/shared/ipcChannels'
 import type { Track, VideoDimensions } from '@src/shared/track'
 import type { Cue } from '@src/shared/cue'
 import type { SubtitleEncoding } from '@src/shared/subtitleEncoding'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel. */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 /** Fake media service: records calls and returns canned values. */
 function fakeService(tracks: Track[], cues: Cue[], dims: VideoDimensions | undefined = undefined) {

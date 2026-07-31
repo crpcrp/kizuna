@@ -2,24 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { createWordPopupActions } from '@src/renderer/src/state/wordPopupActions'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const tokenA: Token = { surface: 'A', reading: 'A', lemma: 'A', pos: 'noun', startOffset: 0 }
 const tokenB: Token = { surface: 'B', reading: 'B', lemma: 'B', pos: 'noun', startOffset: 0 }
-const result = (expression: string): LookupResult => ({
-  expression,
-  reading: expression,
-  glossary: expression,
-  dictTitle: 'Test',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-})
+const result = (expression: string): LookupResult =>
+  makeLookupResult({
+    expression,
+    reading: expression,
+    glossary: expression,
+    dictTitle: 'Test'
+  })
 
 function deferred<T>(): {
   promise: Promise<T>

@@ -1,8 +1,7 @@
 // Shared fakes for the renderer's media-orchestration tests: the injectable
-// PlayerBridge and OpenSession bundles, the track/cue fixtures they default to,
-// and a deferred promise for exercising request-token races. Split out of the
-// former playerActions.test.ts so each per-module test file builds the same
-// bridge the same way.
+// PlayerBridge and OpenSession bundles and the track/cue fixtures they default
+// to. Split out of the former playerActions.test.ts so each per-module test
+// file builds the same bridge the same way.
 
 import { vi } from 'vitest'
 import type { OpenSession, PlayerBridge } from '@src/renderer/src/state/mediaSession'
@@ -67,16 +66,4 @@ export function makeSession(overrides: Partial<OpenSession> = {}): OpenSession {
   }
 }
 
-export function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (v: T) => void
-  reject: (err: unknown) => void
-} {
-  let resolve!: (v: T) => void
-  let reject!: (err: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
+export { deferred } from './deferred'

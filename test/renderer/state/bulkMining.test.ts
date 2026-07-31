@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
-import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
 import { buildSubtitleReport } from '@src/renderer/src/state/subtitleReport'
@@ -22,6 +21,7 @@ import {
   type MiningCandidate,
   type ResolvedEntry
 } from '@src/renderer/src/state/bulkMining'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function token(overrides: Partial<Token> = {}): Token {
   return {
@@ -45,21 +45,7 @@ function candidate(lemma: string, count = 1, firstOccurrence?: number): MiningCa
 }
 
 const entry = {
-  entry: {
-    expression: 'word',
-    reading: 'reading',
-    glossary: '',
-    dictTitle: 'test',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  } satisfies LookupResult,
+  entry: makeLookupResult({ expression: 'word', reading: 'reading', glossary: '' }),
   frequency: 10
 }
 
