@@ -175,7 +175,7 @@ interface DictFrequencyModeRow {
 /**
  * Looks up `dictionaries.frequency_mode` for `freqDictId`, defaulting to
  * 'rank-based' if the dict row is missing or holds an unrecognized value
- * (mirrors `parseIndex`'s default in yomitanImport.ts).
+ * (mirrors `parseIndex`'s default in yomitanBanks.ts).
  */
 export function frequencyModeForDict(db: LookupDb, freqDictId: number): FrequencyMode {
   const row = db

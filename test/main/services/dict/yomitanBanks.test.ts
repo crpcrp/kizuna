@@ -8,8 +8,9 @@ import {
   parseTermMetaBank,
   parseKanjiBank,
   countTermBank,
-  countKanjiBank
-} from '@src/main/services/dict/yomitanImport'
+  countKanjiBank,
+  isNameDictionaryTitle
+} from '@src/main/services/dict/yomitanBanks'
 import { FIXTURES_DIR as FIXTURES } from '@test/paths'
 
 describe('parseIndex', () => {
@@ -57,6 +58,14 @@ describe('parseIndex', () => {
     expect(
       parseIndex({ title: 'freq-dict', revision: 'r1', format: 3, frequencyMode: 'bogus' })
     ).toMatchObject({ frequencyMode: 'rank-based' })
+  })
+})
+
+describe('isNameDictionaryTitle', () => {
+  it('recognizes JMnedict titles without matching unrelated names', () => {
+    expect(isNameDictionaryTitle('JMnedict')).toBe(true)
+    expect(isNameDictionaryTitle('My JMnedict Export')).toBe(true)
+    expect(isNameDictionaryTitle('JMdict')).toBe(false)
   })
 })
 
