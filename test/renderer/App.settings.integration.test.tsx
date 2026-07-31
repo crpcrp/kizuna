@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import type { MediaPlaybackHistory } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi } from '../harness/fakeKizunaApi'
-import { installAppTeardown } from '../harness/appIntegration'
+import { appTeardown } from '../harness/appIntegration'
 import { deferred } from '@test/harness/deferred'
 
 function settings(patch: Partial<PlayerSettings> = {}): PlayerSettings {
@@ -42,7 +42,7 @@ async function offsetValue(): Promise<string> {
   )
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App settings hydration', () => {
   it('restores a per-file offset after a file opens during settings loading', async () => {

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { FakeKizunaApi } from './fakeKizunaApi'
 
@@ -27,13 +27,12 @@ export async function openRecent(
 }
 
 /**
- * Registers the standard teardown for a rendered `App` test file. Files with
- * extra state to restore add their own `afterEach` alongside this.
+ * Standard teardown for a rendered `App` test file, called as
+ * `afterEach(appTeardown)`. Files with extra state to restore call it at the
+ * top of their own `afterEach` instead.
  */
-export function installAppTeardown(): void {
-  afterEach(() => {
-    cleanup()
-    vi.useRealTimers()
-    vi.restoreAllMocks()
-  })
+export function appTeardown(): void {
+  cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
 }

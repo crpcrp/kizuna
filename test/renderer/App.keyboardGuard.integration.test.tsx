@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for finding 1's fix: App's keydown shortcut listener bails
 // via isEditableTarget when the event originates in a menu text field, so
@@ -38,7 +38,7 @@ function installBridge(settings: PlayerSettings): Fakes {
   }
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App keyboard-shortcut guard', () => {
   it('does not fire a bare-key shortcut typed into a menu input (finding 1)', async () => {

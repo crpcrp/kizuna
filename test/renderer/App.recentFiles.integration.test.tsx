@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, recent } from '../harness/appIntegration'
 
 // Rendered interaction coverage for the Media menu's recent-files section.
 // Everything below the renderer — dialogs, media, history — is the fake
@@ -97,7 +97,7 @@ function alertText(): string {
   return screen.getByRole('alert').textContent ?? ''
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App recent-files interactions', () => {
   it('forwards the clicked entry’s exact path and closes the Media menu', async () => {

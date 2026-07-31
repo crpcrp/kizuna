@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import type { WindowBounds } from '@src/shared/windowBounds'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { installAppTeardown } from '../harness/appIntegration'
+import { appTeardown } from '../harness/appIntegration'
 
 // Rendered coverage for the mini-player: the Video-menu "Mini player"
 // item and the Ctrl+M key action enter compact mode — saving the current window
@@ -65,7 +65,7 @@ async function openMiniPlayerFromMenu(): Promise<void> {
   fireEvent.click(screen.getByRole('menuitemradio', { name: 'Mini player' }))
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App mini-player', () => {
   it('keeps the full embedded video viewport when Ctrl+M enters mini mode', async () => {

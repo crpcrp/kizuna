@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for the screenshot wiring: the keybinding — the only
 // surface since the Video-menu item was dropped — forwards the current file
@@ -44,7 +44,7 @@ function installBridge(
   }
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App screenshot', () => {
   it('forwards the current file and position to the bridge and shows the saved path', async () => {

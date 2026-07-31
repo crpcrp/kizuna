@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import {
   DEFAULT_PLAYER_SETTINGS,
@@ -8,7 +8,7 @@ import {
   type PlayerSettings
 } from '@src/shared/playerSettings'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for the Audio-menu delay wiring: the file-change effect
 // re-applies the persisted per-file delay to mpv (which retains audio-delay
@@ -51,7 +51,7 @@ function installBridge(settings: PlayerSettings): Fakes {
   }
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App audio delay', () => {
   it('re-applies the persisted per-file audio delay to mpv when the file opens', async () => {

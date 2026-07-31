@@ -5,7 +5,7 @@ import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown } from '../harness/appIntegration'
+import { EPISODE, appTeardown } from '../harness/appIntegration'
 
 // Rendered coverage: the visible video size must survive a side panel opening —
 // both the size a preset picked from Video ▸ Size and the default size nobody
@@ -120,9 +120,8 @@ function togglePlaylistSidebar(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Toggle playlist sidebar' }))
 }
 
-installAppTeardown()
-
 afterEach(() => {
+  appTeardown()
   if (originalOffsetWidth) {
     Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth)
   } else {

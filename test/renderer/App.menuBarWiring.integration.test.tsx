@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import type { Track } from '@src/shared/track'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Wiring guard for the MenuBar call site. These assertions are deliberately
 // about *which* bridge call each menu item reaches: the props they travel
@@ -82,7 +82,7 @@ function openMenu(label: string): void {
   fireEvent.click(screen.getByRole('button', { name: label }))
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('MenuBar frame stepping reaches the matching mpv call', () => {
   it('"Step forward one frame" steps forward, never back', async () => {

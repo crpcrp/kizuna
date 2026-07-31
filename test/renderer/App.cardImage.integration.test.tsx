@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
-import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -101,7 +101,7 @@ function press(element: Element): void {
   fireEvent.click(element)
 }
 
-installAppTeardown()
+afterEach(appTeardown)
 
 describe('App mined-card picture dialog', () => {
   it('still mines the note when the dialog is dismissed with "Add without screenshot"', async () => {
