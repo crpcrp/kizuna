@@ -29,10 +29,10 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Playback and player controls | `state/usePlaybackWindow.ts`, `components/BottomBar.tsx`, `components/MenuBar.tsx`, `state/playerAdapter.ts`, `state/playbackCommands.ts`, `state/keyActions.ts`, `state/perFileOffsets.ts`, `state/usePerFileRestore.ts`, `state/audioDevices.ts`, `shared/playerSettings.ts` | `playerBridge.ts`, `mpv/controller.ts`, `mpv/ipcClient.ts` |
 | Media loading and subtitles | `state/useMediaSession.ts`, `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
 | Playlists and history | `state/useMediaSession.ts`, `components/PlaylistSidebar.tsx`, `state/playlistController.ts`, `state/playlistAppend.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/folderNavigation.ts` |
-| Tokenization | `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |
-| Dictionaries and word lookup | `components/WordPopup.tsx`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
-| Knowledge tracking | subtitle components, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
-| Anki card creation | word and subtitle-report UI, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
+| Tokenization | `state/useVocabularyMining.ts`, `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |
+| Dictionaries and word lookup | `state/useVocabularyMining.ts`, `components/WordPopup.tsx`, `state/popupController.ts`, `state/wordLookup.ts`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
+| Knowledge tracking | `state/useVocabularyMining.ts`, subtitle components, `state/knowledgeActions.ts`, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
+| Anki card creation | `state/useVocabularyMining.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Network media and subtitles | `state/useMediaSession.ts`, `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `state/ytdlpQualityReload.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
 | Settings and appearance | `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `electron-builder.cjs` |
@@ -72,9 +72,11 @@ controllers under `state/`. Keep `App.tsx` focused on composition: add the
 behavior to the feature hook that already owns the workflow —
 `state/useMediaSession.ts` (opening media, playlists, subtitles),
 `state/usePlaybackWindow.ts` (playback commands, per-file values, panels,
-window sizing, mini player), or `state/useVocabularyPipeline.ts` (tokenization
-and vocabulary) — rather than to the root component. Use semantic colors from
-`theme.css` rather than adding isolated color literals.
+window sizing, mini player), or `state/useVocabularyMining.ts` (word popup and
+its Anki mine, subtitle report, bulk mining, and the tokenization/knowledge
+caches it drives through `state/useVocabularyPipeline.ts`) — rather than to the
+root component. Use semantic colors from `theme.css` rather than adding
+isolated color literals.
 
 ### Update runtime binaries
 
