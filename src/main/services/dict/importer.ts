@@ -21,6 +21,6 @@ export function createDbImporter(db: ImportDb): DictionaryImporter {
     import: async (
       zipBytes: Uint8Array,
       onProgress?: (done: number, total: number) => void
-    ): Promise<ImportResult> => importDictionary(zipBytes, db, undefined, onProgress)
+    ): Promise<ImportResult> => importDictionary(zipBytes, db, onProgress)
   }
 }

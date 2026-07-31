@@ -2,24 +2,43 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import { zipSync, strToU8 } from 'fflate'
-import {
-  importDictionary,
-  isNameDictionaryTitle,
-  cappedUnzipSync,
-  MAX_UNZIP_TOTAL_BYTES,
-  MAX_UNZIP_ENTRY_BYTES
-} from '@src/main/services/dict/yomitanImport'
+import { importDictionary, type ImportDb } from '@src/main/services/dict/yomitanImport'
 import { fixture } from '@test/paths'
 
 const ZIP_FIXTURE = readFileSync(fixture('yomitan-sample.zip'))
 
-describe('importDictionary', () => {
-  it('recognizes JMnedict titles without matching unrelated names', () => {
-    expect(isNameDictionaryTitle('JMnedict')).toBe(true)
-    expect(isNameDictionaryTitle('My JMnedict Export')).toBe(true)
-    expect(isNameDictionaryTitle('JMdict')).toBe(false)
-  })
+/**
+ * `db` with its `INSERT INTO terms` statement rigged to throw after `limit`
+ * successful runs, so a mid-import failure can be provoked without a real disk
+ * or constraint error. Everything else passes straight through to `db`,
+ * including `transaction`, so the rollback under test is SQLite's own.
+ */
+function failAfterTermInserts(db: Database.Database, limit: number): ImportDb {
+  let termInserts = 0
+  return {
+    exec: (sql: string) => db.exec(sql),
+    prepare: (sql: string) => {
+      const stmt = db.prepare(sql)
+      const passthrough = {
+        run: (...params: unknown[]) => stmt.run(...params),
+        get: (...params: unknown[]) => stmt.get(...params),
+        all: (...params: unknown[]) => stmt.all(...params)
+      }
+      if (!sql.includes('INSERT INTO terms')) return passthrough
+      return {
+        ...passthrough,
+        run: (...params: unknown[]) => {
+          termInserts += 1
+          if (termInserts > limit) throw new Error('simulated insert failure')
+          return stmt.run(...params)
+        }
+      }
+    },
+    transaction: (fn: () => number) => db.transaction(fn)
+  }
+}
 
+describe('importDictionary', () => {
   it('marks imported JMnedict dictionaries as fallback-only', () => {
     const zipBytes = zipSync({
       'index.json': strToU8(JSON.stringify({ title: 'JMnedict', revision: 'r1', format: 3 })),
@@ -208,7 +227,7 @@ describe('importDictionary', () => {
 
     const db = new Database(':memory:')
     const onProgress = vi.fn()
-    const result = importDictionary(zipBytes, db, undefined, onProgress, 2)
+    const result = importDictionary(zipBytes, db, onProgress, 2)
 
     expect(result.termCount).toBe(3)
     expect(result.metaCount).toBe(2)
@@ -342,7 +361,7 @@ describe('importDictionary', () => {
 
     const db = new Database(':memory:')
     const onProgress = vi.fn()
-    importDictionary(zipBytes, db, undefined, onProgress, 2)
+    importDictionary(zipBytes, db, onProgress, 2)
 
     expect(onProgress.mock.calls).toEqual([
       [2, 5],
@@ -364,7 +383,7 @@ describe('importDictionary', () => {
 
     const db = new Database(':memory:')
     const onProgress = vi.fn()
-    importDictionary(zipBytes, db, undefined, onProgress, 2)
+    importDictionary(zipBytes, db, onProgress, 2)
 
     expect(onProgress.mock.calls).toEqual([
       [2, 4],
@@ -372,78 +391,6 @@ describe('importDictionary', () => {
     ])
 
     db.close()
-  })
-
-  describe('cappedUnzipSync (streaming, counts actual inflated bytes)', () => {
-    const dec = new TextDecoder()
-
-    it('round-trips a normal multi-entry zip (deflated and stored)', () => {
-      const zipBytes = zipSync({
-        'index.json': [strToU8('{"title":"x"}'), { level: 6 }], // deflated
-        'term_bank_1.json': [strToU8('[["猫","ねこ"]]'), { level: 0 }] // stored
-      })
-
-      const files = cappedUnzipSync(zipBytes)
-
-      expect(Object.keys(files).sort()).toEqual(['index.json', 'term_bank_1.json'])
-      expect(dec.decode(files['index.json'])).toBe('{"title":"x"}')
-      expect(dec.decode(files['term_bank_1.json'])).toBe('[["猫","ねこ"]]')
-    })
-
-    it('aborts on a single entry whose DECOMPRESSED size exceeds the per-entry cap, even though the zip itself is tiny', () => {
-      // 256 KiB of zeros compresses to a few hundred bytes: a "small file that
-      // decompresses huge" — the essence of a zip bomb. The cap must trip on
-      // the inflated byte count, not the compressed size or ZIP metadata.
-      const bomb = new Uint8Array(256 * 1024)
-      const zipBytes = zipSync({ 'term_bank_1.json': bomb })
-
-      expect(zipBytes.byteLength).toBeLessThan(64 * 1024) // compressed input is tiny
-      expect(() => cappedUnzipSync(zipBytes, 64 * 1024, 512 * 1024 * 1024)).toThrow(
-        'Dictionary is too large to import.'
-      )
-    })
-
-    it('aborts once entries together exceed the total cap while each stays under the per-entry cap', () => {
-      const chunk = new Uint8Array(40 * 1024)
-      const zipBytes = zipSync({
-        'term_bank_1.json': chunk,
-        'term_bank_2.json': chunk,
-        'term_bank_3.json': chunk
-      })
-
-      // per-entry cap 64 KiB (each 40 KiB entry is fine); total cap 100 KiB
-      // (the third entry pushes the running total to 120 KiB → abort).
-      expect(() => cappedUnzipSync(zipBytes, 64 * 1024, 100 * 1024)).toThrow(
-        'Dictionary is too large to import.'
-      )
-    })
-
-    it('admits entries that stay within both caps', () => {
-      const zipBytes = zipSync({ 'a.json': strToU8('hello'), 'b.json': strToU8('world') })
-
-      const files = cappedUnzipSync(zipBytes, 1024, 4096)
-
-      expect(dec.decode(files['a.json'])).toBe('hello')
-      expect(dec.decode(files['b.json'])).toBe('world')
-    })
-
-    it('rejects data that is not a zip (no End Of Central Directory record)', () => {
-      expect(() => cappedUnzipSync(new Uint8Array([1, 2, 3]))).toThrow('Invalid dictionary zip.')
-      expect(() => cappedUnzipSync(new Uint8Array(0))).toThrow('Invalid dictionary zip.')
-    })
-
-    it('admits a dictionary the size of jitendex, which the old 512 MiB total cap rejected', () => {
-      // jitendex-yomitan.zip is a 38 MB download that inflates to 539,374,214
-      // bytes — 2.4 MB past the previous ceiling, so importing it failed with
-      // "Dictionary is too large to import." Assert against the constants
-      // rather than inflating half a gigabyte in a unit test.
-      const JITENDEX_INFLATED_BYTES = 539_374_214
-      expect(MAX_UNZIP_TOTAL_BYTES).toBeGreaterThan(JITENDEX_INFLATED_BYTES)
-      // BCCWJ's term_meta_bank_1.json is the largest single entry seen (77.5 MB).
-      expect(MAX_UNZIP_ENTRY_BYTES).toBeGreaterThan(78 * 1024 * 1024)
-      // Still a bound, not an open door.
-      expect(MAX_UNZIP_TOTAL_BYTES).toBeLessThanOrEqual(2 * 1024 * 1024 * 1024)
-    })
   })
 
   describe('kanji dictionaries', () => {
@@ -497,22 +444,44 @@ describe('importDictionary', () => {
     })
   })
 
-  it('aborts an oversized (zip-bomb) import before creating the schema or inserting rows', () => {
-    // A 2 MiB-of-zeros entry decompresses well past the caps; the real
-    // cappedUnzipSync (default caps here would allow it, so shrink via the
-    // injected boundary) rejection must abort importDictionary before any DB work.
-    const bomb = new Uint8Array(2 * 1024 * 1024)
-    const zipBytes = zipSync({ 'term_bank_1.json': bomb })
-    const cappedUnzip = (data: Uint8Array): Record<string, Uint8Array> =>
-      cappedUnzipSync(data, 64 * 1024, 128 * 1024)
+  it('rejects data that is not a dictionary zip before creating the schema', () => {
+    // The archive stage runs before initSchema, so anything it refuses —
+    // an unreadable archive here, an oversized one in yomitanArchive.test.ts —
+    // aborts the import before any DB work.
+    const db = new Database(':memory:')
+
+    expect(() => importDictionary(new Uint8Array([1, 2, 3]), db)).toThrow('Invalid dictionary zip.')
+    expect(() => db.prepare('SELECT COUNT(*) AS n FROM terms').get()).toThrow()
+
+    db.close()
+  })
+
+  it('rolls the whole import back when an insert fails partway through', () => {
+    const zipBytes = zipSync({
+      'index.json': strToU8(JSON.stringify({ title: 'rollback', revision: 'r1', format: 3 })),
+      'term_bank_1.json': strToU8(
+        JSON.stringify([
+          ['犬', 'いぬ', '', '', 1, ['dog'], 1, ''],
+          ['猫', 'ねこ', '', '', 1, ['cat'], 2, ''],
+          ['鳥', 'とり', '', '', 1, ['bird'], 3, '']
+        ])
+      ),
+      'term_meta_bank_1.json': strToU8(JSON.stringify([['犬', 'freq', 10]]))
+    })
 
     const db = new Database(':memory:')
 
-    expect(() => importDictionary(zipBytes, db, cappedUnzip)).toThrow(
-      'Dictionary is too large to import.'
+    // initSchema runs before (and outside) the transaction, so the tables
+    // survive the failure and the assertions below can query them.
+    expect(() => importDictionary(zipBytes, failAfterTermInserts(db, 2))).toThrow(
+      'simulated insert failure'
     )
-    // Aborted before initSchema / any insert: the terms table was never created.
-    expect(() => db.prepare('SELECT COUNT(*) AS n FROM terms').get()).toThrow()
+
+    // Everything the transaction did — the dictionaries row and the two term
+    // rows that did land — is gone.
+    expect(db.prepare('SELECT COUNT(*) AS n FROM dictionaries').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM terms').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM term_meta').get()).toEqual({ n: 0 })
 
     db.close()
   })
@@ -525,7 +494,7 @@ describe('importDictionary', () => {
 
     const db = new Database(':memory:')
     const onProgress = vi.fn()
-    importDictionary(zipBytes, db, undefined, onProgress, 2)
+    importDictionary(zipBytes, db, onProgress, 2)
 
     expect(onProgress).not.toHaveBeenCalled()
 

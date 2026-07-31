@@ -94,7 +94,7 @@ export function runImportInWorker(
     // Must precede the import: neither VACUUM nor a checkpoint can run inside
     // the import's transaction.
     migrateAutoVacuum(db)
-    const result = importDictionary(input.zipBytes, db, undefined, onProgress)
+    const result = importDictionary(input.zipBytes, db, onProgress)
     reclaimAfterImport(db)
     return result
   } finally {
