@@ -34,7 +34,7 @@ export interface PlaybackTabProps {
   onAudioDevicesRequest: () => void
 }
 
-export function parseMpvExtraArgs(rawValue: string): string[] {
+function parseMpvExtraArgs(rawValue: string): string[] {
   return rawValue
     .split('\n')
     .map((line) => line.trim())

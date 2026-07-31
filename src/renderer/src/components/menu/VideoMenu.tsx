@@ -1,7 +1,7 @@
 import type { YtdlpQuality } from '../../../../shared/ytdlpQuality'
 import { Menu, MenuItem, CommandItem } from './primitives'
 import { VIDEO_SCALE_PRESETS } from './utils'
-export const YTDLP_QUALITY_OPTIONS: ReadonlyArray<{ value: YtdlpQuality; label: string }> = [
+const YTDLP_QUALITY_OPTIONS: ReadonlyArray<{ value: YtdlpQuality; label: string }> = [
   { value: 'best', label: 'Best available' },
   { value: '2160', label: '2160p or lower' },
   { value: '1440', label: '1440p or lower' },

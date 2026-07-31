@@ -20,7 +20,7 @@ import {
 export type CardImageRenderer = (image: HTMLImageElement, rect: Rect) => string | null
 
 /** Real implementation: an off-screen canvas. Replaced in tests. */
-export const renderWithCanvas: CardImageRenderer = (image, rect) =>
+const renderWithCanvas: CardImageRenderer = (image, rect) =>
   renderJpegBase64(image, rect, document.createElement('canvas'))
 
 export interface CardImageCropDialogProps {
