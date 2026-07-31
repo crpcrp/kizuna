@@ -1,10 +1,6 @@
 import type { Dispatch } from 'react'
 import type { Cue } from '../../../shared/cue'
-import type {
-  KnowledgeSource,
-  PublicKnowledgeSettings,
-  SyncStatus
-} from '../../../shared/knowledge'
+import type { KnowledgeSource, KnowledgeTuning, SyncStatus } from '../../../shared/knowledge'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { Token } from '../../../shared/token'
 import type { DictionariesTabProps } from '../components/options/DictionariesTab'
@@ -131,9 +127,7 @@ export function useKnowledgeOptions({
     await handleSyncNow('wanikani', true)
   }
 
-  const handleChangeKnowledgeSettings = async (
-    patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
-  ): Promise<void> => {
+  const handleChangeKnowledgeSettings = async (patch: Partial<KnowledgeTuning>): Promise<void> => {
     await changeKnowledgeSettings(bridge.knowledge, optionsData, patch)
     if (shouldResyncAnkiForKnowledgePatch(patch)) {
       await handleSyncNow('anki', true)

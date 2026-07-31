@@ -52,6 +52,7 @@ import type {
   KnowledgeLevel,
   KnowledgeDetails,
   KnowledgeSource,
+  KnowledgeTuning,
   PublicKnowledgeSettings,
   SyncStatus
 } from '../shared/knowledge'
@@ -271,7 +272,7 @@ const api = {
     getSettings: (): Promise<PublicKnowledgeSettings> =>
       ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
     setSettings: (
-      patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>> & {
+      patch: Partial<KnowledgeTuning> & {
         wanikaniToken?: string
       }
     ): Promise<PublicKnowledgeSettings> => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.setSettings, patch)

@@ -1,7 +1,11 @@
 import type { OptionsCategory } from '../components/options/types'
 import type { OptionsDataController, OptionsDomain } from './optionsData'
 import type { AnkiSettings } from '../../../shared/anki'
-import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
+import type {
+  KnowledgeTuning,
+  PublicKnowledgeSettings,
+  SyncStatus
+} from '../../../shared/knowledge'
 import type { ImportResult } from '../../../shared/dictionary'
 import {
   invalidateTokenizationForDictionaryChange,
@@ -163,24 +167,20 @@ export async function changeAnkiSettings(
 }
 
 export interface KnowledgeSettingsBridge {
-  setSettings(
-    patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
-  ): Promise<PublicKnowledgeSettings>
+  setSettings(patch: Partial<KnowledgeTuning>): Promise<PublicKnowledgeSettings>
 }
 
 export async function changeKnowledgeSettings(
   knowledge: KnowledgeSettingsBridge,
   optionsData: OptionsDataController,
-  patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
+  patch: Partial<KnowledgeTuning>
 ): Promise<void> {
   await knowledge.setSettings(patch)
   await optionsData.load('knowledge', { force: true })
 }
 
 /** Deck/field changes alter Anki membership; numeric thresholds intentionally do not sync per keystroke. */
-export function shouldResyncAnkiForKnowledgePatch(
-  patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
-): boolean {
+export function shouldResyncAnkiForKnowledgePatch(patch: Partial<KnowledgeTuning>): boolean {
   return patch.ankiKnownDecks !== undefined || patch.ankiKnownField !== undefined
 }
 

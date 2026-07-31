@@ -71,8 +71,33 @@ export function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourc
 /** Result of the most recent explicit sync attempt for a source. */
 export type SyncOutcome = 'synced' | 'cooldown' | 'unconfigured' | 'error'
 
+/**
+ * The user-tunable part of the knowledge settings — everything except the
+ * WaniKani token, which the two processes represent differently (main stores
+ * it encrypted, the renderer only learns whether one is set). Both the stored
+ * `KnowledgeSettings` and the renderer-facing `PublicKnowledgeSettings` build
+ * on this, so the fields and their defaults are declared once.
+ */
+export interface KnowledgeTuning {
+  ankiKnownDecks: string[]
+  ankiKnownField: string
+  knownIntervalDays: number
+  wellKnownIntervalDays: number
+  coloringEnabled: boolean
+  staleAfterHours: number
+}
+
+export const DEFAULT_KNOWLEDGE_TUNING: KnowledgeTuning = {
+  ankiKnownDecks: [],
+  ankiKnownField: '',
+  knownIntervalDays: 21,
+  wellKnownIntervalDays: 90,
+  coloringEnabled: true,
+  staleAfterHours: 23
+}
+
 /** `knowledge` settings as exposed to preload/renderer — never the raw encrypted token. */
-export interface PublicKnowledgeSettings {
+export interface PublicKnowledgeSettings extends KnowledgeTuning {
   hasWanikaniToken: boolean
   /** Whether the OS secure store backs secret encryption — drives the honest
    * "encrypted at rest" vs "saved unencrypted" copy on the WaniKani token.
@@ -80,12 +105,6 @@ export interface PublicKnowledgeSettings {
    * not-yet-loaded fallback, where the UI must make no encryption claim at all
    * rather than defaulting to the alarming (and usually wrong) "unencrypted". */
   encryptionAvailable?: boolean
-  ankiKnownDecks: string[]
-  ankiKnownField: string
-  knownIntervalDays: number
-  wellKnownIntervalDays: number
-  coloringEnabled: boolean
-  staleAfterHours: number
 }
 
 export interface SourceStatus {

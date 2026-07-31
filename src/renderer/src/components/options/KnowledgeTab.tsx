@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type {
   KnowledgeSource,
+  KnowledgeTuning,
   PublicKnowledgeSettings,
   SourceStatus,
   SyncStatus
@@ -107,9 +108,7 @@ export interface KnowledgeTabProps {
   ankiDeckNames: string[]
   ankiModelFields: string[]
   knowledgeSettings: PublicKnowledgeSettings
-  onChangeKnowledgeSettings: (
-    patch: Partial<Omit<PublicKnowledgeSettings, 'hasWanikaniToken' | 'encryptionAvailable'>>
-  ) => void
+  onChangeKnowledgeSettings: (patch: Partial<KnowledgeTuning>) => void
   syncStatus: SyncStatus
   onSyncNow: (source: KnowledgeSource) => Promise<SyncStatus>
   /** User-facing error from the last knowledge-domain load. Undefined when there is none. */
