@@ -30,10 +30,10 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Media loading and subtitles | `state/useMediaSession.ts`, `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts` (composition root), `media/mediaPicker.ts`, `media/subtitleService.ts`, `media/metadataService.ts`, `media/thumbnailPreview.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
 | Seekbar hover thumbnails | `state/seekPreview.ts`, `components/SeekPreview.tsx` | `media/thumbnailPreview.ts`, `services/thumbnails/generation.ts`, `services/thumbnails/cache.ts`, `services/thumbnails/nodeFs.ts` |
 | Playlists and history | `state/useMediaSession.ts`, `components/PlaylistSidebar.tsx`, `state/playlistController.ts`, `state/playlistAppend.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/folderNavigation.ts` |
-| Tokenization | `state/useVocabularyMining.ts`, `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |
-| Dictionaries and word lookup | `state/useVocabularyMining.ts`, `components/WordPopup.tsx`, `state/popupController.ts`, `state/wordLookup.ts`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
-| Knowledge tracking | `state/useVocabularyMining.ts`, subtitle components, `state/knowledgeActions.ts`, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
-| Anki card creation | `state/useVocabularyMining.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
+| Tokenization | `state/useVocabularyCaches.ts`, `state/useVocabularyPipeline.ts`, `shared/token.ts`, `shared/mecab.ts` | `mecabBridge.ts`, `services/mecab/` |
+| Dictionaries and word lookup | `state/useWordPopup.ts`, `components/WordPopup.tsx`, `state/popupController.ts`, `state/wordLookup.ts`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
+| Knowledge tracking | `state/useKnowledgeOptions.ts`, `state/useVocabularyCaches.ts`, subtitle components, `state/knowledgeActions.ts`, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
+| Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Network media and subtitles | `state/useMediaSession.ts`, `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `state/ytdlpQualityReload.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
 | Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `electron-builder.cjs` |
@@ -73,9 +73,13 @@ controllers under `state/`. Keep `App.tsx` focused on composition: add the
 behavior to the feature hook that already owns the workflow —
 `state/useMediaSession.ts` (opening media, playlists, subtitles),
 `state/usePlaybackWindow.ts` (playback commands, per-file values, panels,
-window sizing, mini player), `state/useVocabularyMining.ts` (word popup and
-its Anki mine, subtitle report, bulk mining, and the tokenization/knowledge
-caches it drives through `state/useVocabularyPipeline.ts`), or
+window sizing, mini player), `state/useVocabularyMining.ts` (which composes
+the vocabulary subjects — `state/useVocabularyCaches.ts` for the
+tokenization/knowledge caches it drives through
+`state/useVocabularyPipeline.ts`, `state/useWordPopup.ts` for the popup and its
+Anki mine, `state/useSubtitleReport.ts`, `state/useBulkMining.ts`, and
+`state/useKnowledgeOptions.ts` for the Options rows that invalidate those
+caches), or
 `state/useOptionsDialog.ts` (the Options dialog, its optional-integration data,
 and the dictionary/Anki actions that refresh it) — rather than to the root
 component. A new Options row is wired in `state/optionsMenuProps.ts`, next to
