@@ -55,7 +55,7 @@ export const HIDDEN_PREVIEW: SeekPreviewState = {
 /**
  * The 1-percent bucket a hovered time maps to (`0..99`), or `null` when no
  * preview should be shown (non-finite input, or a duration under 1 s). Mirrors
- * `bucketFor` in `main/services/thumbnails.ts` so the renderer dedupes on the
+ * `bucketFor` in `main/services/thumbnails/generation.ts` so the renderer dedupes on the
  * same granularity the cache keys on — kept local because that module pulls in
  * `node:*` and can't cross into the renderer bundle.
  */
