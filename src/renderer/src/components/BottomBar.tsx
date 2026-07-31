@@ -1,7 +1,7 @@
 import './BottomBar.css'
 import { useEffect, useRef, useState } from 'react'
 import { DEFAULT_SKIP_SECONDS, SPEED_MAX, SPEED_MIN } from '../../../shared/playerSettings'
-import { SPEED_PRESETS } from './MenuBar'
+import { SPEED_PRESETS } from './menu/utils'
 import type { Chapter } from '../../../shared/chapter'
 import type { AbLoopState } from '../state/playerState'
 import { formatTime } from './playbackTime'

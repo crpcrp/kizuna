@@ -6,7 +6,7 @@ import BottomBar, {
   nextSpeedPreset,
   type PlayerApi
 } from '@src/renderer/src/components/BottomBar'
-import { SPEED_PRESETS } from '@src/renderer/src/components/MenuBar'
+import { SPEED_PRESETS } from '@src/renderer/src/components/menu/utils'
 import { DEFAULT_SKIP_SECONDS } from '@src/shared/playerSettings'
 
 // The left cluster of the transport bar: playback speed plus the

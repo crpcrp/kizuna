@@ -1,19 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import MenuBar, {
-  audioTracks,
-  subtitleTracks,
-  languageBadge,
-  trackLabel,
-  isAnyMenuOpen,
-  parseOffsetMs,
-  applyFolderLabel,
+import { isAnyMenuOpen } from '@src/renderer/src/components/MenuBar'
+import {
   APPLY_FOLDER_FEEDBACK_MS,
+  SPEED_PRESETS,
   SUBTITLE_OFFSET_STEP_MS,
   VIDEO_SCALE_PRESETS,
-  SPEED_PRESETS,
-  abLoopPhaseLabel
-} from '@src/renderer/src/components/MenuBar'
+  abLoopPhaseLabel,
+  parseOffsetMs,
+  applyFolderLabel,
+  audioTracks,
+  languageBadge,
+  subtitleTracks,
+  trackLabel
+} from '@src/renderer/src/components/menu/utils'
+import { TestMenuBar as MenuBar } from './menu/menuBarTestAdapter'
 import type { Track } from '@src/shared/track'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { UrlSubtitleTrack } from '@src/shared/urlSubtitles'
