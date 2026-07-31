@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { LEVEL_ORDER, maxKnowledgeLevel } from '@src/shared/knowledge'
+import { DEFAULT_KNOWLEDGE_TUNING, LEVEL_ORDER, maxKnowledgeLevel } from '@src/shared/knowledge'
+
+// The one place the shipped tuning values are pinned as literals. Everywhere
+// else spreads DEFAULT_KNOWLEDGE_TUNING so a deliberate change lands here only.
+describe('DEFAULT_KNOWLEDGE_TUNING', () => {
+  it('ships the documented thresholds', () => {
+    expect(DEFAULT_KNOWLEDGE_TUNING).toEqual({
+      ankiKnownDecks: [],
+      ankiKnownField: '',
+      knownIntervalDays: 21,
+      wellKnownIntervalDays: 90,
+      coloringEnabled: true,
+      staleAfterHours: 23
+    })
+  })
+})
 
 describe('LEVEL_ORDER', () => {
   it('ranks inDeck directly above unknown and below learning', () => {

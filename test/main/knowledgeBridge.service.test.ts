@@ -21,6 +21,7 @@ import {
 import { WANIKANI_BASE } from '@src/main/services/wanikani/client'
 import type { HttpFetch } from '@src/main/services/http'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
+import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
   let resolve!: () => void
@@ -95,16 +96,7 @@ describe('createKnowledgeService', () => {
       fetch: fakeHttp({}).fetch
     })
 
-    expect(await service.getSettings()).toEqual({
-      hasWanikaniToken: false,
-      encryptionAvailable: true,
-      ankiKnownDecks: [],
-      ankiKnownField: '',
-      knownIntervalDays: 21,
-      wellKnownIntervalDays: 90,
-      coloringEnabled: true,
-      staleAfterHours: 23
-    })
+    expect(await service.getSettings()).toEqual(makePublicKnowledgeSettings())
   })
 
   it('getSettings surfaces encryptionAvailable from the codec', async () => {

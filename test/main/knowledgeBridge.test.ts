@@ -3,6 +3,7 @@ import { registerKnowledgeBridge, type KnowledgeServiceLike } from '@src/main/kn
 import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 const EMPTY_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },
@@ -14,16 +15,7 @@ const DETAILS: Record<string, KnowledgeDetails> = {
 }
 
 function fakeService() {
-  let publicSettings: PublicKnowledgeSettings = {
-    hasWanikaniToken: false,
-    encryptionAvailable: true,
-    ankiKnownDecks: [],
-    ankiKnownField: '',
-    knownIntervalDays: 21,
-    wellKnownIntervalDays: 90,
-    coloringEnabled: true,
-    staleAfterHours: 23
-  }
+  let publicSettings: PublicKnowledgeSettings = makePublicKnowledgeSettings()
   const service: KnowledgeServiceLike = {
     levelsFor: vi.fn(async (lemmas: string[]) =>
       Object.fromEntries(lemmas.map((l) => [l, 'known' as const]))

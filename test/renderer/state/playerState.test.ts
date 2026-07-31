@@ -126,6 +126,7 @@ describe('isJapaneseSubtitleTrack', () => {
 describe('playerReducer', () => {
   it('fileLoaded resets timing/cues, picks defaults, and preserves volume', () => {
     const prev: PlayerState = {
+      ...initialPlayerState,
       filePath: 'old.mp4',
       loadGeneration: 4,
       tracks: [audioTrack],
@@ -140,28 +141,15 @@ describe('playerReducer', () => {
       fullscreen: true,
       selectedAudioId: 1,
       selectedSubtitleId: 3,
-      keyBindings: DEFAULT_KEY_BINDINGS,
-      skipSeconds: DEFAULT_SKIP_SECONDS,
-      activeTokens: [],
-      allCueTokens: {},
-      knownLevels: {},
-      knowledgeEpoch: 0,
-      popupSettings: DEFAULT_POPUP_SETTINGS,
-      subtitleStyle: DEFAULT_SUBTITLE_STYLE,
-      subtitleDragEnabled: true,
-      externalSubtitleEncoding: 'auto',
-      rightClickTogglePause: true,
-      autoPlayNext: false,
-      translationEnabled: false,
-      preferredUrlSubtitleLanguage: '',
+      // Per-file state that has to differ from its post-load value, or the
+      // expectation below cannot tell a real reset from an untouched field.
+      externalSubtitlePath: 'old-subs.srt',
+      externalSubtitleEncoding: 'shift_jis',
+      allCueTokens: { '0': [makeToken({ surface: '猫' })] },
       subtitleOffsetMs: 250,
       audioDelayMs: -75,
       abLoopState: { a: 12, b: 30 },
-      appearance: 'system',
       levelColors: { known: '#56be78' },
-      screenshotFolder: null,
-      mpvUserConfig: false,
-      mpvExtraArgs: [],
       videoAdjustments: {
         brightness: 20,
         contrast: 0,
@@ -179,6 +167,10 @@ describe('playerReducer', () => {
       filePath: 'new.mp4',
       tracks: [audioTrack2, subTrack2]
     })
+    // Spelled out in full on purpose: spreading `prev` here would let a field
+    // that should reset on load, but doesn't, pass unnoticed — the expectation
+    // would supply the stale value the reducer wrongly kept. Every field a new
+    // file resets has to be written out to be checked.
     expect(next).toEqual({
       filePath: 'new.mp4',
       loadGeneration: 5,

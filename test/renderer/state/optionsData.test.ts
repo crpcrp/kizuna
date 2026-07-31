@@ -4,7 +4,8 @@ import {
   type OptionsDataBridge
 } from '@src/renderer/src/state/optionsData'
 import { defaultAnkiSettings } from '@src/shared/anki'
-import type { PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
+import type { SyncStatus } from '@src/shared/knowledge'
+import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -20,16 +21,7 @@ function deferred<T>(): {
   return { promise, resolve, reject }
 }
 
-const knowledgeSettings: PublicKnowledgeSettings = {
-  hasWanikaniToken: false,
-  encryptionAvailable: true,
-  ankiKnownDecks: [],
-  ankiKnownField: '',
-  knownIntervalDays: 21,
-  wellKnownIntervalDays: 90,
-  coloringEnabled: true,
-  staleAfterHours: 23
-}
+const knowledgeSettings = makePublicKnowledgeSettings()
 
 const syncStatus: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },

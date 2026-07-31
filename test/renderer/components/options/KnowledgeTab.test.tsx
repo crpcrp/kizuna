@@ -8,23 +8,15 @@ import KnowledgeTab, {
   runSourceSync,
   describeTokenStorage
 } from '@src/renderer/src/components/options/KnowledgeTab'
-import type { PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
+import type { SyncStatus } from '@src/shared/knowledge'
+import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
 // policy — same pattern OptionsMenu.test.tsx uses.
 
 function noop(): void {}
 
-const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
-  hasWanikaniToken: false,
-  encryptionAvailable: true,
-  ankiKnownDecks: [],
-  ankiKnownField: '',
-  knownIntervalDays: 21,
-  wellKnownIntervalDays: 90,
-  coloringEnabled: true,
-  staleAfterHours: 23
-}
+const DEFAULT_KNOWLEDGE_SETTINGS = makePublicKnowledgeSettings()
 
 const DEFAULT_SYNC_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },
