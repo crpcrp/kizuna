@@ -5,6 +5,7 @@ import type { MiningCandidate, ResolvedEntry } from '@src/renderer/src/state/bul
 import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
 import { type DictLookupBridge } from '@src/renderer/src/state/wordLookup'
 import { resolveCandidateEntries } from '@src/renderer/src/state/bulkMiningRunner'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function token(overrides: Partial<Token> = {}): Token {
   return {
@@ -27,21 +28,7 @@ function candidate(lemma: string, overrides: Partial<Token> = {}): MiningCandida
 }
 
 function result(expression: string, frequency: number | null): LookupResult {
-  return {
-    expression,
-    reading: '',
-    glossary: '',
-    dictTitle: 'test',
-    dictId: 1,
-    stylesCss: null,
-    frequency,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+  return makeLookupResult({ expression, reading: '', glossary: '', frequency })
 }
 
 function fakeDict(

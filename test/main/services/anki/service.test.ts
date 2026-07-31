@@ -13,6 +13,7 @@ import type { Token } from '@src/shared/token'
 import { fakeAnkiConnect } from '@test/harness/fakeAnkiConnect'
 import type { SentenceAudioService } from '@src/main/services/anki/sentenceAudio'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 /** Default sentence-audio fake: the dependency is required, but most cases
  * mine without a clip, so extraction reports "nothing to attach". */
@@ -37,21 +38,7 @@ const configuredAnkiSettings = {
 }
 
 const token: Token = { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 }
-const result: LookupResult = {
-  expression: '猫',
-  reading: 'ねこ',
-  glossary: 'cat',
-  dictTitle: 'yomitan-sample',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 
 function overwriteNote(

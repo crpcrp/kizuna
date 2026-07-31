@@ -5,6 +5,7 @@ import type { AnkiMineResult, AnkiSettings, AnkiPing, MineRequest } from '@src/s
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 const sampleSettings: AnkiSettings = {
   url: 'http://127.0.0.1:8765',
@@ -34,21 +35,7 @@ const sampleToken: Token = {
   pos: '名詞',
   startOffset: 0
 }
-const sampleResult: LookupResult = {
-  expression: '猫',
-  reading: 'ねこ',
-  glossary: 'cat',
-  dictTitle: 'yomitan-sample',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+const sampleResult: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const sampleMineRequest: MineRequest = {
   token: sampleToken,
   result: sampleResult,

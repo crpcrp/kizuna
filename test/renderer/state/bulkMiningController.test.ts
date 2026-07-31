@@ -14,26 +14,13 @@ import {
 } from '@src/renderer/src/state/bulkMiningController'
 import type { BulkMineBridges } from '@src/renderer/src/state/bulkMiningRunner'
 import type { WholeTrackVocabularyResult } from '@src/renderer/src/state/wholeTrackVocabulary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function token(lemma: string): Token {
   return { surface: lemma, reading: '', lemma, pos: 'noun', startOffset: 0 }
 }
 function entry(lemma: string): LookupResult {
-  return {
-    expression: lemma,
-    reading: '',
-    glossary: '',
-    dictTitle: 'test',
-    dictId: 1,
-    stylesCss: null,
-    frequency: 4,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+  return makeLookupResult({ expression: lemma, reading: '', glossary: '', frequency: 4 })
 }
 function deferred<T>() {
   let resolve!: (value: T) => void

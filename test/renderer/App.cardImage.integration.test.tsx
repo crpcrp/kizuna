@@ -6,6 +6,7 @@ import { defaultAnkiSettings } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 // Regression coverage for the mined-card picture flow (issue: mining silently
 // did nothing whenever a Picture field was mapped). The crop dialog renders
@@ -28,22 +29,7 @@ const TOKEN = {
   startOffset: 0
 }
 
-const RESULT: LookupResult = {
-  expression: '猫',
-  reading: 'ねこ',
-  glossary: 'cat',
-  glossaryJson: null,
-  dictTitle: 'Fake Dict',
-  dictId: 1,
-  stylesCss: null,
-  frequency: null,
-  frequencyDisplay: null,
-  pitchAccent: null,
-  defTags: '',
-  termTags: '',
-  score: 0,
-  rules: ''
-}
+const RESULT: LookupResult = makeLookupResult({ glossaryJson: null, dictTitle: 'Fake Dict' })
 
 interface Fakes {
   load: FakeKizunaApi['player']['load']

@@ -10,6 +10,7 @@ import {
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
 import { type Token } from '@src/shared/token'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 describe('wordPopupPosition', () => {
   it('anchors at the subtitle box’s horizontal center / top when a rect is given', () => {
@@ -35,21 +36,12 @@ describe('wordPopupPosition', () => {
 
 describe('lookupWordPopup', () => {
   const token: Token = { surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }
-  const result: LookupResult = {
+  const result: LookupResult = makeLookupResult({
     expression: '猫',
     reading: 'ねこ',
     glossary: 'cat',
-    dictTitle: 'JMdict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+    dictTitle: 'JMdict'
+  })
 
   function makeDictBridge(): DictLookupBridge {
     return { lookup: vi.fn().mockResolvedValue([result]) }
@@ -276,21 +268,12 @@ describe('lookupWordPopup', () => {
 })
 
 describe('lookupLinkedWord', () => {
-  const result: LookupResult = {
+  const result: LookupResult = makeLookupResult({
     expression: '閻魔',
     reading: 'えんま',
     glossary: 'Yama (king of hell)',
-    dictTitle: 'JMdict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: ''
-  }
+    dictTitle: 'JMdict'
+  })
 
   function makeDictBridge(): DictLookupBridge {
     return { lookup: vi.fn().mockResolvedValue([result]) }

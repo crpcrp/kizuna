@@ -10,6 +10,7 @@ import WordPopup, {
 import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy,
 // mirroring test/optionsMenu.test.tsx exactly.
@@ -31,22 +32,13 @@ function findMatchingDivClose(html: string, openTagStart: number): number {
 }
 
 function makeResult(overrides: Partial<LookupResult> = {}): LookupResult {
-  return {
+  return makeLookupResult({
     expression: '食べる',
     reading: 'たべる',
     glossary: 'to eat',
     dictTitle: 'Jitendex',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: '',
     ...overrides
-  }
+  })
 }
 
 const sampleResults: LookupResult[] = [

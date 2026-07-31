@@ -9,6 +9,7 @@ import DictionariesTab, {
 import { DEFAULT_POPUP_SETTINGS } from '@src/shared/playerSettings'
 import type { McDict } from '@src/shared/mecab'
 import type { DictInfo } from '@src/shared/dictionary'
+import { makeDictInfo } from '@test/harness/dictFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
 // policy — same pattern OptionsMenu.test.tsx uses.
@@ -35,36 +36,22 @@ const UNIDIC_MISSING: McDict[] = [
 const NO_YOMITAN_DICTS: DictInfo[] = []
 
 const THREE_YOMITAN_DICTS: DictInfo[] = [
-  {
-    id: 1,
-    title: 'JMdict',
-    revision: 'rev1',
-    enabled: true,
-    fallbackOnly: false,
-    priority: 0,
-    schemaVersion: 2,
-    needsReimport: false
-  },
-  {
+  makeDictInfo({ id: 1, title: 'JMdict', revision: 'rev1', schemaVersion: 2 }),
+  makeDictInfo({
     id: 2,
     title: 'Kenkyusha',
     revision: 'rev2',
     enabled: false,
-    fallbackOnly: false,
     priority: 1,
-    schemaVersion: 2,
-    needsReimport: false
-  },
-  {
+    schemaVersion: 2
+  }),
+  makeDictInfo({
     id: 3,
     title: 'Daijirin',
     revision: 'rev3',
-    enabled: true,
-    fallbackOnly: false,
     priority: 2,
-    schemaVersion: 1,
     needsReimport: true
-  }
+  })
 ]
 
 function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTab>> = {}): string {

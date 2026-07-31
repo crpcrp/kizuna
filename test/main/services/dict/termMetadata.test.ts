@@ -7,24 +7,10 @@ import {
   frequencyModeForDict
 } from '@src/main/services/dict/termMetadata'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function makeResult(overrides: Partial<LookupResult>): LookupResult {
-  return {
-    expression: '猫',
-    reading: 'ねこ',
-    glossary: 'cat',
-    dictTitle: 'Enabled Dict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: '',
-    ...overrides
-  }
+  return makeLookupResult({ dictTitle: 'Enabled Dict', ...overrides })
 }
 
 describe('attachFrequencies', () => {
@@ -172,22 +158,13 @@ describe('frequencyModeForDict', () => {
 })
 
 function makePitchResult(overrides: Partial<LookupResult>): LookupResult {
-  return {
+  return makeLookupResult({
     expression: '橋',
     reading: 'はし',
     glossary: 'bridge',
     dictTitle: 'Pitch Dict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: '',
     ...overrides
-  }
+  })
 }
 
 /**

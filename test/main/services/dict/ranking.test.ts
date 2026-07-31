@@ -1,24 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { sortByFrequency } from '@src/main/services/dict/ranking'
 import type { LookupResult } from '@src/shared/dictionary'
+import { makeLookupResult } from '@test/harness/dictFixtures'
 
 function makeResult(overrides: Partial<LookupResult>): LookupResult {
-  return {
-    expression: '猫',
-    reading: 'ねこ',
-    glossary: 'cat',
-    dictTitle: 'Enabled Dict',
-    dictId: 1,
-    stylesCss: null,
-    frequency: null,
-    frequencyDisplay: null,
-    pitchAccent: null,
-    defTags: '',
-    termTags: '',
-    score: 0,
-    rules: '',
-    ...overrides
-  }
+  return makeLookupResult({ dictTitle: 'Enabled Dict', ...overrides })
 }
 
 describe('sortByFrequency', () => {
