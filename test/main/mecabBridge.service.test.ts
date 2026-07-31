@@ -3,21 +3,12 @@ import { createMecabService } from '@src/main/mecabBridge'
 import { createSettingsStore } from '@src/main/services/settings'
 import type { Token } from '@src/shared/token'
 import type { MecabConfig } from '@src/main/services/mecab/runner'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 const IPADIC_DIR = 'C:\\resources\\mecab\\ipadic'
 const UNIDIC_DIR = 'C:\\resources\\mecab\\unidic'
 
 /** Fake settings IO (mirrors settings.test.ts's fakeIo). */
-function fakeIo(initial?: string): { read(): string | undefined; write(s: string): void } {
-  let stored = initial
-  return {
-    read: () => stored,
-    write: (s: string) => {
-      stored = s
-    }
-  }
-}
-
 const sampleToken: Token = {
   surface: '猫',
   reading: 'ネコ',

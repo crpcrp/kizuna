@@ -14,6 +14,7 @@ import { cueKey } from '@src/renderer/src/state/tokenization'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import type { SearchMatch } from '@src/renderer/src/state/sidebarSearch'
+import { deferred } from '@test/harness/deferred'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 // SubtitleSidebar itself now owns hook state (search bar), so it can only be
@@ -246,20 +247,6 @@ describe('SubtitleSidebar copy toast', () => {
     expect(html).not.toContain('subtitle-sidebar-copy-toast')
   })
 })
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(reason?: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
 
 describe('createTranslationPopupController', () => {
   const anchor = { top: 10, left: 20 }

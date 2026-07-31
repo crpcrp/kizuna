@@ -6,21 +6,8 @@ import {
   type DictServiceLike
 } from '@src/main/dictBridge'
 import { DICT_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { DictInfo, ImportResult, LookupResult } from '@src/shared/dictionary'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors mecabBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const sampleImportResult: ImportResult = { dictId: 1, termCount: 6, metaCount: 0 }
 const sampleLookupResults: LookupResult[] = [

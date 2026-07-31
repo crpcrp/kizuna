@@ -4,21 +4,8 @@ import {
   type PlayerSettingsServiceLike
 } from '@src/main/playerSettingsBridge'
 import { PLAYER_SETTINGS_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors knowledgeBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 function fakeService() {
   let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS

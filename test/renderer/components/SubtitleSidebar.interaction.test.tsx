@@ -3,23 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Cue } from '@src/shared/cue'
 import SubtitleSidebar from '@src/renderer/src/components/SubtitleSidebar'
+import { deferred } from '@test/harness/deferred'
 
 const cueA: Cue = { start: 0, end: 2, text: 'first cue' }
 const cueB: Cue = { start: 2, end: 4, text: 'second cue' }
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(reason?: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise
-    reject = rejectPromise
-  })
-  return { promise, resolve, reject }
-}
 
 function rect(top: number, left: number, width: number, height: number): DOMRect {
   return { top, left, width, height, right: left + width, bottom: top + height } as DOMRect

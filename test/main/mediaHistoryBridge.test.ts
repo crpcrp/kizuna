@@ -3,20 +3,10 @@ import {
   registerMediaHistoryBridge,
   type MediaHistoryBridgeService
 } from '@src/main/mediaHistoryBridge'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MEDIA_HISTORY_CHANNELS } from '@src/shared/ipcChannels'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-
-type FakeEvent = { senderId: number }
-
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => handlers.set(channel, listener)
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 function fakeService(availability: FileAvailability = { status: 'available' }) {
   const recents: RecentMediaFile[] = [{ path: 'C:\\Media\\episode.mkv', openedAt: 1 }]

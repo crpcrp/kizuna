@@ -12,22 +12,13 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
 import { fakeAnkiConnect } from '@test/harness/fakeAnkiConnect'
 import type { SentenceAudioService } from '@src/main/services/anki/sentenceAudio'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 /** Default sentence-audio fake: the dependency is required, but most cases
  * mine without a clip, so extraction reports "nothing to attach". */
 const noSentenceAudio: SentenceAudioService = { extract: async () => null }
 
 /** Fake settings IO (mirrors mecabBridge.service.test.ts's fakeIo). */
-function fakeIo(initial?: string): { read(): string | undefined; write(s: string): void } {
-  let stored = initial
-  return {
-    read: () => stored,
-    write: (s: string) => {
-      stored = s
-    }
-  }
-}
-
 const configuredAnkiSettings = {
   ...defaultAnkiSettings,
   deckName: 'Japanese',

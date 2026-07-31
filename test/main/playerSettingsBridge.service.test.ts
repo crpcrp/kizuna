@@ -2,21 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { createPlayerSettingsService } from '@src/main/playerSettingsBridge'
 import { createSettingsStore } from '@src/main/services/settings'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 /** Injected mpv-config opener stub; the real one does fs+shell side effects. */
 const noopOpen = async (): Promise<string> => ''
 
 /** Fake settings IO (mirrors knowledgeBridge.service.test.ts's fakeIo). */
-function fakeIo(initial?: string): { read(): string | undefined; write(s: string): void } {
-  let stored = initial
-  return {
-    read: () => stored,
-    write: (s: string) => {
-      stored = s
-    }
-  }
-}
-
 describe('createPlayerSettingsService', () => {
   it('getSettings reports the defaults when nothing is stored', () => {
     const settings = createSettingsStore(fakeIo())

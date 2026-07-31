@@ -1,22 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerMecabBridge, type MecabServiceLike } from '@src/main/mecabBridge'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import { MECAB_CHANNELS } from '@src/shared/ipcChannels'
 import type { Token } from '@src/shared/token'
 import type { McDict } from '@src/shared/mecab'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors playerBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const sampleToken: Token = {
   surface: '猫',

@@ -1,23 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerAnkiBridge, type AnkiServiceLike } from '@src/main/ankiBridge'
 import { ANKI_CHANNELS } from '@src/shared/ipcChannels'
-import type { IpcMainHandleLike } from '@src/main/ipc'
 import type { AnkiMineResult, AnkiSettings, AnkiPing, MineRequest } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
-
-type FakeEvent = { senderId: number }
-
-/** Fake ipcMain: records handlers per channel (mirrors dictBridge.test.ts). */
-function fakeIpc() {
-  const handlers = new Map<string, (event: FakeEvent, ...args: unknown[]) => unknown>()
-  const ipc: IpcMainHandleLike<FakeEvent> = {
-    handle: (channel, listener) => {
-      handlers.set(channel, listener)
-    }
-  }
-  return { ipc, handlers }
-}
+import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const sampleSettings: AnkiSettings = {
   url: 'http://127.0.0.1:8765',
