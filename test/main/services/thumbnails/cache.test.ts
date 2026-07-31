@@ -1,22 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   createDebouncedThumbnailEviction,
-  createThumbnailService,
   selectEvictions,
+  summarizeCacheDir,
   collectCacheEntries,
   collectCacheEntriesAsync,
   sweepThumbnailCache,
   sweepThumbnailCacheAsync,
   THUMBNAIL_CACHE_MAX_BYTES,
-  thumbnailCachePath,
   type ThumbnailCacheEntry,
   type ThumbnailDirFs,
   type ThumbnailAsyncDirFs,
-  type ThumbnailFs,
   type ThumbnailStat
-} from '@src/main/services/thumbnails'
-import { fakeFfmpegSuccess } from '@test/harness/fakeFfmpeg'
+} from '@src/main/services/thumbnails/cache'
 
 const entry = (path: string, bytes: number, mtimeMs: number): ThumbnailCacheEntry => ({
   path,
@@ -55,6 +52,23 @@ describe('selectEvictions', () => {
 
   it('exposes a ~500 MB default cap', () => {
     expect(THUMBNAIL_CACHE_MAX_BYTES).toBe(500 * 1024 * 1024)
+  })
+})
+
+describe('summarizeCacheDir', () => {
+  // The one place the per-dir measurement rule lives: both the sync startup
+  // walk and the async runtime walk go through it, so they cannot drift.
+  it('sums bytes and takes the newest mtime', () => {
+    expect(
+      summarizeCacheDir('/cache/h1', [
+        { size: 100, mtimeMs: 10 },
+        { size: 50, mtimeMs: 40 }
+      ])
+    ).toEqual({ path: '/cache/h1', bytes: 150, mtimeMs: 40 })
+  })
+
+  it('reports an empty file-dir as zero bytes at mtime 0', () => {
+    expect(summarizeCacheDir('/cache/h1', [])).toEqual({ path: '/cache/h1', bytes: 0, mtimeMs: 0 })
   })
 })
 
@@ -142,34 +156,7 @@ describe('sweepThumbnailCacheAsync', () => {
   })
 })
 
-describe('post-write thumbnail eviction', () => {
-  it('schedules after a write, preserves the result, and skips cache hits', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const existing = new Set<string>()
-    const fs: ThumbnailFs = {
-      stat: () => ({ size: 100, mtimeMs: 200 }),
-      exists: (path) => existing.has(path),
-      mkdir: vi.fn(),
-      rename: (_from, to) => existing.add(to)
-    }
-    const schedule = vi.fn()
-    const service = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      evictionScheduler: { schedule }
-    })
-    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50)
-
-    expect(await service.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
-    expect(schedule).toHaveBeenCalledTimes(1)
-    expect(dirname(expected)).toContain('cache')
-
-    expect(await service.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
-    expect(schedule).toHaveBeenCalledTimes(1)
-  })
-
+describe('createDebouncedThumbnailEviction', () => {
   it('coalesces repeated schedules until the debounce window expires', async () => {
     vi.useFakeTimers()
     try {

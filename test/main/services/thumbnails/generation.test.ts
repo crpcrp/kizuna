@@ -8,7 +8,7 @@ import {
   createThumbnailService,
   type ThumbnailFs,
   type ThumbnailStat
-} from '@src/main/services/thumbnails'
+} from '@src/main/services/thumbnails/generation'
 import { fakeFfmpegSuccess, fakeFfmpegFailure } from '@test/harness/fakeFfmpeg'
 
 describe('bucketFor', () => {
@@ -272,5 +272,29 @@ describe('createThumbnailService.getThumbnail', () => {
     })
     expect(await svc.getThumbnail('/v/gone.mkv', 50, 100)).toBeNull()
     expect(ffmpeg.calls).toHaveLength(0)
+  })
+
+  // Generation's only tie to the cache-lifecycle module (cache.ts): a write
+  // asks the injected scheduler to sweep. The debounce/eviction policy itself
+  // is covered in cache.test.ts.
+  it('schedules eviction after a write, preserves the result, and skips cache hits', async () => {
+    const ffmpeg = fakeFfmpegSuccess()
+    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
+    const schedule = vi.fn()
+    const svc = createThumbnailService({
+      exec: ffmpeg.exec,
+      fs,
+      cacheDir: '/cache',
+      ffmpegPath: '/bin/ffmpeg',
+      evictionScheduler: { schedule }
+    })
+    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50)
+
+    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
+    expect(schedule).toHaveBeenCalledTimes(1)
+    expect(dirname(expected)).toContain('cache')
+
+    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
+    expect(schedule).toHaveBeenCalledTimes(1)
   })
 })

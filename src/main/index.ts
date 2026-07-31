@@ -32,7 +32,8 @@ import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
 import { createSystemMediaController } from './services/systemMedia'
 import { createFrameCaptureService, createScreenshotService } from './services/screenshots'
-import { sweepThumbnailCache, THUMBNAIL_CACHE_MAX_BYTES } from './services/thumbnails'
+import { sweepThumbnailCache, THUMBNAIL_CACHE_MAX_BYTES } from './services/thumbnails/cache'
+import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { hwndFromHandleBuffer } from './mpv/hwnd'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
@@ -313,10 +314,10 @@ function startMedia(ffprobePath: string, ffmpegPath: string, history: MediaHisto
 }
 
 /**
- * LRU-caps the seekbar-thumbnail cache at startup. The
- * pure eviction lives in services/thumbnails.ts; here we supply the real
- * node:fs directory walk, tolerating an absent cache dir (first run) by
- * treating a missing/unreadable listing as empty.
+ * LRU-caps the seekbar-thumbnail cache at startup. The eviction policy lives in
+ * services/thumbnails/cache.ts and the node:fs walk in
+ * services/thumbnails/nodeFs.ts (which tolerates an absent cache dir on first
+ * run); here we only name the directory and log the outcome.
  */
 function sweepThumbnails(): void {
   const cacheDir = join(app.getPath('userData'), 'thumbnails')
@@ -324,33 +325,7 @@ function sweepThumbnails(): void {
     const removed = sweepThumbnailCache({
       cacheDir,
       maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
-      fs: {
-        readSubdirs: (dir) => {
-          try {
-            return fs
-              .readdirSync(dir, { withFileTypes: true })
-              .filter((e) => e.isDirectory())
-              .map((e) => e.name)
-          } catch {
-            return []
-          }
-        },
-        readFiles: (dir) => {
-          try {
-            return fs
-              .readdirSync(dir, { withFileTypes: true })
-              .filter((e) => e.isFile())
-              .map((e) => e.name)
-          } catch {
-            return []
-          }
-        },
-        stat: (path) => {
-          const s = fs.statSync(path)
-          return { size: s.size, mtimeMs: s.mtimeMs }
-        },
-        remove: (path) => fs.rmSync(path, { recursive: true, force: true })
-      }
+      fs: nodeThumbnailDirFs
     })
     if (removed.length) console.log(`[kizuna] thumbnail cache: evicted ${removed.length} dir(s)`)
   } catch (err) {
