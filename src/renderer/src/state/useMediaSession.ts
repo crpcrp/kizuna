@@ -45,16 +45,17 @@ import { createUrlSubtitleController } from './urlSubtitleController'
 import { useLatestCallback, useLatestRef } from './useLatestRef'
 import { createYtdlpQualityReloadController } from './ytdlpQualityReload'
 
+/** The render-driven fields this feature reads. Values it only needs at the
+ * moment a handler fires (the playback position a quality reload restores, the
+ * preferred URL-subtitle language) come from `stateRef` instead, so a change to
+ * them never re-runs anything here. */
 type SessionState = Pick<
   PlayerState,
   | 'externalSubtitleEncoding'
   | 'externalSubtitlePath'
   | 'filePath'
   | 'loadGeneration'
-  | 'paused'
-  | 'preferredUrlSubtitleLanguage'
   | 'selectedSubtitleId'
-  | 'timePos'
   | 'tracks'
 >
 
