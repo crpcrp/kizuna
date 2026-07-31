@@ -34,7 +34,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Knowledge tracking | `state/useVocabularyMining.ts`, subtitle components, `state/knowledgeActions.ts`, knowledge options, `shared/knowledge.ts` | `knowledgeBridge.ts`, `services/knowledge/` |
 | Anki card creation | `state/useVocabularyMining.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Network media and subtitles | `state/useMediaSession.ts`, `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `state/ytdlpQualityReload.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
-| Settings and appearance | `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
+| Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `electron-builder.cjs` |
 
 Renderer paths in the table are relative to `src/renderer/src/`; shared and
@@ -72,11 +72,14 @@ controllers under `state/`. Keep `App.tsx` focused on composition: add the
 behavior to the feature hook that already owns the workflow —
 `state/useMediaSession.ts` (opening media, playlists, subtitles),
 `state/usePlaybackWindow.ts` (playback commands, per-file values, panels,
-window sizing, mini player), or `state/useVocabularyMining.ts` (word popup and
+window sizing, mini player), `state/useVocabularyMining.ts` (word popup and
 its Anki mine, subtitle report, bulk mining, and the tokenization/knowledge
-caches it drives through `state/useVocabularyPipeline.ts`) — rather than to the
-root component. Use semantic colors from `theme.css` rather than adding
-isolated color literals.
+caches it drives through `state/useVocabularyPipeline.ts`), or
+`state/useOptionsDialog.ts` (the Options dialog, its optional-integration data,
+and the dictionary/Anki actions that refresh it) — rather than to the root
+component. A new Options row is wired in `state/optionsMenuProps.ts`, next to
+the rest of the dialog's props. Use semantic colors from `theme.css` rather
+than adding isolated color literals.
 
 ### Update runtime binaries
 
