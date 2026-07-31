@@ -2,7 +2,8 @@ import { vi, type MockedObject } from 'vitest'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { KizunaApi } from '@src/shared/preloadApi'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
-import type { PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
+import type { SyncStatus } from '@src/shared/knowledge'
+import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -12,16 +13,7 @@ export type FakeKizunaApiOverrides = {
   [Domain in keyof KizunaApi]?: Partial<FakeKizunaApi[Domain]>
 }
 
-const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
-  hasWanikaniToken: false,
-  encryptionAvailable: true,
-  ankiKnownDecks: [],
-  ankiKnownField: 'Expression',
-  knownIntervalDays: 21,
-  wellKnownIntervalDays: 90,
-  coloringEnabled: true,
-  staleAfterHours: 24
-}
+const DEFAULT_KNOWLEDGE_SETTINGS = makePublicKnowledgeSettings()
 
 const DEFAULT_SYNC_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },
