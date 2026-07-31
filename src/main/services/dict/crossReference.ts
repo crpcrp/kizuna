@@ -1,6 +1,7 @@
 import { parseStructuredGlossary, type GlossaryNode } from '../../../shared/structuredGlossary'
 import type { LookupResult } from '../../../shared/dictionary'
-import { normalizeReading, type LookupDb } from './lookup'
+import type { LookupDb } from './lookupDb'
+import { normalizeReading } from './reading'
 
 export interface CrossReferenceTarget {
   query: string
