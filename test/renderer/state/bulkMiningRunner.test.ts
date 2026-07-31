@@ -6,16 +6,16 @@ import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
 import { type DictLookupBridge } from '@src/renderer/src/state/wordLookup'
 import { resolveCandidateEntries } from '@src/renderer/src/state/bulkMiningRunner'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(overrides: Partial<Token> = {}): Token {
-  return {
+  return makeToken({
     surface: 'surface',
     reading: 'reading',
     lemma: 'lemma',
     pos: 'noun',
-    startOffset: 0,
     ...overrides
-  }
+  })
 }
 
 function candidate(lemma: string, overrides: Partial<Token> = {}): MiningCandidate {

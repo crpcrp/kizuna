@@ -3,9 +3,10 @@ import { createWordPopupActions } from '@src/renderer/src/state/wordPopupActions
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const tokenA: Token = { surface: 'A', reading: 'A', lemma: 'A', pos: 'noun', startOffset: 0 }
-const tokenB: Token = { surface: 'B', reading: 'B', lemma: 'B', pos: 'noun', startOffset: 0 }
+const tokenA: Token = makeToken({ surface: 'A', reading: 'A', pos: 'noun' })
+const tokenB: Token = makeToken({ surface: 'B', reading: 'B', pos: 'noun' })
 const result = (expression: string): LookupResult =>
   makeLookupResult({
     expression,

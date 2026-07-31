@@ -6,9 +6,10 @@ import {
 import type { SyncStatus } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import type { WholeTrackVocabularyResult } from '@src/renderer/src/state/wholeTrackVocabulary'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(lemma: string): Token {
-  return { surface: lemma, reading: '', lemma, pos: 'noun', startOffset: 0 }
+  return makeToken({ surface: lemma, reading: '', lemma, pos: 'noun' })
 }
 
 function readySnapshot(): WholeTrackVocabularyResult {

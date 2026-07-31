@@ -4,23 +4,18 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import BulkMiningSidebar, {
   type BulkMiningSidebarProps
 } from '@src/renderer/src/components/BulkMiningSidebar'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const candidates = [
   {
     lemma: '食べる',
-    token: {
-      surface: '食べます',
-      lemma: '食べる',
-      reading: '',
-      pos: 'verb' as const,
-      startOffset: 0
-    },
+    token: makeToken({ surface: '食べます', lemma: '食べる', pos: 'verb' as const }),
     sentence: '食べます',
     count: 1
   },
   {
     lemma: '猫',
-    token: { surface: '猫', lemma: '猫', reading: '', pos: 'noun' as const, startOffset: 4 },
+    token: makeToken({ surface: '猫', pos: 'noun' as const, startOffset: 4 }),
     sentence: '猫',
     count: 1
   }

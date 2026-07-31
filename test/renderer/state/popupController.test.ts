@@ -9,8 +9,9 @@ import {
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const token: Token = { surface: 'A', reading: 'A', lemma: 'A', pos: 'noun', startOffset: 0 }
+const token: Token = makeToken({ surface: 'A', reading: 'A', pos: 'noun' })
 const result = (expression: string): LookupResult =>
   makeLookupResult({
     expression,

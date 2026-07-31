@@ -22,16 +22,10 @@ import {
   type ResolvedEntry
 } from '@src/renderer/src/state/bulkMining'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(overrides: Partial<Token> = {}): Token {
-  return {
-    surface: 'word',
-    reading: 'reading',
-    lemma: 'word',
-    pos: 'noun',
-    startOffset: 0,
-    ...overrides
-  }
+  return makeToken({ surface: 'word', reading: 'reading', pos: 'noun', ...overrides })
 }
 
 function candidate(lemma: string, count = 1, firstOccurrence?: number): MiningCandidate {

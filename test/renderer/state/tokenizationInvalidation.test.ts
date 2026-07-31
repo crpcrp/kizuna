@@ -4,15 +4,12 @@ import type { Token } from '@src/shared/token'
 import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
 import { cueKey, tokenizeActiveCue } from '@src/renderer/src/state/tokenization'
 import { invalidateTokenizationForDictionaryChange } from '@src/renderer/src/state/tokenizationInvalidation'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const cue: Cue = { start: 0, end: 1, text: '猫' }
 const otherCue: Cue = { start: 1, end: 2, text: '犬' }
-const oldTokens: Token[] = [
-  { surface: '猫', reading: 'ネコ', lemma: 'old', pos: '名詞', startOffset: 0 }
-]
-const newTokens: Token[] = [
-  { surface: '猫', reading: 'ねこ', lemma: 'new', pos: '名詞', startOffset: 0 }
-]
+const oldTokens: Token[] = [makeToken({ surface: '猫', reading: 'ネコ', lemma: 'old' })]
+const newTokens: Token[] = [makeToken({ surface: '猫', reading: 'ねこ', lemma: 'new' })]
 
 function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
   let resolve!: (value: T) => void

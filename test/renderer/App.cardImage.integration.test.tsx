@@ -7,6 +7,7 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 // Regression coverage for the mined-card picture flow (issue: mining silently
 // did nothing whenever a Picture field was mapped). The crop dialog renders
@@ -21,13 +22,7 @@ const EPISODE = 'C:\\Media\\Episode05.mkv'
 const CUE_TEXT = '猫が好き'
 const FRAME_BASE64 = 'ZmFrZS1mcmFtZQ=='
 
-const TOKEN = {
-  surface: '猫',
-  reading: 'ネコ',
-  lemma: '猫',
-  pos: '名詞,一般',
-  startOffset: 0
-}
+const TOKEN = makeToken({ surface: '猫', reading: 'ネコ', pos: '名詞,一般' })
 
 const RESULT: LookupResult = makeLookupResult({ glossaryJson: null, dictTitle: 'Fake Dict' })
 

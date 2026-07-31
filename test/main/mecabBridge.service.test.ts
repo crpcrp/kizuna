@@ -4,18 +4,13 @@ import { createSettingsStore } from '@src/main/services/settings'
 import type { Token } from '@src/shared/token'
 import type { MecabConfig } from '@src/main/services/mecab/runner'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const IPADIC_DIR = 'C:\\resources\\mecab\\ipadic'
 const UNIDIC_DIR = 'C:\\resources\\mecab\\unidic'
 
 /** Fake settings IO (mirrors settings.test.ts's fakeIo). */
-const sampleToken: Token = {
-  surface: '猫',
-  reading: 'ネコ',
-  lemma: '猫',
-  pos: '名詞',
-  startOffset: 0
-}
+const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 
 function fakeTokenizeFn() {
   const calls: Array<{ cfg: MecabConfig; text: string }> = []

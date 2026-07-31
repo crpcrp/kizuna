@@ -13,6 +13,7 @@ import { type Cue } from '@src/shared/cue'
 import { type KnowledgeLevel } from '@src/shared/knowledge'
 import { type Token } from '@src/shared/token'
 import { deferred } from '@test/harness/playerActionFakes'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 describe('cueKey', () => {
   it('is stable for identical cues and differs when any field changes', () => {
@@ -25,7 +26,7 @@ describe('cueKey', () => {
 })
 
 describe('tokenizeActiveCue', () => {
-  const tokenA: Token = { surface: 'a', reading: '', lemma: 'a', pos: 'noun', startOffset: 0 }
+  const tokenA: Token = makeToken({ surface: 'a', pos: 'noun' })
   const cue: Cue = { start: 0, end: 1, text: 'hi' }
 
   function makeMecabBridge(): MecabBridge {
@@ -117,27 +118,9 @@ describe('tokenizeActiveCue', () => {
 })
 
 describe('resolveKnownLevels', () => {
-  const tokenA: Token = {
-    surface: 'lemmaA',
-    reading: '',
-    lemma: 'lemmaA',
-    pos: 'noun',
-    startOffset: 0
-  }
-  const tokenB: Token = {
-    surface: 'lemmaB',
-    reading: '',
-    lemma: 'lemmaB',
-    pos: 'noun',
-    startOffset: 1
-  }
-  const tokenARepeat: Token = {
-    surface: 'lemmaA',
-    reading: '',
-    lemma: 'lemmaA',
-    pos: 'noun',
-    startOffset: 2
-  }
+  const tokenA: Token = makeToken({ surface: 'lemmaA', pos: 'noun' })
+  const tokenB: Token = makeToken({ surface: 'lemmaB', pos: 'noun', startOffset: 1 })
+  const tokenARepeat: Token = makeToken({ surface: 'lemmaA', pos: 'noun', startOffset: 2 })
 
   function makeKnowledgeBridge(overrides: Partial<KnowledgeBridge> = {}): KnowledgeBridge {
     return {
@@ -280,20 +263,8 @@ describe('resolveKnownLevels', () => {
 describe('tokenizeAllCues', () => {
   const cueA: Cue = { start: 0, end: 1, text: '猫' }
   const cueB: Cue = { start: 1, end: 2, text: '犬' }
-  const tokenCat: Token = {
-    surface: '猫',
-    reading: 'ネコ',
-    lemma: '猫',
-    pos: '名詞',
-    startOffset: 0
-  }
-  const tokenDog: Token = {
-    surface: '犬',
-    reading: 'イヌ',
-    lemma: '犬',
-    pos: '名詞',
-    startOffset: 0
-  }
+  const tokenCat: Token = makeToken({ surface: '猫', reading: 'ネコ' })
+  const tokenDog: Token = makeToken({ surface: '犬', reading: 'イヌ' })
 
   function makeMecabBatch(batches: Token[][]): MecabBatchBridge {
     return { tokenizeBatch: vi.fn().mockResolvedValue(batches) }

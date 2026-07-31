@@ -6,10 +6,10 @@ import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
+import { makeAnkiSettings } from '@test/harness/ankiFixtures'
 
-const sampleSettings: AnkiSettings = {
-  url: 'http://127.0.0.1:8765',
-  apiKey: '',
+const sampleSettings: AnkiSettings = makeAnkiSettings({
   deckName: 'Japanese',
   modelName: 'Kizuna',
   fieldMap: {
@@ -17,24 +17,11 @@ const sampleSettings: AnkiSettings = {
     reading: 'Reading',
     definition: 'Definition',
     sentence: 'Sentence',
-    frequency: '',
-    pitchAccent: '',
-    wordAudio: 'WordAudio',
-    picture: '',
-    sentenceAudio: ''
-  },
-  tags: ['kizuna'],
-  includeWordAudio: true,
-  duplicatePolicy: 'prevent-deck'
-}
+    wordAudio: 'WordAudio'
+  }
+})
 
-const sampleToken: Token = {
-  surface: '猫',
-  reading: 'ネコ',
-  lemma: '猫',
-  pos: '名詞',
-  startOffset: 0
-}
+const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const sampleResult: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const sampleMineRequest: MineRequest = {
   token: sampleToken,

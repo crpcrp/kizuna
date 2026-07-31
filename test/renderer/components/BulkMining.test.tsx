@@ -4,14 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import BulkMining, { type BulkMiningProps } from '@src/renderer/src/components/BulkMining'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const token = (surface: string, lemma = surface) => ({
-  surface,
-  lemma,
-  reading: '',
-  pos: 'noun' as const,
-  startOffset: 0
-})
+const token = (surface: string, lemma = surface) => makeToken({ surface, lemma, pos: 'noun' })
 const entry = (frequency: number | null, frequencyDisplay: string | null = null): LookupResult =>
   makeLookupResult({ expression: 'x', reading: '', glossary: '', frequency, frequencyDisplay })
 const candidates = [

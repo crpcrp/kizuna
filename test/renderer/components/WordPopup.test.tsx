@@ -11,6 +11,7 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy,
 // mirroring test/optionsMenu.test.tsx exactly.
@@ -649,13 +650,7 @@ function onClickOf(el: ElementNode): () => void {
   return el.props.onClick as () => void
 }
 
-const sampleToken: Token = {
-  surface: '食べる',
-  reading: 'たべる',
-  lemma: '食べる',
-  pos: '動詞',
-  startOffset: 0
-}
+const sampleToken: Token = makeToken({ surface: '食べる', reading: 'たべる', pos: '動詞' })
 
 describe('WordPopup Anki mining action', () => {
   it('renders one ＋ Anki button per row when onAddToAnki is supplied', () => {

@@ -4,7 +4,6 @@ import { createAnkiService } from '@src/main/services/anki/service'
 import { createSettingsStore } from '@src/main/services/settings'
 import {
   ANKI_MEMBERSHIP_BATCH_LIMIT,
-  defaultAnkiSettings,
   type MineMediaContext,
   type MineRequest
 } from '@src/shared/anki'
@@ -14,14 +13,15 @@ import { fakeAnkiConnect } from '@test/harness/fakeAnkiConnect'
 import type { SentenceAudioService } from '@src/main/services/anki/sentenceAudio'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
+import { makeAnkiSettings } from '@test/harness/ankiFixtures'
 
 /** Default sentence-audio fake: the dependency is required, but most cases
  * mine without a clip, so extraction reports "nothing to attach". */
 const noSentenceAudio: SentenceAudioService = { extract: async () => null }
 
 /** Fake settings IO (mirrors mecabBridge.service.test.ts's fakeIo). */
-const configuredAnkiSettings = {
-  ...defaultAnkiSettings,
+const configuredAnkiSettings = makeAnkiSettings({
   deckName: 'Japanese',
   modelName: 'Kizuna',
   fieldMap: {
@@ -29,15 +29,11 @@ const configuredAnkiSettings = {
     reading: 'Reading',
     definition: 'Definition',
     sentence: 'Sentence',
-    frequency: '',
-    pitchAccent: '',
-    wordAudio: 'WordAudio',
-    picture: '',
-    sentenceAudio: ''
+    wordAudio: 'WordAudio'
   }
-}
+})
 
-const token: Token = { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 }
+const token: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 

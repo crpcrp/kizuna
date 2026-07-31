@@ -5,6 +5,7 @@ import AnkiTab, {
   parseTagsInput
 } from '@src/renderer/src/components/options/AnkiTab'
 import { defaultAnkiSettings, mergeAnkiSettings } from '@src/shared/anki'
+import { makeAnkiSettings } from '@test/harness/ankiFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
 // policy — same pattern OptionsMenu.test.tsx uses.
@@ -14,7 +15,7 @@ function noop(): void {}
 function renderTab(overrides: Partial<React.ComponentProps<typeof AnkiTab>> = {}): string {
   return renderToStaticMarkup(
     <AnkiTab
-      ankiSettings={defaultAnkiSettings}
+      ankiSettings={makeAnkiSettings()}
       ankiDeckNames={[]}
       ankiModelNames={[]}
       ankiModelFields={[]}
@@ -28,7 +29,7 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof AnkiTab>> = {}
 describe('AnkiTab markup', () => {
   it('renders the Anki tab with URL/deck/model inputs bound to ankiSettings', () => {
     const html = renderTab({
-      ankiSettings: { ...defaultAnkiSettings, url: 'http://127.0.0.1:8765', deckName: 'Mining' },
+      ankiSettings: makeAnkiSettings({ url: 'http://127.0.0.1:8765', deckName: 'Mining' }),
       ankiDeckNames: ['Mining', 'Core 2k'],
       ankiModelNames: ['Basic', 'Kizuna']
     })
@@ -40,7 +41,7 @@ describe('AnkiTab markup', () => {
   })
 
   it('renders the API key as a password draft field with Save/Clear, never echoing the stored key', () => {
-    const html = renderTab({ ankiSettings: { ...defaultAnkiSettings, apiKey: 'secret' } })
+    const html = renderTab({ ankiSettings: makeAnkiSettings({ apiKey: 'secret' }) })
     // Secret credential (mirrors the WaniKani token): the input is a local draft,
     // so the stored key is never rendered into value; a masked placeholder + a
     // "Configured ✓" status convey that one is set.
@@ -53,7 +54,7 @@ describe('AnkiTab markup', () => {
   })
 
   it('shows the API key as not set with the Clear button disabled when no key is stored', () => {
-    const html = renderTab({ ankiSettings: { ...defaultAnkiSettings, apiKey: '' } })
+    const html = renderTab({ ankiSettings: makeAnkiSettings({ apiKey: '' }) })
     expect(html).toMatch(/id="anki-api-key-status"[^>]*data-configured="false"[^>]*>Not set/)
     expect(html).toMatch(/id="anki-api-key-clear"[^>]*disabled/)
   })
@@ -74,14 +75,14 @@ describe('AnkiTab markup', () => {
   })
 
   it('renders the tags input joined by ", " and the include-audio checkbox', () => {
-    const html = renderTab({ ankiSettings: { ...defaultAnkiSettings, tags: ['kizuna', 'jp'] } })
+    const html = renderTab({ ankiSettings: makeAnkiSettings({ tags: ['kizuna', 'jp'] }) })
     expect(html).toMatch(/id="anki-tags-input"[^>]*value="kizuna, jp"/)
     expect(html).toContain('id="anki-include-audio-checkbox"')
   })
 
   it('renders all duplicate-policy choices with the persisted selection', () => {
     const html = renderTab({
-      ankiSettings: { ...defaultAnkiSettings, duplicatePolicy: 'overwrite' }
+      ankiSettings: makeAnkiSettings({ duplicatePolicy: 'overwrite' })
     })
     expect(html).toMatch(/id="anki-duplicate-policy-select"[^>]*>/)
     expect(html).toContain('<option value="prevent-global">Prevent duplicates globally</option>')
@@ -131,13 +132,13 @@ describe('AnkiTab pure helpers', () => {
 
   it('warns that mined content leaves the machine only for a non-loopback URL', () => {
     const remote = renderTab({
-      ankiSettings: { ...defaultAnkiSettings, url: 'http://192.168.1.20:8765' }
+      ankiSettings: makeAnkiSettings({ url: 'http://192.168.1.20:8765' })
     })
     expect(remote).toContain('id="anki-url-warning"')
     expect(remote).toContain('not on this machine')
 
     const local = renderTab({
-      ankiSettings: { ...defaultAnkiSettings, url: 'http://127.0.0.1:8765' }
+      ankiSettings: makeAnkiSettings({ url: 'http://127.0.0.1:8765' })
     })
     expect(local).not.toContain('anki-url-warning')
   })
@@ -181,10 +182,9 @@ describe('AnkiTab picture mapping', () => {
 
   it('binds the Picture select to the persisted mapping', () => {
     const html = renderTab({
-      ankiSettings: {
-        ...defaultAnkiSettings,
-        fieldMap: { ...defaultAnkiSettings.fieldMap, picture: 'Screenshot' }
-      },
+      ankiSettings: makeAnkiSettings({
+        fieldMap: { picture: 'Screenshot' }
+      }),
       ankiModelFields: ['Screenshot']
     })
 
@@ -224,10 +224,9 @@ describe('AnkiTab frequency mapping', () => {
 
   it('binds the Frequency select to the persisted mapping', () => {
     const html = renderTab({
-      ankiSettings: {
-        ...defaultAnkiSettings,
-        fieldMap: { ...defaultAnkiSettings.fieldMap, frequency: 'Freq' }
-      },
+      ankiSettings: makeAnkiSettings({
+        fieldMap: { frequency: 'Freq' }
+      }),
       ankiModelFields: ['Freq']
     })
 
@@ -260,10 +259,9 @@ describe('AnkiTab pitch-accent mapping', () => {
 
   it('binds the Pitch accent select to the persisted mapping', () => {
     const html = renderTab({
-      ankiSettings: {
-        ...defaultAnkiSettings,
-        fieldMap: { ...defaultAnkiSettings.fieldMap, pitchAccent: 'Pitch' }
-      },
+      ankiSettings: makeAnkiSettings({
+        fieldMap: { pitchAccent: 'Pitch' }
+      }),
       ankiModelFields: ['Pitch']
     })
 
@@ -295,10 +293,9 @@ describe('AnkiTab sentence-audio mapping', () => {
 
   it('binds the Sentence audio select to the persisted mapping', () => {
     const html = renderTab({
-      ankiSettings: {
-        ...defaultAnkiSettings,
-        fieldMap: { ...defaultAnkiSettings.fieldMap, sentenceAudio: 'SentenceAudio' }
-      },
+      ankiSettings: makeAnkiSettings({
+        fieldMap: { sentenceAudio: 'SentenceAudio' }
+      }),
       ankiModelFields: ['SentenceAudio']
     })
 
