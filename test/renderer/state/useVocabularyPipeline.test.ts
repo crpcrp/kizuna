@@ -15,6 +15,7 @@ import {
   type WholeTrackVocabularyResult
 } from '@src/renderer/src/state/wholeTrackVocabulary'
 import { createSubtitleReportController } from '@src/renderer/src/state/subtitleReportController'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -28,8 +29,8 @@ const cueA: Cue = { start: 0, end: 1, text: 'a' }
 const cueB: Cue = { start: 1, end: 2, text: 'b' }
 const cueAKey = '0|1|a'
 const cueBKey = '1|2|b'
-const tokenA: Token = { surface: 'a', reading: '', lemma: 'a', pos: 'noun', startOffset: 0 }
-const tokenB: Token = { surface: 'b', reading: '', lemma: 'b', pos: 'noun', startOffset: 0 }
+const tokenA: Token = makeToken({ surface: 'a', pos: 'noun' })
+const tokenB: Token = makeToken({ surface: 'b', pos: 'noun' })
 
 function makeBridges(
   overrides: Partial<{

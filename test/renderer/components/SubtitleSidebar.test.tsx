@@ -15,6 +15,7 @@ import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import type { SearchMatch } from '@src/renderer/src/state/sidebarSearch'
 import { deferred } from '@test/harness/deferred'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 // SubtitleSidebar itself now owns hook state (search bar), so it can only be
@@ -25,17 +26,6 @@ import { deferred } from '@test/harness/deferred'
 // on open, scroll on explicit navigation) are not exercised here, same as
 // MenuBar's outside-click listener and OptionsMenu's rebind-capture
 // listener — they need a live DOM this test environment doesn't provide.
-
-function makeToken(overrides: Partial<Token>): Token {
-  return {
-    surface: '',
-    reading: '',
-    lemma: '',
-    pos: '',
-    startOffset: 0,
-    ...overrides
-  }
-}
 
 const cueA: Cue = { start: 0, end: 2, text: 'hello' }
 const cueB: Cue = { start: 3, end: 5, text: 'a\nb' }
@@ -92,9 +82,9 @@ describe('SubtitleSidebar row rendering', () => {
 describe('SubtitleSidebar knowledge-level coloring', () => {
   const cue: Cue = { start: 0, end: 2, text: '猫は可愛い' }
   const tokens: Token[] = [
-    makeToken({ surface: '猫', lemma: '猫', startOffset: 0 }),
-    makeToken({ surface: 'は', lemma: 'は', startOffset: 1 }),
-    makeToken({ surface: '可愛い', lemma: '可愛い', startOffset: 2 })
+    makeToken({ surface: '猫' }),
+    makeToken({ surface: 'は', startOffset: 1 }),
+    makeToken({ surface: '可愛い', startOffset: 2 })
   ]
 
   it('renders data-level per token when tokens are available for the cue', () => {
@@ -149,10 +139,10 @@ describe('SubtitleSidebar symbol tokens', () => {
   // here too, even when absent from levels (would otherwise default to unknown).
   const cue: Cue = { start: 0, end: 2, text: '猫(?)' }
   const tokens: Token[] = [
-    makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),
-    makeToken({ surface: '(', lemma: '(', pos: '記号,括弧開', startOffset: 1 }),
-    makeToken({ surface: '?', lemma: '?', pos: '記号,一般', startOffset: 2 }),
-    makeToken({ surface: ')', lemma: ')', pos: '補助記号,括弧閉', startOffset: 3 })
+    makeToken({ surface: '猫', reading: 'ねこ' }),
+    makeToken({ surface: '(', pos: '記号,括弧開', startOffset: 1 }),
+    makeToken({ surface: '?', pos: '記号,一般', startOffset: 2 }),
+    makeToken({ surface: ')', pos: '補助記号,括弧閉', startOffset: 3 })
   ]
 
   it('renders "wellKnown" for symbol tokens even when absent from levels', () => {
@@ -516,9 +506,9 @@ describe('CueRowContent search highlighting', () => {
 
   it('wraps the intersecting substring inside a token span, preserving data-level', () => {
     const tokens: Token[] = [
-      makeToken({ surface: '猫', lemma: '猫', startOffset: 0 }),
-      makeToken({ surface: 'は', lemma: 'は', startOffset: 1 }),
-      makeToken({ surface: '猫', lemma: '猫', startOffset: 2 })
+      makeToken({ surface: '猫' }),
+      makeToken({ surface: 'は', startOffset: 1 }),
+      makeToken({ surface: '猫', startOffset: 2 })
     ]
     const matches: SearchMatch[] = [{ cueKey: cueKey(cue), start: 2, end: 3 }]
     const html = renderToStaticMarkup(

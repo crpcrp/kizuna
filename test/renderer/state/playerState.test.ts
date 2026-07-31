@@ -19,6 +19,7 @@ import {
   DEFAULT_SUBTITLE_STYLE,
   DEFAULT_VIDEO_ADJUSTMENTS
 } from '@src/shared/playerSettings'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const audioTrack: Track = { id: 1, kind: 'audio', codec: 'aac' }
 const audioTrack2: Track = { id: 2, kind: 'audio', codec: 'aac' }
@@ -235,13 +236,7 @@ describe('playerReducer', () => {
   })
 
   it('mediaClosed clears file identity and per-file state but keeps settings', () => {
-    const token: Token = {
-      surface: '猫',
-      reading: 'ねこ',
-      lemma: '猫',
-      pos: '名詞',
-      startOffset: 0
-    }
+    const token: Token = makeToken({ surface: '猫', reading: 'ねこ' })
     const loaded = playerReducer(
       {
         ...initialPlayerState,
@@ -483,7 +478,7 @@ describe('playerReducer', () => {
     const withTokens: PlayerState = {
       ...initialPlayerState,
       allCueTokens: {
-        '0|2|old': [{ surface: 'x', reading: '', lemma: 'x', pos: 'n', startOffset: 0 }]
+        '0|2|old': [makeToken({ surface: 'x', pos: 'n' })]
       }
     }
     const next = playerReducer(withTokens, { type: 'cuesLoaded', cues })
@@ -493,16 +488,14 @@ describe('playerReducer', () => {
 
   it('allCueTokensLoaded sets the whole-track token map', () => {
     const tokens: Record<string, Token[]> = {
-      '0|1|hi': [{ surface: 'hi', reading: '', lemma: 'hi', pos: 'n', startOffset: 0 }]
+      '0|1|hi': [makeToken({ surface: 'hi', pos: 'n' })]
     }
     const next = playerReducer(initialPlayerState, { type: 'allCueTokensLoaded', tokens })
     expect(next.allCueTokens).toBe(tokens)
   })
 
   it('keeps state identity for a whole-track snapshot with the same cue keys and token arrays', () => {
-    const cueTokens: Token[] = [
-      { surface: 'hi', reading: '', lemma: 'hi', pos: 'n', startOffset: 0 }
-    ]
+    const cueTokens: Token[] = [makeToken({ surface: 'hi', pos: 'n' })]
     const current = playerReducer(initialPlayerState, {
       type: 'allCueTokensLoaded',
       tokens: { '0|1|hi': cueTokens }
@@ -518,12 +511,8 @@ describe('playerReducer', () => {
   })
 
   it('publishes a changed track once and clears a non-empty snapshot for invalidation', () => {
-    const firstTokens: Token[] = [
-      { surface: 'one', reading: '', lemma: 'one', pos: 'n', startOffset: 0 }
-    ]
-    const changedTokens: Token[] = [
-      { surface: 'two', reading: '', lemma: 'two', pos: 'n', startOffset: 0 }
-    ]
+    const firstTokens: Token[] = [makeToken({ surface: 'one', pos: 'n' })]
+    const changedTokens: Token[] = [makeToken({ surface: 'two', pos: 'n' })]
     const first = playerReducer(initialPlayerState, {
       type: 'allCueTokensLoaded',
       tokens: { first: firstTokens }
@@ -639,13 +628,13 @@ describe('playerReducer', () => {
   })
 
   it('activeTokensLoaded sets activeTokens', () => {
-    const tokens: Token[] = [{ surface: 'a', reading: '', lemma: 'a', pos: 'noun', startOffset: 0 }]
+    const tokens: Token[] = [makeToken({ surface: 'a', pos: 'noun' })]
     const next = playerReducer(initialPlayerState, { type: 'activeTokensLoaded', tokens })
     expect(next.activeTokens).toBe(tokens)
   })
 
   it('resetTokenization clears active and whole-track tokens', () => {
-    const tokens: Token[] = [{ surface: 'a', reading: '', lemma: 'a', pos: 'noun', startOffset: 0 }]
+    const tokens: Token[] = [makeToken({ surface: 'a', pos: 'noun' })]
     const populated = playerReducer(
       playerReducer(initialPlayerState, { type: 'activeTokensLoaded', tokens }),
       { type: 'allCueTokensLoaded', tokens: { cue: tokens } }

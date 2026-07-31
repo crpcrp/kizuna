@@ -4,14 +4,9 @@ import { MECAB_CHANNELS } from '@src/shared/ipcChannels'
 import type { Token } from '@src/shared/token'
 import type { McDict } from '@src/shared/mecab'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const sampleToken: Token = {
-  surface: '猫',
-  reading: 'ネコ',
-  lemma: '猫',
-  pos: '名詞',
-  startOffset: 0
-}
+const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const sampleDicts: McDict[] = [
   { id: 'ipadic', label: 'IPADIC', dicdir: '/ipadic', flavor: 'ipadic', installed: true }
 ]

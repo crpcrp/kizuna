@@ -11,6 +11,7 @@ import {
 import { type LookupResult } from '@src/shared/dictionary'
 import { type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 describe('wordPopupPosition', () => {
   it('anchors at the subtitle box’s horizontal center / top when a rect is given', () => {
@@ -35,7 +36,7 @@ describe('wordPopupPosition', () => {
 })
 
 describe('lookupWordPopup', () => {
-  const token: Token = { surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }
+  const token: Token = makeToken({ surface: '猫', reading: 'ねこ' })
   const result: LookupResult = makeLookupResult({
     expression: '猫',
     reading: 'ねこ',
@@ -92,20 +93,8 @@ describe('lookupWordPopup', () => {
 
   it('forwards token-boundary and clicked-token prefix candidates longest first', async () => {
     const bridge = makeDictBridge()
-    const enma: Token = {
-      surface: '閻魔',
-      reading: 'えんま',
-      lemma: '閻魔',
-      pos: '名詞',
-      startOffset: 1
-    }
-    const daiou: Token = {
-      surface: '大王',
-      reading: 'だいおう',
-      lemma: '大王',
-      pos: '名詞',
-      startOffset: 3
-    }
+    const enma: Token = makeToken({ surface: '閻魔', reading: 'えんま', startOffset: 1 })
+    const daiou: Token = makeToken({ surface: '大王', reading: 'だいおう', startOffset: 3 })
     const cueTokens = [enma, daiou]
 
     await lookupWordPopup(bridge, enma, { x: 0, y: 0 }, null, undefined, cueTokens)
@@ -122,20 +111,8 @@ describe('lookupWordPopup', () => {
 
   it('includes a differing clicked surface after existing compound candidates', async () => {
     const bridge = makeDictBridge()
-    const goku: Token = {
-      surface: '悟空',
-      reading: 'ゴクー',
-      lemma: 'ゴクウ',
-      pos: '名詞',
-      startOffset: 0
-    }
-    const next: Token = {
-      surface: '様',
-      reading: 'サマ',
-      lemma: '様',
-      pos: '接尾辞',
-      startOffset: 2
-    }
+    const goku: Token = makeToken({ surface: '悟空', reading: 'ゴクー', lemma: 'ゴクウ' })
+    const next: Token = makeToken({ surface: '様', reading: 'サマ', pos: '接尾辞', startOffset: 2 })
 
     await lookupWordPopup(bridge, goku, { x: 0, y: 0 }, null, undefined, [goku, next])
 
@@ -151,13 +128,12 @@ describe('lookupWordPopup', () => {
 
   it('queries JPDBv2’s exact 良かろう headword when MeCab supplies a different lemma', async () => {
     const bridge = makeDictBridge()
-    const yokarou: Token = {
+    const yokarou: Token = makeToken({
       surface: '良かろう',
       reading: 'よかろう',
       lemma: '良い',
-      pos: '形容詞',
-      startOffset: 0
-    }
+      pos: '形容詞'
+    })
 
     await lookupWordPopup(bridge, yokarou, { x: 0, y: 0 }, null, undefined, [yokarou])
 
@@ -181,13 +157,12 @@ describe('lookupWordPopup', () => {
 
   it('does not offer internal prefixes for an inflected single-token form', async () => {
     const bridge = makeDictBridge()
-    const ikitakereba: Token = {
+    const ikitakereba: Token = makeToken({
       surface: '行きたければ',
       reading: 'イキタケレバ',
       lemma: '行く',
-      pos: '動詞',
-      startOffset: 0
-    }
+      pos: '動詞'
+    })
 
     await lookupWordPopup(bridge, ikitakereba, { x: 0, y: 0 }, null, undefined, [ikitakereba])
 
@@ -202,20 +177,8 @@ describe('lookupWordPopup', () => {
   })
 
   it('highlights the full compound span when the resolved expression is a longest-match hit', async () => {
-    const enma: Token = {
-      surface: '閻魔',
-      reading: 'えんま',
-      lemma: '閻魔',
-      pos: '名詞',
-      startOffset: 1
-    }
-    const daiou: Token = {
-      surface: '大王',
-      reading: 'だいおう',
-      lemma: '大王',
-      pos: '名詞',
-      startOffset: 3
-    }
+    const enma: Token = makeToken({ surface: '閻魔', reading: 'えんま', startOffset: 1 })
+    const daiou: Token = makeToken({ surface: '大王', reading: 'だいおう', startOffset: 3 })
     const cueTokens = [enma, daiou]
     const compoundResult: LookupResult = { ...result, expression: '閻魔大王' }
     const bridge: DictLookupBridge = { lookup: vi.fn().mockResolvedValue([compoundResult]) }
@@ -226,14 +189,14 @@ describe('lookupWordPopup', () => {
   })
 
   it('highlights all of がよい when the dictionary result uses the が良い spelling', async () => {
-    const ga: Token = { surface: 'が', reading: 'が', lemma: 'が', pos: '助詞', startOffset: 0 }
-    const yoi: Token = {
+    const ga: Token = makeToken({ surface: 'が', reading: 'が', pos: '助詞' })
+    const yoi: Token = makeToken({
       surface: 'よい',
       reading: 'よい',
       lemma: '良い',
       pos: '形容詞',
       startOffset: 1
-    }
+    })
     const orthographicResult: LookupResult = { ...result, expression: 'が良い' }
     const bridge: DictLookupBridge = { lookup: vi.fn().mockResolvedValue([orthographicResult]) }
 
@@ -243,13 +206,7 @@ describe('lookupWordPopup', () => {
   })
 
   it('highlights just the clicked token when the resolved expression is not a compound (e.g. deinflection)', async () => {
-    const tabeta: Token = {
-      surface: '食べた',
-      reading: 'たべた',
-      lemma: '食べた',
-      pos: '動詞',
-      startOffset: 0
-    }
+    const tabeta: Token = makeToken({ surface: '食べた', reading: 'たべた', pos: '動詞' })
     const deinflectedResult: LookupResult = { ...result, expression: '食べる' }
     const bridge: DictLookupBridge = { lookup: vi.fn().mockResolvedValue([deinflectedResult]) }
 
@@ -314,27 +271,9 @@ describe('lookupLinkedWord', () => {
 })
 
 describe('matchedTokenSpan', () => {
-  const enma: Token = {
-    surface: '閻魔',
-    reading: 'えんま',
-    lemma: '閻魔',
-    pos: '名詞',
-    startOffset: 1
-  }
-  const daiou: Token = {
-    surface: '大王',
-    reading: 'だいおう',
-    lemma: '大王',
-    pos: '名詞',
-    startOffset: 3
-  }
-  const un: Token = {
-    surface: 'うん',
-    reading: 'うん',
-    lemma: 'うん',
-    pos: '感動詞',
-    startOffset: 5
-  }
+  const enma: Token = makeToken({ surface: '閻魔', reading: 'えんま', startOffset: 1 })
+  const daiou: Token = makeToken({ surface: '大王', reading: 'だいおう', startOffset: 3 })
+  const un: Token = makeToken({ surface: 'うん', reading: 'うん', pos: '感動詞', startOffset: 5 })
 
   it('returns the run of tokens whose merged surface equals the expression', () => {
     expect(matchedTokenSpan([enma, daiou, un], enma, '閻魔大王')).toEqual([enma, daiou])
@@ -349,13 +288,7 @@ describe('matchedTokenSpan', () => {
   })
 
   it('falls back to [clickedToken] when clickedToken is not found in cueTokens', () => {
-    const stray: Token = {
-      surface: '猫',
-      reading: 'ねこ',
-      lemma: '猫',
-      pos: '名詞',
-      startOffset: 99
-    }
+    const stray: Token = makeToken({ surface: '猫', reading: 'ねこ', startOffset: 99 })
     expect(matchedTokenSpan([enma, daiou], stray, '猫')).toEqual([stray])
   })
 })
@@ -447,27 +380,9 @@ describe('resolvePopupHighlightSpan', () => {
 })
 
 describe('buildLongestMatchCandidates', () => {
-  const enma: Token = {
-    surface: '閻魔',
-    reading: 'えんま',
-    lemma: '閻魔',
-    pos: '名詞',
-    startOffset: 1
-  }
-  const daiou: Token = {
-    surface: '大王',
-    reading: 'だいおう',
-    lemma: '大王',
-    pos: '名詞',
-    startOffset: 3
-  }
-  const un: Token = {
-    surface: 'うん',
-    reading: 'うん',
-    lemma: 'うん',
-    pos: '感動詞',
-    startOffset: 5
-  }
+  const enma: Token = makeToken({ surface: '閻魔', reading: 'えんま', startOffset: 1 })
+  const daiou: Token = makeToken({ surface: '大王', reading: 'だいおう', startOffset: 3 })
+  const un: Token = makeToken({ surface: 'うん', reading: 'うん', pos: '感動詞', startOffset: 5 })
 
   it('merges surfaces and then adds shorter clicked-token prefixes, longest first', () => {
     expect(buildLongestMatchCandidates([enma, daiou, un], enma)).toEqual([
@@ -491,13 +406,7 @@ describe('buildLongestMatchCandidates', () => {
   })
 
   it('returns [] when the clicked token is not found in cueTokens', () => {
-    const stray: Token = {
-      surface: '猫',
-      reading: 'ねこ',
-      lemma: '猫',
-      pos: '名詞',
-      startOffset: 99
-    }
+    const stray: Token = makeToken({ surface: '猫', reading: 'ねこ', startOffset: 99 })
     expect(buildLongestMatchCandidates([enma, daiou], stray)).toEqual([])
   })
 
@@ -506,50 +415,28 @@ describe('buildLongestMatchCandidates', () => {
   })
 
   it('caps the merge window at maxTokens', () => {
-    const tokens = ['あ', 'い', 'う', 'え', 'お'].map((surface, i): Token => ({
-      surface,
-      reading: surface,
-      lemma: surface,
-      pos: '名詞',
-      startOffset: i
-    }))
+    const tokens = ['あ', 'い', 'う', 'え', 'お'].map((surface, i) =>
+      makeToken({ surface, reading: surface, startOffset: i })
+    )
     expect(buildLongestMatchCandidates(tokens, tokens[0], 3)).toEqual(['あいう', 'あい', 'あ'])
   })
 
   it('does not split a supplementary Unicode character while generating prefixes', () => {
-    const token: Token = {
-      surface: '𠮷野',
-      reading: 'よしの',
-      lemma: '𠮷野',
-      pos: '名詞',
-      startOffset: 0
-    }
+    const token: Token = makeToken({ surface: '𠮷野', reading: 'よしの' })
 
     expect(buildLongestMatchCandidates([token], token)).toEqual(['𠮷野', '𠮷'])
   })
 
   it('adds a final-token lemma variant for multi-token spans but not the clicked token alone', () => {
-    const nantoka: Token = {
-      surface: '何とか',
-      reading: 'なんとか',
-      lemma: '何とか',
-      pos: '副詞',
-      startOffset: 0
-    }
-    const nari: Token = {
+    const nantoka: Token = makeToken({ surface: '何とか', reading: 'なんとか', pos: '副詞' })
+    const nari: Token = makeToken({
       surface: 'なり',
       reading: 'なり',
       lemma: 'なる',
       pos: '動詞',
       startOffset: 3
-    }
-    const sou: Token = {
-      surface: 'そう',
-      reading: 'そう',
-      lemma: 'そう',
-      pos: '名詞',
-      startOffset: 5
-    }
+    })
+    const sou: Token = makeToken({ surface: 'そう', reading: 'そう', startOffset: 5 })
 
     expect(buildLongestMatchCandidates([nantoka, nari, sou], nantoka)).toEqual([
       '何とかなりそう',
@@ -562,13 +449,12 @@ describe('buildLongestMatchCandidates', () => {
   })
 
   it('does not add a single-token lemma variant', () => {
-    const tabeta: Token = {
+    const tabeta: Token = makeToken({
       surface: '食べた',
       reading: 'たべた',
       lemma: '食べる',
-      pos: '動詞',
-      startOffset: 0
-    }
+      pos: '動詞'
+    })
 
     expect(buildLongestMatchCandidates([tabeta], tabeta)).toEqual(['食べた', '食べ', '食'])
   })

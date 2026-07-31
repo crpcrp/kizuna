@@ -10,16 +10,10 @@ import {
 import type { Token } from '@src/shared/token'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(overrides: Partial<Token>): Token {
-  return {
-    surface: '食べる',
-    reading: 'タベル',
-    lemma: '食べる',
-    pos: '動詞',
-    startOffset: 0,
-    ...overrides
-  }
+  return makeToken({ surface: '食べる', reading: 'タベル', pos: '動詞', ...overrides })
 }
 
 function symbolToken(surface: string): Token {

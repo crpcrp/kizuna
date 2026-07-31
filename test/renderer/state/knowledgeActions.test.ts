@@ -8,21 +8,10 @@ import {
   syncAndRefreshKnowledge,
   type KnowledgeSyncBridge
 } from '@src/renderer/src/state/knowledgeActions'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const activeToken: Token = {
-  surface: 'active',
-  reading: '',
-  lemma: 'active',
-  pos: 'noun',
-  startOffset: 0
-}
-const sidebarToken: Token = {
-  surface: 'sidebar',
-  reading: '',
-  lemma: 'sidebar',
-  pos: 'noun',
-  startOffset: 0
-}
+const activeToken: Token = makeToken({ surface: 'active', pos: 'noun' })
+const sidebarToken: Token = makeToken({ surface: 'sidebar', pos: 'noun' })
 const syncedStatus = {
   wanikani: { lastSyncAt: null, count: 1, configured: true, outcome: 'synced' as const },
   anki: { lastSyncAt: null, count: 0, configured: false }

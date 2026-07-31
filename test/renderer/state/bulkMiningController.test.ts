@@ -15,9 +15,10 @@ import {
 import type { BulkMineBridges } from '@src/renderer/src/state/bulkMiningRunner'
 import type { WholeTrackVocabularyResult } from '@src/renderer/src/state/wholeTrackVocabulary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(lemma: string): Token {
-  return { surface: lemma, reading: '', lemma, pos: 'noun', startOffset: 0 }
+  return makeToken({ surface: lemma, pos: 'noun' })
 }
 function entry(lemma: string): LookupResult {
   return makeLookupResult({ expression: lemma, reading: '', glossary: '', frequency: 4 })

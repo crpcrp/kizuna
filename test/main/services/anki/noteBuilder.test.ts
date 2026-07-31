@@ -12,14 +12,15 @@ import type { AnkiSettings } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
+import { makeAnkiSettings } from '@test/harness/ankiFixtures'
 
-const token: Token = {
+const token: Token = makeToken({
   surface: '食べる',
   reading: 'タベル',
-  lemma: '食べる',
   pos: '動詞',
   startOffset: 2
-}
+})
 
 const lookupResult: LookupResult = makeLookupResult({
   expression: '食べる',
@@ -28,9 +29,7 @@ const lookupResult: LookupResult = makeLookupResult({
   dictTitle: 'yomitan-sample'
 })
 
-const settings: AnkiSettings = {
-  url: 'http://127.0.0.1:8765',
-  apiKey: '',
+const settings: AnkiSettings = makeAnkiSettings({
   deckName: 'Japanese',
   modelName: 'Kizuna',
   fieldMap: {
@@ -38,20 +37,13 @@ const settings: AnkiSettings = {
     reading: 'Reading',
     definition: 'Definition',
     sentence: 'Sentence',
-    frequency: '',
-    pitchAccent: '',
-    wordAudio: 'WordAudio',
-    picture: '',
-    sentenceAudio: ''
-  },
-  tags: ['kizuna'],
-  includeWordAudio: true,
-  duplicatePolicy: 'prevent-deck'
-}
+    wordAudio: 'WordAudio'
+  }
+})
 
 describe('boldTarget', () => {
   it('wraps the target word at offset 0', () => {
-    const t: Token = { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 }
+    const t: Token = makeToken({ surface: '猫', reading: 'ネコ' })
     expect(boldTarget('猫が魚を食べる。', t)).toBe('<b>猫</b>が魚を食べる。')
   })
 
@@ -60,13 +52,12 @@ describe('boldTarget', () => {
   })
 
   it('wraps the target word at the end of the string', () => {
-    const t: Token = {
+    const t: Token = makeToken({
       surface: '食べる',
       reading: 'タベル',
-      lemma: '食べる',
       pos: '動詞',
       startOffset: 2
-    }
+    })
     expect(boldTarget('猫が食べる', t)).toBe('猫が<b>食べる</b>')
   })
 })

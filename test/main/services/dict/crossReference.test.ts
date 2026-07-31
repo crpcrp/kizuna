@@ -13,6 +13,8 @@ import { lookup } from '../../../../src/main/services/dict/lookup'
 import { initSchema } from '../../../../src/main/services/dict/schema'
 import { buildNote } from '../../../../src/main/services/anki/noteBuilder'
 import type { AnkiSettings } from '../../../../src/shared/anki'
+import { makeAnkiSettings } from '@test/harness/ankiFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const redirectGlossary = JSON.stringify([
   {
@@ -274,36 +276,22 @@ describe('resolveCrossReferences through lookup', () => {
       }
     ])
     const [result] = lookup(db, { lemma: '王さま' })
-    const settings: AnkiSettings = {
-      url: 'http://127.0.0.1:8765',
-      apiKey: '',
+    const settings: AnkiSettings = makeAnkiSettings({
       deckName: 'Japanese',
       modelName: 'Kizuna',
+      tags: [],
       fieldMap: {
         word: 'Word',
         reading: 'Reading',
         definition: 'Definition',
         sentence: 'Sentence',
-        frequency: '',
-        pitchAccent: '',
-        wordAudio: 'WordAudio',
-        picture: '',
-        sentenceAudio: ''
-      },
-      tags: [],
-      includeWordAudio: true,
-      duplicatePolicy: 'prevent-deck'
-    }
+        wordAudio: 'WordAudio'
+      }
+    })
 
     const note = buildNote(
       {
-        token: {
-          surface: '王さま',
-          reading: 'オウサマ',
-          lemma: '王さま',
-          pos: '名詞',
-          startOffset: 0
-        },
+        token: makeToken({ surface: '王さま', reading: 'オウサマ' }),
         result,
         sentence: '王さまだ。'
       },

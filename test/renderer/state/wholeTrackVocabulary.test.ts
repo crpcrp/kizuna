@@ -12,6 +12,7 @@ import type {
   VocabularySpanEpoch
 } from '@src/renderer/src/state/vocabularySpanController'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const epoch: VocabularySpanEpoch = {
   file: 1,
@@ -21,9 +22,7 @@ const epoch: VocabularySpanEpoch = {
   knowledge: 1
 }
 const cues: Cue[] = [{ start: 0, end: 1, text: 'word' }]
-const tokens: Token[] = [
-  { surface: 'word', reading: '', lemma: 'word', pos: 'noun', startOffset: 0 }
-]
+const tokens: Token[] = [makeToken({ surface: 'word', pos: 'noun' })]
 const result: LookupResult = makeLookupResult({
   expression: 'word',
   matchedSurface: 'word',

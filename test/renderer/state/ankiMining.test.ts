@@ -9,9 +9,10 @@ import {
 import { type LookupResult } from '@src/shared/dictionary'
 import { type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 describe('addTokenToAnki', () => {
-  const token: Token = { surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }
+  const token: Token = makeToken({ surface: '猫', reading: 'ねこ' })
   const result: LookupResult = makeLookupResult({ dictTitle: 'JMdict' })
 
   it('calls addNote with { token, result, sentence } and preserves its operation', async () => {
@@ -70,7 +71,7 @@ describe('addTokenToAnki', () => {
 })
 
 describe('checkAnkiExisting', () => {
-  const token: Token = { surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }
+  const token: Token = makeToken({ surface: '猫', reading: 'ねこ' })
 
   it('returns the bridge result when findExisting resolves', async () => {
     const bridge = { findExisting: vi.fn().mockResolvedValue({ cardId: 7 }) }

@@ -8,6 +8,7 @@ import SubtitleOverlay, {
 import { DEFAULT_SUBTITLE_STYLE } from '@src/shared/playerSettings'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 
@@ -87,7 +88,7 @@ describe('subtitleBoxStyle (pure)', () => {
 
   it('uses a Japanese-capable font stack for halfwidth ideographic punctuation', () => {
     const cue: Cue = { start: 0, end: 2, text: '｡' }
-    const punctuation = makeToken({ surface: '｡', lemma: '｡', pos: '記号', startOffset: 0 })
+    const punctuation = makeToken({ surface: '｡', pos: '記号' })
     const html = renderToStaticMarkup(
       <SubtitleOverlay cues={[cue]} timePos={1} tokens={[punctuation]} />
     )
@@ -138,21 +139,10 @@ describe('SubtitleOverlay drag handling', () => {
   })
 })
 
-function makeToken(overrides: Partial<Token>): Token {
-  return {
-    surface: '',
-    reading: '',
-    lemma: '',
-    pos: '',
-    startOffset: 0,
-    ...overrides
-  }
-}
-
 describe('tokenSpans (pure)', () => {
   it('returns one token item per token, in order, when there is no newline', () => {
     const tokens: Token[] = [
-      makeToken({ surface: 'hello', startOffset: 0 }),
+      makeToken({ surface: 'hello' }),
       makeToken({ surface: 'world', startOffset: 5 })
     ]
     const spans = tokenSpans('helloworld', tokens)
@@ -164,7 +154,7 @@ describe('tokenSpans (pure)', () => {
 
   it('inserts a break item at a line boundary crossed by token startOffset', () => {
     const tokens: Token[] = [
-      makeToken({ surface: 'a', startOffset: 0 }),
+      makeToken({ surface: 'a' }),
       makeToken({ surface: 'b', startOffset: 2 })
     ]
     const spans = tokenSpans('a\nb', tokens)
@@ -177,7 +167,7 @@ describe('tokenSpans (pure)', () => {
 
   it('inserts multiple breaks when a token spans several blank lines', () => {
     const tokens: Token[] = [
-      makeToken({ surface: 'a', startOffset: 0 }),
+      makeToken({ surface: 'a' }),
       makeToken({ surface: 'c', startOffset: 4 })
     ]
     const spans = tokenSpans('a\n\nc', tokens)
@@ -196,13 +186,7 @@ describe('tokenSpans (pure)', () => {
 
 describe('SubtitleOverlay optional event parameters', () => {
   const cue: Cue = { start: 0, end: 2, text: '猫' }
-  const token = makeToken({
-    surface: '猫',
-    reading: 'ねこ',
-    lemma: '猫',
-    pos: '名詞',
-    startOffset: 0
-  })
+  const token = makeToken({ surface: '猫', reading: 'ねこ' })
 
   interface TokenSpanProps {
     onClick: (event: React.MouseEvent) => void
@@ -269,15 +253,9 @@ describe('SubtitleOverlay optional event parameters', () => {
 describe('SubtitleOverlay markup with tokens', () => {
   const tokenCues: Cue[] = [{ start: 0, end: 2, text: '猫は\n可愛い' }]
   const tokens: Token[] = [
-    makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),
-    makeToken({ surface: 'は', reading: 'は', lemma: 'は', pos: '助詞', startOffset: 1 }),
-    makeToken({
-      surface: '可愛い',
-      reading: 'かわいい',
-      lemma: '可愛い',
-      pos: '形容詞',
-      startOffset: 3
-    })
+    makeToken({ surface: '猫', reading: 'ねこ' }),
+    makeToken({ surface: 'は', reading: 'は', pos: '助詞', startOffset: 1 }),
+    makeToken({ surface: '可愛い', reading: 'かわいい', pos: '形容詞', startOffset: 3 })
   ]
 
   it('renders one data-token span per token, with the surface as its text', () => {
@@ -322,15 +300,9 @@ describe('SubtitleOverlay markup with tokens', () => {
 describe('SubtitleOverlay knowledge-level coloring', () => {
   const tokenCues: Cue[] = [{ start: 0, end: 2, text: '猫は可愛い' }]
   const tokens: Token[] = [
-    makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),
-    makeToken({ surface: 'は', reading: 'は', lemma: 'は', pos: '助詞', startOffset: 1 }),
-    makeToken({
-      surface: '可愛い',
-      reading: 'かわいい',
-      lemma: '可愛い',
-      pos: '形容詞',
-      startOffset: 2
-    })
+    makeToken({ surface: '猫', reading: 'ねこ' }),
+    makeToken({ surface: 'は', reading: 'は', pos: '助詞', startOffset: 1 }),
+    makeToken({ surface: '可愛い', reading: 'かわいい', pos: '形容詞', startOffset: 2 })
   ]
 
   it('renders data-level from the levels map, keyed by lemma', () => {
@@ -385,10 +357,10 @@ describe('SubtitleOverlay knowledge-level coloring', () => {
 describe('SubtitleOverlay symbol tokens always render as known', () => {
   const tokenCues: Cue[] = [{ start: 0, end: 2, text: '猫(?)' }]
   const tokens: Token[] = [
-    makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),
-    makeToken({ surface: '(', lemma: '(', pos: '記号,括弧開', startOffset: 1 }),
-    makeToken({ surface: '?', lemma: '?', pos: '記号,一般', startOffset: 2 }),
-    makeToken({ surface: ')', lemma: ')', pos: '補助記号,括弧閉', startOffset: 3 })
+    makeToken({ surface: '猫', reading: 'ねこ' }),
+    makeToken({ surface: '(', pos: '記号,括弧開', startOffset: 1 }),
+    makeToken({ surface: '?', pos: '記号,一般', startOffset: 2 }),
+    makeToken({ surface: ')', pos: '補助記号,括弧閉', startOffset: 3 })
   ]
 
   it('renders "wellKnown" for symbol tokens even when absent from levels (would otherwise default to unknown)', () => {
@@ -405,8 +377,8 @@ describe('SubtitleOverlay symbol tokens always render as known', () => {
 describe('SubtitleOverlay grammar tokens always render as wellKnown (QA-4)', () => {
   const tokenCues: Cue[] = [{ start: 0, end: 2, text: '猫にな' }]
   const tokens: Token[] = [
-    makeToken({ surface: '猫', reading: 'ねこ', lemma: '猫', pos: '名詞', startOffset: 0 }),
-    makeToken({ surface: 'に', reading: 'に', lemma: 'に', pos: '助詞,格助詞', startOffset: 1 }),
+    makeToken({ surface: '猫', reading: 'ねこ' }),
+    makeToken({ surface: 'に', reading: 'に', pos: '助詞,格助詞', startOffset: 1 }),
     makeToken({ surface: 'な', reading: 'な', lemma: 'だ', pos: '助動詞', startOffset: 2 })
   ]
 

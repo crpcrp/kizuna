@@ -15,8 +15,9 @@ import {
   type FakeAnkiConnectRouteFn
 } from '@test/harness/fakeAnkiConnect'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
-const token: Token = { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 }
+const token: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 

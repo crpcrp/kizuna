@@ -12,6 +12,7 @@ import type { Token } from '@src/shared/token'
 import { createVocabularySpanController } from '@src/renderer/src/state/vocabularySpanController'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { makeToken } from '@test/harness/tokenFixtures'
 
 const ROWS = ['生き返る', '生き', '何とかなる', '何とか', '行きたければ', '行き'].map(
   (expression, index) => ({
@@ -129,10 +130,10 @@ describe('compound knowledge projection rendering', () => {
   const cue = { start: 0, end: 1, text: '神様と様' }
   const otherCue = { start: 2, end: 3, text: '様' }
   const tokens: Token[] = [
-    { surface: '神', reading: 'かみ', lemma: '神', pos: '名詞', startOffset: 0 },
-    { surface: '様', reading: 'さま', lemma: '様', pos: '名詞', startOffset: 1 },
-    { surface: 'と', reading: 'と', lemma: 'と', pos: '助詞', startOffset: 2 },
-    { surface: '様', reading: 'さま', lemma: '様', pos: '名詞', startOffset: 3 }
+    makeToken({ surface: '神', reading: 'かみ' }),
+    makeToken({ surface: '様', reading: 'さま', startOffset: 1 }),
+    makeToken({ surface: 'と', reading: 'と', pos: '助詞', startOffset: 2 }),
+    makeToken({ surface: '様', reading: 'さま', startOffset: 3 })
   ]
   async function resolvedSpans() {
     const compound: LookupResult = makeLookupResult({
