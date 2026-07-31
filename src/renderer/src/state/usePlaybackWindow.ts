@@ -16,7 +16,7 @@ import type { SubtitleMenuProps } from '../components/menu/SubtitleMenu'
 import type { VideoMenuProps } from '../components/menu/VideoMenu'
 import type { PlaybackTabProps } from '../components/options/PlaybackTab'
 import { toggleSidebar } from './appChrome'
-import { useAudioDevices, type AudioDevicesController } from './audioDevices'
+import { useAudioDevices } from './audioDevices'
 import type { BulkMiningPresentation } from './bulkMiningPresentation'
 import { shouldProbe } from './mediaSession'
 import { INACTIVE_MINI_PLAYER, type MiniPlayerState } from './miniPlayer'
@@ -46,10 +46,8 @@ type PlaybackWindowState = Pick<
   | 'fullscreen'
   | 'loadGeneration'
   | 'loudnessNormalization'
-  | 'selectedAudioId'
   | 'subtitleOffsetMs'
   | 'tracks'
-  | 'videoAdjustments'
 >
 
 /** The persisted per-file (and app-wide picture) values this feature applies to
@@ -132,10 +130,9 @@ export interface MiniPlayerViewModel {
 }
 
 export interface FullscreenViewModel {
-  /** Plain window toggle (BottomBar's button). */
+  /** Plain window toggle (BottomBar's button). The keyboard/menu toggle, which
+   * tears the mini player down first, is in `keyboard.windowControls`. */
   toggle(): void
-  /** Keyboard/menu toggle, which tears the mini player down first. */
-  toggleFromKey(): void
 }
 
 export interface VideoAdjustmentsDialogViewModel {
@@ -185,8 +182,6 @@ export interface UsePlaybackWindowResult {
   >
   /** Whether the seekbar can show frame previews for the current media. */
   thumbnailsEnabled: boolean
-  /** mpv output selection, also surfaced in Options > Playback. */
-  audioDevices: AudioDevicesController
 }
 
 /**
@@ -541,8 +536,7 @@ export function usePlaybackWindow({
       toggle: () => void handleToggleMiniPlayer()
     },
     fullscreen: {
-      toggle: () => bridge.windowControls.toggleFullscreen(),
-      toggleFromKey: toggleFullscreenFromKey
+      toggle: () => bridge.windowControls.toggleFullscreen()
     },
     videoAdjustmentsDialog: {
       open: videoAdjustmentsOpen,
@@ -565,7 +559,6 @@ export function usePlaybackWindow({
       applyMiniPlayerEffect
     },
     thumbnailsEnabled:
-      videoDimensions !== undefined && state.filePath !== undefined && shouldProbe(state.filePath),
-    audioDevices: audioDeviceController
+      videoDimensions !== undefined && state.filePath !== undefined && shouldProbe(state.filePath)
   }
 }

@@ -241,7 +241,6 @@ export function useVocabularyMining({
     () => bulkMiningController.getState()
   )
   const [miningPresentation, setMiningPresentation] = useState<BulkMiningPresentation>('closed')
-  const miningSessionToken = useRef(0)
   const miningCompletionTrackerRef = useRef(createBulkMiningCompletionTracker())
   const [miningCompletion, setMiningCompletion] = useState<BulkMiningCompletionEvent | null>(null)
 
@@ -488,7 +487,6 @@ export function useVocabularyMining({
   }
 
   const closeMining = useLatestCallback((): void => {
-    miningSessionToken.current++
     bulkMiningController.close()
     miningCompletionTrackerRef.current.reset()
     setMiningCompletion(null)
@@ -501,7 +499,6 @@ export function useVocabularyMining({
       return
     }
     if (miningPresentation === 'modal') return
-    ++miningSessionToken.current
     setReportOpen(false)
     reportController.close()
     setMiningPresentation('modal')
@@ -523,7 +520,6 @@ export function useVocabularyMining({
   // outgoing cue list/track so the teardown fires on exactly the same
   // transitions, without the effect body itself writing state.
   const invalidateMiningRef = useLatestRef((): void => {
-    miningSessionToken.current++
     if (miningPresentation !== 'closed') closeMining()
   })
   useEffect(
