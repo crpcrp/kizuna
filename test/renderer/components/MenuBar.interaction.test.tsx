@@ -2,10 +2,11 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import MenuBar, { APPLY_FOLDER_FEEDBACK_MS } from '@src/renderer/src/components/MenuBar'
+import { APPLY_FOLDER_FEEDBACK_MS } from '@src/renderer/src/components/menu/utils'
+import { TestMenuBar as MenuBar, type FlatMenuBarTestProps } from './menu/menuBarTestAdapter'
 
-function renderMenu(overrides: Partial<React.ComponentProps<typeof MenuBar>> = {}) {
-  const props: React.ComponentProps<typeof MenuBar> = {
+function renderMenu(overrides: Partial<FlatMenuBarTestProps> = {}) {
+  const props: FlatMenuBarTestProps = {
     tracks: [],
     selectedSubtitleId: null,
     onOpenFile: vi.fn(),
