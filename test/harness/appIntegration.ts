@@ -1,0 +1,38 @@
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import { expect, vi } from 'vitest'
+import type { RecentMediaFile } from '@src/shared/mediaHistory'
+import type { FakeKizunaApi } from './fakeKizunaApi'
+
+// Shared scaffolding for the rendered `App` integration tests: the media path
+// they open, the recent-files list shape the bridge returns, the Media-menu
+// open, and the teardown every one of them needs.
+
+/** Media path the rendered `App` tests open unless they need a distinct one. */
+export const EPISODE = 'C:\\Media\\Episode05.mkv'
+
+/** Builds a newest-first recent-files list from the given paths. */
+export function recent(...paths: string[]): RecentMediaFile[] {
+  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
+}
+
+/** Opens a recent file through the Media menu and waits for its load. */
+export async function openRecent(
+  load: FakeKizunaApi['player']['load'],
+  path: string = EPISODE
+): Promise<void> {
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
+  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: path }))
+  await waitFor(() => expect(load).toHaveBeenCalledWith(path))
+}
+
+/**
+ * Standard teardown for a rendered `App` test file, called as
+ * `afterEach(appTeardown)`. Files with extra state to restore call it at the
+ * top of their own `afterEach` instead.
+ */
+export function appTeardown(): void {
+  cleanup()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+}

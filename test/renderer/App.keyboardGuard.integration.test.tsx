@@ -1,22 +1,16 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for finding 1's fix: App's keydown shortcut listener bails
 // via isEditableTarget when the event originates in a menu text field, so
 // typing into the Audio-menu delay input (e.g. Backspace to delete a digit)
 // no longer fires the bare-key shortcut bound to that key (speedReset). The
 // whole preload bridge is faked; no production code outside src/ runs.
-
-const EPISODE = 'C:\\Media\\Episode07.mkv'
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
-}
 
 interface Fakes {
   setSpeed: FakeKizunaApi['player']['setSpeed']
@@ -44,18 +38,7 @@ function installBridge(settings: PlayerSettings): Fakes {
   }
 }
 
-/** Opens the recent file through the Media menu and waits for its load. */
-async function openRecent(load: ReturnType<typeof vi.fn>): Promise<void> {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
-  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: EPISODE }))
-  await waitFor(() => expect(load).toHaveBeenCalledWith(EPISODE))
-}
-
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+afterEach(appTeardown)
 
 describe('App keyboard-shortcut guard', () => {
   it('does not fire a bare-key shortcut typed into a menu input (finding 1)', async () => {

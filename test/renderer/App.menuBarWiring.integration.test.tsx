@@ -4,9 +4,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
-import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { Track } from '@src/shared/track'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Wiring guard for the MenuBar call site. These assertions are deliberately
 // about *which* bridge call each menu item reaches: the props they travel
@@ -14,16 +14,10 @@ import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaA
 // with its neighbour. `onFrameStep`/`onFrameBack` are the pair most at risk.
 // The whole preload bridge is faked; no production code outside src/ runs.
 
-const EPISODE = 'C:\\Media\\Episode05.mkv'
-
 const AUDIO_JP: Track = { id: 1, kind: 'audio', codec: 'aac', language: 'jpn' }
 const AUDIO_EN: Track = { id: 2, kind: 'audio', codec: 'ac3', language: 'eng' }
 const SUB_JP: Track = { id: 3, kind: 'subtitle', codec: 'ass', title: 'Full', language: 'jpn' }
 const SUB_EN: Track = { id: 4, kind: 'subtitle', codec: 'srt', title: 'Signs', language: 'eng' }
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
-}
 
 interface Fakes {
   load: FakeKizunaApi['player']['load']
@@ -83,23 +77,12 @@ function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fake
   }
 }
 
-/** Opens the recent episode through the Media menu and waits for its load. */
-async function openRecent(load: ReturnType<typeof vi.fn>): Promise<void> {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
-  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: EPISODE }))
-  await waitFor(() => expect(load).toHaveBeenCalledWith(EPISODE))
-}
-
 /** Opens a top-level menu category by its button label. */
 function openMenu(label: string): void {
   fireEvent.click(screen.getByRole('button', { name: label }))
 }
 
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+afterEach(appTeardown)
 
 describe('MenuBar frame stepping reaches the matching mpv call', () => {
   it('"Step forward one frame" steps forward, never back', async () => {
