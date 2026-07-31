@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
-import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -18,7 +18,6 @@ import { makeToken } from '@test/harness/tokenFixtures'
 // sequence (mouseDown then click), which is what makes that ordering visible.
 // The whole preload bridge is faked; no production code outside src/ runs.
 
-const EPISODE = 'C:\\Media\\Episode05.mkv'
 const CUE_TEXT = '猫が好き'
 const FRAME_BASE64 = 'ZmFrZS1mcmFtZQ=='
 
@@ -30,10 +29,6 @@ interface Fakes {
   load: FakeKizunaApi['player']['load']
   captureFrame: FakeKizunaApi['player']['captureFrame']
   addNote: FakeKizunaApi['anki']['addNote']
-}
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
 }
 
 /** Installs a bridge whose Anki settings map a Picture field (the bug's trigger). */
@@ -88,10 +83,7 @@ function installBridge(): Fakes {
 
 /** Opens the recent file, clicks its subtitle word, and mines it into Anki. */
 async function openCropDialog(fakes: Fakes): Promise<void> {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
-  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: EPISODE }))
-  await waitFor(() => expect(fakes.load).toHaveBeenCalledWith(EPISODE))
+  await openRecent(fakes.load)
 
   const word = await screen.findByText(TOKEN.surface)
   fireEvent.click(word)
@@ -109,10 +101,7 @@ function press(element: Element): void {
   fireEvent.click(element)
 }
 
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+installAppTeardown()
 
 describe('App mined-card picture dialog', () => {
   it('still mines the note when the dialog is dismissed with "Add without screenshot"', async () => {

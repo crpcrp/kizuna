@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
@@ -11,6 +11,7 @@ import type {
 } from '@src/shared/urlSubtitles'
 import type { Cue } from '@src/shared/cue'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { installAppTeardown } from '../harness/appIntegration'
 
 // End-to-end wiring for the Subtitle menu's Online-subtitles section (issue
 // #265). The whole preload bridge is faked with controllable promises for
@@ -94,10 +95,7 @@ function renderOnYouTube(): void {
   render(<App initialState={{ ...initialPlayerState, filePath: YT, timePos: 2 }} />)
 }
 
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+installAppTeardown()
 
 describe('Online subtitles reach the DOM cue lifecycle', () => {
   it('an acquired auto-generated Japanese caption renders in the overlay, session-only', async () => {

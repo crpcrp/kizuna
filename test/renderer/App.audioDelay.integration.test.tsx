@@ -1,25 +1,19 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import {
   DEFAULT_PLAYER_SETTINGS,
   subtitleOffsetKey,
   type PlayerSettings
 } from '@src/shared/playerSettings'
-import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for the Audio-menu delay wiring: the file-change effect
 // re-applies the persisted per-file delay to mpv (which retains audio-delay
 // across loadfile), and the menu's ± controls both drive mpv and persist. The
 // whole preload bridge is faked; no production code outside src/ runs.
-
-const EPISODE = 'C:\\Media\\Episode05.mkv'
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
-}
 
 interface Fakes {
   setAudioDelay: FakeKizunaApi['player']['setAudioDelay']
@@ -57,18 +51,7 @@ function installBridge(settings: PlayerSettings): Fakes {
   }
 }
 
-/** Opens the given recent file through the Media menu and waits for its load. */
-async function openRecent(load: ReturnType<typeof vi.fn>): Promise<void> {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
-  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: EPISODE }))
-  await waitFor(() => expect(load).toHaveBeenCalledWith(EPISODE))
-}
-
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+installAppTeardown()
 
 describe('App audio delay', () => {
   it('re-applies the persisted per-file audio delay to mpv when the file opens', async () => {

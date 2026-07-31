@@ -1,22 +1,18 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, installAppTeardown, recent } from '../harness/appIntegration'
 
 // Rendered interaction coverage for the Media menu's recent-files section.
 // Everything below the renderer — dialogs, media, history — is the fake
 // preload bridge; no production code is exercised outside src/.
 
-const EPISODE_5 = 'C:\\Media\\Episode05.mkv'
 const EPISODE_4 = 'C:\\Media\\episode04.mkv'
 const PICKED = 'E:\\video\\picked.mkv'
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
-}
 
 interface BridgeOptions {
   /** Resolved by every `getRecentFiles` call — mutate it to model a refresh. */
@@ -101,14 +97,11 @@ function alertText(): string {
   return screen.getByRole('alert').textContent ?? ''
 }
 
-afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
-})
+installAppTeardown()
 
 describe('App recent-files interactions', () => {
   it('forwards the clicked entry’s exact path and closes the Media menu', async () => {
-    const bridge = installBridge({ recentFiles: recent(EPISODE_5, EPISODE_4) })
+    const bridge = installBridge({ recentFiles: recent(EPISODE, EPISODE_4) })
     render(<App />)
 
     await openMediaMenu(bridge)
@@ -125,25 +118,25 @@ describe('App recent-files interactions', () => {
 
   it('drops a missing recent entry, reports it, and never loads it', async () => {
     const bridge = installBridge({
-      recentFiles: recent(EPISODE_5, EPISODE_4),
+      recentFiles: recent(EPISODE, EPISODE_4),
       availability: { status: 'missing' }
     })
     render(<App />)
 
     await openMediaMenu(bridge)
-    fireEvent.click(await screen.findByRole('menuitem', { name: EPISODE_5 }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: EPISODE }))
 
     await waitFor(() => expect(alertText()).toContain('This file could no longer be found.'))
-    expect(bridge.removeRecentFile).toHaveBeenCalledWith(EPISODE_5)
+    expect(bridge.removeRecentFile).toHaveBeenCalledWith(EPISODE)
     expect(bridge.load).not.toHaveBeenCalled()
     // The list is refreshed from the bridge, so the dead shortcut is gone
     // while the surviving one stays clickable.
-    await waitFor(() => expect(screen.queryByRole('menuitem', { name: EPISODE_5 })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('menuitem', { name: EPISODE })).toBeNull())
     expect(screen.getByRole('menuitem', { name: EPISODE_4 })).not.toBeNull()
   })
 
   it('empties the list when Clear recent files succeeds', async () => {
-    const bridge = installBridge({ recentFiles: recent(EPISODE_5, EPISODE_4) })
+    const bridge = installBridge({ recentFiles: recent(EPISODE, EPISODE_4) })
     render(<App />)
 
     await openMediaMenu(bridge)
@@ -153,7 +146,7 @@ describe('App recent-files interactions', () => {
 
     await waitFor(() => expect(bridge.clearRecentFiles).toHaveBeenCalledTimes(1))
     await screen.findByText('No recent files')
-    expect(screen.queryByRole('menuitem', { name: EPISODE_5 })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: EPISODE })).toBeNull()
     expect(
       screen.getByRole('menuitem', { name: 'Clear recent files' }).hasAttribute('disabled')
     ).toBe(true)
@@ -162,7 +155,7 @@ describe('App recent-files interactions', () => {
 
   it('keeps the entries and reports the failure when Clear recent files fails', async () => {
     const bridge = installBridge({
-      recentFiles: recent(EPISODE_5, EPISODE_4),
+      recentFiles: recent(EPISODE, EPISODE_4),
       clearRecentFiles: async () => {
         throw new Error('Could not clear recent files.')
       }
@@ -173,13 +166,13 @@ describe('App recent-files interactions', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Clear recent files' }))
 
     await waitFor(() => expect(alertText()).toContain('Could not clear recent files.'))
-    expect(screen.getByRole('menuitem', { name: EPISODE_5 })).not.toBeNull()
+    expect(screen.getByRole('menuitem', { name: EPISODE })).not.toBeNull()
     expect(screen.getByRole('menuitem', { name: EPISODE_4 })).not.toBeNull()
   })
 
   it('shows an empty list and an error when the initial recent-files read fails', async () => {
     const bridge = installBridge({
-      recentFiles: recent(EPISODE_5),
+      recentFiles: recent(EPISODE),
       getRecentFiles: async () => {
         throw new Error('History unavailable.')
       }
@@ -189,7 +182,7 @@ describe('App recent-files interactions', () => {
     await openMediaMenu(bridge)
     await waitFor(() => expect(alertText()).toContain('History unavailable.'))
     expect(await screen.findByText('No recent files')).not.toBeNull()
-    expect(screen.queryByRole('menuitem', { name: EPISODE_5 })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: EPISODE })).toBeNull()
     // Nothing to clear, so the row stays disabled after the failed read.
     expect(
       screen.getByRole('menuitem', { name: 'Clear recent files' }).hasAttribute('disabled')
@@ -198,9 +191,9 @@ describe('App recent-files interactions', () => {
 
   it('empties the playlist sidebar when the picker opens a single file over a queue', async () => {
     const bridge = installBridge({
-      recentFiles: recent(EPISODE_5),
+      recentFiles: recent(EPISODE),
       pickedPaths: ['C:\\Media\\queue.m3u', PICKED],
-      playlistEntries: [EPISODE_5, EPISODE_4]
+      playlistEntries: [EPISODE, EPISODE_4]
     })
     render(<App />)
 
@@ -210,7 +203,7 @@ describe('App recent-files interactions', () => {
     // A picked .m3u replaces the queue with its entries, which the sidebar lists.
     await openMediaMenu(bridge)
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Open file' }))
-    await waitFor(() => expect(bridge.load).toHaveBeenCalledWith(EPISODE_5))
+    await waitFor(() => expect(bridge.load).toHaveBeenCalledWith(EPISODE))
     expect(screen.getAllByRole('button', { name: /^(Episode05|episode04)\.mkv$/ })).toHaveLength(2)
 
     // Opening a single file replaces that queue with just it — one entry is not
@@ -224,7 +217,7 @@ describe('App recent-files interactions', () => {
   })
 
   it('refreshes the recent list after the picker opens a file', async () => {
-    const bridge = installBridge({ recentFiles: recent(EPISODE_5) })
+    const bridge = installBridge({ recentFiles: recent(EPISODE) })
     render(<App />)
 
     await openMediaMenu(bridge)
@@ -236,7 +229,7 @@ describe('App recent-files interactions', () => {
     // so the just-opened file appears newest-first from the stored list.
     await waitFor(() => expect(screen.getByRole('menuitem', { name: PICKED })).not.toBeNull())
     expect(bridge.getRecentFiles.mock.calls.length).toBeGreaterThanOrEqual(2)
-    expect(screen.getByRole('menuitem', { name: EPISODE_5 })).not.toBeNull()
+    expect(screen.getByRole('menuitem', { name: EPISODE })).not.toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

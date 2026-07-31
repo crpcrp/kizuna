@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, installAppTeardown } from '../harness/appIntegration'
 
 // Rendered coverage: the visible video size must survive a side panel opening —
 // both the size a preset picked from Video ▸ Size and the default size nobody
@@ -13,7 +14,6 @@ import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaA
 // shrinks. The whole preload bridge is faked; no production code outside src/
 // runs.
 
-const EPISODE = 'C:\\Media\\Episode05.mkv'
 const VIDEO = { width: 1920, height: 1080 }
 const SIDEBAR_WIDTH = 360
 const PLAYLIST_WIDTH = 320
@@ -120,9 +120,9 @@ function togglePlaylistSidebar(): void {
   fireEvent.click(screen.getByRole('button', { name: 'Toggle playlist sidebar' }))
 }
 
+installAppTeardown()
+
 afterEach(() => {
-  cleanup()
-  vi.restoreAllMocks()
   if (originalOffsetWidth) {
     Object.defineProperty(HTMLElement.prototype, 'offsetWidth', originalOffsetWidth)
   } else {

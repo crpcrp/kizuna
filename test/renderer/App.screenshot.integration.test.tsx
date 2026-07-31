@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import type { RecentMediaFile } from '@src/shared/mediaHistory'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
+import { EPISODE, installAppTeardown, openRecent, recent } from '../harness/appIntegration'
 
 // Rendered coverage for the screenshot wiring: the keybinding — the only
 // surface since the Video-menu item was dropped — forwards the current file
@@ -12,14 +12,8 @@ import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaA
 // surface a message on the shared error banner. The whole preload bridge is
 // faked; no production code outside src/ runs.
 
-const EPISODE = 'C:\\Media\\Episode05.mkv'
-
 /** Default binding for the screenshot action ('KeyS'). */
 const SCREENSHOT_KEY = DEFAULT_PLAYER_SETTINGS.keyBindings.screenshot
-
-function recent(...paths: string[]): RecentMediaFile[] {
-  return paths.map((path, i) => ({ path, openedAt: paths.length - i }))
-}
 
 interface Fakes {
   screenshot: FakeKizunaApi['player']['screenshot']
@@ -50,19 +44,7 @@ function installBridge(
   }
 }
 
-/** Opens the recent file through the Media menu and waits for its load. */
-async function openRecent(load: ReturnType<typeof vi.fn>): Promise<void> {
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
-  fireEvent.click(screen.getByRole('button', { name: 'Media' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: EPISODE }))
-  await waitFor(() => expect(load).toHaveBeenCalledWith(EPISODE))
-}
-
-afterEach(() => {
-  cleanup()
-  vi.useRealTimers()
-  vi.restoreAllMocks()
-})
+installAppTeardown()
 
 describe('App screenshot', () => {
   it('forwards the current file and position to the bridge and shows the saved path', async () => {
