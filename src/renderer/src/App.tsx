@@ -32,36 +32,14 @@ import {
 } from './state/playerState'
 import { type MineMediaSource } from './state/ankiMining'
 import { seekTargetForCue } from './state/cueNavigation'
-import { type SubtitleRequestToken, shouldProbe } from './state/mediaSession'
-import { applyOffsetToFolder, nextAudioDelays, nextSubtitleOffsets } from './state/perFileOffsets'
-import {
-  type FrameStepGuard,
-  applyVideoAdjustments,
-  cycleAbLoopAction,
-  frameStepAction
-} from './state/playbackCommands'
+import { type SubtitleRequestToken } from './state/mediaSession'
+import { cycleAbLoopAction } from './state/playbackCommands'
 import { cueKey } from './state/tokenization'
-import { selectAudio } from './state/trackSelection'
 import { wordPopupPosition } from './state/wordLookup'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
-import {
-  appClassName,
-  copySidebarCue,
-  toggleFromRightClick,
-  toggleSidebar
-} from './state/appChrome'
+import { appClassName, copySidebarCue, toggleFromRightClick } from './state/appChrome'
 import { buildPlayerAdapter } from './state/playerAdapter'
-import {
-  sidebarPreservingWindowSize,
-  videoContentBaseline,
-  videoScaleWindowSize,
-  type VideoContentBaseline
-} from './state/windowSizing'
-import {
-  INACTIVE_MINI_PLAYER,
-  miniPlayerSubtitleStyle,
-  type MiniPlayerState
-} from './state/miniPlayer'
+import { miniPlayerSubtitleStyle } from './state/miniPlayer'
 import {
   createPopupController,
   createHoverDebouncer,
@@ -84,11 +62,9 @@ import {
 } from './state/bulkMiningPresentation'
 import { createSettingsPersistence } from './state/settingsPersistence'
 import { useSettingsLifecycle } from './state/useSettingsLifecycle'
-import { usePerFileRestore } from './state/usePerFileRestore'
 import { usePlayerEvents } from './state/usePlayerEvents'
 import { useVocabularyPipeline } from './state/useVocabularyPipeline'
-import { useMiniPlayer } from './state/useMiniPlayer'
-import { useAudioDevices } from './state/audioDevices'
+import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
 import { createThemeController } from './state/themeController'
 import {
   createOptionsDataController,
@@ -115,7 +91,6 @@ import { refreshKnownLevels } from './state/knowledgeActions'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
-import { useVideoMargins } from './state/useVideoMargins'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestCallback, useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
@@ -125,9 +100,7 @@ import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
 import type { Token } from '../../shared/token'
-import { type VideoDimensions } from '../../shared/track'
-import type { VideoAdjustments as VideoAdjustmentsValue } from '../../shared/playerSettings'
-import { effectiveAudioDevice, type AudioDevice } from '../../shared/audioDevice'
+import { type AudioDevice } from '../../shared/audioDevice'
 import type {
   KnowledgeLevel,
   KnowledgeSource,
@@ -137,9 +110,10 @@ import type {
 import type { LookupResult, ImportProgress } from '../../shared/dictionary'
 import type { AnkiSettings } from '../../shared/anki'
 
-// Root React component: the runnable player shell. Wires the reducer +
-// orchestration modules (state/mediaOpen.ts and siblings) into the presentational
-// components (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
+// Root React component: the runnable player shell. Wires the reducer + the
+// feature hooks that own each workflow (state/useMediaSession.ts for media,
+// state/usePlaybackWindow.ts for playback and window, and their siblings) into
+// the presentational components (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
 //
 // SSR-safety: the render path never touches `window` directly. All bridge
 // access is deferred to event handlers or to the useEffect subscriptions
@@ -171,7 +145,6 @@ export default function App({
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
   const [optionsOpen, setOptionsOpen] = useState(false)
-  const [videoAdjustmentsOpen, setVideoAdjustmentsOpen] = useState(false)
   // A captured frame awaiting the user's crop decision, together with the
   // dictionary entry whose mine triggered it (see handleAddToAnki).
   const [cardImageRequest, setCardImageRequest] = useState<{
@@ -191,9 +164,6 @@ export default function App({
   // would otherwise slide the bar away mid-click. Keeping it revealed here
   // is OR'd into the top-controls reveal below.
   const [menuBarOpen, setMenuBarOpen] = useState(false)
-  // Drops frame-step presses while a previous step's IPC invoke is still in
-  // flight, so holding the key down can't flood mpv's command queue.
-  const frameStepGuard = useRef<FrameStepGuard>({ inFlight: false })
   const stateRef = useLatestRef(state)
   const mediaSession = useMediaSession({
     bridge: kizuna,
@@ -213,10 +183,11 @@ export default function App({
   const knownLevelsCache = useRef(new Map<string, KnowledgeLevel>())
   const knownLevelsToken = useRef<SubtitleRequestToken>({ current: 0 })
   // Whether the all-subtitles side panel (SubtitleSidebar) is shown. Restored
-  // from settings.json on mount and persisted by handleToggleSidebar.
+  // from settings.json on mount by useSettingsLifecycle; toggled and persisted
+  // by usePlaybackWindow, which also compensates the window size for it.
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // Whether the playlist (play-queue) side panel is shown. Restored from
-  // settings.json on mount and persisted by handleTogglePlaylist.
+  // Whether the playlist (play-queue) side panel is shown, restored and
+  // toggled exactly like sidebarOpen above.
   const [playlistOpen, setPlaylistOpen] = useState(false)
   // Request-token guards for tokenizeAllCues' batch tokenize + level
   // resolution, separate from tokenizeActiveCue's own tokens/knownLevelsToken
@@ -230,12 +201,6 @@ export default function App({
   const [vocabularySpansByCue, setVocabularySpansByCue] = useState<
     Record<string, VocabularySpan[]>
   >({})
-  // The shared right-side stack is measured once to keep mpv out from under
-  // either (or both) sidebar surfaces.
-  const rightSidebarStackRef = useRef<HTMLElement>(null)
-  // The left-side stack holds the playlist; measured so mpv stays out from
-  // under it too, exactly like the right stack.
-  const leftSidebarStackRef = useRef<HTMLElement>(null)
   // Options dialog's optional-integration data (MeCab/Yomitan dictionaries,
   // Anki connection + deck/model/field lists, knowledge settings + sync
   // status) — cached per-domain, isolated on failure. See state/optionsData.ts.
@@ -326,79 +291,48 @@ export default function App({
       (query) => window.matchMedia(query)
     )
   )
-  // Measured to keep the mpv video frame out from under these bars (see the
-  // useVideoMargins hook below).
-  const topBarRef = useRef<HTMLDivElement>(null)
-  const bottomBarRef = useRef<HTMLDivElement>(null)
-  // Per-file subtitle offsets (ms), persisted via playerSettings.setSettings.
-  // Held in a ref (not state) since it's read/written outside the render
-  // path and only ever needs the current file's entry reflected in state
-  // (state.subtitleOffsetMs), not the whole map.
-  const subtitleOffsetsRef = useRef<Record<string, number>>({})
-  // Per-folder subtitle offsets (ms), the fallback for any file in the folder
-  // with no per-file entry — written by the Subtitle menu's "Apply to folder".
-  const folderSubtitleOffsetsRef = useRef<Record<string, number>>({})
-  // Per-file audio delays (ms), persisted via playerSettings.setSettings —
-  // held in a ref for the same reason as subtitleOffsetsRef.
-  const audioDelaysRef = useRef<Record<string, number>>({})
-  // Latest app-wide picture adjustments, mirrored into a ref so the per-load
-  // re-apply effect can read them without listing state.videoAdjustments in its
-  // deps (which would re-fire it on every slider drag).
-  const videoAdjustmentsRef = useRef<VideoAdjustmentsValue>(state.videoAdjustments)
-  // Native pixel resolution of the current file's video stream, used by the
-  // Video menu's size presets; undefined until fetched (or if there's no
-  // video stream).
-  const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | undefined>(undefined)
-  // The last size preset the user explicitly picked from Video ▸ Size, kept so
-  // opening/closing a side panel can re-apply it (see applyVideoScale).
-  // Undefined until a preset is picked; the default size is preserved through
-  // videoContentBaselineRef instead.
-  const [requestedVideoScale, setRequestedVideoScale] = useState<number | undefined>(undefined)
-  // The video rectangle a side-panel toggle has to preserve while no preset is
-  // in play — the window content box minus the panels open when it was
-  // measured. Re-measured whenever the window itself resizes (see below), never
-  // during a panel transition, so it always describes the picture the user is
-  // currently looking at rather than a fabricated scale.
-  const videoContentBaselineRef = useRef<VideoContentBaseline | undefined>(undefined)
-  // mpv output selection (list refresh, explicit picks, per-load re-apply).
-  const audioDeviceController = useAudioDevices({
-    player: kizuna.player,
-    dispatch,
-    storedDeviceRef: stateRef,
-    initialDevices: initialAudioDevices
-  })
-  const [alwaysOnTop, setAlwaysOnTop] = useState(false)
-  // Compact mini-player (picture-in-picture) mode. `miniPlayer.active` gates the
-  // reduced chrome; the ref mirror lets the toggle-fullscreen wrapper read the
-  // current mode without re-subscribing. See `state/miniPlayer.ts`.
-  const [miniPlayer, setMiniPlayer] = useState<MiniPlayerState>(INACTIVE_MINI_PLAYER)
-  const miniPlayerRef = useLatestRef(miniPlayer)
-  const miniPlayerActive = miniPlayer.active
-  const { applyMiniPlayerEffect, handleToggleMiniPlayer, toggleFullscreenFromKey } = useMiniPlayer({
-    setMiniPlayer,
-    miniPlayerRef,
-    alwaysOnTop,
-    setAlwaysOnTop,
-    windowControls: kizuna.windowControls,
-    stateRef,
-    topBarRef,
-    bottomBarRef
-  })
-  useVideoMargins({
-    topBarRef,
-    bottomBarRef,
-    rightSidebarStackRef,
-    leftSidebarStackRef,
-    fullscreen: state.fullscreen,
-    sidebarOpen,
-    playlistOpen,
-    miningPresentation,
-    miniPlayerActive,
-    player: kizuna.player
-  })
+  // The per-file playback values applied after every load, hydrated from
+  // settings.json below and owned by usePlaybackWindow afterwards.
+  const perFileValues = usePerFileValues(state.videoAdjustments)
   // The content area subtitles are positioned against (percentage left/top);
   // also the drag-to-reposition gesture's coordinate frame.
   const contentRef = useRef<HTMLDivElement>(null)
+
+  const settingsReady = useSettingsLifecycle({
+    dispatch,
+    bridge: kizuna.playerSettings,
+    settingsPersistenceRef,
+    settings: state,
+    ...perFileValues,
+    setSidebarOpen,
+    setPlaylistOpen,
+    reportError: mediaSession.banner.reportError
+  })
+
+  // Playback and window lifecycle: audio/subtitle menu commands, per-file
+  // values, panel sizing, video scale, fullscreen, mini player, and picture
+  // adjustments — see state/usePlaybackWindow.ts.
+  const playbackWindow = usePlaybackWindow({
+    bridge: kizuna,
+    dispatch,
+    state,
+    stateRef,
+    perFileValues,
+    settingsPersistenceRef,
+    settingsReady,
+    panels: { sidebarOpen, playlistOpen, setSidebarOpen, setPlaylistOpen },
+    miningPresentation,
+    initialAudioDevices
+  })
+  // Attached to the chrome and side-panel elements this component renders;
+  // usePlaybackWindow measures them for mpv's video margins and window sizing.
+  const {
+    topBar: topBarRef,
+    bottomBar: bottomBarRef,
+    leftSidebarStack: leftSidebarStackRef,
+    rightSidebarStack: rightSidebarStackRef
+  } = playbackWindow.layoutRefs
+  const miniPlayerActive = playbackWindow.miniPlayer.active
 
   // mpv/window event pushes (time/duration/pause/EOF/fullscreen/media keys)
   // and file-association launch delivery.
@@ -408,44 +342,7 @@ export default function App({
     playerAdapter,
     stateRef,
     mediaSession: mediaSession.events,
-    miniPlayerRef,
-    setMiniPlayer,
-    setAlwaysOnTop,
-    applyMiniPlayerEffect
-  })
-
-  const settingsReady = useSettingsLifecycle({
-    dispatch,
-    bridge: kizuna.playerSettings,
-    settingsPersistenceRef,
-    settings: state,
-    subtitleOffsetsRef,
-    folderSubtitleOffsetsRef,
-    audioDelaysRef,
-    videoAdjustmentsRef,
-    setSidebarOpen,
-    setPlaylistOpen,
-    reportError: mediaSession.banner.reportError
-  })
-
-  // Applies the current file's persisted subtitle offset (its own entry, else
-  // its folder's — see subtitleOffsetForFile) and fetches its video stream's
-  // native resolution (for the Video menu's size presets) whenever a new file
-  // loads. Both offset refs are populated by the settings-load effect above (or
-  // already hold this file's entry if it was set earlier this session).
-  usePerFileRestore({
-    dispatch,
-    bridge: kizuna,
-    filePath: state.filePath,
-    loadGeneration: state.loadGeneration,
-    settingsReady,
-    playbackSettingsRef: stateRef,
-    subtitleOffsetsRef,
-    folderSubtitleOffsetsRef,
-    audioDelaysRef,
-    videoAdjustmentsRef,
-    reapplyAudioDevice: audioDeviceController.reapplyAfterLoad,
-    setVideoDimensions
+    ...playbackWindow.playerEvents
   })
 
   // Paints the user's underline-color overrides onto <html> as inline custom
@@ -477,206 +374,6 @@ export default function App({
     dispatch,
     settingsPersistenceRef
   })
-
-  const toggleFullscreen = (): void => window.kizuna.windowControls.toggleFullscreen()
-
-  // Updates the current subtitle offset immediately and persists it keyed by
-  // the current file path, so re-opening the file later re-applies it.
-  const handleSubtitleOffsetChange = (valueMs: number): void => {
-    dispatch({ type: 'setSubtitleOffset', value: valueMs })
-    if (!state.filePath) return
-    subtitleOffsetsRef.current = nextSubtitleOffsets(
-      subtitleOffsetsRef.current,
-      state.filePath,
-      valueMs
-    )
-    settingsPersistenceRef.current.schedule({ subtitleOffsets: subtitleOffsetsRef.current })
-  }
-
-  // Applies the audio delay immediately and persists it keyed by the current
-  // file path, mirroring handleSubtitleOffsetChange.
-  const handleAudioDelayChange = (valueMs: number): void => {
-    dispatch({ type: 'setAudioDelay', value: valueMs })
-    void window.kizuna.player.setAudioDelay(valueMs)
-    if (!state.filePath) return
-    audioDelaysRef.current = nextAudioDelays(audioDelaysRef.current, state.filePath, valueMs)
-    settingsPersistenceRef.current.schedule({ audioDelays: audioDelaysRef.current })
-  }
-
-  // Audio menu > track list. Ignores ids with no matching audio track, and
-  // does nothing without a loaded file (there is no stream to switch).
-  const handleSelectAudio = (id: number): void => {
-    const track = state.tracks.find((t) => t.kind === 'audio' && t.id === id)
-    if (state.filePath && track) selectAudio(window.kizuna, dispatch, state.filePath, track)
-  }
-
-  const handleToggleLoudnessNorm = (): void => {
-    const next = !state.loudnessNormalization
-    dispatch({ type: 'setLoudnessNormalization', value: next })
-    void window.kizuna.player.setLoudnessNorm(next)
-  }
-
-  // Video menu > frame stepping, shared by both directions. The guard drops
-  // repeat presses while a step is still in flight.
-  const handleFrameStep = (direction: 'forward' | 'back'): void => {
-    frameStepAction(
-      window.kizuna.player,
-      direction,
-      state.filePath !== undefined,
-      frameStepGuard.current
-    )
-  }
-
-  // Video menu > "Adjustments…" panel: applies the new picture-adjustments block
-  // to mpv live and persists it app-wide (not per file). The ref is updated in
-  // lockstep so the per-load re-apply reads the latest value.
-  const handleChangeVideoAdjustments = (next: VideoAdjustmentsValue): void => {
-    videoAdjustmentsRef.current = next
-    dispatch({ type: 'setVideoAdjustments', value: next })
-    applyVideoAdjustments(window.kizuna.player, next)
-  }
-
-  // Subtitle menu > "Apply to folder": makes the current offset the default for
-  // every video in this file's folder, present and future.
-  const handleApplyOffsetToFolder = (): void => {
-    if (!state.filePath) return
-    applyOffsetToFolder(
-      { subtitleOffsets: subtitleOffsetsRef, folderSubtitleOffsets: folderSubtitleOffsetsRef },
-      state.filePath,
-      state.subtitleOffsetMs,
-      (patch) => settingsPersistenceRef.current.schedule(patch)
-    )
-  }
-
-  // Resizes the app window so the embedded mpv video renders at `scale` ×
-  // its native resolution (clamped to the display's available area). No-op
-  // if the current file's video dimensions aren't known yet (e.g. audio-only
-  // file, or still loading). The open side panels are measured from the same
-  // refs useVideoMargins observes: mpv takes their width out of the video
-  // area, so the window has to be that much wider for the picture to keep the
-  // requested scale. Stable identity so the re-apply effect below can depend
-  // on it without re-firing every render.
-  const applyVideoScale = useLatestCallback((scale: number): void => {
-    const size = videoScaleWindowSize(
-      videoDimensions,
-      scale,
-      topBarRef.current?.offsetHeight ?? 0,
-      bottomBarRef.current?.offsetHeight ?? 0,
-      { width: window.screen.availWidth, height: window.screen.availHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-    if (size) window.kizuna.windowControls.setSize(size.width, size.height)
-  })
-
-  const handleSetVideoScale = (scale: number): void => {
-    setRequestedVideoScale(scale)
-    // Applied here as well as from the effect below: re-picking the preset
-    // that is already remembered leaves the state untouched, and the user
-    // (who may have hand-resized the window since) still expects a resize.
-    applyVideoScale(scale)
-  }
-
-  // Re-measures the preservation baseline from the window as it stands now.
-  // Only ever called outside a panel transition: mid-transition the panels are
-  // already laid out while the window still has its old size, which would fold
-  // the panel's width into the baseline and defeat the whole compensation.
-  const captureVideoContentBaseline = useLatestCallback((): void => {
-    videoContentBaselineRef.current = videoContentBaseline(
-      { width: window.innerWidth, height: window.innerHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-  })
-
-  // Resizes the window so the video keeps the dimensions it had before the
-  // panel transition, for the default/unmodified size (no preset picked). The
-  // baseline is the rectangle measured before this transition, so the window
-  // simply carries whichever panels are open now on top of it.
-  const applySidebarSizeCompensation = useLatestCallback((): void => {
-    if (state.fullscreen || miniPlayerActive) return
-    // Same guard the preset path uses: with no video stream there is no picture
-    // to preserve, so the window is left exactly where the user put it.
-    if (!videoDimensions) return
-    const size = sidebarPreservingWindowSize(
-      videoContentBaselineRef.current,
-      { width: window.screen.availWidth, height: window.screen.availHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-    if (size) window.kizuna.windowControls.setSize(size.width, size.height)
-  })
-
-  // Keeps the baseline current between panel transitions. The window resizing —
-  // by the user's drag, a size preset, or our own compensation — is the only
-  // thing that legitimately changes the video rectangle, so re-measuring on
-  // `resize` is both the staleness fix and the way a clamped compensation
-  // settles into the new (smaller) rectangle. Panel toggles deliberately do not
-  // re-run this: their deps are absent. `settingsReady` lets restored panels
-  // establish the startup baseline; `videoDimensions` rebases layouts changed
-  // while no video dimensions were available before later transitions.
-  useEffect(() => {
-    if (state.fullscreen || miniPlayerActive) return
-    captureVideoContentBaseline()
-    const onResize = (): void => captureVideoContentBaseline()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [
-    state.fullscreen,
-    miniPlayerActive,
-    settingsReady,
-    videoDimensions,
-    captureVideoContentBaseline
-  ])
-
-  // True once the restored panel layout has been observed, so the panels
-  // reopened at startup establish the baseline instead of counting as a
-  // transition to compensate for.
-  const panelLayoutObservedRef = useRef(false)
-
-  // Keeps the visible video the same size across panel toggles: opening or
-  // closing a side panel changes how much window width mpv's margins reserve,
-  // so the window has to grow or shrink by that width instead of the picture
-  // doing it. With an explicit Video ▸ Size preset the preset is re-applied;
-  // otherwise the default size is preserved against the measured baseline.
-  // Runs post-commit, so the sidebar refs measure the panel's real width.
-  useEffect(() => {
-    if (requestedVideoScale !== undefined) {
-      applyVideoScale(requestedVideoScale)
-      return
-    }
-    if (!settingsReady) return
-    if (!panelLayoutObservedRef.current) {
-      panelLayoutObservedRef.current = true
-      return
-    }
-    applySidebarSizeCompensation()
-  }, [
-    settingsReady,
-    sidebarOpen,
-    playlistOpen,
-    requestedVideoScale,
-    applyVideoScale,
-    applySidebarSizeCompensation
-  ])
-
-  const handleToggleAlwaysOnTop = (): void => {
-    const next = !alwaysOnTop
-    setAlwaysOnTop(next)
-    window.kizuna.windowControls.setAlwaysOnTop(next)
-  }
-
-  const handleToggleSidebar = (): void => {
-    toggleSidebar(sidebarOpen, setSidebarOpen, (patch) =>
-      settingsPersistenceRef.current.schedule(patch)
-    )
-  }
-
-  const handleTogglePlaylist = (): void => {
-    const next = !playlistOpen
-    setPlaylistOpen(next)
-    settingsPersistenceRef.current.schedule({ playlistOpen: next })
-  }
 
   useEffect(() => {
     if (!loopCue) return
@@ -724,11 +421,8 @@ export default function App({
     }
   }
   const keyContext: KeyboardShortcutContext = {
+    ...playbackWindow.keyboard,
     player: playerAdapter,
-    windowControls: {
-      toggleFullscreen: toggleFullscreenFromKey,
-      setFullscreen: (fullscreen) => window.kizuna.windowControls.setFullscreen(fullscreen)
-    },
     paused: state.paused,
     fullscreen: state.fullscreen,
     skipSeconds: state.skipSeconds,
@@ -739,25 +433,10 @@ export default function App({
     subtitleOffsetMs: state.subtitleOffsetMs,
     onToggleLoopLine: handleToggleLoopLine,
     onCycleAbLoop: handleCycleAbLoop,
-    onFrameStep: () =>
-      frameStepAction(
-        window.kizuna.player,
-        'forward',
-        state.filePath !== undefined,
-        frameStepGuard.current
-      ),
-    onFrameBack: () =>
-      frameStepAction(
-        window.kizuna.player,
-        'back',
-        state.filePath !== undefined,
-        frameStepGuard.current
-      ),
     onNavigateLine: () => setLoopCue(null),
     onPrevFile: () => mediaSession.navigate('prev'),
     onNextFile: () => mediaSession.navigate('next'),
     onScreenshot: () => void handleScreenshot(),
-    onToggleMiniPlayer: () => void handleToggleMiniPlayer(),
     keyBindings: state.keyBindings
   }
   // Mirrored into a ref so the window-level keydown listener stays mounted once
@@ -1152,45 +831,32 @@ export default function App({
             media={{
               ...mediaSession.mediaMenu,
               playlistOpen,
-              onTogglePlaylist: handleTogglePlaylist
+              onTogglePlaylist: playbackWindow.panels.onTogglePlaylist
             }}
             video={{
               ...mediaSession.qualityMenu,
-              onSetVideoScale: handleSetVideoScale,
-              onOpenVideoAdjustments: () => setVideoAdjustmentsOpen(true),
-              alwaysOnTop,
-              onToggleAlwaysOnTop: handleToggleAlwaysOnTop,
-              miniPlayer: miniPlayerActive,
-              onToggleMiniPlayer: () => void handleToggleMiniPlayer()
+              ...playbackWindow.videoMenu
             }}
             audio={{
+              ...playbackWindow.audioMenu,
               tracks: state.tracks,
-              selectedAudioId: state.selectedAudioId,
-              hasFile: state.filePath !== undefined,
-              onSelectAudio: handleSelectAudio,
-              audioDelayMs: state.audioDelayMs,
-              onChangeAudioDelay: handleAudioDelayChange
+              selectedAudioId: state.selectedAudioId
             }}
             subtitle={{
               ...mediaSession.subtitleMenu,
+              ...playbackWindow.subtitleMenu,
               tracks: state.tracks,
               selectedSubtitleId: state.selectedSubtitleId,
               externalSubtitleEncoding: state.externalSubtitleEncoding,
               preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
-              subtitleOffsetMs: state.subtitleOffsetMs,
-              onChangeSubtitleOffset: handleSubtitleOffsetChange,
-              onApplyOffsetToFolder: state.filePath ? handleApplyOffsetToFolder : undefined,
-              sidebarOpen,
-              onToggleSidebar: handleToggleSidebar
+              sidebarOpen
             }}
             playback={{
-              hasFile: state.filePath !== undefined,
+              ...playbackWindow.playbackMenu,
               speed: state.speed,
               onSetSpeed: (speed) => void playerAdapter.setSpeed(speed),
               abLoop: state.abLoopState,
-              onCycleAbLoop: handleCycleAbLoop,
-              onFrameStep: () => handleFrameStep('forward'),
-              onFrameBack: () => handleFrameStep('back')
+              onCycleAbLoop: handleCycleAbLoop
             }}
             vocabulary={{
               onOpenWordReport: () => setReportOpen(true),
@@ -1306,29 +972,23 @@ export default function App({
         speed={state.speed}
         chapters={state.chapters}
         abLoop={state.abLoopState}
-        onToggleFullscreen={toggleFullscreen}
+        onToggleFullscreen={playbackWindow.fullscreen.toggle}
         miniPlayer={miniPlayerActive}
-        onExitMiniPlayer={() => void handleToggleMiniPlayer()}
+        onExitMiniPlayer={playbackWindow.miniPlayer.toggle}
         onSetSpeed={(speed) => void playerAdapter.setSpeed(speed)}
         sidebarOpen={sidebarOpen}
         playlistOpen={playlistOpen}
-        onToggleSidebar={handleToggleSidebar}
-        onTogglePlaylist={handleTogglePlaylist}
+        onToggleSidebar={playbackWindow.panels.onToggleSidebar}
+        onTogglePlaylist={playbackWindow.panels.onTogglePlaylist}
         player={playerAdapter}
         containerRef={bottomBarRef}
         mediaPath={state.filePath}
-        thumbnailsEnabled={
-          videoDimensions !== undefined &&
-          state.filePath !== undefined &&
-          shouldProbe(state.filePath)
-        }
+        thumbnailsEnabled={playbackWindow.thumbnailsEnabled}
       />
 
       <VideoAdjustments
-        open={videoAdjustmentsOpen}
+        {...playbackWindow.videoAdjustmentsDialog}
         adjustments={state.videoAdjustments}
-        onChange={handleChangeVideoAdjustments}
-        onClose={() => setVideoAdjustmentsOpen(false)}
       />
 
       <OpenUrlDialog
@@ -1353,18 +1013,11 @@ export default function App({
             dispatch({ type: 'setKeyBinding', action, binding })
         }}
         playback={{
+          ...playbackWindow.optionsPlayback,
           skipSeconds: state.skipSeconds,
           rightClickTogglePause: state.rightClickTogglePause,
           autoPlayNext: state.autoPlayNext,
           preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
-          audioDevices: audioDeviceController.devices,
-          selectedAudioDevice: effectiveAudioDevice(
-            state.audioDevice,
-            audioDeviceController.devices
-          ),
-          onSelectAudioDevice: audioDeviceController.selectDevice,
-          loudnessNormalization: state.loudnessNormalization,
-          onToggleLoudnessNorm: handleToggleLoudnessNorm,
           screenshotFolder: state.screenshotFolder,
           mpvUserConfig: state.mpvUserConfig,
           mpvExtraArgs: state.mpvExtraArgs,
@@ -1388,8 +1041,7 @@ export default function App({
               },
               () => mediaSession.banner.reportError('Could not open the mpv config folder.')
             )
-          },
-          onAudioDevicesRequest: audioDeviceController.requestDevices
+          }
         }}
         appearance={{
           appearance: state.appearance,
