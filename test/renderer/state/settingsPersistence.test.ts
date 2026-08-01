@@ -114,7 +114,74 @@ describe('settingsPersistence', () => {
     await flushB
   })
 
-  it('a rejected write does not poison a later save', async () => {
+  it('reports a rejected write and includes its retained patch in the next scheduled write', async () => {
+    const timers = fakeTimers()
+    const onWriteError = vi.fn()
+    const write = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockResolvedValueOnce(settingsResult)
+    const persistence = createSettingsPersistence(write, timers, undefined, onWriteError)
+
+    persistence.schedule({ skipSeconds: 3 })
+    await expect(persistence.flush()).resolves.toBeUndefined()
+    expect(onWriteError).toHaveBeenCalledOnce()
+    expect(onWriteError).toHaveBeenCalledWith(expect.any(Error))
+
+    persistence.schedule({ rightClickTogglePause: false })
+    await expect(persistence.flush()).resolves.toBeUndefined()
+
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenLastCalledWith({ skipSeconds: 3, rightClickTogglePause: false })
+  })
+
+  it('retries a failed in-flight snapshot with the newer value, never the old value', async () => {
+    const timers = fakeTimers()
+    const first = deferred<PlayerSettings>()
+    const second = deferred<PlayerSettings>()
+    const write = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const onWriteError = vi.fn()
+    const persistence = createSettingsPersistence(write, timers, undefined, onWriteError)
+
+    persistence.schedule({ skipSeconds: 3 })
+    const firstFlush = persistence.flush()
+    persistence.schedule({ skipSeconds: 4 })
+
+    first.reject(new Error('disk full'))
+    await firstFlush
+    const retry = persistence.flush()
+
+    expect(write).toHaveBeenCalledTimes(2)
+    expect(write).toHaveBeenLastCalledWith({ skipSeconds: 4 })
+
+    second.resolve(settingsResult)
+    await retry
+    expect(onWriteError).toHaveBeenCalledOnce()
+  })
+
+  it('does not clear a newer value when an older snapshot succeeds', async () => {
+    const timers = fakeTimers()
+    const first = deferred<PlayerSettings>()
+    const second = deferred<PlayerSettings>()
+    const write = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const persistence = createSettingsPersistence(write, timers)
+
+    persistence.schedule({ skipSeconds: 3 })
+    const firstFlush = persistence.flush()
+    persistence.schedule({ skipSeconds: 4 })
+    const retry = persistence.flush()
+
+    first.resolve(settingsResult)
+    await firstFlush
+    expect(write).toHaveBeenLastCalledWith({ skipSeconds: 4 })
+
+    second.resolve(settingsResult)
+    await retry
+    await persistence.flush()
+    expect(write).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves no retained work after a failed write is successfully retried', async () => {
     const timers = fakeTimers()
     const write = vi
       .fn()
@@ -123,25 +190,44 @@ describe('settingsPersistence', () => {
     const persistence = createSettingsPersistence(write, timers)
 
     persistence.schedule({ skipSeconds: 3 })
-    await expect(persistence.flush()).resolves.toBeUndefined()
+    await persistence.flush()
+    await persistence.flush()
+    await persistence.flush()
+
+    expect(write).toHaveBeenCalledTimes(2)
+  })
+
+  it('continues processing later writes after a rejected timer attempt', async () => {
+    const timers = fakeTimers()
+    const write = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('disk full'))
+      .mockResolvedValueOnce(settingsResult)
+    const persistence = createSettingsPersistence(write, timers)
+
+    persistence.schedule({ skipSeconds: 3 })
+    timers.flush()
+    await Promise.resolve()
 
     persistence.schedule({ skipSeconds: 4 })
-    await expect(persistence.flush()).resolves.toBeUndefined()
+    timers.flush()
+    await persistence.flush()
 
     expect(write).toHaveBeenCalledTimes(2)
     expect(write).toHaveBeenLastCalledWith({ skipSeconds: 4 })
   })
 
-  it('cancel() drops pending work without writing', () => {
+  it('cancel() drops pending and retained failed work without writing it again', async () => {
     const timers = fakeTimers()
-    const write = vi.fn().mockResolvedValue(settingsResult)
+    const write = vi.fn().mockRejectedValueOnce(new Error('disk full'))
     const persistence = createSettingsPersistence(write, timers)
 
     persistence.schedule({ skipSeconds: 7 })
+    await persistence.flush()
     persistence.cancel()
     expect(timers.pendingCount()).toBe(0)
-    timers.flush()
+    await persistence.flush()
 
-    expect(write).not.toHaveBeenCalled()
+    expect(write).toHaveBeenCalledOnce()
   })
 })
