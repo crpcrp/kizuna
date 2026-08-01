@@ -26,6 +26,7 @@ import type { OpenMediaResult, OpenSession, SubtitleRequestToken } from './media
 import {
   appendPathsToPlaylist,
   appendPlaylistFile,
+  type PlaylistAppendResult,
   type PlaylistAppendDeps
 } from './playlistAppend'
 import {
@@ -217,6 +218,38 @@ export function useMediaSession({
       )
     }
   }))
+  const reportPlaylistAppendResult = useLatestCallback((result: PlaylistAppendResult): void => {
+    if (result.status === 'empty') recentFiles.reportError('Playlist is empty.')
+    if (result.status === 'unreadable') recentFiles.reportError('Could not read the playlist.')
+  })
+  const addFilesToPlaylist = useLatestCallback(async (): Promise<void> => {
+    try {
+      const paths = await bridge.media.openFiles()
+      if (paths.length === 0) return
+      const result = await appendPathsToPlaylist(paths, playlistAppendDeps())
+      reportPlaylistAppendResult(result)
+    } catch {
+      recentFiles.reportError('Could not add files to the playlist.')
+    }
+  })
+  const addFolderToPlaylist = useLatestCallback(async (): Promise<void> => {
+    try {
+      const paths = await bridge.media.openFolder()
+      if (paths.length === 0) return
+      const result = await appendPathsToPlaylist(paths, playlistAppendDeps())
+      reportPlaylistAppendResult(result)
+    } catch {
+      recentFiles.reportError('Could not add the folder to the playlist.')
+    }
+  })
+  const savePlaylist = useLatestCallback(async (): Promise<void> => {
+    try {
+      const path = await bridge.media.savePlaylist(playlistController.getState().playlist.entries)
+      if (path === undefined) return
+    } catch {
+      recentFiles.reportError('Could not save the playlist.')
+    }
+  })
 
   const handleOpenNeighbor = useCallback(
     async (direction: 'prev' | 'next'): Promise<void> => {
@@ -385,19 +418,9 @@ export function useMediaSession({
       onNextFile: () => navigate('next'),
       onOpenRecent: (path) => void recentFiles.openRecent(openSession(), path),
       onClearRecentFiles: () => void recentFiles.clearRecent(bridge),
-      onAddFiles: () => {
-        void bridge.media
-          .openFiles()
-          .then((paths) => appendPathsToPlaylist(paths, playlistAppendDeps()))
-      },
-      onAddFolder: () => {
-        void bridge.media
-          .openFolder()
-          .then((paths) => appendPathsToPlaylist(paths, playlistAppendDeps()))
-      },
-      onSavePlaylist: () => {
-        void bridge.media.savePlaylist(playlistController.getState().playlist.entries)
-      }
+      onAddFiles: () => void addFilesToPlaylist(),
+      onAddFolder: () => void addFolderToPlaylist(),
+      onSavePlaylist: () => void savePlaylist()
     },
     qualityMenu: {
       qualityVisible,

@@ -1,5 +1,6 @@
 import { pickDropTarget } from '../../../shared/mediaFileTypes'
 import type { OpenMediaResult } from './mediaSession'
+import type { PlaylistAppendResult } from './playlistAppend'
 
 interface DropHandlerDeps {
   hasVideo: boolean
@@ -7,7 +8,7 @@ interface DropHandlerDeps {
   pathForFile: (file: File) => string
   openPath: (path: string) => Promise<OpenMediaResult>
   loadSubtitle: (videoPath: string, subtitlePath: string) => Promise<string | undefined>
-  appendPlaylistFile: (path: string) => Promise<number>
+  appendPlaylistFile: (path: string) => Promise<PlaylistAppendResult>
   reportError: (message: string) => void
 }
 
@@ -37,8 +38,13 @@ export async function handleDroppedFiles(files: File[], deps: DropHandlerDeps): 
     return
   }
   if (target.kind === 'playlist') {
-    const appended = await deps.appendPlaylistFile(path)
-    if (appended === 0) deps.reportError('Playlist is empty or unreadable.')
+    try {
+      const result = await deps.appendPlaylistFile(path)
+      if (result.status === 'empty') deps.reportError('Playlist is empty.')
+      if (result.status === 'unreadable') deps.reportError('Could not read the playlist.')
+    } catch {
+      deps.reportError('Could not read the playlist.')
+    }
     return
   }
   if (!deps.hasVideo) {
