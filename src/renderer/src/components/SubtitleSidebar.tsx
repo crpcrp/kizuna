@@ -23,7 +23,7 @@ import { useLatestCallback } from '../state/useLatestRef'
 // ephemeral UI state scoped to this component.
 
 /** How long the "Copied to clipboard" toast stays up after a right-click copy. */
-export const COPY_TOAST_MS = 1200
+const COPY_TOAST_MS = 1200
 
 export interface SubtitleSidebarProps {
   cues: Cue[]
