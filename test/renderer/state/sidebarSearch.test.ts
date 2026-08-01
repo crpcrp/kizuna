@@ -46,6 +46,31 @@ describe('findMatches', () => {
     expect(findMatches([c], 'world')).toEqual([{ cueKey: cueKey(c), start: 6, end: 11 }])
   })
 
+  it('uses UTF-16 offsets when an astral character precedes a match', () => {
+    const c = cue('😀猫')
+    expect(findMatches([c], '猫')).toEqual([{ cueKey: cueKey(c), start: 2, end: 3 }])
+  })
+
+  it('uses the full surrogate-pair range for an astral query', () => {
+    const c = cue('A😀B')
+    expect(findMatches([c], '😀')).toEqual([{ cueKey: cueKey(c), start: 1, end: 3 }])
+  })
+
+  it('preserves offsets for astral and full-width Latin text together', () => {
+    const c = cue('x😀ＡＢ')
+    expect(findMatches([c], '😀ab')).toEqual([{ cueKey: cueKey(c), start: 1, end: 5 }])
+  })
+
+  it('uses non-overlapping match semantics for repeated Latin text', () => {
+    const c = cue('aaa')
+    expect(findMatches([c], 'aa')).toEqual([{ cueKey: cueKey(c), start: 0, end: 2 }])
+  })
+
+  it('uses non-overlapping match semantics for repeated Japanese text', () => {
+    const c = cue('人人人')
+    expect(findMatches([c], '人人')).toEqual([{ cueKey: cueKey(c), start: 0, end: 2 }])
+  })
+
   it('matches full-width against half-width query via NFKC', () => {
     const c = cue('ABC')
     expect(findMatches([c], 'ＡＢＣ')).toEqual([{ cueKey: cueKey(c), start: 0, end: 3 }])
@@ -88,6 +113,10 @@ describe('stepMatch', () => {
 })
 
 describe('highlightSegments', () => {
+  function renderSegments(text: string, segments: ReturnType<typeof highlightSegments>): string {
+    return segments.map((segment) => text.slice(segment.start, segment.end)).join('')
+  }
+
   it('returns a single plain segment when there are no matches', () => {
     expect(highlightSegments(5, [])).toEqual([{ start: 0, end: 5, kind: 'plain' }])
   })
@@ -126,5 +155,27 @@ describe('highlightSegments', () => {
       { start: 2, end: 3, kind: 'currentMatch' },
       { start: 3, end: 4, kind: 'plain' }
     ])
+  })
+
+  it('clips invalid and overlapping matches into a non-overlapping partition', () => {
+    const segments = highlightSegments(3, [
+      { cueKey: 'k', start: -1, end: 2 },
+      { cueKey: 'k', start: 1, end: 4 },
+      { cueKey: 'k', start: 4, end: 5 }
+    ])
+    expect(segments).toEqual([
+      { start: 0, end: 2, kind: 'match' },
+      { start: 2, end: 3, kind: 'match' }
+    ])
+    expect(renderSegments('abc', segments)).toBe('abc')
+  })
+
+  it('preserves the source text when partitioning astral text', () => {
+    const text = '😀猫😀'
+    const segments = highlightSegments(text.length, [
+      { cueKey: 'k', start: 2, end: 3 },
+      { cueKey: 'k', start: 5, end: 7 }
+    ])
+    expect(renderSegments(text, segments)).toBe(text)
   })
 })
