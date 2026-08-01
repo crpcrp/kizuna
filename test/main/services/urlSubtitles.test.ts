@@ -13,6 +13,7 @@ import {
 import type { UrlSubtitleTrack } from '@src/shared/urlSubtitles'
 import { fixture } from '@test/paths'
 import { fakeYtdlpQueue, fakeYtdlpSuccess, type FakeYtdlp } from '@test/harness/fakeYtdlp'
+import { deferred, type Deferred } from '@test/harness/deferred'
 
 /** Flushes microtasks until `pred` holds (or a bounded number of ticks pass). */
 async function flushUntil(pred: () => boolean): Promise<void> {
@@ -62,6 +63,30 @@ function makeService(
     ...overrides
   })
 }
+
+interface DeferredYtdlp extends FakeYtdlp {
+  pending: Deferred<string>[]
+}
+
+function deferredYtdlp(): DeferredYtdlp {
+  const calls: FakeYtdlp['calls'] = []
+  const pending: Deferred<string>[] = []
+  const exec: FakeYtdlp['exec'] = (ytdlpPath, args, opts) => {
+    calls.push({
+      ytdlpPath,
+      args: [...args],
+      signal: opts.signal,
+      maxOutputBytes: opts.maxOutputBytes
+    })
+    const result = deferred<string>()
+    pending.push(result)
+    return result.promise
+  }
+  return { exec, calls, pending }
+}
+
+const PROVIDED_EN_JSON = JSON.stringify({ subtitles: { en: [{ ext: 'srt' }] } })
+const PROVIDED_JA_JSON = JSON.stringify({ subtitles: { ja: [{ ext: 'vtt' }] } })
 
 describe('buildInventoryArgs', () => {
   it('is a fixed allowlist ending in `-- <url>`', () => {
@@ -173,6 +198,45 @@ describe('createUrlSubtitleService.enumerate', () => {
     const yt = fakeYtdlpQueue([{ error: new Error('exit 1') }])
     const inv = await makeService(yt, fakeFs()).enumerate(URL)
     expect(inv).toMatchObject({ available: false, tracks: [] })
+  })
+
+  it('keeps the newest catalog when enumerations finish out of order', async () => {
+    const yt = deferredYtdlp()
+    const service = makeService(yt, fakeFs())
+    const first = service.enumerate(URL)
+    await flushUntil(() => yt.calls.length === 1)
+    const second = service.enumerate(OTHER_URL)
+    await flushUntil(() => yt.calls.length === 2)
+
+    yt.pending[1].resolve(PROVIDED_JA_JSON)
+    const secondInventory = await second
+    yt.pending[0].resolve(PROVIDED_EN_JSON)
+    const firstInventory = await first
+
+    expect(firstInventory.tracks.map((track) => track.selectionId)).toEqual(['provided:en'])
+    expect(secondInventory.tracks.map((track) => track.selectionId)).toEqual(['provided:ja'])
+    await expect(service.acquire({ url: OTHER_URL, selectionId: 'provided:en' })).rejects.toThrow(
+      'Subtitle track is unavailable.'
+    )
+  })
+
+  it('does not replace a newer catalog when an older enumeration is rejected late', async () => {
+    const yt = deferredYtdlp()
+    const service = makeService(yt, fakeFs())
+    const first = service.enumerate(URL)
+    await flushUntil(() => yt.calls.length === 1)
+    const second = service.enumerate(OTHER_URL)
+    await flushUntil(() => yt.calls.length === 2)
+
+    yt.pending[1].resolve(PROVIDED_JA_JSON)
+    await second
+    yt.pending[0].reject(new Error('aborted'))
+    await expect(first).resolves.toMatchObject({ url: URL, available: false, tracks: [] })
+
+    const assetPromise = service.acquire({ url: OTHER_URL, selectionId: 'provided:ja' })
+    await flushUntil(() => yt.calls.length === 3)
+    yt.pending[2].resolve('')
+    await expect(assetPromise).resolves.toMatchObject({ selectionId: 'provided:ja' })
   })
 })
 
@@ -319,6 +383,55 @@ describe('createUrlSubtitleService.acquire', () => {
     await expect(pending).rejects.toBeInstanceOf(UrlSubtitleError)
     expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
   })
+
+  it('does not cache a result that completes after cancel()', async () => {
+    const yt = deferredYtdlp()
+    const service = makeService(yt, fakeFs())
+    const enumeration = service.enumerate(URL)
+    await flushUntil(() => yt.calls.length === 1)
+    yt.pending[0].resolve(PROVIDED_EN_JSON)
+    await enumeration
+
+    const staleAcquire = service.acquire({ url: URL, selectionId: 'provided:en' })
+    await flushUntil(() => yt.calls.length === 2)
+    service.cancel()
+    yt.pending[1].resolve('late subtitle')
+    await expect(staleAcquire).rejects.toThrow('Subtitle selection is no longer valid.')
+
+    const currentAcquire = service.acquire({ url: URL, selectionId: 'provided:en' })
+    await flushUntil(() => yt.calls.length === 3)
+    yt.pending[2].resolve('current subtitle')
+    await expect(currentAcquire).resolves.toMatchObject({ selectionId: 'provided:en' })
+  })
+
+  it('rejects an acquisition from an older URL without caching its late result', async () => {
+    const yt = deferredYtdlp()
+    const fs = fakeFs()
+    const service = makeService(yt, fs)
+
+    const firstEnumeration = service.enumerate(URL)
+    await flushUntil(() => yt.calls.length === 1)
+    yt.pending[0].resolve(PROVIDED_EN_JSON)
+    await firstEnumeration
+
+    const staleAcquire = service.acquire({ url: URL, selectionId: 'provided:en' })
+    await flushUntil(() => yt.calls.length === 2)
+
+    const secondEnumeration = service.enumerate(OTHER_URL)
+    await flushUntil(() => yt.calls.length === 3)
+    yt.pending[2].resolve(PROVIDED_EN_JSON)
+    await secondEnumeration
+
+    yt.pending[1].resolve('late A subtitle')
+    await expect(staleAcquire).rejects.toThrow('Subtitle selection is no longer valid.')
+
+    const currentAcquire = service.acquire({ url: OTHER_URL, selectionId: 'provided:en' })
+    await flushUntil(() => yt.calls.length === 4)
+    yt.pending[3].resolve('current B subtitle')
+    await expect(currentAcquire).resolves.toMatchObject({ selectionId: 'provided:en' })
+    expect(yt.calls.filter((call) => call.args.includes('--write-subs'))).toHaveLength(2)
+    expect(fs.removed).toEqual([join(CACHE, 'TOKEN'), join(CACHE, 'TOKEN')])
+  })
 })
 
 describe('createUrlSubtitleService session/shutdown lifecycle', () => {
@@ -350,5 +463,35 @@ describe('createUrlSubtitleService session/shutdown lifecycle', () => {
     await service.enumerate(URL)
     await service.cleanup()
     expect(fs.removed).toEqual([CACHE])
+  })
+
+  it('prevents late enumeration and acquisition commits during cleanup', async () => {
+    const enumYt = deferredYtdlp()
+    const enumFs = fakeFs()
+    const enumService = makeService(enumYt, enumFs)
+    const pendingEnumeration = enumService.enumerate(URL)
+    await flushUntil(() => enumYt.calls.length === 1)
+    await enumService.cleanup()
+    enumYt.pending[0].resolve(PROVIDED_EN_JSON)
+    await pendingEnumeration
+    await expect(enumService.acquire({ url: URL, selectionId: 'provided:en' })).rejects.toThrow(
+      'Subtitle selection is no longer valid.'
+    )
+    expect(enumFs.removed).toEqual([CACHE])
+
+    const acquireYt = deferredYtdlp()
+    const acquireFs = fakeFs()
+    const acquireService = makeService(acquireYt, acquireFs)
+    const enumeration = acquireService.enumerate(URL)
+    await flushUntil(() => acquireYt.calls.length === 1)
+    acquireYt.pending[0].resolve(PROVIDED_EN_JSON)
+    await enumeration
+
+    const pendingAcquisition = acquireService.acquire({ url: URL, selectionId: 'provided:en' })
+    await flushUntil(() => acquireYt.calls.length === 2)
+    await acquireService.cleanup()
+    acquireYt.pending[1].resolve('late subtitle')
+    await expect(pendingAcquisition).rejects.toThrow('Subtitle selection is no longer valid.')
+    expect(acquireFs.removed.filter((path) => path === CACHE)).toHaveLength(1)
   })
 })

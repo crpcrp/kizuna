@@ -158,10 +158,10 @@ export function pickAcquiredFile(
 
 /**
  * Builds the URL-subtitle service. `enumerate` stores the resulting inventory
- * as the active catalog; `acquire` only trusts descriptors whose URL matches
- * that active URL and whose `selectionId` exists in it, and caches each
- * acquired track in memory for the session so a re-select never re-spawns
- * yt-dlp. Switching to a new URL clears the session cache.
+ * as the active catalog only when its generation is still current; `acquire`
+ * only trusts descriptors whose URL and catalog generation are still active.
+ * Acquired tracks are cached by URL and selection ID for the session so a
+ * re-select never re-spawns yt-dlp. Starting a new catalog clears the cache.
  */
 export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubtitleService {
   const timeoutMs = deps.timeoutMs ?? URL_SUBTITLE_TIMEOUT_MS
@@ -172,6 +172,9 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
 
   let activeUrl: string | undefined
   let inventory: UrlSubtitleInventory | undefined
+  let inventoryGeneration = 0
+  let catalogGeneration = 0
+  let acquisitionGeneration = 0
   const sessionCache = new Map<string, UrlSubtitleAsset>()
   const inFlight = new Set<AbortController>()
 
@@ -180,6 +183,34 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
     available: false,
     tracks: []
   })
+
+  const cacheKey = (url: string, selectionId: string): string => `${url}\0${selectionId}`
+
+  const abortInFlight = (): void => {
+    for (const controller of inFlight) controller.abort()
+  }
+
+  const invalidateAcquisitions = (): void => {
+    acquisitionGeneration += 1
+    abortInFlight()
+  }
+
+  const isCurrentGeneration = (url: string, generation: number): boolean =>
+    activeUrl === url && catalogGeneration === generation
+
+  const isCurrentCatalog = (url: string, generation: number): boolean =>
+    isCurrentGeneration(url, generation) &&
+    inventoryGeneration === generation &&
+    inventory !== undefined
+
+  const staleSelectionError = (): UrlSubtitleError =>
+    new UrlSubtitleError('Subtitle selection is no longer valid.')
+
+  const isCurrentAcquisition = (
+    url: string,
+    generation: number,
+    operationGeneration: number
+  ): boolean => isCurrentCatalog(url, generation) && acquisitionGeneration === operationGeneration
 
   async function runYtdlp(ytdlpPath: string, args: readonly string[]): Promise<string> {
     const controller = new AbortController()
@@ -195,31 +226,54 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
 
   return {
     async enumerate(url): Promise<UrlSubtitleInventory> {
-      // A new URL invalidates the previous session's cache.
-      if (url !== activeUrl) sessionCache.clear()
+      // Invalidate all work from the previous catalog before changing the
+      // active URL. The result remains local until this generation completes.
+      const generation = ++catalogGeneration
+      invalidateAcquisitions()
       activeUrl = url
+      inventory = undefined
+      inventoryGeneration = 0
+      sessionCache.clear()
+
+      let nextInventory: UrlSubtitleInventory
       if (!isExtractorBackedUrl(url) || deps.ytdlpPath === undefined) {
-        inventory = emptyInventory(url)
-        return inventory
+        nextInventory = emptyInventory(url)
+      } else {
+        try {
+          const stdout = await runYtdlp(deps.ytdlpPath, buildInventoryArgs(url))
+          nextInventory = parseUrlSubtitleInventory(url, JSON.parse(stdout))
+        } catch {
+          // Timeout, abort, nonzero exit, or malformed JSON → safe empty result.
+          nextInventory = emptyInventory(url)
+        }
       }
-      try {
-        const stdout = await runYtdlp(deps.ytdlpPath, buildInventoryArgs(url))
-        inventory = parseUrlSubtitleInventory(url, JSON.parse(stdout))
-      } catch {
-        // Timeout, abort, nonzero exit, or malformed JSON → safe empty result.
-        inventory = emptyInventory(url)
+
+      if (isCurrentGeneration(url, generation)) {
+        inventory = nextInventory
+        inventoryGeneration = generation
       }
-      return inventory
+      return nextInventory
     },
 
     async acquire(descriptor): Promise<UrlSubtitleAsset> {
-      if (descriptor.url !== activeUrl || inventory === undefined) {
-        throw new UrlSubtitleError('Subtitle selection is no longer valid.')
+      const url = activeUrl
+      const generation = catalogGeneration
+      const operationGeneration = acquisitionGeneration
+      const currentInventory = inventory
+      if (
+        url === undefined ||
+        descriptor.url !== url ||
+        currentInventory === undefined ||
+        !isCurrentCatalog(url, generation)
+      ) {
+        throw staleSelectionError()
       }
-      const cached = sessionCache.get(descriptor.selectionId)
+
+      const key = cacheKey(url, descriptor.selectionId)
+      const cached = sessionCache.get(key)
       if (cached) return cached
 
-      const track = inventory.tracks.find((t) => t.selectionId === descriptor.selectionId)
+      const track = currentInventory.tracks.find((t) => t.selectionId === descriptor.selectionId)
       if (track === undefined) throw new UrlSubtitleError('Subtitle track is unavailable.')
       if (deps.ytdlpPath === undefined) throw new UrlSubtitleError('yt-dlp is unavailable.')
       if (!track.formats.some(isSupportedSubtitleFormat)) {
@@ -235,14 +289,23 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
       }
 
       const outDir = join(deps.cacheDir, randomToken())
-      const args = buildAcquireArgs(activeUrl, track, outDir)
+      const args = buildAcquireArgs(url, track, outDir)
       let files: string[] = []
       let stage: 'exec' | 'files' | 'parse' = 'exec'
-      await deps.fs.mkdir(outDir)
       try {
+        await deps.fs.mkdir(outDir)
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          throw staleSelectionError()
+        }
         await runYtdlp(deps.ytdlpPath, args)
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          throw staleSelectionError()
+        }
         stage = 'files'
         files = await deps.fs.readdir(outDir)
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          throw staleSelectionError()
+        }
         const picked = pickAcquiredFile(files, track.lang)
         if (picked === undefined) {
           throw new UrlSubtitleError('This subtitle is not available in a supported format.')
@@ -256,9 +319,19 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
           format: picked.format,
           cues
         }
-        sessionCache.set(descriptor.selectionId, asset)
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          throw staleSelectionError()
+        }
+        sessionCache.set(key, asset)
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          sessionCache.delete(key)
+          throw staleSelectionError()
+        }
         return asset
       } catch (err) {
+        if (!isCurrentAcquisition(url, generation, operationGeneration)) {
+          throw staleSelectionError()
+        }
         if (stage === 'exec') files = await deps.fs.readdir(outDir).catch(() => [])
         console.error('URL subtitle acquisition failed', {
           kind: track.kind,
@@ -278,11 +351,16 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
     },
 
     cancel(): void {
-      for (const controller of inFlight) controller.abort()
+      invalidateAcquisitions()
     },
 
     async cleanup(): Promise<void> {
+      // Invalidate and abort first so no late operation can commit while the
+      // in-memory session is cleared or its on-disk root is removed.
+      catalogGeneration += 1
+      invalidateAcquisitions()
       inventory = undefined
+      inventoryGeneration = 0
       activeUrl = undefined
       sessionCache.clear()
       await deps.fs.remove(deps.cacheDir).catch(() => {})
