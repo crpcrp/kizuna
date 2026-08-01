@@ -504,6 +504,15 @@ describe('CueRowContent search highlighting', () => {
     expect(html).toContain('猫は猫が好き')
   })
 
+  it('preserves an astral character before the highlighted Japanese match', () => {
+    const emojiCue: Cue = { start: 0, end: 1, text: '😀猫' }
+    const matches: SearchMatch[] = [{ cueKey: cueKey(emojiCue), start: 2, end: 3 }]
+    const html = renderToStaticMarkup(
+      <CueRowContent cue={emojiCue} rowTokens={[]} matches={matches} />
+    )
+    expect(html).toBe('<span>😀<mark>猫</mark></span>')
+  })
+
   it('wraps the intersecting substring inside a token span, preserving data-level', () => {
     const tokens: Token[] = [
       makeToken({ surface: '猫' }),
