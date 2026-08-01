@@ -126,6 +126,26 @@ describe('App settings hydration', () => {
     expect(setSettings).not.toHaveBeenCalled()
   })
 
+  it('reports a settings write failure through the shared error banner', async () => {
+    const setSettings = installBridge(Promise.resolve(settings()))
+    render(<App />)
+
+    await screen.findByRole('button', { name: 'Media' })
+    setSettings.mockRejectedValueOnce(new Error('settings path leaked'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Skip back\/ahead seconds/ }), {
+      target: { value: '6' }
+    })
+
+    await waitFor(() => expect(setSettings).toHaveBeenCalledWith({ skipSeconds: 6 }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Could not save settings.')
+    )
+    expect(screen.queryByText('settings path leaked')).toBeNull()
+  })
+
   it('does not schedule a settings write when only the playback speed changes', async () => {
     const setSettings = installBridge(Promise.resolve(settings()))
     const view = render(<App />)

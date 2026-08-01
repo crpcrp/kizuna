@@ -118,7 +118,12 @@ export default function App({
   // round-trip (and synchronous writeFileSync) per intermediate value. See
   // state/settingsPersistence.ts.
   const settingsPersistenceRef = useRef(
-    createSettingsPersistence((patch) => window.kizuna.playerSettings.setSettings(patch))
+    createSettingsPersistence(
+      (patch) => window.kizuna.playerSettings.setSettings(patch),
+      undefined,
+      undefined,
+      () => mediaSession.banner.reportError('Could not save settings.')
+    )
   )
   // Options dialog lifecycle: its open state, the per-domain optional-integration
   // data behind it (dictionaries, Anki, knowledge, setup), and the dictionary/Anki
