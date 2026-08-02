@@ -1,6 +1,11 @@
 // App-quit wiring. Split out from index.ts so it's unit-testable with fakes
 // instead of a live Electron session/controller.
 
+/** Electron does not await the `before-quit` listener, so only this subset is needed. */
+export interface PreventableQuitEvent {
+  preventDefault(): void
+}
+
 /** Subset of Electron's Session used on quit. */
 export interface FlushableSession {
   flushStorageData(): void
@@ -9,36 +14,126 @@ export interface FlushableSession {
 /** Subset of MpvController used on quit. */
 export interface QuittableController {
   quit(): Promise<void>
+  dispose(): void
+}
+
+/** Maximum time to wait for asynchronous shutdown work before forcing teardown. */
+export const SHUTDOWN_TIMEOUT_MS = 2_000
+
+export type SetTimeoutFn = (callback: () => void, delayMs: number) => unknown
+export type ClearTimeoutFn = (handle: unknown) => void
+
+export interface QuitCoordinatorDeps {
+  defaultSession: FlushableSession
+  controller: QuittableController
+  flushHistory?: () => void
+  releasePowerSave?: () => void
+  disposeSystemMedia?: () => void
+  cleanupUrlSubtitles?: () => Promise<void>
+  appQuit: () => void
+  setTimeoutFn?: SetTimeoutFn
+  clearTimeoutFn?: ClearTimeoutFn
+  onError?: (operation: string, error: unknown) => void
+}
+
+export type QuitHandler = (event: PreventableQuitEvent) => void
+
+function defaultOnError(operation: string, error: unknown): void {
+  console.error(`[kizuna] ${operation} failed during shutdown`, error)
 }
 
 /**
- * Runs on 'before-quit'. Electron's renderer localStorage is backed by a
- * store that commits writes to disk asynchronously — a quit that follows
- * shortly after a write can race the commit and lose it, which looks exactly
- * like "my setting didn't persist" even though the write itself succeeded.
- * flushStorageData forces any pending writes to disk before mpv is torn down
- * and the process exits. See bugs.json's "subtitle position doesn't persist"
- * report. (Options-menu settings — keybindings, skip amount, popup/subtitle
- * style — no longer go through localStorage; they're persisted synchronously
- * via settings.json, see services/settings.ts's PlayerSettings.)
+ * Coordinates Electron shutdown without relying on Electron to await an event
+ * listener. The returned handler is safe to register directly with
+ * `app.on('before-quit', ...)`.
  */
-export function handleBeforeQuit(
-  defaultSession: FlushableSession,
-  controller: QuittableController,
-  flushHistory: () => void = () => {},
-  releasePowerSave: () => void = () => {},
-  disposeSystemMedia: () => void = () => {},
-  cleanupUrlSubtitles: () => void = () => {}
-): void {
-  // Release the media-key global shortcuts (and clear the taskbar surfaces)
-  // first: leaving them registered past quit would keep stealing the keys from
-  // other apps.
-  disposeSystemMedia()
-  releasePowerSave()
-  // Best-effort removal of the session-only URL-subtitle download cache: remote
-  // subtitle assets are never persisted, so nothing outlives quit.
-  cleanupUrlSubtitles()
-  flushHistory()
-  defaultSession.flushStorageData()
-  void controller.quit()
+export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
+  const flushHistory = deps.flushHistory ?? (() => {})
+  const releasePowerSave = deps.releasePowerSave ?? (() => {})
+  const disposeSystemMedia = deps.disposeSystemMedia ?? (() => {})
+  const cleanupUrlSubtitles = deps.cleanupUrlSubtitles ?? (async () => {})
+  const setTimeoutFn = deps.setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
+  const clearTimeoutFn =
+    deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
+  const onError = deps.onError ?? defaultOnError
+
+  let shutdownStarted = false
+  let shutdownAllowed = false
+  let hardDisposed = false
+  let appQuitCalled = false
+
+  const reportFailure = (operation: string, error: unknown): void => {
+    try {
+      onError(operation, error)
+    } catch {
+      // Logging must never create another unhandled shutdown failure.
+    }
+  }
+
+  const runSafely = (operation: string, action: () => void): void => {
+    try {
+      action()
+    } catch (error) {
+      reportFailure(operation, error)
+    }
+  }
+
+  const startAsync = (action: () => Promise<void>): Promise<void> => {
+    try {
+      return Promise.resolve(action())
+    } catch (error) {
+      // The rejected promise is consumed by Promise.allSettled below, which
+      // reports the failure exactly once with the other async outcomes.
+      return Promise.reject(error)
+    }
+  }
+
+  const disposeHard = (): void => {
+    if (hardDisposed) return
+    hardDisposed = true
+    runSafely('mpv hard disposal', () => deps.controller.dispose())
+  }
+
+  const allowQuit = (): void => {
+    if (shutdownAllowed) return
+    shutdownAllowed = true
+    if (appQuitCalled) return
+    appQuitCalled = true
+    runSafely('app.quit', deps.appQuit)
+  }
+
+  return (event): void => {
+    if (shutdownAllowed) return
+
+    event.preventDefault()
+    if (shutdownStarted) return
+    shutdownStarted = true
+
+    // Keep the existing synchronous order: release media surfaces, then the
+    // power-save blocker, then flush history and renderer storage.
+    runSafely('system-media disposal', disposeSystemMedia)
+    runSafely('power-save release', releasePowerSave)
+
+    // Start URL cleanup at its existing position, but let it run alongside
+    // the controller quit so either rejection cannot prevent the other.
+    const urlCleanup = startAsync(cleanupUrlSubtitles)
+    runSafely('history flush', flushHistory)
+    runSafely('session storage flush', () => deps.defaultSession.flushStorageData())
+    const controllerQuit = startAsync(() => deps.controller.quit())
+    const cleanup = Promise.allSettled([urlCleanup, controllerQuit])
+    const timer = setTimeoutFn(() => {
+      disposeHard()
+      allowQuit()
+    }, SHUTDOWN_TIMEOUT_MS)
+
+    void cleanup.then((results) => {
+      const operations = ['URL-subtitle cleanup', 'mpv quit']
+      for (const [index, result] of results.entries()) {
+        if (result.status === 'rejected') reportFailure(operations[index], result.reason)
+      }
+      if (shutdownAllowed) return
+      clearTimeoutFn(timer)
+      allowQuit()
+    })
+  }
 }
