@@ -1,5 +1,5 @@
 import './SubtitleSidebar.css'
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
@@ -14,7 +14,8 @@ import {
 } from '../state/sidebarSearch'
 import { SubtitleSearchDebounce } from '../state/subtitleSearchDebounce'
 import type { VocabularySpan } from '../state/vocabularySpans'
-import { useLatestCallback } from '../state/useLatestRef'
+import { useSidebarTranslation } from '../state/useSidebarTranslation'
+import SubtitleTranslationPopup from './SubtitleTranslationPopup'
 
 // Presentational side panel: lists every cue of the current subtitle track,
 // highlights whichever one is active, and jumps playback to a clicked row.
@@ -47,128 +48,6 @@ export interface SubtitleSidebarProps {
   /** Root element ref, so the caller can measure the sidebar's rendered width
    * for the mpv video-margin-ratio-right inset (see computeVideoMargins). */
   containerRef?: React.RefObject<HTMLElement | null>
-}
-
-export interface TranslationPopup {
-  anchor: { top: number; left: number }
-  cueKey: string
-  status: 'loading' | 'done' | 'error'
-  text?: string
-}
-
-export interface TranslationPopupPlacement {
-  top: number
-  left: number
-  placement: 'above' | 'below'
-}
-
-export interface PopupAnchorRect {
-  top: number
-  left: number
-  width: number
-  bottom: number
-}
-
-export interface PopupSize {
-  width: number
-  height: number
-}
-
-/** Pure viewport-safe geometry for the translated-cue popup. */
-export function placeTranslationPopup(
-  anchorRect: PopupAnchorRect,
-  popupSize: PopupSize,
-  viewportSize: PopupSize,
-  margin = 8
-): TranslationPopupPlacement {
-  const clamp = (value: number, minimum: number, maximum: number): number =>
-    Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
-  const left = clamp(
-    anchorRect.left + anchorRect.width / 2 - popupSize.width / 2,
-    margin,
-    viewportSize.width - popupSize.width - margin
-  )
-  const aboveTop = anchorRect.top - popupSize.height - margin
-  const placement = aboveTop >= margin ? 'above' : 'below'
-  const preferredTop = placement === 'above' ? aboveTop : anchorRect.bottom + margin
-  return {
-    top: clamp(preferredTop, margin, viewportSize.height - popupSize.height - margin),
-    left,
-    placement
-  }
-}
-
-export interface TranslationPopupController {
-  open(
-    cueKey: string,
-    anchor: TranslationPopup['anchor'],
-    translate: (requestId: string) => Promise<string>
-  ): void
-  close(): void
-}
-
-/** Owns the popup's cue-local cache and latest-request-wins guard. Kept apart
- * from React so the async edge cases remain directly testable. */
-export function createTranslationPopupController(
-  setPopup: (popup: TranslationPopup | null) => void,
-  createRequestId: () => string,
-  cancel: (requestId: string) => void
-): TranslationPopupController {
-  const cache = new Map<string, string>()
-  let popup: TranslationPopup | null = null
-  let requestNonce = 0
-  let activeRequestId: string | undefined
-
-  function set(next: TranslationPopup | null): void {
-    popup = next
-    setPopup(next)
-  }
-
-  function cancelActiveRequest(): void {
-    if (activeRequestId === undefined) return
-    const requestId = activeRequestId
-    activeRequestId = undefined
-    cancel(requestId)
-  }
-
-  return {
-    open(cueKey, anchor, translate): void {
-      if (popup?.cueKey === cueKey && popup.status === 'loading') return
-
-      const cached = cache.get(cueKey)
-      if (cached !== undefined) {
-        cancelActiveRequest()
-        requestNonce++
-        set({ anchor, cueKey, status: 'done', text: cached })
-        return
-      }
-
-      cancelActiveRequest()
-      const request = ++requestNonce
-      const requestId = createRequestId()
-      activeRequestId = requestId
-      set({ anchor, cueKey, status: 'loading' })
-      void translate(requestId).then(
-        (text) => {
-          if (request !== requestNonce) return
-          if (activeRequestId === requestId) activeRequestId = undefined
-          cache.set(cueKey, text)
-          set({ anchor, cueKey, status: 'done', text })
-        },
-        () => {
-          if (request !== requestNonce) return
-          if (activeRequestId === requestId) activeRequestId = undefined
-          set({ anchor, cueKey, status: 'error' })
-        }
-      )
-    },
-
-    close(): void {
-      requestNonce++
-      cancelActiveRequest()
-      set(null)
-    }
-  }
 }
 
 /** Pure: scrolls the active row into the middle of the sidebar's scroll
@@ -404,33 +283,21 @@ export default function SubtitleSidebar({
   const currentMatchRowRef = useRef<HTMLElement | null>(null)
   const isFirstNavRef = useRef(true)
   const debounceRef = useRef<SubtitleSearchDebounce | null>(null)
-  const rowElsRef = useRef<Map<string, HTMLLIElement> | null>(null)
   const [copyToastAnchor, setCopyToastAnchor] = useState<{ top: number; left: number } | null>(null)
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [translationPopup, setTranslationPopup] = useState<TranslationPopup | null>(null)
-  const [translationPopupPosition, setTranslationPopupPosition] =
-    useState<TranslationPopupPlacement | null>(null)
-  const translationPopupElementRef = useRef<HTMLDivElement | null>(null)
-  const createRequestId = useLatestCallback(
-    (): string => createTranslationRequestId?.() ?? crypto.randomUUID()
-  )
-  const cancelTranslation = useLatestCallback((requestId: string): void =>
-    onCancelTranslation?.(requestId)
-  )
-
-  if (rowElsRef.current === null) rowElsRef.current = new Map()
-  // Created once per mount; the callbacks read the latest props through the
-  // mirrors above instead of being rebuilt with the controller.
-  const [translationPopupController] = useState<TranslationPopupController>(() =>
-    createTranslationPopupController(
-      (popup) => {
-        setTranslationPopupPosition(null)
-        setTranslationPopup(popup)
-      },
-      createRequestId,
-      cancelTranslation
-    )
-  )
+  const {
+    popup: translationPopup,
+    position: translationPopupPosition,
+    popupElementRef: translationPopupElementRef,
+    rowElementsRef: rowElsRef,
+    openTranslation,
+    closeTranslation
+  } = useSidebarTranslation({
+    cues,
+    onTranslateCue,
+    createTranslationRequestId,
+    onCancelTranslation
+  })
 
   function commitSearch(nextQuery: string): void {
     setSearchedQuery(nextQuery)
@@ -454,14 +321,12 @@ export default function SubtitleSidebar({
   // track changes as before, and the debounce cancel still covers unmount.
   useEffect(() => {
     const debounce = debounceRef.current!
-    const controller = translationPopupController
     return () => {
       debounce.cancel()
       setQuery('')
       commitSearch('')
-      controller.close()
     }
-  }, [cues, translationPopupController])
+  }, [cues])
 
   // Scrolls the current-match row into view, but only for explicit
   // next/previous navigation (navNonce bumps), never merely because the
@@ -496,15 +361,13 @@ export default function SubtitleSidebar({
   // timers.
   function handleCopyCue(cue: Cue): void {
     onCopyCue?.(cue)
-    const rect = rowElsRef.current!.get(cueKey(cue))?.getBoundingClientRect()
-    const anchor = rect ? { top: rect.top, left: rect.left + rect.width / 2 } : { top: 0, left: 0 }
     if (onTranslateCue) {
-      translationPopupController.open(cueKey(cue), anchor, (requestId) =>
-        onTranslateCue(cue, requestId)
-      )
+      openTranslation(cue)
       return
     }
 
+    const rect = rowElsRef.current!.get(cueKey(cue))?.getBoundingClientRect()
+    const anchor = rect ? { top: rect.top, left: rect.left + rect.width / 2 } : { top: 0, left: 0 }
     setCopyToastAnchor(rect ? anchor : null)
     if (copyToastTimerRef.current !== null) clearTimeout(copyToastTimerRef.current)
     copyToastTimerRef.current = setTimeout(() => setCopyToastAnchor(null), COPY_TOAST_MS)
@@ -513,37 +376,8 @@ export default function SubtitleSidebar({
   useEffect(() => {
     return () => {
       if (copyToastTimerRef.current !== null) clearTimeout(copyToastTimerRef.current)
-      translationPopupController.close()
     }
-  }, [translationPopupController])
-
-  // Re-measure only when popup content changes or the viewport resizes. Scrolling
-  // deliberately does not trigger layout work; a vanished row closes the popup.
-  useLayoutEffect(() => {
-    if (!translationPopup) return
-    const reposition = (): void => {
-      const anchor = rowElsRef.current!.get(translationPopup.cueKey)?.getBoundingClientRect()
-      const popup = translationPopupElementRef.current?.getBoundingClientRect()
-      if (!anchor || !popup) {
-        translationPopupController.close()
-        return
-      }
-      const next = placeTranslationPopup(anchor, popup, {
-        width: window.innerWidth,
-        height: window.innerHeight
-      })
-      setTranslationPopupPosition((current) =>
-        current?.top === next.top &&
-        current.left === next.left &&
-        current.placement === next.placement
-          ? current
-          : next
-      )
-    }
-    reposition()
-    window.addEventListener('resize', reposition)
-    return () => window.removeEventListener('resize', reposition)
-  }, [translationPopup, cues, translationPopupController])
+  }, [])
 
   return (
     <aside id="subtitle-sidebar" aria-label="All subtitles" ref={containerRef}>
@@ -557,29 +391,12 @@ export default function SubtitleSidebar({
         </div>
       )}
       {translationPopup && (
-        <div
-          id="subtitle-sidebar-translate-popup"
-          role="status"
-          ref={translationPopupElementRef}
-          style={{
-            top: translationPopupPosition?.top ?? 0,
-            left: translationPopupPosition?.left ?? 0
-          }}
-        >
-          <div className="subtitle-sidebar-translate-header">
-            Copied to clipboard
-            <button
-              type="button"
-              aria-label="Close translation"
-              onClick={() => translationPopupController.close()}
-            >
-              ✕
-            </button>
-          </div>
-          {translationPopup.status === 'loading' && <p>Translating…</p>}
-          {translationPopup.status === 'done' && <p>{translationPopup.text}</p>}
-          {translationPopup.status === 'error' && <p>Translation failed.</p>}
-        </div>
+        <SubtitleTranslationPopup
+          popup={translationPopup}
+          position={translationPopupPosition}
+          popupRef={translationPopupElementRef}
+          onClose={closeTranslation}
+        />
       )}
       <div id="subtitle-sidebar-header">
         <div className="subtitle-sidebar-search-row">
