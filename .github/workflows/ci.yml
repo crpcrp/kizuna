@@ -92,10 +92,8 @@ jobs:
         run: npm run format:check
 
       # scripts/run-tests.mjs writes failing test names to test-results.log and
-      # exits non-zero, per AGENTS.md's testing policy. CI running the full
-      # suite here does not change that policy: agents still run only the one
-      # focused test they just created, and the user runs `npm.cmd test`
-      # locally.
+      # exits non-zero. It runs the full Vitest suite; the following step
+      # uploads the log only when the test step fails.
       - name: Test
         run: npm test
 

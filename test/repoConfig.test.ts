@@ -41,4 +41,10 @@ describe('repository configuration', () => {
 
     expect(config.fileAssociations?.[0]?.ext).toEqual([...VIDEO_EXTENSIONS])
   })
+
+  it('keeps release documentation discoverable without delegating CI validation', () => {
+    expect(read('docs/architecture-plan.md')).toContain('[Releasing](releasing.md)')
+    expect(read('docs/codebase-map.md')).toContain('[Releasing](releasing.md)')
+    expect(read('.github/workflows/ci.yml')).not.toMatch(/user runs .*test/i)
+  })
 })

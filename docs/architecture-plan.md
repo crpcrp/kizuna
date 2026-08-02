@@ -45,8 +45,13 @@ Windows x64 and NSIS are the supported release targets. The installer includes
 the staged runtime binaries and generated third-party notices.
 `better-sqlite3` is rebuilt for Electron's ABI.
 
-Published installers are built and signed by the release workflow. Runtime
-binaries and their licensing metadata are pinned separately; see
+GitHub Actions builds unsigned Windows x64 NSIS installers. The release
+workflow verifies the package, generates checksums, notices, and provenance,
+and prepares a draft pre-release. Code signing is planned after the project is
+accepted by an open-source signing service; see [Releasing](releasing.md) for
+the authoritative release procedure.
+
+Runtime binaries and their licensing metadata are pinned separately; see
 [Runtime binaries](binaries.md) and
 [Licensing and third-party notices](licensing.md).
 
