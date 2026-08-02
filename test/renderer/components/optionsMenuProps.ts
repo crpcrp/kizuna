@@ -43,6 +43,7 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       audioDevices: [],
       selectedAudioDevice: AUTO_AUDIO_DEVICE,
       onSelectAudioDevice: noop,
+      audioDeviceSelectionPending: false,
       loudnessNormalization: false,
       onToggleLoudnessNorm: noop,
       screenshotFolder: null,

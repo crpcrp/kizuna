@@ -198,7 +198,8 @@ export default function App({
     settingsReady,
     panels: { sidebarOpen, playlistOpen, setSidebarOpen, setPlaylistOpen },
     miningPresentation,
-    initialAudioDevices
+    initialAudioDevices,
+    reportError: mediaSession.banner.reportError
   })
   // Attached to the chrome and side-panel elements this component renders;
   // usePlaybackWindow measures them for mpv's video margins and window sizing.

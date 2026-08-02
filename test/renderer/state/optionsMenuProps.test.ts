@@ -39,6 +39,7 @@ const playback: OptionsPlaybackGroup = {
   audioDevices: [],
   selectedAudioDevice: 'auto',
   onSelectAudioDevice: vi.fn(),
+  audioDeviceSelectionPending: false,
   onAudioDevicesRequest: vi.fn(),
   loudnessNormalization: false,
   onToggleLoudnessNorm: vi.fn()

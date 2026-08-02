@@ -30,6 +30,7 @@ export type OptionsSettingsState = Pick<
 export type OptionsPlaybackGroup = Pick<
   PlaybackTabProps,
   | 'audioDevices'
+  | 'audioDeviceSelectionPending'
   | 'loudnessNormalization'
   | 'onAudioDevicesRequest'
   | 'onSelectAudioDevice'

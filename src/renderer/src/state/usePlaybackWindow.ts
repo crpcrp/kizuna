@@ -106,6 +106,8 @@ export interface UsePlaybackWindowInput {
   miningPresentation: BulkMiningPresentation
   /** Initially-known mpv outputs, for deterministic renderer integration tests. */
   initialAudioDevices?: AudioDevice[]
+  /** Reports playback-operation failures through the media banner. */
+  reportError: (message: string) => void
 }
 
 /** Refs the composition root attaches to the chrome and side-panel elements.
@@ -161,6 +163,7 @@ export interface UsePlaybackWindowResult {
   optionsPlayback: Pick<
     PlaybackTabProps,
     | 'audioDevices'
+    | 'audioDeviceSelectionPending'
     | 'loudnessNormalization'
     | 'onAudioDevicesRequest'
     | 'onSelectAudioDevice'
@@ -201,7 +204,8 @@ export function usePlaybackWindow({
   settingsReady,
   panels,
   miningPresentation,
-  initialAudioDevices = []
+  initialAudioDevices = [],
+  reportError
 }: UsePlaybackWindowInput): UsePlaybackWindowResult {
   const { subtitleOffsetsRef, folderSubtitleOffsetsRef, audioDelaysRef, videoAdjustmentsRef } =
     perFileValues
@@ -247,7 +251,8 @@ export function usePlaybackWindow({
     player: bridge.player,
     dispatch,
     storedDeviceRef: stateRef,
-    initialDevices: initialAudioDevices
+    initialDevices: initialAudioDevices,
+    reportError
   })
 
   const { applyMiniPlayerEffect, handleToggleMiniPlayer, toggleFullscreenFromKey } = useMiniPlayer({
@@ -521,6 +526,7 @@ export function usePlaybackWindow({
     },
     optionsPlayback: {
       audioDevices: audioDeviceController.devices,
+      audioDeviceSelectionPending: audioDeviceController.selectionPending,
       selectedAudioDevice: effectiveAudioDevice(state.audioDevice, audioDeviceController.devices),
       onSelectAudioDevice: audioDeviceController.selectDevice,
       onAudioDevicesRequest: audioDeviceController.requestDevices,
