@@ -26,7 +26,7 @@ import {
   sendToWindow
 } from './windowOptions'
 import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
-import { handleBeforeQuit } from './appLifecycle'
+import { createQuitCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
 import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
@@ -488,6 +488,18 @@ function startIntegrationStatus(paths: BinaryPaths): void {
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
+  const handleBeforeQuit = createQuitCoordinator({
+    defaultSession: session.defaultSession,
+    controller,
+    flushHistory: () => mediaHistory?.flush(),
+    releasePowerSave: () => powerSave?.dispose(),
+    disposeSystemMedia: () => systemMedia?.dispose(),
+    cleanupUrlSubtitles: async () => {
+      await urlSubtitles?.cleanup()
+    },
+    appQuit: () => app.quit()
+  })
+
   const initialLaunchPath = videoPathFromArgv(process.argv, process.cwd())
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
@@ -559,18 +571,7 @@ if (!gotSingleInstanceLock) {
     })
   })
 
-  app.on('before-quit', () => {
-    handleBeforeQuit(
-      session.defaultSession,
-      controller,
-      () => mediaHistory?.flush(),
-      () => powerSave?.dispose(),
-      () => systemMedia?.dispose(),
-      () => {
-        void urlSubtitles?.cleanup()
-      }
-    )
-  })
+  app.on('before-quit', handleBeforeQuit)
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

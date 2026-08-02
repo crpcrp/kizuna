@@ -755,6 +755,16 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(spawns[0].proc.killed).toBe(true)
   })
 
+  it('dispose hard-tears down the client and mpv process', async () => {
+    const { controller, client, spawns } = makeFixture()
+    await controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })
+
+    controller.dispose()
+
+    expect(client.disposed).toBe(true)
+    expect(spawns[0].proc.killed).toBe(true)
+  })
+
   it('start kills the spawned proc and resets state when connect rejects', async () => {
     const { controller, client, spawns } = makeFixture()
     const connectErr = new Error('mpv IPC: connect failed')
