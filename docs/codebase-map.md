@@ -103,5 +103,6 @@ Update `resources.lock.json` and `third-party.json` together, then run
 ### Change CI or releases
 
 Keep third-party GitHub Actions pinned to commit SHAs. CI configuration is in
-`.github/workflows/ci.yml`; signed packaging is in
-`.github/workflows/release.yml`.
+`.github/workflows/ci.yml`; release packaging and verification are in
+`.github/workflows/release.yml`. See [Releasing](releasing.md) for the release
+procedure and current signing status.
