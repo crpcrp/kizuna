@@ -21,7 +21,7 @@ function makeDeps(overrides: Partial<Parameters<typeof handleDroppedFiles>[1]> =
       warnings: []
     })),
     loadSubtitle: vi.fn().mockResolvedValue(undefined),
-    appendPlaylistFile: vi.fn().mockResolvedValue(1),
+    appendPlaylistFile: vi.fn().mockResolvedValue({ status: 'added', count: 1 }),
     reportError: vi.fn(),
     ...overrides
   }
@@ -89,13 +89,27 @@ describe('handleDroppedFiles', () => {
   })
 
   it('appends playlist files and reports empty or unreadable ones', async () => {
-    const appended = makeDeps({ appendPlaylistFile: vi.fn().mockResolvedValue(3) })
+    const appended = makeDeps({
+      appendPlaylistFile: vi.fn().mockResolvedValue({ status: 'added', count: 3 })
+    })
     await handleDroppedFiles([new File([], 'queue.m3u')], appended)
     expect(appended.appendPlaylistFile).toHaveBeenCalledWith('E:\\anime\\queue.m3u')
 
-    const empty = makeDeps({ appendPlaylistFile: vi.fn().mockResolvedValue(0) })
+    const empty = makeDeps({ appendPlaylistFile: vi.fn().mockResolvedValue({ status: 'empty' }) })
     await handleDroppedFiles([new File([], 'queue.m3u8')], empty)
-    expect(empty.reportError).toHaveBeenCalledWith('Playlist is empty or unreadable.')
+    expect(empty.reportError).toHaveBeenCalledWith('Playlist is empty.')
+
+    const unreadable = makeDeps({
+      appendPlaylistFile: vi.fn().mockResolvedValue({ status: 'unreadable' })
+    })
+    await handleDroppedFiles([new File([], 'queue.m3u8')], unreadable)
+    expect(unreadable.reportError).toHaveBeenCalledWith('Could not read the playlist.')
+
+    const rejected = makeDeps({
+      appendPlaylistFile: vi.fn().mockRejectedValue(new Error('load failed'))
+    })
+    await handleDroppedFiles([new File([], 'queue.m3u8')], rejected)
+    expect(rejected.reportError).toHaveBeenCalledWith('Could not read the playlist.')
   })
 
   it('reports unsupported files but silently ignores drags without files', async () => {
