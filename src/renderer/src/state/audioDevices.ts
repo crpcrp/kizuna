@@ -14,6 +14,7 @@ import {
   type AudioDevice
 } from '../../../shared/audioDevice'
 import type { PlayerAction } from './playerState'
+import { useLatestRef } from './useLatestRef'
 
 /** Minimal player surface needed to refresh and recover an output device. */
 export interface AudioDevicePlayer {
@@ -38,25 +39,34 @@ export async function refreshAudioDevice(
 ): Promise<boolean> {
   const devices = await player.getAudioDevices()
   if (!isCurrent()) return false
-  onDevices(devices)
 
   const effective = effectiveAudioDevice(stored, devices)
   const recovered = effective !== stored
   if (stored !== AUTO_AUDIO_DEVICE && (recovered || reapplyStored)) {
     await player.setAudioDevice(effective)
+    if (!isCurrent()) return false
   }
-  if (recovered) await player.setMuted(false)
+  if (recovered) {
+    await player.setMuted(false)
+    if (!isCurrent()) return false
+  }
+  onDevices(devices)
   return recovered
 }
 
-/** Applies a user-selected output and restores sound after a prior fallback. */
+/** Applies a user-selected output. */
 export async function applySelectedAudioDevice(
   name: string,
-  recoverMute: boolean,
-  player: Pick<AudioDevicePlayer, 'setAudioDevice' | 'setMuted'>
+  player: Pick<AudioDevicePlayer, 'setAudioDevice'>
 ): Promise<void> {
   await player.setAudioDevice(name)
-  if (recoverMute) await player.setMuted(false)
+}
+
+/** Restores sound after a device was selected following fallback recovery. */
+export async function recoverAudioDeviceMute(
+  player: Pick<AudioDevicePlayer, 'setMuted'>
+): Promise<void> {
+  await player.setMuted(false)
 }
 
 export interface UseAudioDevicesInput {
@@ -67,6 +77,8 @@ export interface UseAudioDevicesInput {
   storedDeviceRef: RefObject<{ audioDevice: string }>
   /** Initially-known outputs, for deterministic renderer integration tests. */
   initialDevices?: AudioDevice[]
+  /** Reports device-operation failures through the app's media banner. */
+  reportError: (message: string) => void
 }
 
 export interface AudioDevicesController {
@@ -77,6 +89,8 @@ export interface AudioDevicesController {
   requestDevices: () => void
   /** Commits an explicit user pick. */
   selectDevice: (name: string) => void
+  /** True while mpv is applying an explicit user pick. */
+  selectionPending: boolean
   /** Re-reads the list and re-sends the stored preference, for use after a new
    * mpv load has reset the device. */
   reapplyAfterLoad: () => void
@@ -92,9 +106,14 @@ export function useAudioDevices({
   player,
   dispatch,
   storedDeviceRef,
-  initialDevices = []
+  initialDevices = [],
+  reportError
 }: UseAudioDevicesInput): AudioDevicesController {
   const [devices, setDevices] = useState<AudioDevice[]>(initialDevices)
+  const [selectionPending, setSelectionPending] = useState(false)
+  const selectionPendingRef = useRef(false)
+  const selectionRequestRef = useRef<number | undefined>(undefined)
+  const reportErrorRef = useLatestRef(reportError)
   // Set when a missing saved device forced mpv to auto; the next explicit
   // device selection should also clear mpv's mute state.
   const needsUnmuteRef = useRef(false)
@@ -113,15 +132,22 @@ export function useAudioDevices({
         () => refreshVersionRef.current === refreshVersion
       ).then(
         (recovered) => {
-          if (recovered) {
+          if (refreshVersionRef.current === refreshVersion && recovered) {
             needsUnmuteRef.current = true
             dispatch({ type: 'setMuted', value: false })
           }
         },
-        () => {}
+        () => {
+          if (refreshVersionRef.current !== refreshVersion) return
+          reportErrorRef.current(
+            reapplyStored
+              ? 'Could not restore the saved audio output device.'
+              : 'Could not refresh audio output devices.'
+          )
+        }
       )
     },
-    [player, dispatch, storedDeviceRef]
+    [player, dispatch, storedDeviceRef, reportErrorRef]
   )
 
   const requestDevices = useCallback((): void => refresh(false), [refresh])
@@ -132,19 +158,51 @@ export function useAudioDevices({
   // device recovery.
   const selectDevice = useCallback(
     (name: string): void => {
+      if (selectionPendingRef.current) return
       refreshVersionRef.current += 1
+      const selectionRequest = refreshVersionRef.current
+      selectionRequestRef.current = selectionRequest
+      selectionPendingRef.current = true
+      setSelectionPending(true)
       const recoverMute = needsUnmuteRef.current
-      dispatch({ type: 'setAudioDevice', value: name })
-      void applySelectedAudioDevice(name, recoverMute, player).then(
-        () => {
-          needsUnmuteRef.current = false
-          if (recoverMute) dispatch({ type: 'setMuted', value: false })
-        },
-        () => {}
-      )
+      const isCurrent = (): boolean => refreshVersionRef.current === selectionRequest
+
+      const applySelection = async (): Promise<void> => {
+        try {
+          await applySelectedAudioDevice(name, player)
+        } catch {
+          if (isCurrent()) reportErrorRef.current('Could not change the audio output device.')
+          return
+        }
+
+        // Do not claim or persist the new setting until mpv accepted it. A
+        // later request may have superseded this one while the command was in
+        // flight, so stale completions must not update the reducer or flags.
+        if (!isCurrent()) return
+        dispatch({ type: 'setAudioDevice', value: name })
+        if (!recoverMute) return
+
+        try {
+          await recoverAudioDeviceMute(player)
+        } catch {
+          if (isCurrent())
+            reportErrorRef.current('The audio device changed, but Kizuna could not restore sound.')
+          return
+        }
+
+        if (!isCurrent()) return
+        needsUnmuteRef.current = false
+        dispatch({ type: 'setMuted', value: false })
+      }
+
+      void applySelection().finally(() => {
+        if (selectionRequestRef.current !== selectionRequest) return
+        selectionPendingRef.current = false
+        setSelectionPending(false)
+      })
     },
-    [player, dispatch]
+    [player, dispatch, reportErrorRef]
   )
 
-  return { devices, requestDevices, selectDevice, reapplyAfterLoad }
+  return { devices, requestDevices, selectDevice, selectionPending, reapplyAfterLoad }
 }

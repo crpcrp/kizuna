@@ -323,6 +323,13 @@ describe('OptionsMenu audio output', () => {
     expect((screen.getByLabelText(/Output device/) as HTMLSelectElement).value).toBe('wasapi/{abc}')
   })
 
+  it('disables device choices while a selection is pending', () => {
+    renderAudio({ audioDeviceSelectionPending: true })
+
+    const select = screen.getByLabelText(/Output device/) as HTMLSelectElement
+    expect(select.disabled).toBe(true)
+  })
+
   it('toggles loudness normalization', () => {
     const onToggleLoudnessNorm = vi.fn()
     renderAudio({ loudnessNormalization: true, onToggleLoudnessNorm })

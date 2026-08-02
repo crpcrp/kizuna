@@ -18,6 +18,7 @@ export interface PlaybackTabProps {
   audioDevices: AudioDevice[]
   selectedAudioDevice: string
   onSelectAudioDevice: (name: string) => void
+  audioDeviceSelectionPending: boolean
   loudnessNormalization: boolean
   onToggleLoudnessNorm: () => void
   screenshotFolder: string | null
@@ -125,6 +126,7 @@ export default function PlaybackTab({
   audioDevices,
   selectedAudioDevice,
   onSelectAudioDevice,
+  audioDeviceSelectionPending,
   loudnessNormalization,
   onToggleLoudnessNorm,
   screenshotFolder,
@@ -260,6 +262,7 @@ export default function PlaybackTab({
           <select
             id="audio-device-select"
             value={selectedAudioDevice}
+            disabled={audioDeviceSelectionPending}
             onChange={(e) => onSelectAudioDevice(e.target.value)}
           >
             {audioDeviceMenuList(audioDevices).map((device) => (
