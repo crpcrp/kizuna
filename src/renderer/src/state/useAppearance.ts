@@ -6,7 +6,8 @@ import { createThemeController } from './themeController'
 export interface UseAppearanceInput {
   /** Persisted appearance mode: 'system' follows the OS preference. */
   appearance: Appearance
-  /** Per-level underline color overrides; a cleared level falls back to the theme. */
+  /** Per-level subtitle/report color overrides; a cleared ordinary level falls
+   * back to the theme, while a cleared wellKnown level disables its underline. */
   levelColors: LevelColors
 }
 

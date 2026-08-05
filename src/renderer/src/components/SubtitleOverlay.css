@@ -60,5 +60,5 @@
   border-bottom: 2px solid var(--level-known);
 }
 #subtitle [data-token][data-level='wellKnown'] {
-  border-bottom: 2px solid transparent;
+  border-bottom: 2px solid var(--level-well-known-underline);
 }

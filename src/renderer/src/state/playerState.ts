@@ -107,8 +107,9 @@ export interface PlayerState {
   abLoopState: AbLoopState
   /** UI theme preference; 'system' follows the OS (Options > Appearance). */
   appearance: Appearance
-  /** User overrides for the underline color of each knowledge level. An absent
-   * level keeps the theme default; overrides apply to both light and dark. */
+  /** User overrides for the subtitle/report color of each knowledge level. An
+   * absent ordinary level keeps the theme default; absent wellKnown means no
+   * underline and a white report swatch. Overrides apply to both themes. */
   levelColors: LevelColors
   /** Folder screenshots are saved to; null uses the main-side Pictures default. */
   screenshotFolder: string | null

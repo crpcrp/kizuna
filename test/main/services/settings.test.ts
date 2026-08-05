@@ -616,9 +616,10 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
       DEFAULT_PLAYER_SETTINGS.levelColors
     )
     expect(
-      mergeSettings({ player: { levelColors: { learning: '#E0A83C', known: 'nope' } } }).player
-        .levelColors
-    ).toEqual({ learning: '#e0a83c' })
+      mergeSettings({
+        player: { levelColors: { learning: '#E0A83C', wellKnown: '#AABBCC', known: 'nope' } }
+      }).player.levelColors
+    ).toEqual({ learning: '#e0a83c', wellKnown: '#aabbcc' })
     expect(mergeSettings({ player: { levelColors: 'nope' } }).player.levelColors).toEqual({})
   })
 })
@@ -646,9 +647,14 @@ describe('createSettingsStore', () => {
   it('round-trips levelColors across a reopen', () => {
     const io = fakeIo(undefined)
     const store = createSettingsStore(io)
-    store.set({ player: { ...store.get().player, levelColors: { unknown: '#123abc' } } })
+    store.set({
+      player: { ...store.get().player, levelColors: { unknown: '#123abc', wellKnown: '#ffffff' } }
+    })
 
-    expect(createSettingsStore(io).get().player.levelColors).toEqual({ unknown: '#123abc' })
+    expect(createSettingsStore(io).get().player.levelColors).toEqual({
+      unknown: '#123abc',
+      wellKnown: '#ffffff'
+    })
   })
 
   it('parses+merges whatever was persisted at construction', () => {

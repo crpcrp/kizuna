@@ -225,7 +225,7 @@ describe('OptionsMenu underline colors', () => {
     const html = renderMenu()
     expect(html).toContain('Word underline colors')
     expect(html).toContain(
-      'Overrides apply to both light and dark themes; well-known words have no underline.'
+      'Overrides apply to both light and dark themes; well-known words are not underlined unless a color is chosen here.'
     )
     for (const { level, label } of UNDERLINE_COLOR_ROWS) {
       expect(html).toContain(`id="level-color-${level}"`)
@@ -234,8 +234,6 @@ describe('OptionsMenu underline colors', () => {
         new RegExp(`id="level-color-${level}"[^>]*value="${DEFAULT_LEVEL_COLOR_HEX[level]}"`)
       )
     }
-    // wellKnown draws no underline, so it gets no row.
-    expect(html).not.toContain('id="level-color-wellKnown"')
   })
 
   it('shows an override as the input value', () => {
@@ -280,6 +278,31 @@ describe('OptionsMenu underline colors', () => {
     expect(reset).not.toBeNull()
     ;(reset!.props as { onClick: () => void }).onClick()
     expect(onChangeLevelColor).toHaveBeenCalledWith('inDeck', null)
+  })
+
+  it('renders a Well known row whose picker and reset emit the wellKnown level', () => {
+    const html = renderMenu()
+    expect(html).toMatch(
+      new RegExp(`id="level-color-wellKnown"[^>]*value="${DEFAULT_LEVEL_COLOR_HEX.wellKnown}"`)
+    )
+    expect(html).toContain('Well known<')
+
+    const onChangeLevelColor = vi.fn()
+    const input = findRowInput({}, 'wellKnown', onChangeLevelColor)
+    expect(input).not.toBeNull()
+    ;(input!.props as { onChange: (e: { target: { value: string } }) => void }).onChange({
+      target: { value: '#abcdef' }
+    })
+    expect(onChangeLevelColor).toHaveBeenCalledWith('wellKnown', '#abcdef')
+
+    const reset = findElement(
+      UnderlineColorRows({ levelColors: { wellKnown: '#abcdef' }, onChangeLevelColor }),
+      (el) =>
+        (el.props as { 'aria-label'?: string })['aria-label'] === 'Reset Well known underline color'
+    )
+    expect(reset).not.toBeNull()
+    ;(reset!.props as { onClick: () => void }).onClick()
+    expect(onChangeLevelColor).toHaveBeenCalledWith('wellKnown', null)
   })
 
   it('renders Reset only for an overridden level, and it clears the override', () => {

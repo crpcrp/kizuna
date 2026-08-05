@@ -100,17 +100,21 @@ export function normalizeAppearance(raw: unknown, fallback: Appearance): Appeara
   return raw === 'system' || raw === 'light' || raw === 'dark' ? raw : fallback
 }
 
-/** The knowledge levels that draw an underline (wellKnown never does). */
-export type UnderlineLevel = 'unknown' | 'inDeck' | 'learning' | 'known'
+/** Knowledge levels with configurable subtitle/report colors. For the four
+ * ordinary levels, an absent key uses the theme color; for `wellKnown`, it
+ * means no subtitle underline and a white report swatch. */
+export type UnderlineLevel = 'unknown' | 'inDeck' | 'learning' | 'known' | 'wellKnown'
 
 export const UNDERLINE_LEVELS: readonly UnderlineLevel[] = [
   'unknown',
   'inDeck',
   'learning',
-  'known'
+  'known',
+  'wellKnown'
 ]
 
-/** Overrides for the theme's underline colors; an absent level uses the theme value. */
+/** Overrides for subtitle underline/report colors; see `UnderlineLevel` for
+ * the different meaning of an absent `wellKnown` override. */
 export type LevelColors = Partial<Record<UnderlineLevel, string>>
 
 /** Validates a stored level→#rrggbb map; invalid entries are dropped. */
@@ -261,8 +265,9 @@ export interface PlayerSettings {
   playlistOpen: boolean
   /** Whether right-clicked subtitle text may be sent to the experimental online translator. */
   translationEnabled: boolean
-  /** User overrides for the underline color of each knowledge level. An absent
-   * level keeps the theme default; overrides apply to both light and dark. */
+  /** User overrides for the subtitle/report color of each knowledge level. An
+   * absent ordinary level keeps the theme default; absent wellKnown means no
+   * underline and a white report swatch. Overrides apply to both themes. */
   levelColors: LevelColors
   /** Folder screenshots are saved to. null = `<Pictures>/Kizuna`, resolved main-side. */
   screenshotFolder: string | null
