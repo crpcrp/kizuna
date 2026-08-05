@@ -83,10 +83,7 @@ describe('createAnkiClient', () => {
   it('multi() posts one request and returns the result of each nested action', async () => {
     const anki = fakeAnkiConnect({
       multi: {
-        result: [
-          { result: [7], error: null },
-          { result: [], error: null }
-        ]
+        result: [[7], []]
       }
     })
     const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
@@ -108,6 +105,17 @@ describe('createAnkiClient', () => {
         }
       }
     ])
+  })
+
+  it('multi() still surfaces a nested action error envelope', async () => {
+    const anki = fakeAnkiConnect({
+      multi: { result: [{ result: null, error: 'deck was not found' }] }
+    })
+    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+
+    await expect(client.multi<number[]>([{ action: 'findCards' }])).rejects.toThrow(
+      'deck was not found'
+    )
   })
 
   it('sends the configured api key as a top-level key on every request', async () => {

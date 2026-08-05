@@ -436,10 +436,7 @@ describe('createAnkiService', () => {
   it('findTargetDeckMembership deduplicates expressions and returns target-deck matches', async () => {
     const anki = fakeAnkiConnect({
       multi: {
-        result: [
-          { result: [7], error: null },
-          { result: ['bad', -1], error: null }
-        ]
+        result: [[7], ['bad', -1]]
       }
     })
     const settings = createSettingsStore(
