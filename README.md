@@ -24,8 +24,9 @@ Download links for published Windows builds are available on the
 
 ## Requirements
 
-Kizuna currently supports Windows x64. Building from source requires Node.js 24
-or newer, npm, and local copies of mpv, FFmpeg/ffprobe, and MeCab under
+The minimum system requirement is 64-bit Windows 10 or newer. Building from
+source requires Node.js 24 or newer, npm, and local copies of mpv, FFmpeg/ffprobe,
+and MeCab under
 `resources/`.
 
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
