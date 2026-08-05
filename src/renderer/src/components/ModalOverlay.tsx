@@ -16,7 +16,7 @@ export type ModalCloseSource = 'escape' | 'backdrop' | 'button'
 
 export interface ModalOverlayProps {
   open: boolean
-  /** Accessible name for the dialog, e.g. 'Subtitle report'. */
+  /** Accessible name for the dialog, e.g. 'Word report'. */
   label: string
   /** Header title text. Defaults to `label`, which is what most dialogs want. */
   title?: string

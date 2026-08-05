@@ -10,7 +10,7 @@ import {
   type SubtitleReport as Report
 } from '../state/subtitleReport'
 
-// Presentational modal for the subtitle report. Always rendered, visibility toggled by
+// Presentational modal for the word report. Always rendered, visibility toggled by
 // the `open` class — same testable-without-a-live-DOM pattern as
 // OptionsMenu. All data arrives via props; subtitleReportController.ts owns
 // every async/staleness concern.
@@ -178,7 +178,7 @@ function LoadingBody(): React.JSX.Element {
   return (
     <div id="subtitle-report-loading" className="report-loading" role="status" aria-live="polite">
       <span className="report-loading-spinner" aria-hidden="true" />
-      <p>Generating subtitle report&hellip;</p>
+      <p>Generating word report&hellip;</p>
     </div>
   )
 }
@@ -228,13 +228,13 @@ export default function SubtitleReport({
     <ModalOverlay
       id="subtitle-report"
       open={open}
-      label="Subtitle report"
+      label="Word report"
       onClose={onClose}
       headerActions={
         <button
           type="button"
           id="subtitle-report-close"
-          aria-label="Close subtitle report"
+          aria-label="Close word report"
           onClick={onClose}
         >
           &#x2715;
