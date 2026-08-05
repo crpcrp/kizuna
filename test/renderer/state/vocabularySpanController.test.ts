@@ -126,7 +126,9 @@ describe('vocabulary span controller', () => {
       lookup: vi.fn((lemma: string) => Promise.resolve([result(lemma === '神' ? '神様' : lemma)]))
     }
     const knowledge = {
-      detailsFor: vi.fn().mockResolvedValue({ 神様: { level: 'known', sources: [] } })
+      detailsFor: vi
+        .fn()
+        .mockResolvedValue({ 神様: { level: 'known', sourceKinds: [], sources: [] } })
     }
     const resolved = await controller.resolve({
       dict,
@@ -234,7 +236,9 @@ describe('vocabulary span controller', () => {
     const ipadic = token('ヤツ', 0)
     const dict = { lookup: vi.fn(() => Promise.resolve([result('奴', 'ヤツ'), result('ヤツ')])) }
     const knowledge = {
-      detailsFor: vi.fn().mockResolvedValue({ 奴: { level: 'known', sources: [] } })
+      detailsFor: vi
+        .fn()
+        .mockResolvedValue({ 奴: { level: 'known', sourceKinds: [], sources: [] } })
     }
     const resolved = await controller.resolve({
       dict,
@@ -263,7 +267,9 @@ describe('vocabulary span controller', () => {
     const controller = createVocabularySpanController()
     const dict = { lookup: vi.fn().mockResolvedValue([result('神様')]) }
     const knowledge = {
-      detailsFor: vi.fn().mockResolvedValue({ 神様: { level: 'known', sources: [] } })
+      detailsFor: vi
+        .fn()
+        .mockResolvedValue({ 神様: { level: 'known', sourceKinds: [], sources: [] } })
     }
     const input = {
       dict,
@@ -376,7 +382,7 @@ describe('vocabulary span controller', () => {
 
   it('does not cache a request invalidated during knowledge lookup', async () => {
     const controller = createVocabularySpanController()
-    const details = deferred<Record<string, { level: 'known'; sources: [] }>>()
+    const details = deferred<Record<string, { level: 'known'; sourceKinds: []; sources: [] }>>()
     const dict = { lookup: vi.fn().mockResolvedValue([result('A')]) }
     const knowledge = { detailsFor: vi.fn(() => details.promise) }
     const input = {
@@ -390,7 +396,7 @@ describe('vocabulary span controller', () => {
     const request = controller.resolve(input)
     await Promise.resolve()
     controller.invalidate()
-    details.resolve({ A: { level: 'known', sources: [] } })
+    details.resolve({ A: { level: 'known', sourceKinds: [], sources: [] } })
 
     await expect(request).resolves.toEqual({ kind: 'stale' })
     await controller.resolve(input)
@@ -405,7 +411,9 @@ describe('vocabulary span controller', () => {
       )
     }
     const knowledge = {
-      detailsFor: vi.fn().mockResolvedValue({ 神様: { level: 'known', sources: [] } })
+      detailsFor: vi
+        .fn()
+        .mockResolvedValue({ 神様: { level: 'known', sourceKinds: [], sources: [] } })
     }
     const resolved = await controller.resolve({
       dict,

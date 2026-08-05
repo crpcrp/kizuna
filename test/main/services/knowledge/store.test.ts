@@ -160,6 +160,7 @@ describe('detailsFor', () => {
     expect(detailsFor(asKnowledgeDb(db), ['猫', '犬'])).toEqual({
       猫: {
         level: 'wellKnown',
+        sourceKinds: ['wanikani', 'anki'],
         sources: [
           { source: 'wanikani', curriculumLevel: 5, proficiency: 'Apprentice 3' },
           { source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 123, noteId: 456 }
@@ -175,17 +176,23 @@ describe('detailsFor', () => {
       [{ source: 'wanikani', lemma: '犬', reading: 'いぬ', level: 'known' }],
       '2026-07-09T00:00:00.000Z'
     )
-    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({ 犬: { level: 'known', sources: [] } })
+    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({
+      犬: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    })
 
     db.prepare('UPDATE known_words SET metadata_json = ? WHERE lemma = ?').run('{not json', '犬')
-    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({ 犬: { level: 'known', sources: [] } })
+    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({
+      犬: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    })
 
     db.prepare('UPDATE known_words SET metadata_json = ? WHERE lemma = ?').run(
       '{"source":"anki","deck":7}',
       '犬'
     )
 
-    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({ 犬: { level: 'known', sources: [] } })
+    expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({
+      犬: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    })
   })
 })
 

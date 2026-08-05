@@ -56,6 +56,7 @@ describe('WordPopup markup', () => {
   it('renders all WaniKani and Anki provenance badges directly below the headword', () => {
     const provenance: KnowledgeDetails = {
       level: 'known',
+      sourceKinds: ['wanikani', 'anki'],
       sources: [
         { source: 'wanikani', curriculumLevel: 12, proficiency: 'Apprentice' },
         { source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 },
@@ -81,11 +82,32 @@ describe('WordPopup markup', () => {
       <WordPopup
         results={[makeResult()]}
         position={{ x: 0, y: 0 }}
-        provenanceByExpression={{ [makeResult().expression]: { level: 'unknown', sources: [] } }}
+        provenanceByExpression={{
+          [makeResult().expression]: { level: 'unknown', sourceKinds: [], sources: [] }
+        }}
       />
     )
 
     expect(html).not.toContain('word-popup-provenance')
+  })
+
+  it('omits the WaniKani level segment when the curriculum level is unavailable', () => {
+    const html = renderToStaticMarkup(
+      <WordPopup
+        results={[makeResult()]}
+        position={{ x: 0, y: 0 }}
+        provenanceByExpression={{
+          [makeResult().expression]: {
+            level: 'known',
+            sourceKinds: ['wanikani'],
+            sources: [{ source: 'wanikani', proficiency: 'Guru II' }]
+          }
+        }}
+      />
+    )
+
+    expect(html).toContain('WaniKani - Guru II')
+    expect(html).not.toContain('Level undefined')
   })
 
   it('is present but hidden (no "open" class) when position is null', () => {

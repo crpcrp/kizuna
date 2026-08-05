@@ -133,7 +133,7 @@ describe('popupController', () => {
 
   it('invalidates old provenance before a newer popup finishes reading its policy', async () => {
     const controller = createPopupController()
-    const details = deferred<Record<string, { level: 'known'; sources: [] }>>()
+    const details = deferred<Record<string, { level: 'known'; sourceKinds: []; sources: [] }>>()
     const detailsStarted = deferred<void>()
     const first = controller.open(
       fakeDict({ A: [result('A')] }),
@@ -158,7 +158,7 @@ describe('popupController', () => {
       fakeKnowledge(),
       openInput({ ...token, surface: 'B', lemma: 'B' })
     )
-    details.resolve({ A: { level: 'known', sources: [] } })
+    details.resolve({ A: { level: 'known', sourceKinds: [], sources: [] } })
     await first
 
     expect(controller.getState().popup?.provenanceByExpression).toBeUndefined()

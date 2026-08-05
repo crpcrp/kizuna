@@ -203,7 +203,7 @@ describe('buildSubtitleReport', () => {
 
   it('counts a repeated lemma per-token and per-lemma separately', () => {
     const details: Record<string, KnowledgeDetails> = {
-      食べる: { level: 'known', sources: [] }
+      食べる: { level: 'known', sourceKinds: [], sources: [] }
     }
     const tokens = [
       token({ lemma: '食べる' }),
@@ -228,6 +228,7 @@ describe('buildSubtitleReport', () => {
   it('uses differing-surface details for level, provenance, decks, and topUnknown', () => {
     const surfaceDetails: KnowledgeDetails = {
       level: 'known',
+      sourceKinds: ['anki'],
       sources: [{ source: 'anki', deck: 'Listening', intervalDays: 192, cardId: 1, noteId: 1 }]
     }
     const report = buildSubtitleReport([token({ lemma: 'properNounLemma', surface: '悟空' })], {
@@ -245,10 +246,12 @@ describe('buildSubtitleReport', () => {
     const report = buildSubtitleReport([token({ lemma: 'lemma', surface: 'surface' })], {
       lemma: {
         level: 'learning',
+        sourceKinds: ['wanikani'],
         sources: [{ source: 'wanikani', curriculumLevel: 1, proficiency: 'apprentice' }]
       },
       surface: {
         level: 'wellKnown',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 100, cardId: 1, noteId: 1 }]
       }
     })
@@ -257,10 +260,11 @@ describe('buildSubtitleReport', () => {
     expect(report.provenance.both).toBe(1)
   })
 
-  it('classifies provenance: both, wanikani-only, anki-only, unsourced; unknown contributes nothing', () => {
+  it('classifies provenance from source kinds even when metadata is missing', () => {
     const details: Record<string, KnowledgeDetails> = {
       both: {
         level: 'known',
+        sourceKinds: ['wanikani', 'anki'],
         sources: [
           { source: 'wanikani', curriculumLevel: 5, proficiency: 'burned' },
           { source: 'anki', deck: 'Core', intervalDays: 30, cardId: 1, noteId: 1 }
@@ -268,30 +272,76 @@ describe('buildSubtitleReport', () => {
       },
       wkOnly: {
         level: 'known',
+        sourceKinds: ['wanikani'],
         sources: [{ source: 'wanikani', curriculumLevel: 3, proficiency: 'guru' }]
       },
       ankiOnly: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 10, cardId: 2, noteId: 2 }]
       },
-      unsourced: { level: 'known', sources: [] },
-      unknownLemma: { level: 'unknown', sources: [] }
+      incompleteAnki: { level: 'known', sourceKinds: ['anki'], sources: [] },
+      unknownLemma: { level: 'unknown', sourceKinds: [], sources: [] }
     }
     const tokens = [
       token({ lemma: 'both' }),
       token({ lemma: 'wkOnly' }),
       token({ lemma: 'ankiOnly' }),
-      token({ lemma: 'unsourced' }),
+      token({ lemma: 'incompleteAnki' }),
       token({ lemma: 'unknownLemma' })
     ]
     const report = buildSubtitleReport(tokens, details)
-    expect(report.provenance).toEqual({ wanikaniOnly: 1, ankiOnly: 1, both: 1, unsourced: 1 })
+    expect(report.provenance).toEqual({ wanikaniOnly: 1, ankiOnly: 2, both: 1, unsourced: 0 })
+  })
+
+  it('attributes a projected compound from the expression source kind', () => {
+    const report = buildSubtitleReport(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens: [
+            token({ lemma: '神', surface: '神', startOffset: 0 }),
+            token({ lemma: '様', surface: '様', startOffset: 1 })
+          ],
+          acceptedSpans: [compoundSpan({ level: 'known' })]
+        }
+      ],
+      { 神様: { level: 'known', sourceKinds: ['wanikani'], sources: [] } }
+    )
+
+    expect(report.provenance).toEqual({ wanikaniOnly: 1, ankiOnly: 0, both: 0, unsourced: 0 })
+  })
+
+  it('does not mutate details when applying a projected compound level', () => {
+    const expressionDetails = Object.freeze({
+      level: 'learning' as const,
+      sourceKinds: ['wanikani' as const],
+      sources: []
+    })
+    const details: Record<string, KnowledgeDetails> = { 神様: expressionDetails }
+
+    buildSubtitleReport(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens: [
+            token({ lemma: '神', surface: '神', startOffset: 0 }),
+            token({ lemma: '様', surface: '様', startOffset: 1 })
+          ],
+          acceptedSpans: [compoundSpan({ level: 'known' })]
+        }
+      ],
+      details
+    )
+
+    expect(details.神様.level).toBe('learning')
   })
 
   it('deduplicates decks per lemma and sorts rows count desc then name asc', () => {
     const details: Record<string, KnowledgeDetails> = {
       twoCardsOneDeck: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'A', intervalDays: 5, cardId: 1, noteId: 1 },
           { source: 'anki', deck: 'A', intervalDays: 8, cardId: 2, noteId: 2 }
@@ -299,6 +349,7 @@ describe('buildSubtitleReport', () => {
       },
       twoDecks: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'A', intervalDays: 5, cardId: 3, noteId: 3 },
           { source: 'anki', deck: 'B', intervalDays: 5, cardId: 4, noteId: 4 }
@@ -306,6 +357,7 @@ describe('buildSubtitleReport', () => {
       },
       onlyB: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'B', intervalDays: 5, cardId: 5, noteId: 5 }]
       }
     }
@@ -374,6 +426,7 @@ describe('buildSubtitleReport', () => {
     const details: Record<string, KnowledgeDetails> = {
       に: {
         level: 'learning',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 3, cardId: 1, noteId: 1 }]
       }
     }
@@ -401,7 +454,7 @@ describe('buildSubtitleReport', () => {
 
   it('always has every LevelCounts key present even when zero', () => {
     const report = buildSubtitleReport([token({ lemma: 'x' })], {
-      x: { level: 'wellKnown', sources: [] }
+      x: { level: 'wellKnown', sourceKinds: [], sources: [] }
     })
     expect(Object.keys(report.tokenLevels).sort()).toEqual(
       ['inDeck', 'known', 'learning', 'unknown', 'wellKnown'].sort()
@@ -419,6 +472,7 @@ describe('buildSubtitleReport', () => {
     const details: Record<string, KnowledgeDetails> = {
       新しい: {
         level: 'inDeck',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Mining', intervalDays: 0, cardId: 1, noteId: 1 }]
       }
     }

@@ -156,7 +156,7 @@ describe('word popup actions', () => {
   })
 
   it('does not attach late provenance to a newer popup', async () => {
-    const details = deferred<Record<string, { level: 'known'; sources: [] }>>()
+    const details = deferred<Record<string, { level: 'known'; sourceKinds: []; sources: [] }>>()
     const { actions, setProvenance } = setup()
     const knowledge = { detailsFor: vi.fn().mockReturnValue(details.promise) }
     const first = actions.open(
@@ -173,10 +173,12 @@ describe('word popup actions', () => {
       input(tokenB)
     )
     await second
-    details.resolve({ A: { level: 'known', sources: [] } })
+    details.resolve({ A: { level: 'known', sourceKinds: [], sources: [] } })
     await first
 
-    expect(setProvenance).not.toHaveBeenCalledWith({ A: { level: 'known', sources: [] } })
+    expect(setProvenance).not.toHaveBeenCalledWith({
+      A: { level: 'known', sourceKinds: [], sources: [] }
+    })
   })
 
   it('keeps the current glossary-link lookup error observable', async () => {

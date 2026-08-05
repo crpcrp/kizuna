@@ -23,7 +23,7 @@ export type KnowledgeSourceDetail = WaniKaniSourceDetail | AnkiSourceDetail
 
 export interface WaniKaniSourceDetail {
   source: 'wanikani'
-  curriculumLevel: number
+  curriculumLevel?: number
   proficiency: string
 }
 
@@ -37,6 +37,8 @@ export interface AnkiSourceDetail {
 
 export interface KnowledgeDetails {
   level: KnowledgeLevel
+  /** Distinct `known_words.source` values for this lemma; independent of metadata JSON. */
+  sourceKinds: KnowledgeSource[]
   sources: KnowledgeSourceDetail[]
 }
 
@@ -45,10 +47,12 @@ export function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourc
   if (typeof value !== 'object' || value === null) return false
   const detail = value as Record<string, unknown>
   if (detail.source === 'wanikani') {
+    const hasCurriculumLevel = Object.prototype.hasOwnProperty.call(detail, 'curriculumLevel')
     return (
-      typeof detail.curriculumLevel === 'number' &&
-      Number.isInteger(detail.curriculumLevel) &&
-      detail.curriculumLevel > 0 &&
+      (!hasCurriculumLevel ||
+        (typeof detail.curriculumLevel === 'number' &&
+          Number.isInteger(detail.curriculumLevel) &&
+          detail.curriculumLevel > 0)) &&
       typeof detail.proficiency === 'string'
     )
   }

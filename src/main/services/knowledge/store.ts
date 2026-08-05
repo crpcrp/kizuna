@@ -7,6 +7,7 @@ import {
   isKnowledgeSourceDetail,
   type KnowledgeDetails,
   type KnowledgeLevel,
+  type KnowledgeSource,
   type KnowledgeSourceDetail
 } from '../../../shared/knowledge'
 import { mergeLevel } from './levels'
@@ -101,9 +102,10 @@ export function levelsFor(db: KnowledgeDb, lemmas: string[]): Record<string, Kno
 }
 
 /**
- * Looks up merged knowledge levels plus every valid source detail for each
- * lemma. Null, malformed, and legacy metadata intentionally contributes only
- * its level, so upgrading an existing knowledge DB cannot break coloring.
+ * Looks up merged knowledge levels plus every source kind and valid source
+ * detail for each lemma. Null, malformed, and legacy metadata contributes only
+ * its source kind and level, so upgrading an existing knowledge DB cannot break
+ * coloring or provenance accounting.
  */
 export function detailsFor(db: KnowledgeDb, lemmas: string[]): Record<string, KnowledgeDetails> {
   const result: Record<string, KnowledgeDetails> = {}
@@ -112,22 +114,36 @@ export function detailsFor(db: KnowledgeDb, lemmas: string[]): Record<string, Kn
     const placeholders = batch.map(() => '?').join(', ')
     const rows = db
       .prepare(
-        `SELECT lemma, level, metadata_json FROM known_words WHERE lemma IN (${placeholders})`
+        `SELECT source, lemma, level, metadata_json FROM known_words WHERE lemma IN (${placeholders})`
       )
       .all(...batch) as Array<{
+      source: string
       lemma: string
       level: KnowledgeLevel
       metadata_json: string | null
     }>
     for (const row of rows) {
       const existing = result[row.lemma]
-      const details = existing ?? { level: row.level, sources: [] }
+      const details = existing ?? { level: row.level, sourceKinds: [], sources: [] }
       details.level = existing ? mergeLevel(existing.level, row.level) : row.level
+      const sourceKind = toKnowledgeSource(row.source)
+      if (sourceKind && !details.sourceKinds.includes(sourceKind)) {
+        details.sourceKinds.push(sourceKind)
+        details.sourceKinds.sort(sourceKindOrder)
+      }
       details.sources.push(...parseSourceDetails(row.metadata_json))
       result[row.lemma] = details
     }
   }
   return result
+}
+
+function toKnowledgeSource(source: string): KnowledgeSource | undefined {
+  return source === 'wanikani' || source === 'anki' ? source : undefined
+}
+
+function sourceKindOrder(a: KnowledgeSource, b: KnowledgeSource): number {
+  return (a === 'wanikani' ? 0 : 1) - (b === 'wanikani' ? 0 : 1)
 }
 
 function parseSourceDetails(metadataJson: string | null): KnowledgeSourceDetail[] {

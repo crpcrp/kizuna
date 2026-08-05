@@ -168,9 +168,16 @@ export function buildSubtitleReport(
       .reduce<KnowledgeDetails>(
         (effective, surface) => ({
           level: maxKnowledgeLevel(effective.level, details[surface]?.level ?? 'unknown'),
+          sourceKinds: Array.from(
+            new Set([...effective.sourceKinds, ...(details[surface]?.sourceKinds ?? [])])
+          ),
           sources: [...effective.sources, ...(details[surface]?.sources ?? [])]
         }),
-        details[lemma] ?? { level: 'unknown', sources: [] }
+        {
+          level: details[lemma]?.level ?? 'unknown',
+          sourceKinds: Array.from(new Set(details[lemma]?.sourceKinds ?? [])),
+          sources: [...(details[lemma]?.sources ?? [])]
+        }
       )
     if (agg.projectedLevel) mergedDetails.level = agg.projectedLevel
     lemmaLevels[mergedDetails.level]++
@@ -181,12 +188,11 @@ export function buildSubtitleReport(
     }
     const sources = mergedDetails.sources
     const decks = new Set<string>()
-    let hasWanikani = false
     for (const source of sources) {
-      if (source.source === 'wanikani') hasWanikani = true
-      else decks.add(source.deck)
+      if (source.source === 'anki') decks.add(source.deck)
     }
-    const hasAnki = decks.size > 0
+    const hasWanikani = mergedDetails.sourceKinds.includes('wanikani')
+    const hasAnki = mergedDetails.sourceKinds.includes('anki')
     if (hasWanikani && hasAnki) provenance.both++
     else if (hasWanikani) provenance.wanikaniOnly++
     else if (hasAnki) provenance.ankiOnly++

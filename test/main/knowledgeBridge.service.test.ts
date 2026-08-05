@@ -311,6 +311,7 @@ describe('createKnowledgeService', () => {
     expect(await service.detailsFor(['word'])).toEqual({
       word: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 }]
       }
     })

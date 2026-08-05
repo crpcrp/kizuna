@@ -57,8 +57,22 @@ describe('toKnownRows', () => {
     const rows = toKnownRows(assignments, subjects)
 
     expect(rows).toEqual([
-      { source: 'wanikani', lemma: '猫', reading: 'ねこ', level: 'known', srsStage: 6 },
-      { source: 'wanikani', lemma: 'だから', reading: 'だから', level: 'learning', srsStage: 1 }
+      {
+        source: 'wanikani',
+        lemma: '猫',
+        reading: 'ねこ',
+        level: 'known',
+        srsStage: 6,
+        metadata: { source: 'wanikani', proficiency: 'Guru II' }
+      },
+      {
+        source: 'wanikani',
+        lemma: 'だから',
+        reading: 'だから',
+        level: 'learning',
+        srsStage: 1,
+        metadata: { source: 'wanikani', proficiency: 'Apprentice I' }
+      }
     ])
   })
 
