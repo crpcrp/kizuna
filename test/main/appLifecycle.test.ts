@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createQuitCoordinator,
+  createReadySessionFlusher,
   SHUTDOWN_TIMEOUT_MS,
   type PreventableQuitEvent,
   type QuitHandler
@@ -201,5 +202,28 @@ describe('createQuitCoordinator', () => {
     } finally {
       process.off('unhandledRejection', unhandled)
     }
+  })
+})
+
+describe('createReadySessionFlusher', () => {
+  it('does not read the default session before the app is ready', () => {
+    const getDefaultSession = vi.fn(() => {
+      throw new Error('default session accessed too early')
+    })
+    const flusher = createReadySessionFlusher(() => false, getDefaultSession)
+
+    expect(() => flusher.flushStorageData()).not.toThrow()
+    expect(getDefaultSession).not.toHaveBeenCalled()
+  })
+
+  it('flushes the default session after the app is ready', () => {
+    const flushStorageData = vi.fn()
+    const getDefaultSession = vi.fn(() => ({ flushStorageData }))
+    const flusher = createReadySessionFlusher(() => true, getDefaultSession)
+
+    flusher.flushStorageData()
+
+    expect(getDefaultSession).toHaveBeenCalledOnce()
+    expect(flushStorageData).toHaveBeenCalledOnce()
   })
 })

@@ -11,6 +11,22 @@ export interface FlushableSession {
   flushStorageData(): void
 }
 
+/**
+ * Defers Electron's default-session lookup until the app is ready. Electron
+ * throws if `session.defaultSession` is read during module initialization.
+ */
+export function createReadySessionFlusher(
+  isReady: () => boolean,
+  getDefaultSession: () => FlushableSession
+): FlushableSession {
+  return {
+    flushStorageData: () => {
+      if (!isReady()) return
+      getDefaultSession().flushStorageData()
+    }
+  }
+}
+
 /** Subset of MpvController used on quit. */
 export interface QuittableController {
   quit(): Promise<void>

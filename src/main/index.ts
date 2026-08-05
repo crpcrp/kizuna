@@ -26,7 +26,7 @@ import {
   sendToWindow
 } from './windowOptions'
 import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
-import { createQuitCoordinator } from './appLifecycle'
+import { createQuitCoordinator, createReadySessionFlusher } from './appLifecycle'
 import { MpvController } from './mpv/controller'
 import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
@@ -489,7 +489,10 @@ if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   const handleBeforeQuit = createQuitCoordinator({
-    defaultSession: session.defaultSession,
+    defaultSession: createReadySessionFlusher(
+      () => app.isReady(),
+      () => session.defaultSession
+    ),
     controller,
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
