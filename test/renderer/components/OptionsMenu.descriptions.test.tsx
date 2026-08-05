@@ -31,7 +31,7 @@ describe('OptionsMenu setting descriptions', () => {
     expect(html).toContain('0% is the left edge, 100% the right')
     expect(html).toContain('0% is the top, 100% the bottom')
     expect(html).toContain(
-      'Overrides apply to both light and dark themes; well-known words have no underline.'
+      'Overrides apply to both light and dark themes; well-known words are not underlined unless a color is chosen here.'
     )
   })
 

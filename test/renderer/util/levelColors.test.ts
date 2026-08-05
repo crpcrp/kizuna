@@ -44,7 +44,12 @@ describe('applyLevelColors', () => {
       '--level-unknown': '#112233',
       '--level-known': '#445566'
     })
-    expect(style.removed).toEqual(['--level-in-deck', '--level-learning'])
+    expect(style.removed).toEqual([
+      '--level-in-deck',
+      '--level-learning',
+      '--level-well-known',
+      '--level-well-known-underline'
+    ])
   })
 
   it('sets --level-in-deck from an inDeck override', () => {
@@ -55,6 +60,21 @@ describe('applyLevelColors', () => {
     expect(style.removed).not.toContain('--level-in-deck')
   })
 
+  it('sets both report and underline variables from a wellKnown override', () => {
+    const style = fakeStyle()
+    applyLevelColors(style, { wellKnown: '#ffffff' })
+    expect(style.set).toEqual({
+      '--level-well-known': '#ffffff',
+      '--level-well-known-underline': '#ffffff'
+    })
+    expect(style.removed).toEqual([
+      '--level-unknown',
+      '--level-in-deck',
+      '--level-learning',
+      '--level-known'
+    ])
+  })
+
   it('removes every variable when no override is set', () => {
     const style = fakeStyle()
     applyLevelColors(style, {})
@@ -63,7 +83,9 @@ describe('applyLevelColors', () => {
       '--level-unknown',
       '--level-in-deck',
       '--level-learning',
-      '--level-known'
+      '--level-known',
+      '--level-well-known',
+      '--level-well-known-underline'
     ])
   })
 })

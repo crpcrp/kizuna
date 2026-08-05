@@ -68,6 +68,7 @@
 }
 .report-bar-segment[data-level='wellKnown'] {
   background: var(--level-well-known);
+  box-shadow: inset 0 0 0 1px var(--border-default);
 }
 
 .report-legend {
@@ -106,6 +107,7 @@
 }
 .report-legend-row[data-level='wellKnown'] dt::before {
   background: var(--level-well-known);
+  box-shadow: inset 0 0 0 1px var(--border-default);
 }
 .report-legend-row dd {
   margin: 0;

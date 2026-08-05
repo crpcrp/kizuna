@@ -89,7 +89,8 @@
   --level-in-deck: rgba(96, 144, 224, 0.75);
   --level-learning: rgba(224, 168, 60, 0.75);
   --level-known: rgba(86, 190, 120, 0.55);
-  --level-well-known: rgba(76, 175, 150, 0.8);
+  --level-well-known: #ffffff;
+  --level-well-known-underline: transparent;
   --mark-bg: rgba(224, 168, 60, 0.55);
   --mark-current-bg: rgba(224, 86, 86, 0.75);
 
@@ -166,7 +167,8 @@
   --level-in-deck: rgba(38, 96, 192, 0.8);
   --level-learning: rgba(178, 121, 16, 0.8);
   --level-known: rgba(34, 139, 76, 0.7);
-  --level-well-known: rgba(28, 130, 105, 0.8);
+  --level-well-known: #ffffff;
+  --level-well-known-underline: transparent;
   --mark-bg: rgba(230, 178, 60, 0.5);
   --mark-current-bg: rgba(224, 100, 90, 0.65);
 

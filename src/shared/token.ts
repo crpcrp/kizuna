@@ -34,7 +34,7 @@ export function isSymbolToken(token: Pick<Token, 'surface' | 'pos'>): boolean {
  * Whether a token is a grammatical function word — a particle ('助詞', which
  * also matches subtypes like '格助詞'/'接続助詞') or an auxiliary verb
  * ('助動詞') — in either dict flavor's POS string. Learners never mine these
- * as vocabulary, so callers treat them as well-known everywhere: no underline
+ * as vocabulary, so callers treat them as well-known everywhere: no underline by default
  * in subtitles, counted as understood in the subtitle report, excluded from
  * its top-unknown list. Deliberately NOT included: 接続詞 (conjunctions),
  * 感動詞 (interjections), and ultra-common verbs like する — those are real
