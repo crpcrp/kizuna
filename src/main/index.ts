@@ -489,7 +489,12 @@ if (!gotSingleInstanceLock) {
   app.quit()
 } else {
   const handleBeforeQuit = createQuitCoordinator({
-    defaultSession: session.defaultSession,
+    // Electron's defaultSession getter is unavailable until app is ready.
+    // Keep the lookup lazy because this coordinator is registered during
+    // module initialization, before the ready promise resolves.
+    defaultSession: {
+      flushStorageData: () => session.defaultSession.flushStorageData()
+    },
     controller,
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
