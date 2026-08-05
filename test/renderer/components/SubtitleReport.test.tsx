@@ -49,7 +49,7 @@ describe('SubtitleReport closed state', () => {
       <SubtitleReport open={false} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
     )
     expect(html).not.toContain('open')
-    expect(html).not.toContain('Generating subtitle report')
+    expect(html).not.toContain('Generating word report')
   })
 })
 
@@ -59,7 +59,7 @@ describe('SubtitleReport phase markers', () => {
       <SubtitleReport open={true} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
     )
     expect(html).toContain('id="subtitle-report-loading"')
-    expect(html).toContain('Generating subtitle report')
+    expect(html).toContain('Generating word report')
     expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
   })
 
@@ -74,7 +74,7 @@ describe('SubtitleReport phase markers', () => {
     )
     expect(html).toContain('id="subtitle-report-loading"')
     expect(html).toContain('role="status"')
-    expect(html).toContain('Generating subtitle report')
+    expect(html).toContain('Generating word report')
     expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
   })
 
@@ -152,6 +152,11 @@ describe('SubtitleReport ready phase', () => {
     // tokenLevels: (4+1)/10 known = 50.0%; lemmaLevels: (1+1)/5 known = 40.0%
     expect(html).toContain('50.0%')
     expect(html).toContain('40.0%')
+  })
+
+  it('uses the Word report name throughout the open dialog', () => {
+    expect(html).toContain('aria-label="Word report"')
+    expect(html).not.toContain('Subtitle report')
   })
 
   it('renders every legend level', () => {
