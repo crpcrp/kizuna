@@ -101,7 +101,6 @@ function ProvenanceSection({
           <li>Via WaniKani only: {report.provenance.wanikaniOnly}</li>
           <li>Via Anki only: {report.provenance.ankiOnly}</li>
           <li>Both: {report.provenance.both}</li>
-          {report.provenance.unsourced > 0 && <li>Unsourced: {report.provenance.unsourced}</li>}
         </ul>
       )}
       {report.ankiDecks.length > 0 && (

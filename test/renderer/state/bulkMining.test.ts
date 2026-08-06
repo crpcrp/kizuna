@@ -87,7 +87,9 @@ describe('deriveMiningCandidates', () => {
   })
 
   it('excludes symbols, grammar, and lemmas known through a differing surface', () => {
-    const details: Record<string, KnowledgeDetails> = { inflected: { level: 'known', sources: [] } }
+    const details: Record<string, KnowledgeDetails> = {
+      inflected: { level: 'known', sourceKinds: [], sources: [] }
+    }
     const candidates = deriveMiningCandidates(
       [
         {
@@ -229,8 +231,8 @@ describe('deriveMiningCandidates', () => {
   // since the last knowledge sync. Both mechanisms coexist by design.
   it('excludes already-mined lemmas whose level is inDeck, by lemma or by surface', () => {
     const details: Record<string, KnowledgeDetails> = {
-      mined: { level: 'inDeck', sources: [] },
-      minedSurface: { level: 'inDeck', sources: [] }
+      mined: { level: 'inDeck', sourceKinds: [], sources: [] },
+      minedSurface: { level: 'inDeck', sourceKinds: [], sources: [] }
     }
     const candidates = deriveMiningCandidates(
       [

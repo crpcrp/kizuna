@@ -89,6 +89,7 @@ describe('syncWaniKani', () => {
     expect(detailsFor(asKnowledgeDb(db), ['猫'])).toEqual({
       猫: {
         level: 'known',
+        sourceKinds: ['wanikani'],
         sources: [{ source: 'wanikani', curriculumLevel: 5, proficiency: 'Guru II' }]
       }
     })

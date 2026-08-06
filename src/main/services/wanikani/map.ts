@@ -116,15 +116,13 @@ export function toKnownRows(
       reading: subject.reading,
       level: levelFromSrsStage(assignment.srsStage),
       srsStage: assignment.srsStage,
-      ...(subject.curriculumLevel === undefined
-        ? {}
-        : {
-            metadata: {
-              source: 'wanikani' as const,
-              curriculumLevel: subject.curriculumLevel,
-              proficiency: srsStageName(assignment.srsStage)
-            }
-          })
+      metadata: {
+        source: 'wanikani' as const,
+        ...(subject.curriculumLevel === undefined
+          ? {}
+          : { curriculumLevel: subject.curriculumLevel }),
+        proficiency: srsStageName(assignment.srsStage)
+      }
     })
   }
   return rows

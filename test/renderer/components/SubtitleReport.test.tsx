@@ -235,7 +235,7 @@ describe('SubtitleReport ready phase', () => {
     expect(html).not.toContain('Unsourced')
   })
 
-  it('shows the unsourced row when its count is nonzero', () => {
+  it('never renders the diagnostic unsourced count', () => {
     const withUnsourced: SubtitleReportPhase = {
       kind: 'ready',
       report: makeReport({ provenance: { wanikaniOnly: 0, ankiOnly: 0, both: 0, unsourced: 2 } }),
@@ -244,7 +244,7 @@ describe('SubtitleReport ready phase', () => {
     const withUnsourcedHtml = renderToStaticMarkup(
       <SubtitleReport open={true} phase={withUnsourced} onClose={() => {}} onRetry={() => {}} />
     )
-    expect(withUnsourcedHtml).toContain('Unsourced: 2')
+    expect(withUnsourcedHtml).not.toContain('Unsourced: 2')
   })
 })
 

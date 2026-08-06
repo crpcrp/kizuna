@@ -11,7 +11,7 @@ const EMPTY_STATUS: SyncStatus = {
 }
 
 const DETAILS: Record<string, KnowledgeDetails> = {
-  word: { level: 'known', sources: [] }
+  word: { level: 'known', sourceKinds: [], sources: [] }
 }
 
 function fakeService() {

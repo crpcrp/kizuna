@@ -188,7 +188,7 @@ describe('createBulkMiningController', () => {
     const listener = vi.fn()
     const unsubscribe = controller.subscribe(listener)
     const opening = controller.open(firstInput)
-    await controller.open(input(bridges, { two: { level: 'known', sources: [] } }))
+    await controller.open(input(bridges, { two: { level: 'known', sourceKinds: [], sources: [] } }))
     first.resolve({})
     await opening
     controller.setThreshold('3')

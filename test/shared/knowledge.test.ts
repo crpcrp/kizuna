@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_KNOWLEDGE_TUNING, LEVEL_ORDER, maxKnowledgeLevel } from '@src/shared/knowledge'
+import {
+  DEFAULT_KNOWLEDGE_TUNING,
+  isKnowledgeSourceDetail,
+  LEVEL_ORDER,
+  maxKnowledgeLevel
+} from '@src/shared/knowledge'
 
 // The one place the shipped tuning values are pinned as literals. Everywhere
 // else spreads DEFAULT_KNOWLEDGE_TUNING so a deliberate change lands here only.
@@ -35,5 +40,24 @@ describe('maxKnowledgeLevel', () => {
     expect(maxKnowledgeLevel('unknown', 'inDeck')).toBe('inDeck')
     expect(maxKnowledgeLevel('inDeck', 'learning')).toBe('learning')
     expect(maxKnowledgeLevel('inDeck', 'wellKnown')).toBe('wellKnown')
+  })
+})
+
+describe('isKnowledgeSourceDetail', () => {
+  it('accepts a WaniKani detail without a curriculum level', () => {
+    expect(isKnowledgeSourceDetail({ source: 'wanikani', proficiency: 'Guru II' })).toBe(true)
+  })
+
+  it('rejects a WaniKani detail with an invalid curriculum level', () => {
+    expect(
+      isKnowledgeSourceDetail({ source: 'wanikani', curriculumLevel: 0, proficiency: 'Guru II' })
+    ).toBe(false)
+    expect(
+      isKnowledgeSourceDetail({
+        source: 'wanikani',
+        curriculumLevel: undefined,
+        proficiency: 'Guru II'
+      })
+    ).toBe(false)
   })
 })
