@@ -387,13 +387,29 @@ passed from unit tests alone.
 ## 10. Result
 
 Complete this section only after the full WSLg checklist has been run with real
-mpv and a real local video. This implementation slice intentionally leaves the
-result blank.
+mpv and a real local video.
+
+### Current status: BLOCKED
+
+The validation was not run in this agent environment. It is a root Linux
+container rather than the required Windows host with Ubuntu 24.04 under WSL2
+and WSLg: the `wsl` command is unavailable, and both `DISPLAY` and
+`WAYLAND_DISPLAY` are unset. No real window, standalone mpv, or Kizuna
+embedding result was therefore observed.
+
+This is an environment limitation, not a GO or NO-GO finding about Kizuna. No
+manual checklist item is marked as passed or failed, and the automated checks
+must not be treated as a substitute for the required WSLg evidence. A Windows
+operator must rerun sections 1–9, attach the requested environment and runtime
+evidence, complete all 12 observations, and replace this status with GO or
+NO-GO before the spike can be concluded.
 
 - [ ] **GO:** X11/XWayland embedding works and the existing playback
   architecture can be extended.
 - [ ] **NO-GO:** embedding fails; record the exact failed checklist items and
   link the logs from the PR.
+- [x] **BLOCKED:** the required Windows/WSLg environment was unavailable for
+  this validation attempt; no embedding conclusion was made.
 
 Failed checklist items:
 
