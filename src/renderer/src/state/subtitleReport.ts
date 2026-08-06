@@ -31,7 +31,13 @@ export interface SubtitleReport {
   /** Each unique lemma counted once. */
   lemmaLevels: LevelCounts
   /** Unique-lemma provenance, over lemmas whose level is not 'unknown'. */
-  provenance: { wanikaniOnly: number; ankiOnly: number; both: number; unsourced: number }
+  provenance: {
+    wanikaniOnly: number
+    ankiOnly: number
+    both: number
+    grammar: number
+    unsourced: number
+  }
   /** Sorted by lemmaCount desc, then deck name asc. */
   ankiDecks: DeckBreakdownRow[]
   /** Most frequent unknown lemmas, count desc then first-occurrence order; capped. */
@@ -80,8 +86,8 @@ interface LemmaAgg {
 /**
  * Pure aggregation. `details` keys absent for a lemma mean level 'unknown'.
  * Lemmas with at least one grammar-POS occurrence count as 'wellKnown' in both
- * weightings and are excluded from provenance, deck breakdown, and topUnknown
- * even when a DB details row exists for them (QA-4).
+ * weightings and use their own provenance bucket, remaining out of the deck
+ * breakdown and topUnknown even when a DB details row exists for them (QA-4).
  */
 export function buildSubtitleReport(
   input: Token[] | SubtitleReportCueTokens[],
@@ -152,7 +158,7 @@ export function buildSubtitleReport(
     }
   }
 
-  const provenance = { wanikaniOnly: 0, ankiOnly: 0, both: 0, unsourced: 0 }
+  const provenance = { wanikaniOnly: 0, ankiOnly: 0, both: 0, grammar: 0, unsourced: 0 }
   const deckLemmas = new Map<string, Set<string>>()
   const topUnknown: UnknownWordRow[] = []
 
@@ -161,6 +167,7 @@ export function buildSubtitleReport(
     if (agg.grammar) {
       lemmaLevels.wellKnown++
       tokenLevels.wellKnown += agg.count
+      provenance.grammar++
       continue
     }
     const mergedDetails = [...agg.surfaces]
@@ -223,6 +230,17 @@ export function buildSubtitleReport(
     ankiDecks,
     topUnknown: topUnknown.slice(0, TOP_UNKNOWN_CAP)
   }
+}
+
+/** Sum of all unique non-unknown provenance buckets. */
+export function provenanceTotal(provenance: SubtitleReport['provenance']): number {
+  return (
+    provenance.wanikaniOnly +
+    provenance.ankiOnly +
+    provenance.both +
+    provenance.grammar +
+    provenance.unsourced
+  )
 }
 
 /** (known + wellKnown) over all five levels, as a 0–100 number with one decimal; 0 when total is 0. */

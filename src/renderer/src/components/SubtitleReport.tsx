@@ -5,6 +5,7 @@ import type { SubtitleReportPhase } from '../state/subtitleReportController'
 import {
   inDeckPct,
   levelTotal,
+  provenanceTotal,
   understandingPct,
   type LevelCounts,
   type SubtitleReport as Report
@@ -88,6 +89,7 @@ function ProvenanceSection({
   sources: { wanikani: boolean; anki: boolean }
 }): React.JSX.Element {
   const unconfigured = !sources.wanikani && !sources.anki
+  const knownLemmaCount = provenanceTotal(report.provenance)
   return (
     <section className="report-section">
       <h3>Sources</h3>
@@ -97,10 +99,16 @@ function ProvenanceSection({
           Anki under Settings &rarr; Options &rarr; Known words.
         </p>
       ) : (
-        <ul className="report-provenance">
+        <ul
+          className="report-provenance"
+          aria-label={`Sources for ${knownLemmaCount} unique words`}
+        >
           <li>Via WaniKani only: {report.provenance.wanikaniOnly}</li>
           <li>Via Anki only: {report.provenance.ankiOnly}</li>
           <li>Both: {report.provenance.both}</li>
+          {report.provenance.grammar > 0 && (
+            <li>Grammar words (always counted as known): {report.provenance.grammar}</li>
+          )}
         </ul>
       )}
       {report.ankiDecks.length > 0 && (
