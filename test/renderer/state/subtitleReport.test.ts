@@ -11,6 +11,8 @@ import {
 import type { Token } from '@src/shared/token'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
+import { deriveMiningCandidates } from '@src/renderer/src/state/bulkMining'
+import { deriveVocabularyUnits } from '@src/renderer/src/state/vocabularyUnits'
 import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(overrides: Partial<Token>): Token {
@@ -95,7 +97,7 @@ describe('buildSubtitleReport', () => {
     expect(report.topUnknown).toEqual([])
   })
 
-  it('keeps a standalone member independent from a compound occurrence', () => {
+  it('collapses a bare member into the projected compound identity', () => {
     const tokens = [
       token({ lemma: '神', surface: '神', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 1 }),
@@ -107,10 +109,7 @@ describe('buildSubtitleReport', () => {
     )
 
     expectProvenanceInvariant(report)
-    expect(report.topUnknown).toEqual([
-      { lemma: '神様', surface: '神様', count: 1 },
-      { lemma: '様', surface: '様', count: 1 }
-    ])
+    expect(report.topUnknown).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
   })
 
   it('counts repeated compounds by occurrence and preserves their first surface', () => {
@@ -165,10 +164,7 @@ describe('buildSubtitleReport', () => {
 
     expect(report.totalTokens).toBe(3)
     expectProvenanceInvariant(report)
-    expect(report.topUnknown).toEqual([
-      { lemma: '神様', surface: '神様', count: 1 },
-      { lemma: '様', surface: '様', count: 1 }
-    ])
+    expect(report.topUnknown).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
   })
 
   it('ignores a malformed single-member span and retains both ordinary lemmas', () => {
@@ -184,7 +180,7 @@ describe('buildSubtitleReport', () => {
     )
     expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([
-      { lemma: '神', surface: '神', count: 1 },
+      { lemma: '神様', surface: '神様', count: 1 },
       { lemma: '様', surface: '様', count: 1 }
     ])
   })
@@ -615,6 +611,67 @@ describe('buildSubtitleReport', () => {
       unsourced: 0
     })
     expect(report.ankiDecks).toEqual([{ deck: 'Mining', lemmaCount: 1 }])
+  })
+
+  it('keeps the report and bulk mining unknown identities in parity', () => {
+    const cues = [
+      {
+        cueKey: 'cue-1',
+        text: '神様 ヤツ に 謎。',
+        tokens: [
+          token({ lemma: '神', surface: '神', startOffset: 0 }),
+          token({ lemma: '様', surface: '様', startOffset: 1 }),
+          token({ lemma: 'ヤツ', surface: 'ヤツ', startOffset: 2 }),
+          token({ lemma: 'に', surface: 'に', pos: '助詞', startOffset: 3 }),
+          token({ lemma: '謎', surface: '謎', startOffset: 4 }),
+          symbolToken('。')
+        ],
+        spans: [
+          compoundSpan({ level: 'known' }),
+          compoundSpan({
+            startOffset: 2,
+            endOffset: 3,
+            memberTokenOffsets: [2],
+            expression: '奴',
+            matchedSurface: 'ヤツ'
+          }),
+          compoundSpan({
+            startOffset: 3,
+            endOffset: 4,
+            memberTokenOffsets: [3],
+            expression: 'に',
+            matchedSurface: 'に'
+          })
+        ]
+      },
+      {
+        cueKey: 'cue-2',
+        text: 'ヤツ 謎',
+        tokens: [
+          token({ lemma: 'ヤツ', surface: 'ヤツ', startOffset: 0 }),
+          token({ lemma: '謎', surface: '謎', startOffset: 1 })
+        ],
+        spans: []
+      }
+    ]
+    const details: Record<string, KnowledgeDetails> = {
+      神様: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    }
+    const report = buildSubtitleReport(
+      cues.map(({ cueKey, tokens, spans }) => ({ cueKey, tokens, acceptedSpans: spans })),
+      details
+    )
+    const units = deriveVocabularyUnits(cues, details)
+    const candidates = deriveMiningCandidates(cues, details)
+    const unknownKeys = units
+      .filter((unit) => !unit.grammar && unit.level === 'unknown')
+      .map((unit) => unit.key)
+
+    expect(report.lemmaLevels.unknown).toBe(candidates.length)
+    expect(new Set(report.topUnknown.map((row) => row.lemma))).toEqual(
+      new Set(candidates.map((row) => row.lemma))
+    )
+    expect(new Set(unknownKeys)).toEqual(new Set(candidates.map((row) => row.lemma)))
   })
 
   it('counts an accepted span whose level is inDeck under inDeck, not unknown', () => {

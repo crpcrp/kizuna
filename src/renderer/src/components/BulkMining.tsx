@@ -287,6 +287,9 @@ export default function BulkMining(props: BulkMiningProps): React.JSX.Element | 
             Resolving frequencies&hellip; please wait before mining.
           </p>
         )}
+        <p className="bulk-mining-hint">
+          Showing {displayed.length} of {phase.candidates.length} unknown words
+        </p>
         {displayed.length === 0 ? (
           <p className="bulk-mining-hint" role="status">
             No words match the current filters.
