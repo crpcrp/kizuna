@@ -246,12 +246,15 @@ export function deriveVocabularyUnits(
   const lemmaExpressions = new Map<string, string>()
 
   // Build the projection map before aggregating tokens so a bare occurrence can
-  // use a projection discovered later in the track.
+  // use a projection discovered later in the track. Only a single-token
+  // projection (ヤツ resolved as 奴) speaks for the token's lemma: a compound's
+  // member is not the compound, so a standalone 様 must stay its own word
+  // rather than being filed under — and counted as known through — 神様.
   for (const { spans } of preparedCues) {
     for (const { span, members } of spans) {
-      for (const member of members) {
-        if (!lemmaExpressions.has(member.lemma)) lemmaExpressions.set(member.lemma, span.expression)
-      }
+      if (members.length !== 1) continue
+      const [member] = members
+      if (!lemmaExpressions.has(member.lemma)) lemmaExpressions.set(member.lemma, span.expression)
     }
   }
 

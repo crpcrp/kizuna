@@ -97,7 +97,7 @@ describe('buildSubtitleReport', () => {
     expect(report.topUnknown).toEqual([])
   })
 
-  it('collapses a bare member into the projected compound identity', () => {
+  it('keeps a bare compound member as its own word, since 様 is not 神様', () => {
     const tokens = [
       token({ lemma: '神', surface: '神', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 1 }),
@@ -109,7 +109,10 @@ describe('buildSubtitleReport', () => {
     )
 
     expectProvenanceInvariant(report)
-    expect(report.topUnknown).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
+    expect(report.topUnknown).toEqual([
+      { lemma: '神様', surface: '神様', count: 1 },
+      { lemma: '様', surface: '様', count: 1 }
+    ])
   })
 
   it('counts repeated compounds by occurrence and preserves their first surface', () => {
@@ -164,7 +167,10 @@ describe('buildSubtitleReport', () => {
 
     expect(report.totalTokens).toBe(3)
     expectProvenanceInvariant(report)
-    expect(report.topUnknown).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
+    expect(report.topUnknown).toEqual([
+      { lemma: '神様', surface: '神様', count: 1 },
+      { lemma: '様', surface: '様', count: 1 }
+    ])
   })
 
   it('ignores a malformed single-member span and retains both ordinary lemmas', () => {

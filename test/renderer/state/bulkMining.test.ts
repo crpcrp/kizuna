@@ -111,7 +111,7 @@ describe('deriveMiningCandidates', () => {
     expect(deriveMiningCandidates([], {})).toEqual([])
   })
 
-  it('aggregates accepted compounds and collapses bare members into the projection', () => {
+  it('aggregates accepted compounds while a bare member stays its own candidate', () => {
     const compound = [
       token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 2 })
@@ -130,7 +130,8 @@ describe('deriveMiningCandidates', () => {
     )
 
     expect(candidates.map(({ lemma, count, sentence }) => ({ lemma, count, sentence }))).toEqual([
-      { lemma: '閻魔様', count: 2, sentence: '閻魔様だ' }
+      { lemma: '閻魔様', count: 1, sentence: '閻魔様だ' },
+      { lemma: '様', count: 1, sentence: '様がいる' }
     ])
     expect(candidates[0].token).toMatchObject({
       lemma: '閻魔様',

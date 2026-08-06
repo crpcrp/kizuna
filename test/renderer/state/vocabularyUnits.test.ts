@@ -113,6 +113,27 @@ describe('deriveVocabularyUnits', () => {
     expect(units[0]).toMatchObject({ key: '奴', count: 2, tokenCount: 2 })
   })
 
+  it('does not file a bare compound member under the compound, matching the underline', () => {
+    const cues = [
+      {
+        cueKey: 'cue-1',
+        tokens: [
+          token({ surface: '神', lemma: '神' }),
+          token({ surface: '様', lemma: '様', startOffset: 1 })
+        ],
+        spans: [span({ level: 'known' })]
+      },
+      { cueKey: 'cue-2', tokens: [token({ surface: '様', lemma: '様' })] }
+    ]
+    const units = deriveVocabularyUnits(cues, {})
+
+    expect(units.map(({ key, count, level }) => ({ key, count, level }))).toEqual([
+      { key: '神様', count: 1, level: 'known' },
+      { key: '様', count: 1, level: 'unknown' }
+    ])
+    expect(vocabularyLevelsByToken(cues[1], {})).toEqual(new Map([[0, 'unknown']]))
+  })
+
   it('keeps grammar status when a grammar token is span-covered', () => {
     const grammar = token({ surface: 'に', lemma: 'に', pos: '助詞' })
     const [unit] = deriveVocabularyUnits(
