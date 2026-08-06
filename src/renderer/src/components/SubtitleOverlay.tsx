@@ -1,10 +1,11 @@
 import './SubtitleOverlay.css'
 import { findActiveCue, type Cue } from '../../../shared/cue'
-import { isGrammarToken, isSymbolToken, type Token } from '../../../shared/token'
+import { type Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../shared/playerSettings'
 import { cueKey } from '../state/tokenization'
 import type { VocabularySpan } from '../state/vocabularySpans'
+import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
 
 // Presentational overlay: shows whichever cue is active at the current
 // playback time. Derived from props — no internal state; dragging is
@@ -35,12 +36,11 @@ export interface SubtitleOverlayProps {
    * viewer knows it. `undefined` means coloring is disabled/not yet resolved
    * and renders no `data-level` attribute at all (no regression for callers
    * that haven't wired this yet); an object (even `{}`) means coloring is on
-   * and a lemma missing from the map defaults to `'unknown'` — except a
-   * punctuation/symbol token (see `isSymbolToken`), which always renders
-   * `'wellknown'` since there is nothing to "know" about a '(' or a '?'.
+   * and a word missing from the map defaults to `'unknown'`. How a token's
+   * level follows from this map is `cueTokenLevels` below.
    */
   levels?: Record<string, KnowledgeLevel>
-  /** Compound projections for this cue; member tokens render at the span level. */
+  /** Compound projections for this cue; member tokens render as one word. */
   vocabularySpans?: VocabularySpan[]
   /** Font scale + box position; defaults to DEFAULT_SUBTITLE_STYLE when omitted. */
   style?: SubtitleStyleSettings
@@ -108,22 +108,23 @@ function countNewlinesBefore(text: string, offset: number): number {
 }
 
 /**
- * Pure: resolves a single token's `data-level`, shared by SubtitleOverlay and
- * SubtitleSidebar so the two never deviate. `undefined` levels means coloring
- * is disabled. A symbol/punctuation token is always `'wellKnown'` since there
- * is nothing to "know" about a '(' or a '?'; likewise a grammar token
- * (particle/auxiliary — see `isGrammarToken`) always renders `'wellKnown'`,
- * overriding whatever the knowledge DB says for its lemma.
+ * Pure: resolves one cue's tokens to their `data-level`, shared by
+ * SubtitleOverlay and SubtitleSidebar so the two never deviate. Levels come
+ * from `vocabularyLevelsByToken` — the same base the word report and bulk mining
+ * derive from — so a word underlined as known is exactly a word those two count
+ * as known. `undefined` levels means coloring is disabled and no attribute is
+ * rendered; a symbol/punctuation token is always `'wellKnown'` since there is
+ * nothing to "know" about a '(' or a '?'.
  */
-export function tokenLevel(
-  token: Token,
+export function cueTokenLevels(
+  key: string,
+  tokens: Token[],
   levels: Record<string, KnowledgeLevel> | undefined,
-  projectedLevel?: KnowledgeLevel
-): KnowledgeLevel | undefined {
-  if (!levels) return undefined
-  if (projectedLevel) return projectedLevel
-  if (isSymbolToken(token) || isGrammarToken(token)) return 'wellKnown'
-  return levels[token.lemma] ?? 'unknown'
+  vocabularySpans: VocabularySpan[] | undefined
+): (token: Token) => KnowledgeLevel | undefined {
+  if (!levels) return () => undefined
+  const byOffset = vocabularyLevelsByToken({ cueKey: key, tokens, spans: vocabularySpans }, levels)
+  return (token) => byOffset.get(token.startOffset) ?? 'wellKnown'
 }
 
 export default function SubtitleOverlay({
@@ -142,11 +143,6 @@ export default function SubtitleOverlay({
 }: SubtitleOverlayProps): React.JSX.Element {
   const cue = findActiveCue(cues, timePos)
   const highlightedOffsets = new Set(highlightedTokens?.map((t) => t.startOffset))
-  const projectedLevels = new Map(
-    vocabularySpans
-      ?.filter((span) => cue && span.cueKey === cueKey(cue))
-      .flatMap((span) => span.memberTokenOffsets.map((offset) => [offset, span.level] as const))
-  )
 
   // Only starts a drag when the mousedown lands on the box itself (not a
   // word span), so repositioning the subtitle never steals a word click/hover.
@@ -174,6 +170,7 @@ export default function SubtitleOverlay({
   }
 
   const spans = tokenSpans(cue.text, tokens)
+  const levelFor = cueTokenLevels(cueKey(cue), tokens, levels, vocabularySpans)
   return (
     <div
       id="subtitle"
@@ -189,7 +186,7 @@ export default function SubtitleOverlay({
             key={i}
             data-token=""
             data-highlighted={highlightedOffsets.has(item.token.startOffset) ? '' : undefined}
-            data-level={tokenLevel(item.token, levels, projectedLevels.get(item.token.startOffset))}
+            data-level={levelFor(item.token)}
             onMouseEnter={(e) => onWordHover?.(item.token, e)}
             onMouseLeave={() => onWordLeave?.()}
             onClick={(e) => onWordClick?.(item.token, e)}

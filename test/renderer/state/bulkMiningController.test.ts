@@ -135,7 +135,7 @@ describe('createBulkMiningController', () => {
     expect(controller.getState()).toEqual({ kind: 'idle' })
   })
 
-  it('uses accepted cue spans so their bare members share the projected identity', async () => {
+  it('uses accepted cue spans, still offering a bare member of a known compound', async () => {
     const bridges = anki()
     const controller = createBulkMiningController()
     await controller.open({
@@ -152,7 +152,12 @@ describe('createBulkMiningController', () => {
       frequencyDictId: 1
     })
 
-    expect(controller.getState()).toMatchObject({ kind: 'ready', candidates: [] })
+    // The known 神様 span is not offered, while the standalone 様 is its own
+    // unknown word rather than being counted as known through the compound.
+    expect(controller.getState()).toMatchObject({
+      kind: 'ready',
+      candidates: [{ lemma: '様', count: 1 }]
+    })
   })
 
   it('requests projected span identities together with token identities', async () => {

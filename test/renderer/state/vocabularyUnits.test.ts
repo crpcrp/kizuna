@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
-import { deriveVocabularyUnits } from '@src/renderer/src/state/vocabularyUnits'
+import {
+  deriveVocabularyUnits,
+  vocabularyLevelsByToken
+} from '@src/renderer/src/state/vocabularyUnits'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -110,6 +113,27 @@ describe('deriveVocabularyUnits', () => {
     expect(units[0]).toMatchObject({ key: '奴', count: 2, tokenCount: 2 })
   })
 
+  it('does not file a bare compound member under the compound, matching the underline', () => {
+    const cues = [
+      {
+        cueKey: 'cue-1',
+        tokens: [
+          token({ surface: '神', lemma: '神' }),
+          token({ surface: '様', lemma: '様', startOffset: 1 })
+        ],
+        spans: [span({ level: 'known' })]
+      },
+      { cueKey: 'cue-2', tokens: [token({ surface: '様', lemma: '様' })] }
+    ]
+    const units = deriveVocabularyUnits(cues, {})
+
+    expect(units.map(({ key, count, level }) => ({ key, count, level }))).toEqual([
+      { key: '神様', count: 1, level: 'known' },
+      { key: '様', count: 1, level: 'unknown' }
+    ])
+    expect(vocabularyLevelsByToken(cues[1], {})).toEqual(new Map([[0, 'unknown']]))
+  })
+
   it('keeps grammar status when a grammar token is span-covered', () => {
     const grammar = token({ surface: 'に', lemma: 'に', pos: '助詞' })
     const [unit] = deriveVocabularyUnits(
@@ -163,5 +187,60 @@ describe('deriveVocabularyUnits', () => {
     )
 
     expect(units[0].level).toBe('wellKnown')
+  })
+})
+
+describe('vocabularyLevelsByToken', () => {
+  it('levels every member of a compound the same way the derived unit is levelled', () => {
+    const cue = {
+      cueKey: 'cue-1',
+      text: '神様',
+      tokens: [
+        token({ surface: '神', lemma: '神' }),
+        token({ surface: '様', lemma: '様', startOffset: 1 })
+      ],
+      spans: [span()]
+    }
+    const details: Record<string, KnowledgeDetails> = {
+      様: { level: 'known', sourceKinds: [], sources: [] }
+    }
+
+    expect(vocabularyLevelsByToken(cue, { 様: 'known' })).toEqual(
+      new Map([
+        [0, 'known'],
+        [1, 'known']
+      ])
+    )
+    expect(deriveVocabularyUnits([cue], details)[0].level).toBe('known')
+  })
+
+  it('keeps a span-covered grammar token wellKnown, as the report and mining treat it', () => {
+    const grammar = token({ surface: 'に', lemma: 'に', pos: '助詞' })
+    const cue = {
+      cueKey: 'cue-1',
+      text: 'に',
+      tokens: [grammar],
+      spans: [
+        span({ memberTokenOffsets: [0], endOffset: 1, expression: 'に', matchedSurface: 'に' })
+      ]
+    }
+
+    expect(vocabularyLevelsByToken(cue, { に: 'unknown' })).toEqual(new Map([[0, 'wellKnown']]))
+  })
+
+  it('leaves symbols out of the map and defaults unseen lemmas to unknown', () => {
+    const levels = vocabularyLevelsByToken(
+      {
+        cueKey: 'cue-1',
+        text: '猫。',
+        tokens: [
+          token({ surface: '猫', lemma: '猫' }),
+          token({ surface: '。', lemma: '。', pos: '記号', startOffset: 1 })
+        ]
+      },
+      {}
+    )
+
+    expect(levels).toEqual(new Map([[0, 'unknown']]))
   })
 })
