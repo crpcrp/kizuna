@@ -1,8 +1,16 @@
-// A net.Server on a unique per-instance named pipe that parses newline-JSON
-// commands and lets tests script replies and push events. All mpv IPC tests
-// go through this instead of mpv.exe.
+// A net.Server on a unique per-instance mpv IPC endpoint that parses
+// newline-delimited JSON commands and lets tests script replies and push
+// events. All mpv IPC tests go through this instead of mpv.exe.
 
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { createServer, type Server, type Socket } from 'node:net'
+import {
+  createMpvIpcEndpoint,
+  removeMpvIpcEndpoint,
+  type UnlinkFn
+} from '@src/main/mpv/ipcEndpoint'
 
 export interface ReceivedCommand {
   command: unknown[]
@@ -16,32 +24,106 @@ export interface ReceivedCommand {
  */
 export type CommandHandler = (msg: ReceivedCommand) => Record<string, unknown> | undefined | void
 
-let pipeCounter = 0
+type MakeTempDirFn = (prefix: string) => string
+type RemoveDirFn = (path: string) => void
+
+export interface FakeMpvServerOptions {
+  /** Defaults to the host platform. Only Windows and Linux are supported. */
+  platform?: NodeJS.Platform
+  /** Caller-owned parent directory for the server's Linux temp directory. */
+  tempRoot?: string
+  /** Filesystem seams used by cleanup tests. */
+  mkdtempFn?: MakeTempDirFn
+  unlinkFn?: UnlinkFn
+  removeDirFn?: RemoveDirFn
+}
+
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
+function defaultRemoveDir(path: string): void {
+  rmSync(path, { recursive: true, force: true })
+}
 
 export class FakeMpvServer {
-  readonly pipePath = `\\\\.\\pipe\\kizuna-fake-mpv-${process.pid}-${pipeCounter++}`
+  readonly endpoint: string
   readonly received: ReceivedCommand[] = []
 
+  private readonly platform: NodeJS.Platform
+  private readonly unlinkFn: UnlinkFn | undefined
+  private readonly removeDirFn: RemoveDirFn
+  private readonly ownedTempDir: string | null
+  private resourcesCleaned = false
   private server: Server | null = null
+  private closePromise: Promise<void> | null = null
   private readonly sockets: Socket[] = []
   private buffer = ''
   /** Default: mpv-style success reply with no data. */
   private handler: CommandHandler = () => ({ error: 'success' })
 
+  constructor(options: FakeMpvServerOptions = {}) {
+    this.platform = options.platform ?? process.platform
+    this.unlinkFn = options.unlinkFn
+    this.removeDirFn = options.removeDirFn ?? defaultRemoveDir
+
+    if (this.platform === 'linux') {
+      const tempRoot = options.tempRoot ?? tmpdir()
+      this.ownedTempDir = (options.mkdtempFn ?? mkdtempSync)(join(tempRoot, 'kizuna-fake-mpv-'))
+      this.endpoint = createMpvIpcEndpoint(this.platform, this.ownedTempDir)
+    } else if (this.platform === 'win32') {
+      this.ownedTempDir = null
+      this.endpoint = createMpvIpcEndpoint(this.platform)
+    } else {
+      throw new Error(`Unsupported platform for fake mpv server: ${this.platform}`)
+    }
+  }
+
   onCommand(handler: CommandHandler): void {
     this.handler = handler
   }
 
-  listen(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.server = createServer((sock) => {
+  async listen(): Promise<void> {
+    if (this.server) throw new Error('FakeMpvServer is already listening')
+
+    try {
+      // mpv may have left a Unix socket behind after a crash. Named pipes are
+      // managed by Windows and must not go through filesystem cleanup.
+      removeMpvIpcEndpoint(this.endpoint, this.platform, this.unlinkFn)
+
+      const server = createServer((sock) => {
         this.sockets.push(sock)
         sock.on('data', (chunk) => this.onData(chunk))
         sock.on('error', () => sock.destroy())
       })
-      this.server.once('error', reject)
-      this.server.listen(this.pipePath, () => resolve())
-    })
+      this.server = server
+
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error): void => reject(error)
+        server.once('error', onError)
+        server.listen(this.endpoint, () => {
+          server.off('error', onError)
+          resolve()
+        })
+      })
+    } catch (error) {
+      const server = this.server
+      this.server = null
+      if (server) {
+        try {
+          await this.closeServer(server)
+        } catch {
+          // Preserve the original listen failure; cleanup below still runs.
+        }
+      }
+      try {
+        this.cleanupResources()
+      } catch {
+        // Preserve the original listen failure while still attempting all
+        // cleanup steps.
+      }
+      throw error
+    }
   }
 
   /**
@@ -71,14 +153,54 @@ export class FakeMpvServer {
     }
   }
 
-  close(): Promise<void> {
+  async close(): Promise<void> {
+    if (this.closePromise) return this.closePromise
+
+    const server = this.server
+    this.server = null
+    this.closePromise = (async () => {
+      try {
+        if (server) await this.closeServer(server)
+      } finally {
+        this.cleanupResources()
+      }
+    })()
+    return this.closePromise
+  }
+
+  private closeServer(server: Server): Promise<void> {
     for (const sock of this.sockets) sock.destroy()
     this.sockets.length = 0
-    return new Promise((resolve) => {
-      if (!this.server) return resolve()
-      this.server.close(() => resolve())
-      this.server = null
+
+    if (!server.listening) return Promise.resolve()
+    return new Promise((resolve, reject) => {
+      server.close((error) => {
+        if (error && !isMissingPathError(error)) reject(error)
+        else resolve()
+      })
     })
+  }
+
+  private cleanupResources(): void {
+    if (this.resourcesCleaned) return
+
+    let firstError: unknown
+    try {
+      removeMpvIpcEndpoint(this.endpoint, this.platform, this.unlinkFn)
+    } catch (error) {
+      firstError = error
+    }
+
+    if (this.ownedTempDir !== null) {
+      try {
+        this.removeDirFn(this.ownedTempDir)
+      } catch (error) {
+        if (!isMissingPathError(error) && firstError === undefined) firstError = error
+      }
+    }
+
+    if (firstError !== undefined) throw firstError
+    this.resourcesCleaned = true
   }
 
   private onData(chunk: Buffer): void {
