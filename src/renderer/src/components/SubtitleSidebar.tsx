@@ -4,7 +4,7 @@ import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { cueKey } from '../state/tokenization'
-import { tokenSpans, tokenLevel } from './SubtitleOverlay'
+import { tokenSpans, cueTokenLevels } from './SubtitleOverlay'
 import {
   findMatches,
   stepMatch,
@@ -166,11 +166,6 @@ export function CueRowContent({
   currentMatch?: SearchMatch
 }): React.JSX.Element {
   const segments = highlightSegments(cue.text.length, matches, currentMatch)
-  const projectedLevels = new Map(
-    vocabularySpans
-      ?.filter((span) => span.cueKey === cueKey(cue))
-      .flatMap((span) => span.memberTokenOffsets.map((offset) => [offset, span.level] as const))
-  )
 
   if (rowTokens.length === 0) {
     return (
@@ -186,16 +181,14 @@ export function CueRowContent({
   }
 
   const spans = tokenSpans(cue.text, rowTokens)
+  const levelFor = cueTokenLevels(cueKey(cue), rowTokens, levels, vocabularySpans)
   return (
     <>
       {spans.map((item, i) =>
         item.type === 'break' ? (
           <br key={i} />
         ) : (
-          <span
-            key={i}
-            data-level={tokenLevel(item.token, levels, projectedLevels.get(item.token.startOffset))}
-          >
+          <span key={i} data-level={levelFor(item.token)}>
             {renderSegments(
               item.token.surface,
               clipSegments(segments, item.token.startOffset, item.token.surface.length),
