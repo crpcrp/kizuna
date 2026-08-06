@@ -233,29 +233,44 @@ link_runtime "$(require_command mecab)" resources/mecab/mecab
 link_runtime "$(require_command yt-dlp)" resources/yt-dlp/yt-dlp
 ```
 
-Locate the UTF-8 IPADIC directory from the installed package instead of
-assuming a distro-specific path. The command must find exactly one directory
-containing `sys.dic`, validate it, and link that directory to
-`resources/mecab/ipadic`:
+Locate the active compiled dictionary instead of assuming a distro-specific
+path. On Ubuntu 24.04, `mecab-ipadic-utf8` compiles the dictionary during
+package installation, so `dpkg -L mecab-ipadic-utf8` does not list the
+generated `sys.dic`. MeCab's dictionary metadata reports its actual path and
+encoding:
 
 ```bash
 set -euo pipefail
 
-mapfile -t ipadic_dirs < <(
-  dpkg -L mecab-ipadic-utf8 \
-    | awk '$0 ~ /\/sys\.dic$/ { sub(/\/sys\.dic$/, ""); print }' \
-    | sort -u
-)
+dpkg-query -W -f='${Status}\n' mecab-ipadic-utf8 \
+  | grep -qx 'install ok installed' || {
+    echo 'mecab-ipadic-utf8 is not installed correctly.' >&2
+    exit 1
+  }
 
-if (( ${#ipadic_dirs[@]} != 1 )); then
-  echo 'Could not identify exactly one UTF-8 IPADIC directory.' >&2
-  dpkg -L mecab-ipadic-utf8 >&2
+dictionary_info="$(mecab -D)"
+printf '%s\n' "$dictionary_info"
+
+dictionary_file="$(
+  awk '$1 == "filename:" { print $2; exit }' <<<"$dictionary_info"
+)"
+dictionary_charset="$(
+  awk '$1 == "charset:" { print toupper($2); exit }' <<<"$dictionary_info"
+)"
+
+if [[ -z "$dictionary_file" || "$dictionary_charset" != "UTF-8" ]]; then
+  echo 'MeCab did not report an active UTF-8 dictionary.' >&2
   exit 1
 fi
 
-ipadic_dir="${ipadic_dirs[0]}"
+dictionary_file="$(readlink -f "$dictionary_file")"
+ipadic_dir="$(dirname "$dictionary_file")"
 if [[ ! -f "$ipadic_dir/sys.dic" ]]; then
   echo "The selected IPADIC directory has no sys.dic: $ipadic_dir" >&2
+  exit 1
+fi
+if [[ "${ipadic_dir,,}" != *ipadic* ]]; then
+  echo "The active UTF-8 dictionary does not appear to be IPADIC: $ipadic_dir" >&2
   exit 1
 fi
 

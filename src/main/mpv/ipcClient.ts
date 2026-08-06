@@ -1,6 +1,6 @@
 // Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
 // node:net only. Ported/hardened from the throwaway spike's pingMpvIpc().
-// No process spawning here — `MpvController` in controller.ts owns mpv.exe.
+// No process spawning here — `MpvController` in controller.ts owns mpv.
 
 import { connect, type Socket } from 'node:net'
 import { EventEmitter } from 'node:events'

@@ -1,4 +1,4 @@
-// Owns mpv.exe's lifecycle and translates high-level playback calls into mpv
+// Owns mpv's lifecycle and translates high-level playback calls into mpv
 // JSON IPC command arrays. Dependencies (spawn, IPC client) are injected so
 // tests use fakes instead of a real mpv process.
 
@@ -174,7 +174,7 @@ export function sanitizeExtraMpvArgs(args: string[]): string[] {
 }
 
 /**
- * Pure. Builds the mpv.exe argv for embedded, DOM-subtitled playback. Argv
+ * Pure. Builds the mpv argv for embedded, DOM-subtitled playback. Argv
  * order is load-bearing: the config block comes first, the user's sanitized
  * `extraArgs` next, and the non-negotiable embedding args last so nothing a
  * user drops in can break the integration.

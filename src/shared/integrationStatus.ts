@@ -7,10 +7,10 @@
 // something the UI can act on.
 
 export interface BundledBinaryStatus {
-  /** `resources/ffmpeg/ffmpeg.exe` — subtitle extraction, seek thumbnails. */
+  /** `resources/ffmpeg/ffmpeg[.exe]` — subtitle extraction, seek thumbnails. */
   ffmpeg: boolean
-  /** `resources/ffmpeg/ffprobe.exe` — track enumeration, chapters, dimensions. */
+  /** `resources/ffmpeg/ffprobe[.exe]` — track enumeration, chapters, dimensions. */
   ffprobe: boolean
-  /** `resources/yt-dlp/yt-dlp.exe` — URL streaming and online captions. */
+  /** `resources/yt-dlp/yt-dlp[.exe]` — URL streaming and online captions. */
   ytdlp: boolean
 }

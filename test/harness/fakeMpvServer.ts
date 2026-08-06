@@ -1,6 +1,6 @@
 // A net.Server on a unique per-instance mpv IPC endpoint that parses
 // newline-delimited JSON commands and lets tests script replies and push
-// events. All mpv IPC tests go through this instead of mpv.exe.
+// events. All mpv IPC tests go through this instead of a real mpv process.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
