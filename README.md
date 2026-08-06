@@ -31,6 +31,9 @@ or newer, npm, and local copies of mpv, FFmpeg/ffprobe, and MeCab under
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
 version checks.
 
+Linux development is experimental and unreleased; see the [Linux embedding
+spike setup](docs/linux-embedding-spike.md) for WSLg validation instructions.
+
 ## Optional services
 
 - **AnkiConnect** enables individual and bulk card creation plus Anki knowledge
