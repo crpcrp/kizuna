@@ -19,7 +19,7 @@ function makeDeps(overrides: Partial<StartMpvWithConfigDeps> = {}): {
   const warn = vi.fn()
   const deps: StartMpvWithConfigDeps = {
     mpvPath: 'mpv.exe',
-    hwnd: 658188n,
+    windowId: 658188n,
     settings: { mpvUserConfig: false, mpvExtraArgs: [] },
     configDir: '/data/userData/mpv',
     ensureConfigDir,
@@ -43,7 +43,7 @@ describe('startMpvWithConfig', () => {
     expect(start).toHaveBeenCalledTimes(1)
     expect(start).toHaveBeenCalledWith({
       mpvPath: 'mpv.exe',
-      hwnd: 658188n,
+      windowId: 658188n,
       userConfigDir: undefined,
       extraArgs: ['--hwdec=auto']
     })
@@ -61,7 +61,7 @@ describe('startMpvWithConfig', () => {
     expect(start).toHaveBeenCalledTimes(1)
     expect(start).toHaveBeenCalledWith({
       mpvPath: 'mpv.exe',
-      hwnd: 658188n,
+      windowId: 658188n,
       userConfigDir: '/data/userData/mpv',
       extraArgs: ['--profile=gpu-hq']
     })
@@ -85,13 +85,13 @@ describe('startMpvWithConfig', () => {
     // First attempt carries the config dir; the retry drops it (extraArgs kept).
     expect(start).toHaveBeenNthCalledWith(1, {
       mpvPath: 'mpv.exe',
-      hwnd: 658188n,
+      windowId: 658188n,
       userConfigDir: '/data/userData/mpv',
       extraArgs: ['--vo=gpu']
     })
     expect(start).toHaveBeenNthCalledWith(2, {
       mpvPath: 'mpv.exe',
-      hwnd: 658188n,
+      windowId: 658188n,
       extraArgs: ['--vo=gpu']
     })
     expect(warn).toHaveBeenCalledTimes(1)

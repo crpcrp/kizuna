@@ -67,8 +67,8 @@ export type SetTimeoutFn = (cb: () => void, ms: number) => unknown
 export type ClearTimeoutFn = (handle: unknown) => void
 
 export interface BuildMpvArgsOptions {
-  /** Native window handle mpv should render into (see hwndFromHandleBuffer). */
-  hwnd: bigint | string
+  /** Native window ID mpv should render into. */
+  windowId: bigint | string
   /** Bare pipe name — the `\\.\pipe\` prefix is added here. */
   pipeName: string
   /**
@@ -178,7 +178,7 @@ export function sanitizeExtraMpvArgs(args: string[]): string[] {
  * user drops in can break the integration.
  */
 export function buildMpvArgs({
-  hwnd,
+  windowId,
   pipeName,
   userConfigDir,
   extraArgs = [],
@@ -202,7 +202,7 @@ export function buildMpvArgs({
   return [
     ...configArgs,
     ...sanitizeExtraMpvArgs(extraArgs),
-    `--wid=${hwnd}`,
+    `--wid=${windowId}`,
     `--input-ipc-server=\\\\.\\pipe\\${pipeName}`,
     '--idle=yes', // start with no file; wait for loadfile commands
     '--force-window=yes', // paint into the wid even while idle
@@ -255,7 +255,7 @@ export interface LoadFileOptions {
 
 export interface StartOptions {
   mpvPath: string
-  hwnd: bigint | string
+  windowId: bigint | string
   connect?: ConnectOptions
   /** Kizuna-owned mpv config dir; forwarded to `buildMpvArgs`. Undefined =
    * `--no-config` (mpv ignores every config source). */
@@ -294,10 +294,10 @@ export class MpvController {
       deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
   }
 
-  /** Spawns mpv rendering into `hwnd` and connects the IPC client to its pipe. */
+  /** Spawns mpv rendering into `windowId` and connects the IPC client to its pipe. */
   async start({
     mpvPath,
-    hwnd,
+    windowId,
     connect,
     userConfigDir,
     extraArgs,
@@ -307,7 +307,7 @@ export class MpvController {
     const pipeName = uniquePipeName()
     this.proc = this.spawnFn(
       mpvPath,
-      buildMpvArgs({ hwnd, pipeName, userConfigDir, extraArgs, ytdlpPath })
+      buildMpvArgs({ windowId, pipeName, userConfigDir, extraArgs, ytdlpPath })
     )
     try {
       await this.client.connect(`\\\\.\\pipe\\${pipeName}`, connect)

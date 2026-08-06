@@ -34,7 +34,8 @@ import { createSystemMediaController } from './services/systemMedia'
 import { createFrameCaptureService, createScreenshotService } from './services/screenshots'
 import { sweepThumbnailCache, THUMBNAIL_CACHE_MAX_BYTES } from './services/thumbnails/cache'
 import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
-import { hwndFromHandleBuffer } from './mpv/hwnd'
+import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
+import { configureLinuxX11 } from './windowEmbedding'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
 import { resolveBinaryPaths, type BinaryPaths } from './resourcePaths'
@@ -80,6 +81,8 @@ import { applyAppIdentity, screenshotsDir } from './appIdentity'
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
 applyAppIdentity(app)
+
+configureLinuxX11(app)
 
 // The spike's GO verdict was reached with hardware acceleration disabled
 // (spike/main.ts): with Chromium's DirectComposition surface active, mpv's
@@ -176,13 +179,13 @@ function startMpvForWindow(
   win: BrowserWindow,
   mpvPath: string,
   ytdlpPath: string | undefined,
-  hwnd: bigint | string,
+  windowId: bigint | string,
   settings: SettingsStore
 ): Promise<void> {
   const { mpvUserConfig, mpvExtraArgs } = settings.get().player
   return startMpvWithConfig({
     mpvPath,
-    hwnd,
+    windowId,
     ytdlpPath,
     settings: { mpvUserConfig, mpvExtraArgs },
     configDir: mpvConfig?.configDir ?? '',
@@ -256,8 +259,8 @@ async function startPlayer(
   settings: SettingsStore
 ): Promise<void> {
   try {
-    const hwnd = hwndFromHandleBuffer(win.getNativeWindowHandle())
-    await startMpvForWindow(win, mpvPath, ytdlpPath, hwnd, settings)
+    const windowId = windowIdFromHandleBuffer(win.getNativeWindowHandle())
+    await startMpvForWindow(win, mpvPath, ytdlpPath, windowId, settings)
     powerSave = createPowerSaveController(powerSaveBlocker)
     systemMedia = createSystemMediaForWindow(win)
     const screenshots = createScreenshotService({

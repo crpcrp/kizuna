@@ -5,7 +5,7 @@
 /** Argv-shaping options forwarded to `MpvController.start`. */
 export interface MpvStartOptions {
   mpvPath: string
-  hwnd: bigint | string
+  windowId: bigint | string
   userConfigDir?: string
   extraArgs?: string[]
   /** Bundled yt-dlp path; enables mpv's ytdl hook when present. */
@@ -19,7 +19,7 @@ export const MPV_CONFIG_ERROR_MESSAGE =
 
 export interface StartMpvWithConfigDeps {
   mpvPath: string
-  hwnd: bigint | string
+  windowId: bigint | string
   /** Bundled yt-dlp path; forwarded to every `start` attempt so mpv
    * gets the ytdl hook. Undefined when the binary isn't bundled — mpv still
    * plays direct-stream URLs, only extractor-backed ones stop resolving. */
@@ -57,7 +57,7 @@ export async function startMpvWithConfig(deps: StartMpvWithConfigDeps): Promise<
   try {
     await deps.start({
       mpvPath: deps.mpvPath,
-      hwnd: deps.hwnd,
+      windowId: deps.windowId,
       userConfigDir,
       extraArgs: mpvExtraArgs,
       ytdlpPath: deps.ytdlpPath
@@ -68,7 +68,7 @@ export async function startMpvWithConfig(deps: StartMpvWithConfigDeps): Promise<
     // The retry drops only the user config — the ytdl hook still applies.
     await deps.start({
       mpvPath: deps.mpvPath,
-      hwnd: deps.hwnd,
+      windowId: deps.windowId,
       extraArgs: mpvExtraArgs,
       ytdlpPath: deps.ytdlpPath
     })
