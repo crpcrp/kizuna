@@ -135,7 +135,7 @@ describe('createBulkMiningController', () => {
     expect(controller.getState()).toEqual({ kind: 'idle' })
   })
 
-  it('uses accepted cue spans so known compound members are not offered while a standalone member remains', async () => {
+  it('uses accepted cue spans so their bare members share the projected identity', async () => {
     const bridges = anki()
     const controller = createBulkMiningController()
     await controller.open({
@@ -152,10 +152,30 @@ describe('createBulkMiningController', () => {
       frequencyDictId: 1
     })
 
-    expect(controller.getState()).toMatchObject({
-      kind: 'ready',
-      candidates: [{ lemma: '様', count: 1 }]
+    expect(controller.getState()).toMatchObject({ kind: 'ready', candidates: [] })
+  })
+
+  it('requests projected span identities together with token identities', async () => {
+    const bridges = anki()
+    const detailsFor = vi.fn().mockResolvedValue({})
+    const projected = acceptedSpan('projection', 'unknown')
+    projected.memberTokenOffsets = [0]
+    projected.expression = '奴'
+    projected.matchedSurface = 'ヤツ'
+    await createBulkMiningController().open({
+      bridges: { ...bridges, knowledge: { detailsFor } },
+      cueTokens: [
+        {
+          cueKey: 'projection',
+          text: 'ヤツ',
+          tokens: [token('ヤツ')],
+          spans: [projected]
+        }
+      ],
+      frequencyDictId: 1
     })
+
+    expect(detailsFor).toHaveBeenCalledWith(['ヤツ', '奴'])
   })
 
   it('opens ready, progressively resolves entries, deselects no-entry words, and finishes resolving', async () => {

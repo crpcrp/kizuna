@@ -111,7 +111,7 @@ describe('deriveMiningCandidates', () => {
     expect(deriveMiningCandidates([], {})).toEqual([])
   })
 
-  it('aggregates accepted compounds, skips members, and keeps a standalone member independent', () => {
+  it('aggregates accepted compounds and collapses bare members into the projection', () => {
     const compound = [
       token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 2 })
@@ -130,14 +130,53 @@ describe('deriveMiningCandidates', () => {
     )
 
     expect(candidates.map(({ lemma, count, sentence }) => ({ lemma, count, sentence }))).toEqual([
-      { lemma: '閻魔様', count: 1, sentence: '閻魔様だ' },
-      { lemma: '様', count: 1, sentence: '様がいる' }
+      { lemma: '閻魔様', count: 2, sentence: '閻魔様だ' }
     ])
     expect(candidates[0].token).toMatchObject({
       lemma: '閻魔様',
       surface: '閻魔様',
       startOffset: 0
     })
+  })
+
+  it('does not mine a grammar token covered by a single-token projection', () => {
+    const grammar = token({ lemma: 'に', surface: 'に', pos: '助詞' })
+    expect(
+      deriveMiningCandidates(
+        [
+          {
+            cueKey: 'cue-1',
+            text: 'に',
+            tokens: [grammar],
+            spans: [
+              span({
+                memberTokenOffsets: [grammar.startOffset],
+                expression: 'に',
+                matchedSurface: 'に'
+              })
+            ]
+          }
+        ],
+        {}
+      )
+    ).toEqual([])
+  })
+
+  it('does not mine a symbol-only span', () => {
+    const symbol = token({ lemma: '。', surface: '。', pos: '記号' })
+    expect(
+      deriveMiningCandidates(
+        [
+          {
+            cueKey: 'cue-1',
+            text: '。',
+            tokens: [symbol],
+            spans: [span({ memberTokenOffsets: [symbol.startOffset], expression: '記号' })]
+          }
+        ],
+        {}
+      )
+    ).toEqual([])
   })
 
   it('counts repeated compounds from their first sentence and respects compound knowledge levels', () => {

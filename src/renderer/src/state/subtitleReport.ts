@@ -1,10 +1,11 @@
-import { isGrammarToken, isSymbolToken, type Token } from '../../../shared/token'
-import {
-  maxKnowledgeLevel,
-  type KnowledgeDetails,
-  type KnowledgeLevel
-} from '../../../shared/knowledge'
+import { isSymbolToken, type Token } from '../../../shared/token'
+import type { KnowledgeDetails, KnowledgeLevel } from '../../../shared/knowledge'
 import type { VocabularySpan } from './vocabularySpans'
+import {
+  deriveVocabularyUnits,
+  vocabularyUnitIdentities,
+  vocabularyUnitTokenLevels
+} from './vocabularyUnits'
 
 export type LevelCounts = Record<KnowledgeLevel, number>
 
@@ -73,16 +74,6 @@ export function reportLemmas(tokens: Token[]): string[] {
   return keys
 }
 
-interface LemmaAgg {
-  surface: string
-  count: number
-  surfaces: Set<string>
-  /** ≥ 1 occurrence was a grammar token (particle/auxiliary) — see isGrammarToken. */
-  grammar: boolean
-  /** Accepted compounds use their projected lookup level, not member-token details. */
-  projectedLevel?: KnowledgeLevel
-}
-
 /**
  * Pure aggregation. `details` keys absent for a lemma mean level 'unknown'.
  * Lemmas with at least one grammar-POS occurrence count as 'wellKnown' in both
@@ -95,104 +86,53 @@ export function buildSubtitleReport(
 ): SubtitleReport {
   const tokenLevels = emptyLevelCounts()
   const lemmaLevels = emptyLevelCounts()
-  const lemmaOrder: string[] = []
-  const lemmaAgg = new Map<string, LemmaAgg>()
-  let totalTokens = 0
 
   const cueGroups: SubtitleReportCueTokens[] =
     input.length > 0 && 'tokens' in input[0]
       ? (input as SubtitleReportCueTokens[])
       : [{ cueKey: '', tokens: input as Token[] }]
-  const countedSpans = new Set<VocabularySpan>()
-
-  for (const group of cueGroups) {
-    const spanByMemberOffset = new Map<number, VocabularySpan>()
-    const tokenOffsets = new Set(group.tokens.map((token) => token.startOffset))
-    for (const span of group.acceptedSpans ?? []) {
-      if (
-        span.cueKey !== group.cueKey ||
-        span.memberTokenOffsets.length < 2 ||
-        !span.memberTokenOffsets.every((offset) => tokenOffsets.has(offset))
-      )
-        continue
-      for (const offset of span.memberTokenOffsets) spanByMemberOffset.set(offset, span)
-    }
-
-    for (const token of group.tokens) {
-      if (isSymbolToken(token)) continue
-      totalTokens++
-      const span = spanByMemberOffset.get(token.startOffset)
-      if (span) {
-        tokenLevels[span.level]++
-        if (countedSpans.has(span)) continue
-        countedSpans.add(span)
-        let compound = lemmaAgg.get(span.expression)
-        if (!compound) {
-          compound = {
-            surface: span.matchedSurface,
-            count: 0,
-            surfaces: new Set(),
-            grammar: false,
-            projectedLevel: span.level
-          }
-          lemmaAgg.set(span.expression, compound)
-          lemmaOrder.push(span.expression)
-        }
-        compound.count++
-        compound.surfaces.add(span.matchedSurface)
-        compound.projectedLevel = maxKnowledgeLevel(
-          compound.projectedLevel ?? 'unknown',
-          span.level
-        )
-        continue
-      }
-      let agg = lemmaAgg.get(token.lemma)
-      if (!agg) {
-        agg = { surface: token.surface, count: 0, surfaces: new Set(), grammar: false }
-        lemmaAgg.set(token.lemma, agg)
-        lemmaOrder.push(token.lemma)
-      }
-      agg.count++
-      agg.surfaces.add(token.surface)
-      if (isGrammarToken(token)) agg.grammar = true
-    }
-  }
+  const units = deriveVocabularyUnits(
+    cueGroups.map(({ cueKey, tokens, acceptedSpans }) => ({
+      cueKey,
+      tokens,
+      spans: acceptedSpans
+    })),
+    details
+  )
 
   const provenance = { wanikaniOnly: 0, ankiOnly: 0, both: 0, grammar: 0, unsourced: 0 }
   const deckLemmas = new Map<string, Set<string>>()
   const topUnknown: UnknownWordRow[] = []
 
-  for (const lemma of lemmaOrder) {
-    const agg = lemmaAgg.get(lemma)!
-    if (agg.grammar) {
-      lemmaLevels.wellKnown++
-      tokenLevels.wellKnown += agg.count
+  for (const unit of units) {
+    const reportLevel = unit.grammar ? 'wellKnown' : unit.level
+    lemmaLevels[reportLevel]++
+
+    const unitTokenLevels = vocabularyUnitTokenLevels(unit)
+    for (const [level, count] of Object.entries(unitTokenLevels) as [keyof LevelCounts, number][]) {
+      tokenLevels[unit.grammar ? 'wellKnown' : level] += count
+    }
+
+    if (unit.grammar) {
       provenance.grammar++
       continue
     }
-    const mergedDetails = [...agg.surfaces]
-      .filter((surface) => surface !== lemma)
-      .reduce<KnowledgeDetails>(
-        (effective, surface) => ({
-          level: maxKnowledgeLevel(effective.level, details[surface]?.level ?? 'unknown'),
-          sourceKinds: Array.from(
-            new Set([...effective.sourceKinds, ...(details[surface]?.sourceKinds ?? [])])
-          ),
-          sources: [...effective.sources, ...(details[surface]?.sources ?? [])]
-        }),
-        {
-          level: details[lemma]?.level ?? 'unknown',
-          sourceKinds: Array.from(new Set(details[lemma]?.sourceKinds ?? [])),
-          sources: [...(details[lemma]?.sources ?? [])]
-        }
-      )
-    if (agg.projectedLevel) mergedDetails.level = agg.projectedLevel
-    lemmaLevels[mergedDetails.level]++
-    if (!agg.projectedLevel) tokenLevels[mergedDetails.level] += agg.count
-    if (mergedDetails.level === 'unknown') {
-      topUnknown.push({ lemma, surface: agg.surface, count: agg.count })
+
+    if (unit.level === 'unknown') {
+      topUnknown.push({ lemma: unit.key, surface: unit.surface, count: unit.count })
       continue
     }
+
+    const mergedDetails = vocabularyUnitIdentities(unit).reduce<KnowledgeDetails>(
+      (effective, identity) => ({
+        level: effective.level,
+        sourceKinds: Array.from(
+          new Set([...effective.sourceKinds, ...(details[identity]?.sourceKinds ?? [])])
+        ),
+        sources: [...effective.sources, ...(details[identity]?.sources ?? [])]
+      }),
+      { level: unit.level, sourceKinds: [], sources: [] }
+    )
     const sources = mergedDetails.sources
     const decks = new Set<string>()
     for (const source of sources) {
@@ -211,7 +151,7 @@ export function buildSubtitleReport(
         lemmas = new Set()
         deckLemmas.set(deck, lemmas)
       }
-      lemmas.add(lemma)
+      lemmas.add(unit.key)
     }
   }
 
@@ -222,8 +162,8 @@ export function buildSubtitleReport(
   topUnknown.sort((a, b) => b.count - a.count)
 
   return {
-    totalTokens,
-    uniqueLemmas: lemmaOrder.length,
+    totalTokens: units.reduce((total, unit) => total + unit.tokenCount, 0),
+    uniqueLemmas: units.length,
     tokenLevels,
     lemmaLevels,
     provenance,
