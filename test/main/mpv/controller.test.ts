@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { EventEmitter } from 'node:events'
-import { hwndFromHandleBuffer } from '@src/main/mpv/hwnd'
+import { windowIdFromHandleBuffer } from '@src/main/mpv/nativeWindowHandle'
 import {
   buildMpvArgs,
   sanitizeExtraMpvArgs,
@@ -75,17 +75,43 @@ function makeFixture(): {
   return { controller: new MpvController({ spawnFn, client }), client, spawns }
 }
 
-describe('hwndFromHandleBuffer', () => {
+describe('windowIdFromHandleBuffer', () => {
   it('reads the 8-byte LE pointer getNativeWindowHandle returns on Win64', () => {
     const buf = Buffer.alloc(8)
     buf.writeBigUInt64LE(0x00000000000a0b0cn, 0)
-    expect(hwndFromHandleBuffer(buf)).toBe(658188n)
+    expect(windowIdFromHandleBuffer(buf, 'win32')).toBe(658188n)
+  })
+
+  it('reads a Linux X11 window ID without truncating its 64-bit value', () => {
+    const buf = Buffer.alloc(8)
+    buf.writeBigUInt64LE(0x0000000100000001n, 0)
+    expect(windowIdFromHandleBuffer(buf, 'linux')).toBe(0x0000000100000001n)
+  })
+
+  it('rejects a native handle buffer that is too small', () => {
+    expect(() => windowIdFromHandleBuffer(Buffer.alloc(7), 'linux')).toThrow(
+      'must contain at least 8 bytes'
+    )
+  })
+
+  it('rejects unsupported platforms', () => {
+    expect(() => windowIdFromHandleBuffer(Buffer.alloc(8), 'darwin')).toThrow(
+      'Unsupported platform'
+    )
   })
 })
 
 describe('buildMpvArgs', () => {
+  it('passes a decoded Linux X11 window ID to mpv unchanged', () => {
+    const handle = Buffer.alloc(8)
+    handle.writeBigUInt64LE(0x0000000100000001n, 0)
+    const windowId = windowIdFromHandleBuffer(handle, 'linux')
+
+    expect(buildMpvArgs({ windowId, pipeName: 'p' })).toContain('--wid=4294967297')
+  })
+
   it('produces the embedded-playback argv with subs disabled and config off by default', () => {
-    const args = buildMpvArgs({ hwnd: 658188n, pipeName: 'kizuna-mpv-1' })
+    const args = buildMpvArgs({ windowId: 658188n, pipeName: 'kizuna-mpv-1' })
     expect(args).toEqual([
       '--no-config',
       '--wid=658188',
@@ -102,7 +128,7 @@ describe('buildMpvArgs', () => {
 
   it('emits --config=yes/--config-dir when a user config dir is given', () => {
     const args = buildMpvArgs({
-      hwnd: 1n,
+      windowId: 1n,
       pipeName: 'p',
       userConfigDir: 'C:\\Users\\a\\AppData\\Roaming\\Kizuna\\mpv'
     })
@@ -116,7 +142,7 @@ describe('buildMpvArgs', () => {
 
   it('inserts sanitized user extraArgs after the config block and before the forced args', () => {
     const args = buildMpvArgs({
-      hwnd: 1n,
+      windowId: 1n,
       pipeName: 'p',
       userConfigDir: '/cfg',
       extraArgs: ['--hwdec=auto', '--profile=gpu-hq']
@@ -140,7 +166,7 @@ describe('buildMpvArgs', () => {
 
   it('appends the ytdl hook args after the forced block when a yt-dlp path is given', () => {
     const args = buildMpvArgs({
-      hwnd: 1n,
+      windowId: 1n,
       pipeName: 'p',
       ytdlpPath: 'C:\\app\\resources\\yt-dlp\\yt-dlp.exe'
     })
@@ -162,7 +188,7 @@ describe('buildMpvArgs', () => {
   })
 
   it('omits the ytdl args entirely when no yt-dlp path is bundled', () => {
-    const args = buildMpvArgs({ hwnd: 1n, pipeName: 'p' })
+    const args = buildMpvArgs({ windowId: 1n, pipeName: 'p' })
     expect(args.some((arg) => arg.startsWith('--ytdl'))).toBe(false)
     expect(args.some((arg) => arg.includes('ytdl_hook'))).toBe(false)
     expect(args).not.toContain('--script-opts-append=ytdl_hook-use_manifests=no')
@@ -170,7 +196,7 @@ describe('buildMpvArgs', () => {
 
   it('drops embedding/config-owning and non---prefixed args from extraArgs', () => {
     const args = buildMpvArgs({
-      hwnd: 1n,
+      windowId: 1n,
       pipeName: 'p',
       extraArgs: [
         '--wid=999', // steals the window
@@ -289,7 +315,7 @@ describe('MpvController (fake spawn + fake client)', () => {
 
   it('start spawns mpvPath with built args and connects to the same pipe', async () => {
     const { controller, client, spawns } = makeFixture()
-    await controller.start({ mpvPath: 'C:\\bin\\mpv.exe', hwnd: 658188n })
+    await controller.start({ mpvPath: 'C:\\bin\\mpv.exe', windowId: 658188n })
 
     expect(spawns).toHaveLength(1)
     expect(spawns[0].command).toBe('C:\\bin\\mpv.exe')
@@ -298,16 +324,18 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(pipePath).toMatch(/^\\\\\.\\pipe\\kizuna-mpv-/)
     expect(client.connectedTo).toBe(pipePath) // client dials the pipe mpv serves
     expect(spawns[0].args).toEqual(
-      buildMpvArgs({ hwnd: 658188n, pipeName: pipePath!.replace('\\\\.\\pipe\\', '') })
+      buildMpvArgs({ windowId: 658188n, pipeName: pipePath!.replace('\\\\.\\pipe\\', '') })
     )
-    await expect(controller.start({ mpvPath: 'x', hwnd: 1n })).rejects.toThrow('already started')
+    await expect(controller.start({ mpvPath: 'x', windowId: 1n })).rejects.toThrow(
+      'already started'
+    )
   })
 
   it('start forwards userConfigDir and extraArgs into the spawned argv', async () => {
     const { controller, spawns } = makeFixture()
     await controller.start({
       mpvPath: 'mpv.exe',
-      hwnd: 658188n,
+      windowId: 658188n,
       userConfigDir: '/data/mpv',
       extraArgs: ['--hwdec=auto', '--wid=999'],
       ytdlpPath: '/data/yt-dlp/yt-dlp.exe'
@@ -739,7 +767,7 @@ describe('MpvController (fake spawn + fake client)', () => {
 
   it('quit sends the quit command, disposes the client and kills mpv', async () => {
     const { controller, client, spawns } = makeFixture()
-    await controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })
+    await controller.start({ mpvPath: 'mpv.exe', windowId: 1n })
     await controller.quit()
     expect(client.sent).toContainEqual(['quit'])
     expect(client.disposed).toBe(true)
@@ -749,7 +777,7 @@ describe('MpvController (fake spawn + fake client)', () => {
   it('quit still tears down when the quit command rejects', async () => {
     const { controller, client, spawns } = makeFixture()
     client.sendCommand = () => Promise.reject(new Error('mpv IPC: not connected'))
-    await controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })
+    await controller.start({ mpvPath: 'mpv.exe', windowId: 1n })
     await controller.quit()
     expect(client.disposed).toBe(true)
     expect(spawns[0].proc.killed).toBe(true)
@@ -757,7 +785,7 @@ describe('MpvController (fake spawn + fake client)', () => {
 
   it('dispose hard-tears down the client and mpv process', async () => {
     const { controller, client, spawns } = makeFixture()
-    await controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })
+    await controller.start({ mpvPath: 'mpv.exe', windowId: 1n })
 
     controller.dispose()
 
@@ -770,7 +798,7 @@ describe('MpvController (fake spawn + fake client)', () => {
     const connectErr = new Error('mpv IPC: connect failed')
     client.connect = () => Promise.reject(connectErr)
 
-    await expect(controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })).rejects.toThrow(
+    await expect(controller.start({ mpvPath: 'mpv.exe', windowId: 1n })).rejects.toThrow(
       'mpv IPC: connect failed'
     )
     expect(spawns).toHaveLength(1)
@@ -781,7 +809,7 @@ describe('MpvController (fake spawn + fake client)', () => {
     client.connect = async (pipePath: string) => {
       client.connectedTo = pipePath
     }
-    await expect(controller.start({ mpvPath: 'mpv.exe', hwnd: 1n })).resolves.toBeUndefined()
+    await expect(controller.start({ mpvPath: 'mpv.exe', windowId: 1n })).resolves.toBeUndefined()
     expect(spawns).toHaveLength(2)
     expect(spawns[1].proc.killed).toBe(false)
   })
