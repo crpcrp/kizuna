@@ -20,7 +20,6 @@ import Database from 'better-sqlite3'
 import {
   applyNavigationGuards,
   applyReloadGuard,
-  getMainWindowOptions,
   registerWindowControls,
   restorePreFullscreenBounds,
   sendToWindow
@@ -77,6 +76,13 @@ import { createMediaHistoryService, type MediaHistoryService } from './services/
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
+import {
+  createAppWindowSet,
+  loadRendererWindow,
+  packagedRendererPath,
+  presentAppWindowSet,
+  type AppWindowSet
+} from './windowPair'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
@@ -98,7 +104,10 @@ let powerSave: ReturnType<typeof createPowerSaveController> | undefined
 let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
 let urlSubtitles: UrlSubtitleService | undefined
+// The renderer-owning window. On Linux this is the transparent child overlay;
+// the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
+let appWindows: AppWindowSet | undefined
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 const launchPathBuffer = createLaunchPathBuffer(
   (path) => {
@@ -115,57 +124,49 @@ function createWindow(
   history: MediaHistoryService,
   settings: SettingsStore
 ): void {
-  const win = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js')))
-  mainWindow = win
+  const windows = createAppWindowSet({
+    preloadPath: join(__dirname, '../preload/index.js')
+  })
+  const { videoHost, uiOverlay } = windows
+  appWindows = windows
+  mainWindow = uiOverlay
   // Keep the renderer pinned to its bundled origin: deny off-page navigation and
   // refuse child-window creation (Electron security checklist #12/#13).
-  applyNavigationGuards(win.webContents)
+  applyNavigationGuards(uiOverlay.webContents)
   // Ctrl/Cmd+R is Chromium's built-in reload shortcut; it would otherwise
   // wipe the current session with no warning (see applyReloadGuard's doc).
-  applyReloadGuard(win.webContents)
-  win.on('closed', () => {
-    if (mainWindow === win) mainWindow = undefined
+  applyReloadGuard(uiOverlay.webContents)
+  uiOverlay.on('closed', () => {
+    if (mainWindow === uiOverlay) mainWindow = undefined
   })
 
   // In `dev`, electron-vite serves the renderer over HTTP (with HMR).
   // In a packaged/built app, load the compiled HTML from disk.
   const devUrl = process.env['ELECTRON_RENDERER_URL']
-  if (devUrl) {
-    // A cold vite dev server occasionally isn't fully ready for the very
-    // first request (e.g. still resolving its dependency pre-bundle); that
-    // can surface as an outright load failure — a few retries with a short
-    // delay cover that without masking a genuinely broken dev server (which
-    // will keep failing after they're exhausted). electron.vite.config.ts's
-    // optimizeDeps.include/server.warmup close the other half of this race
-    // (a load that "succeeds" but renders blank because the module graph
-    // wasn't actually ready yet).
-    let attemptsLeft = 3
-    win.webContents.on('did-fail-load', () => {
-      if (attemptsLeft <= 0) return
-      attemptsLeft -= 1
-      setTimeout(() => win.loadURL(devUrl), 500)
-    })
-    win.loadURL(devUrl)
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  // Linux keeps both windows hidden until the renderer has finished its first
+  // document load. Windows retains BrowserWindow's existing eager presentation.
+  presentAppWindowSet(windows)
+  loadRendererWindow(uiOverlay, {
+    devUrl,
+    packagedHtmlPath: packagedRendererPath(__dirname)
+  })
 
   // Push fullscreen transitions to the renderer so it can hide/reveal the
   // menu bar and bottom controls (see App.tsx). Both the window's own events
   // (F11, OS controls) and our IPC-driven toggles land here.
-  win.on('enter-full-screen', () =>
-    win.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, true)
+  uiOverlay.on('enter-full-screen', () =>
+    uiOverlay.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, true)
   )
-  win.on('leave-full-screen', () => {
+  uiOverlay.on('leave-full-screen', () => {
     // Restore the window's pre-fullscreen size/position (captured in
     // windowOptions.ts's setFullscreen/toggleFullscreen handlers) only now,
     // after the OS has actually finished leaving fullscreen — doing it
     // earlier races the platform's own transition and can get overwritten.
-    restorePreFullscreenBounds(win)
-    win.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, false)
+    restorePreFullscreenBounds(uiOverlay)
+    uiOverlay.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, false)
   })
 
-  void startPlayer(win, mpvPath, ytdlpPath, history, settings)
+  void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings)
 }
 
 /**
@@ -174,7 +175,7 @@ function createWindow(
  * the config-enabled → no-config-retry → banner decision.
  */
 function startMpvForWindow(
-  win: BrowserWindow,
+  uiOverlay: BrowserWindow,
   mpvPath: string,
   ytdlpPath: string | undefined,
   windowId: bigint | string,
@@ -190,7 +191,7 @@ function startMpvForWindow(
     ensureConfigDir: () => mpvConfig?.ensureDir(),
     start: (opts) => controller.start(opts),
     reportConfigError: (message) => {
-      sendToWindow(win, LAUNCH_CHANNELS.error, message)
+      sendToWindow(uiOverlay, LAUNCH_CHANNELS.error, message)
     },
     warn: (err) =>
       console.warn('[kizuna] mpv failed to start with user config; retrying without it:', err)
@@ -198,15 +199,15 @@ function startMpvForWindow(
 }
 
 /**
- * Builds the system-media controller with the real Electron
- * surfaces for `win`: the app-global media-key shortcuts, this window's taskbar
- * progress bar, and — on Windows only — its thumbnail-toolbar buttons (the API
- * is a no-op elsewhere, so it's injected as an empty function off-Windows).
- * Media-key/thumbar activations are pushed to the renderer, which owns what each
- * command does. Icons are first-party PNGs under `resources/icons/`.
+ * Builds the system-media controller with the real Electron surfaces: the
+ * video host owns taskbar progress/thumbnail buttons, while media-key and
+ * thumbnail activations are pushed to the renderer-owning overlay. On Windows
+ * both roles are the same window. Icons are first-party PNGs under
+ * `resources/icons/`.
  */
 function createSystemMediaForWindow(
-  win: BrowserWindow
+  videoHost: BrowserWindow,
+  uiOverlay: BrowserWindow
 ): ReturnType<typeof createSystemMediaController> {
   const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
   const iconsDir = join(resourcesBase, 'icons')
@@ -216,14 +217,14 @@ function createSystemMediaForWindow(
   return createSystemMediaController({
     globalShortcut,
     setProgressBar: (progress, options) => {
-      if (win.isDestroyed()) return
-      if (options) win.setProgressBar(progress, options)
-      else win.setProgressBar(progress)
+      if (videoHost.isDestroyed()) return
+      if (options) videoHost.setProgressBar(progress, options)
+      else videoHost.setProgressBar(progress)
     },
     setThumbarButtons: isWindows
       ? (buttons) => {
-          if (win.isDestroyed()) return
-          win.setThumbarButtons(
+          if (videoHost.isDestroyed()) return
+          videoHost.setThumbarButtons(
             buttons.map((b) => ({
               icon: b.icon as Electron.NativeImage,
               tooltip: b.tooltip,
@@ -233,14 +234,14 @@ function createSystemMediaForWindow(
         }
       : () => {},
     send: (channel, value) => {
-      sendToWindow(win, channel, value)
+      sendToWindow(uiOverlay, channel, value)
     },
     icons: { prev: icon('prev'), play: icon('play'), pause: icon('pause'), next: icon('next') }
   })
 }
 
 /**
- * Starts mpv embedded into `win` and wires the IPC bridge once it's up.
+ * Starts mpv in `videoHost` and wires the IPC bridge to `uiOverlay` once it's up.
  *
  * The bridge is only registered after `controller.start()` resolves: it
  * eagerly calls observeTimePos/observeDuration, which send IPC over the
@@ -250,17 +251,18 @@ function createSystemMediaForWindow(
  * app must keep working without it.
  */
 async function startPlayer(
-  win: BrowserWindow,
+  videoHost: BrowserWindow,
+  uiOverlay: BrowserWindow,
   mpvPath: string,
   ytdlpPath: string | undefined,
   history: MediaHistoryService,
   settings: SettingsStore
 ): Promise<void> {
   try {
-    const windowId = windowIdFromHandleBuffer(win.getNativeWindowHandle())
-    await startMpvForWindow(win, mpvPath, ytdlpPath, windowId, settings)
+    const windowId = windowIdFromHandleBuffer(videoHost.getNativeWindowHandle())
+    await startMpvForWindow(uiOverlay, mpvPath, ytdlpPath, windowId, settings)
     powerSave = createPowerSaveController(powerSaveBlocker)
-    systemMedia = createSystemMediaForWindow(win)
+    systemMedia = createSystemMediaForWindow(videoHost, uiOverlay)
     const screenshots = createScreenshotService({
       takeScreenshot: (path) => controller.screenshotToFile(path),
       folder: () =>
@@ -280,7 +282,7 @@ async function startPlayer(
       ipcMain,
       controller,
       (channel, value) => {
-        sendToWindow(win, channel, value)
+        sendToWindow(uiOverlay, channel, value)
       },
       history,
       powerSave,
@@ -366,8 +368,7 @@ function startMecab(binaryPaths: BinaryPaths, settings: SettingsStore): void {
  * `configureDictConnection` sets this connection's pragmas (incremental
  * auto-vacuum, then WAL + a busy timeout so its reads don't block on — or get
  * blocked by — the worker's writes) and owns their order. Import progress is
- * pushed to every live window (this app has just the one, but a broadcast is simpler
- * than threading the triggering window's id through the worker round-trip).
+ * pushed to the renderer-owning window; the Linux video host has no renderer.
  */
 function startDict(): void {
   const dbPath = join(app.getPath('userData'), 'dict.db')
@@ -380,9 +381,7 @@ function startDict(): void {
   })
   const dictService = createDictService({ db, importer })
   registerDictBridge(ipcMain, dictService, (channel, value) => {
-    for (const win of BrowserWindow.getAllWindows()) {
-      sendToWindow(win, channel, value)
-    }
+    sendToWindow(mainWindow, channel, value)
   })
 }
 
@@ -517,7 +516,10 @@ if (!gotSingleInstanceLock) {
       cleanupUrlSubtitles: async () => {
         await urlSubtitles?.cleanup()
       },
-      appQuit: () => app.quit()
+      appQuit: () => {
+        appWindows?.close()
+        app.quit()
+      }
     })
     app.on('before-quit', handleBeforeQuit)
 
