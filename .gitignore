@@ -24,3 +24,9 @@ resources/*
 
 
 test-results.log
+
+# Local one-checkout WSL development setup
+/open-kizuna-wsl.bat
+/run-kizuna-linux.bat
+/scripts/wsl-dev-shell.sh
+/docs/wsl-development.md
