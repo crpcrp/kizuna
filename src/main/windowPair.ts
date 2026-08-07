@@ -500,27 +500,51 @@ export function loadRendererWindow(
   void uiOverlay.loadFile(packagedHtmlPath)
 }
 
+const PRESENT_FALLBACK_MS = 2000
+
 /**
- * Presents a Linux pair only after Electron reports that the overlay renderer
- * has painted once. The overlay is shown first so the host is never visible
- * without its DOM surface; the host is then shown immediately behind that
- * child.
+ * Presents a Linux pair once the renderer is ready or the safety-net timeout
+ * elapses. Linux transparent windows do not reliably emit `ready-to-show`, so
+ * `did-finish-load` and the timeout cover the same startup path without
+ * exposing the host before the app can be seen.
  */
 export function presentAppWindowSet(
   windows: AppWindowSet,
-  onRendererReady: (callback: () => void) => void = (callback) =>
+  onRendererReady: (callback: () => void) => void = (callback) => {
     windows.uiOverlay.once('ready-to-show', callback)
+    windows.uiOverlay.webContents.once('did-finish-load', callback)
+  },
+  setTimeoutFn: WindowPairSetTimeout = (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeoutFn: WindowPairClearTimeout = (handle) =>
+    clearTimeout(handle as ReturnType<typeof setTimeout>)
 ): void {
   if (!windows.paired) return
 
   let presented = false
-  onRendererReady(() => {
+  let fallbackTimer: unknown
+  let fallbackTimerPending = false
+
+  const present = (): void => {
     if (presented || windows.uiOverlay.isDestroyed() || windows.videoHost.isDestroyed()) return
     presented = true
-    windows.uiOverlay.show()
+    if (fallbackTimerPending) {
+      fallbackTimerPending = false
+      clearTimeoutFn(fallbackTimer)
+      fallbackTimer = undefined
+    }
     windows.videoHost.show()
+    windows.uiOverlay.show()
+    windows.uiOverlay.moveTop()
     windows.uiOverlay.focus()
-  })
+  }
+
+  fallbackTimerPending = true
+  fallbackTimer = setTimeoutFn(() => {
+    fallbackTimerPending = false
+    fallbackTimer = undefined
+    present()
+  }, PRESENT_FALLBACK_MS)
+  onRendererReady(present)
 }
 
 /** The packaged renderer path used by the main-process startup code. */
