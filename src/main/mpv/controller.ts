@@ -323,6 +323,24 @@ export class MpvController {
     }
   }
 
+  /**
+   * A native mpv exit is a complete controller teardown too. Without this
+   * path, a crash after startup leaves the Linux socket owned by Kizuna and
+   * the controller keeps sending commands to a dead IPC client until app quit.
+   */
+  private handleProcessExit(proc: MpvProcessLike): void {
+    // A killed process may emit its exit event after a new start has already
+    // installed the next process. Never let a late event tear down that new
+    // controller instance.
+    if (this.proc !== proc) return
+    this.proc = null
+    try {
+      this.client.dispose()
+    } finally {
+      this.cleanupIpcEndpoint()
+    }
+  }
+
   /** Spawns mpv rendering into `windowId` and connects the IPC client to its endpoint. */
   async start({
     mpvPath,
@@ -357,6 +375,9 @@ export class MpvController {
           ytdlpPath
         })
       )
+      const proc = this.proc
+      proc.on('exit', () => this.handleProcessExit(proc))
+      proc.on('error', () => this.handleProcessExit(proc))
       await this.client.connect(ipcEndpoint, connect)
     } catch (err) {
       // connect failed: don't leak the spawned mpv process or leave a

@@ -27,10 +27,23 @@ subtitles live only in the overlay. Electron's parent/child relationship keeps
 the overlay above the host without making Kizuna globally always-on-top.
 
 Subtitle tracks are extracted and rendered separately in the DOM so their text
-can be selected, tokenized, looked up, and styled by knowledge level. Linux
-window movement, resizing, fullscreen, and mini-player synchronization are
-handled by the follow-up window-lifecycle slice; the initial pair is aligned
-once before presentation.
+can be selected, tokenized, looked up, and styled by knowledge level.
+
+`src/main/windowPair.ts` owns the platform-specific window lifecycle. On
+Linux, `videoHost` is the single canonical owner of native position, size,
+fullscreen, and taskbar surfaces; `uiOverlay` mirrors its bounds and remains
+the only renderer/focus target. Host move/resize events are coalesced into one
+trailing synchronization, and programmatic writes are guarded so mirroring
+does not recurse. Fullscreen is initiated only on the host, restored from one
+saved pre-fullscreen rectangle after the native leave event, and reported to
+the renderer once per logical transition. Mini-player bounds and requested
+always-on-top state are applied to both sides as one operation. The parent
+relationship remains the normal stacking mechanism; always-on-top is not used
+for ordinary Linux playback.
+
+Windows continues to use the same coordinator interface backed by its one
+transparent BrowserWindow, so window-control IPC does not duplicate platform
+branches or change the existing single-window composition.
 
 Runtime executables resolve from `resources/` in development and Electron's
 resource directory in packaged builds. Subprocess output is bounded and
