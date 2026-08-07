@@ -203,6 +203,9 @@ export interface WindowControlTarget {
   getBounds(): WindowBounds
   setBounds(bounds: WindowBounds): void
   setAlwaysOnTop(flag: boolean): void
+  /** Optional pair-owned fullscreen bookkeeping hooks. */
+  capturePreFullscreenBounds?(): void
+  hasPreFullscreenBounds?(): boolean
 }
 
 /** One display's usable area (`Electron.Display`'s `workArea`). */
@@ -280,10 +283,10 @@ export function capturePreFullscreenBounds(win: WindowControlTarget): void {
 /**
  * Re-applies `win`'s captured pre-fullscreen bounds (if any were captured)
  * and forgets them. Call this after the window has actually left fullscreen
- * (e.g. from the BrowserWindow's `leave-full-screen` event in index.ts) so
- * the restore isn't racing the OS's own fullscreen-exit animation/transition.
- * No-ops if nothing was captured (e.g. the window started fullscreen, or
- * bounds were already consumed by a prior restore).
+ * (e.g. from a BrowserWindow's `leave-full-screen` event) so the restore isn't
+ * racing the OS's own fullscreen-exit animation/transition. The paired Linux
+ * coordinator owns an equivalent pair-wide implementation; this helper keeps
+ * the single-window fallback and its tests small.
  */
 export function restorePreFullscreenBounds(win: WindowControlTarget): void {
   const bounds = preFullscreenBounds.get(win)
@@ -292,15 +295,23 @@ export function restorePreFullscreenBounds(win: WindowControlTarget): void {
   win.setBounds(bounds)
 }
 
+function captureTargetPreFullscreenBounds(win: WindowControlTarget): void {
+  if (win.capturePreFullscreenBounds) win.capturePreFullscreenBounds()
+  else capturePreFullscreenBounds(win)
+}
+
+function targetHasPreFullscreenBounds(win: WindowControlTarget): boolean {
+  return win.hasPreFullscreenBounds?.() ?? preFullscreenBounds.has(win)
+}
+
 /**
  * Registers the window-control channels ('window:minimize' / 'window:close' /
  * 'window:setFullscreen' / 'window:toggleFullscreen'). Pure wiring: the
  * ipcMain-like object and the event→window resolver are injected so tests
  * exercise this with fakes instead of live Electron. The matching
- * 'window:fullscreenChanged' push (main→renderer) is wired at window creation
- * (index.ts), where the BrowserWindow's enter/leave-full-screen events live —
- * that's also where `restorePreFullscreenBounds` is called, since it must run
- * after the OS-level transition finishes, not right after we ask for it.
+ * 'window:fullscreenChanged' push (main→renderer) is wired by the window-pair
+ * coordinator, which listens to the canonical native window and restores
+ * bounds only after the OS-level transition finishes.
  */
 export function registerWindowControls<E, I>(
   ipc: IpcMainLike<E, I>,
@@ -319,7 +330,7 @@ export function registerWindowControls<E, I>(
     const win = windowFromEvent(event)
     if (!win) return
     const fullscreen = Boolean(flag)
-    if (fullscreen) capturePreFullscreenBounds(win)
+    if (fullscreen) captureTargetPreFullscreenBounds(win)
     win.setFullScreen(fullscreen)
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.toggleFullscreen, (event) => {
@@ -329,8 +340,8 @@ export function registerWindowControls<E, I>(
     // is still active. A saved pre-fullscreen rectangle proves this window is
     // in that cycle, so treat toggle as an exit instead of recapturing the
     // fullscreen-sized bounds and requesting fullscreen again.
-    const next = !win.isFullScreen() && !preFullscreenBounds.has(win)
-    if (next) capturePreFullscreenBounds(win)
+    const next = !win.isFullScreen() && !targetHasPreFullscreenBounds(win)
+    if (next) captureTargetPreFullscreenBounds(win)
     win.setFullScreen(next)
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.setSize, (event, width, height) => {

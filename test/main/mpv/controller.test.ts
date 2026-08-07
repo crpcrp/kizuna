@@ -437,6 +437,27 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(order).toEqual(['unlink', 'spawn', 'connect', 'unlink'])
   })
 
+  it('cleans the Linux endpoint and client when mpv exits after startup', async () => {
+    const tempDir = makeTempDir()
+    const client = new FakeClient()
+    const { controller, spawns } = makeFixture({
+      platform: 'linux',
+      tempDir,
+      client
+    })
+
+    await controller.start({ mpvPath: 'mpv', windowId: 1n })
+    const endpoint = client.connectedTo
+    expect(endpoint).toBeTruthy()
+    writeFileSync(endpoint!, '')
+
+    spawns[0].proc.emit('exit', 1, null)
+
+    expect(client.disposed).toBe(true)
+    expect(existsSync(endpoint!)).toBe(false)
+    expect(() => controller.dispose()).not.toThrow()
+  })
+
   it('cleans the Linux endpoint after mpv spawn fails', async () => {
     const tempDir = makeTempDir()
     const unlinkCalls: string[] = []

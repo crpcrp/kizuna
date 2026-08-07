@@ -21,7 +21,6 @@ import {
   applyNavigationGuards,
   applyReloadGuard,
   registerWindowControls,
-  restorePreFullscreenBounds,
   sendToWindow
 } from './windowOptions'
 import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
@@ -151,19 +150,11 @@ function createWindow(
     packagedHtmlPath: packagedRendererPath(__dirname)
   })
 
-  // Push fullscreen transitions to the renderer so it can hide/reveal the
-  // menu bar and bottom controls (see App.tsx). Both the window's own events
-  // (F11, OS controls) and our IPC-driven toggles land here.
-  uiOverlay.on('enter-full-screen', () =>
-    uiOverlay.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, true)
-  )
-  uiOverlay.on('leave-full-screen', () => {
-    // Restore the window's pre-fullscreen size/position (captured in
-    // windowOptions.ts's setFullscreen/toggleFullscreen handlers) only now,
-    // after the OS has actually finished leaving fullscreen — doing it
-    // earlier races the platform's own transition and can get overwritten.
-    restorePreFullscreenBounds(uiOverlay)
-    uiOverlay.webContents.send(WINDOW_CONTROL_CHANNELS.fullscreenChanged, false)
+  // The coordinator listens to the canonical native window (the Linux host,
+  // or the single Windows window), restores paired bounds after the native
+  // transition, and deduplicates the renderer-facing notification.
+  windows.onFullscreenChanged((fullscreen) => {
+    sendToWindow(uiOverlay, WINDOW_CONTROL_CHANNELS.fullscreenChanged, fullscreen)
   })
 
   void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings)
@@ -492,11 +483,7 @@ if (!gotSingleInstanceLock) {
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
   app.on('second-instance', (_event, argv, cwd) => {
-    const win = mainWindow
-    if (win && !win.isDestroyed()) {
-      if (win.isMinimized()) win.restore()
-      win.focus()
-    }
+    appWindows?.activate()
     const launchPath = videoPathFromArgv(argv, cwd)
     if (launchPath) launchPathBuffer.setPath(launchPath)
   })
@@ -525,7 +512,10 @@ if (!gotSingleInstanceLock) {
 
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
-      (event) => BrowserWindow.fromWebContents(event.sender),
+      (event) => {
+        const senderWindow = BrowserWindow.fromWebContents(event.sender)
+        return appWindows?.controlsFor(senderWindow) ?? null
+      },
       screen,
       () => mediaHistory?.flush()
     )

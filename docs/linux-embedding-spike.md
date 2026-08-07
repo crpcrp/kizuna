@@ -347,6 +347,40 @@ Record whether a normal close terminated mpv and removed the socket. Repeated
 IPC reconnect errors, orphaned mpv processes, and stale sockets are failures
 for the relevant checklist item.
 
+### Paired-window diagnostics
+
+The Linux implementation uses two application-owned X11 windows. `videoHost`
+is the opaque native/taskbar owner and mpv's `--wid` parent. `uiOverlay` is its
+transparent child and contains the only renderer, preload, controls, and DOM
+subtitles. Do not use WSLg's private wrapper XID to diagnose or repair the
+pair, and do not run `xwininfo`, `xdotool`, or `wmctrl` from the application at
+runtime.
+
+While Kizuna is idle and again while a local video is playing, capture the
+complete tree and the application log:
+
+```bash
+xwininfo -root -tree | tee ~/kizuna-xwininfo-idle.txt
+xwininfo -root -tree | tee ~/kizuna-xwininfo-playback.txt
+grep -nEi 'mpv|ipc|socket|wid|x11|fullscreen|resize|error|unhandled' \
+  ~/kizuna-linux-spike.log
+```
+
+The evidence must identify the two Kizuna windows, the mpv child below the
+opaque host, and the overlay above it. Record the tested commit, whether the
+checkout was on the Linux filesystem or under `/mnt/<drive>`, Ubuntu/Electron/
+mpv versions, the complete `glxinfo -B`, and screenshots or a short recording
+of movement, continuous edge/corner resizing, monitor/DPI changes, fullscreen,
+mini-player, and always-on-top mini-player. Also record Alt+Tab/taskbar entry
+count and whether a second launch restores and focuses the overlay without
+raising Kizuna above unrelated applications.
+
+After closing from normal, fullscreen, and mini-player states, repeat the
+process/socket checks above. Any detached overlay, persistent bounds offset,
+second logical taskbar entry, orphan mpv process, or stale
+`kizuna-mpv-*.sock` is a failed observation for this development spike and
+must be recorded rather than hidden by a runtime workaround.
+
 ## 8. Environment and version evidence
 
 Record the following in the PR or test result. Include the complete output from
