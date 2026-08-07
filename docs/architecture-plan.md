@@ -30,16 +30,16 @@ Subtitle tracks are extracted and rendered separately in the DOM so their text
 can be selected, tokenized, looked up, and styled by knowledge level.
 
 `src/main/windowPair.ts` owns the platform-specific window lifecycle. On
-Linux, `videoHost` is the single canonical owner of native position, size,
-fullscreen, and taskbar surfaces; `uiOverlay` mirrors its bounds and remains
-the only renderer/focus target. Host move/resize events are coalesced into one
-trailing synchronization, and programmatic writes are guarded so mirroring
-does not recurse. Fullscreen is initiated only on the host, restored from one
-saved pre-fullscreen rectangle after the native leave event, and reported to
-the renderer once per logical transition. Mini-player bounds and requested
-always-on-top state are applied to both sides as one operation. The parent
-relationship remains the normal stacking mechanism; always-on-top is not used
-for ordinary Linux playback.
+Linux, `uiOverlay` owns normal user-driven position and size because its DOM
+contains the native title-bar drag region and interactive resize border;
+`videoHost` owns native fullscreen and taskbar surfaces. Move/resize events are
+coalesced and synchronized from whichever side actually changed, while
+programmatic writes are guarded so mirroring does not recurse. Fullscreen is
+initiated only on the host, restored from one saved pre-fullscreen rectangle
+after the native leave event, and reported to the renderer once per logical
+transition. Mini-player bounds and requested always-on-top state are applied to
+both sides as one operation. The parent relationship remains the normal
+stacking mechanism; always-on-top is not used for ordinary Linux playback.
 
 Windows continues to use the same coordinator interface backed by its one
 transparent BrowserWindow, so window-control IPC does not duplicate platform
