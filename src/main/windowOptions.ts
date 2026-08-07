@@ -43,9 +43,9 @@ export function getMainWindowOptions(preloadPath: string): BrowserWindowConstruc
 }
 
 /**
- * Options for Linux's opaque mpv host. The host deliberately has no preload:
- * it never loads the Kizuna renderer and exists only as the X11 parent named by
- * mpv's `--wid` argument. It stays hidden until the overlay has finished
+ * Options for Linux's opaque mpv host. The host deliberately loads no
+ * document: it is a bare X11 `--wid` target, and its black background is the
+ * video's letterbox colour. It stays hidden until the overlay has finished
  * loading, so startup cannot expose an unpainted host.
  */
 export function getLinuxVideoHostOptions(): BrowserWindowConstructorOptions {
