@@ -20,6 +20,7 @@
     "resources": "node scripts/fetch-resources.mjs",
     "notices": "node scripts/generate-notices.mjs",
     "test": "node scripts/run-tests.mjs",
+    "test:linux-visibility": "npm run build && node scripts/linux-visibility-test.mjs",
     "test:watch": "vitest",
     "postinstall": "install-electron && electron-rebuild -f -w better-sqlite3",
     "dist": "npm run notices && electron-vite build && electron-builder --win nsis --publish never"

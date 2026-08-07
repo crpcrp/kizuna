@@ -5,10 +5,11 @@ Kizuna X11/XWayland embedding spike. It targets Ubuntu 24.04 x64 inside WSL2
 with WSLg on a Windows host. Linux support is experimental and unreleased: this
 setup does not produce a Linux package or a supported download.
 
-The commands below stage system-installed executables into Kizuna's existing
-gitignored `resources/` layout. They are for the spike only. **Do not run
-`npm run resources` on Linux during this spike.** The current lock file contains
-Windows binaries and remains the Windows release lock.
+Unpackaged Linux builds resolve system-installed executables under `/usr/bin`.
+The shared-checkout launcher may still stage them in its isolated resources
+directory for compatibility. **Do not run `npm run resources` on Linux.** The
+current lock file contains Windows binaries and remains the Windows release
+lock.
 
 ## 1. Prerequisites
 
@@ -89,6 +90,22 @@ glxinfo -B
 Save the complete `glxinfo -B` output. It identifies the renderer and makes it
 possible to distinguish GPU-backed WSLg from software rendering.
 
+On recent WSL builds, also verify that `/mnt/shared_memory` exists:
+
+```bash
+test -d /mnt/shared_memory || {
+  echo 'WSLg shared memory is missing; GUI windows may be stuck in [WARN:COPY MODE].' >&2
+  exit 1
+}
+```
+
+If it is missing and every GUI program has a taskbar icon but no visible
+window, stop testing Kizuna on the WSLg desktop. That is the upstream WSLg
+[COPY MODE regression](https://github.com/microsoft/wslg/issues/1456), and a
+standalone `xeyes` failure proves the display baseline is broken before Kizuna
+starts. The private-X11 acceptance test below remains usable to distinguish
+that host fault from Kizuna's own composition.
+
 ## 3. Install development and runtime dependencies
 
 These are the Ubuntu 24.04 packages needed by Electron, native Node modules,
@@ -135,6 +152,8 @@ sudo apt-get install -y \
   mecab \
   mecab-ipadic-utf8 \
   yt-dlp
+
+sudo apt-get install -y xvfb xcompmgr xauth x11-utils
 ```
 
 Install Node.js 24 inside WSL. Do not use the Windows `node.exe` from the
@@ -187,7 +206,12 @@ case "$PWD" in
 esac
 ```
 
-## 5. Stage Linux runtime resources
+## 5. Optional compatibility resource staging
+
+This section is no longer required for a normal Linux checkout: development
+builds use `mpv`, `ffmpeg`, `ffprobe`, and `mecab` from `/usr/bin`. Keep it only for
+the shared-checkout launcher or older commits which still require the mirrored
+resource layout.
 
 Run this from the repository root. It creates the existing resource folders
 and links the system executables to the exact extensionless Linux paths used by
@@ -270,24 +294,24 @@ existing path that points somewhere else, stop and inspect the diagnostic
 output. Do not replace the path blindly: the staging procedure must not
 overwrite a real user file.
 
-## 6. Verify staged runtimes
+## 6. Verify Linux runtimes
 
-Run each version check through the staged path, not through an unqualified
-command. The output is part of the environment evidence.
+Run each version check through `PATH`. The output is part of the environment
+evidence.
 
 ```bash
-resources/mpv/mpv --version
-resources/ffmpeg/ffmpeg -version
-resources/ffmpeg/ffprobe -version
-resources/mecab/mecab -v
-resources/yt-dlp/yt-dlp --version
+mpv --version
+ffmpeg -version
+ffprobe -version
+mecab -v
+yt-dlp --version
 ```
 
 Run a Japanese MeCab smoke test with the staged dictionary:
 
 ```bash
 printf '日本語を勉強します。\n' \
-  | resources/mecab/mecab -d resources/mecab/ipadic
+  | mecab -d /var/lib/mecab/dic/debian
 ```
 
 Use a real local MKV or MP4 to verify standalone mpv through X11/XWayland
@@ -295,10 +319,9 @@ before starting Electron. Replace the example path with an absolute path to a
 file inside the Linux filesystem:
 
 ```bash
-resources/mpv/mpv \
+mpv \
   --no-config \
-  --vo=gpu \
-  --gpu-context=x11egl \
+  --vo=x11 \
   --force-window=yes \
   "/home/<linux-user>/Videos/example.mkv"
 ```
@@ -317,7 +340,16 @@ npm run typecheck
 npm run lint
 npm run format:check
 npm test
+npm run test:linux-visibility
 ```
+
+The visibility command builds Kizuna, creates a deterministic moving video,
+launches real Electron and mpv on an authenticated private Xvfb display, and
+captures the final desktop pixels. It fails on a black or frozen video area,
+missing Settings/play controls, a modal which is not actually visible,
+duplicated or moving window geometry, and flicker after the video reaches a
+static frame. A successful JSON result is programmatic evidence; it does not
+infer visibility from process health or DOM state.
 
 Start the development app and save the terminal output. Keep this process
 running while completing the manual checklist.
@@ -422,15 +454,20 @@ passed from unit tests alone.
 
 ## 10. Result
 
-Complete this section only after the full WSLg checklist has been run with real
-mpv and a real local video. This implementation slice intentionally leaves the
-result blank.
+Result recorded 2026-08-07 on Ubuntu 24.04, Electron 43, mpv 0.37, FFmpeg 6.1,
+Xvfb with xcompmgr, and the production Electron build:
 
-- [ ] **GO:** X11/XWayland embedding works and the existing playback
-  architecture can be extended.
+- [x] **GO:** X11 embedding works. The automated capture contained moving
+  video (6.85% sampled pixels changed), strongly saturated test-video pixels
+  (77.9%), visible Settings and play controls, a visibly composed Settings
+  modal (99.9% central pixel change), exactly two coordinated application
+  surfaces with one embedded mpv child, and zero changed pixels across three
+  post-playback stability samples.
 - [ ] **NO-GO:** embedding fails; record the exact failed checklist items and
   link the logs from the PR.
 
 Failed checklist items:
 
-Logs or attachments:
+Logs or attachments: run `npm run test:linux-visibility` to reproduce the JSON
+evidence. WSLg on the recorded host separately failed the `xeyes` baseline due
+to missing `/mnt/shared_memory`; that host result is not attributed to Kizuna.

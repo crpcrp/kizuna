@@ -79,6 +79,22 @@ export function resolveBinaryPaths({
   appRoot,
   platform = process.platform
 }: ResolveBinaryPathsOptions): BinaryPaths {
+  // Linux development uses Ubuntu's distribution packages under /usr/bin. The checked-in
+  // resource lock currently stages Windows binaries only, and trying to join
+  // extensionless names under that tree leaves every Linux checkout pointing
+  // at files which cannot exist. Packaged Linux builds retain the mirrored
+  // resources layout so a future AppImage/deb remains self-contained.
+  if (platform === 'linux' && !isPackaged) {
+    return {
+      mpvPath: '/usr/bin/mpv',
+      ffprobePath: '/usr/bin/ffprobe',
+      ffmpegPath: '/usr/bin/ffmpeg',
+      mecabPath: '/usr/bin/mecab',
+      ipadicDir: '/var/lib/mecab/dic/debian',
+      unidicDir: '/usr/share/mecab/dic/unidic',
+      ytdlpPath: '/usr/bin/yt-dlp'
+    }
+  }
   const executable = (name: string): string => executableName(name, platform)
   const base = isPackaged ? resourcesPath : join(appRoot, 'resources')
   return {

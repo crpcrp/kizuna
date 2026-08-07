@@ -38,6 +38,7 @@ class FakeWindow {
     this.emit(value ? 'enter-full-screen' : 'leave-full-screen')
   })
   readonly setAlwaysOnTop = vi.fn()
+  readonly setShape = vi.fn()
   readonly setBounds = vi.fn((bounds: { x: number; y: number; width: number; height: number }) => {
     this.bounds = { ...bounds }
     this.emit('move')
@@ -224,6 +225,35 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.setBounds).toHaveBeenCalledWith(bounds)
     expect(host.bounds).toEqual(bounds)
     expect(overlay.bounds).toEqual(bounds)
+  })
+
+  it('shapes only the Linux renderer overlay', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+    const rects = [{ x: 0, y: 0, width: 1280, height: 64 }]
+
+    windows.coordinator.setShape(rects)
+
+    expect(overlay.setShape).toHaveBeenCalledWith(rects)
+    expect(host.setShape).not.toHaveBeenCalled()
+  })
+
+  it('does not shape the proven single-window Windows composition', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+
+    windows.coordinator.setShape([{ x: 0, y: 0, width: 100, height: 100 }])
+
+    expect(factory.created[0].setShape).not.toHaveBeenCalled()
   })
 
   it('coalesces move and resize events and ends at the latest host bounds', () => {

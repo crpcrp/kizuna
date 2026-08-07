@@ -32,6 +32,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       onFullscreenChange: vi.fn(() => listenerCleanup),
       setSize: vi.fn(),
       setAlwaysOnTop: vi.fn(),
+      setShape: vi.fn(),
       getBounds: vi.fn(async () => null),
       setBounds: vi.fn(async () => null)
     },

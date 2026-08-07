@@ -24,15 +24,18 @@ Download links for published Windows builds are available on the
 
 ## Requirements
 
-Kizuna currently supports Windows x64. Building from source requires Node.js 24
-or newer, npm, and local copies of mpv, FFmpeg/ffprobe, and MeCab under
-`resources/`.
+Kizuna currently publishes Windows x64 builds. Building from source requires
+Node.js 24 or newer and npm. Windows uses local runtime copies under
+`resources/`; unpackaged Linux development uses the distribution's `mpv`,
+FFmpeg/ffprobe, and MeCab commands.
 
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
 version checks.
 
-Linux development is experimental and unreleased; see the [Linux embedding
-spike setup](docs/linux-embedding-spike.md) for WSLg validation instructions.
+Linux development is experimental and unreleased, but the X11 port now has a
+real-pixel automated visibility test. See the [Linux embedding setup and
+evidence](docs/linux-embedding-spike.md). To test the same Windows checkout in
+a full Ubuntu desktop, use the [one-checkout VM setup](docs/vm-development.md).
 
 ## Optional services
 
@@ -86,6 +89,13 @@ npm test
 
 Use `npm run test:watch` while iterating locally. CI runs the standard checks
 for pull requests.
+
+On Linux, install Xvfb and xcompmgr, then run the end-to-end pixel acceptance
+test:
+
+```bash
+npm run test:linux-visibility
+```
 
 ## Build and packaging
 

@@ -38,6 +38,7 @@ import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
+import { useLinuxWindowShape } from './state/useLinuxWindowShape'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
@@ -81,6 +82,7 @@ export default function App({
   // fine since those hooks only ever call through the bridge from inside an
   // effect, which never runs server-side.
   const kizuna = typeof window === 'undefined' ? ({} as unknown as KizunaApi) : window.kizuna
+  useLinuxWindowShape(kizuna.windowControls)
   const [state, dispatch] = useReducer(playerReducer, initialState)
   const playerAdapter = useMemo(() => buildPlayerAdapter(dispatch), [dispatch])
   const pausedRef = useLatestRef(state.paused)

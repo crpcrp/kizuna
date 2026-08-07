@@ -146,9 +146,8 @@ describe('buildMpvArgs', () => {
       windowId,
       ipcEndpoint: '/test/kizuna-mpv.sock'
     })
-    expect(args).toEqual(
-      expect.arrayContaining(['--vo=gpu', '--gpu-context=x11egl', '--wid=268435457'])
-    )
+    expect(args).toEqual(expect.arrayContaining(['--vo=x11', '--wid=268435457']))
+    expect(args).not.toContain('--gpu-context=x11egl')
     expect(args).not.toContain('--show-in-taskbar=no')
   })
 

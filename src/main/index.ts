@@ -142,14 +142,6 @@ function createWindow(
   // In `dev`, electron-vite serves the renderer over HTTP (with HMR).
   // In a packaged/built app, load the compiled HTML from disk.
   const devUrl = process.env['ELECTRON_RENDERER_URL']
-  // Linux keeps both windows hidden until the renderer has finished its first
-  // document load. Windows retains BrowserWindow's existing eager presentation.
-  presentAppWindowSet(windows)
-  loadRendererWindow(uiOverlay, {
-    devUrl,
-    packagedHtmlPath: packagedRendererPath(__dirname)
-  })
-
   // The coordinator listens to the canonical native window (the Linux host,
   // or the single Windows window), restores paired bounds after the native
   // transition, and deduplicates the renderer-facing notification.
@@ -157,7 +149,19 @@ function createWindow(
     sendToWindow(uiOverlay, WINDOW_CONTROL_CHANNELS.fullscreenChanged, fullscreen)
   })
 
-  void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings)
+  // Do not let renderer effects invoke player channels before their handlers
+  // exist. The windows remain hidden during mpv's short socket startup; a
+  // failed mpv start is caught inside startPlayer and still loads a usable UI.
+  void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings).then(() => {
+    if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
+    // Linux keeps both windows hidden until the renderer has finished its first
+    // document load. Windows retains BrowserWindow's existing eager presentation.
+    presentAppWindowSet(windows)
+    loadRendererWindow(uiOverlay, {
+      devUrl,
+      packagedHtmlPath: packagedRendererPath(__dirname)
+    })
+  })
 }
 
 /**

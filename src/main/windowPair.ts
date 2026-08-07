@@ -7,6 +7,7 @@ import {
   type WindowBounds,
   type WindowControlTarget
 } from './windowOptions'
+import type { WindowShapeRect } from '../shared/windowShape'
 
 /** Events used by the coordinator; the callbacks intentionally ignore Electron's event object. */
 type WindowPairEvent =
@@ -197,6 +198,14 @@ export class AppWindowCoordinator implements WindowControlTarget {
   /** Mini-player always-on-top applies to both native sides on Linux. */
   setAlwaysOnTop(flag: boolean): void {
     this.forEachDistinctLive((window) => this.callSafely(window, () => window.setAlwaysOnTop(flag)))
+  }
+
+  /** Shapes only Linux's renderer overlay; Windows keeps its proven full window. */
+  setShape(rects: WindowShapeRect[]): void {
+    if (!this.paired || !this.isLive(this.uiOverlay)) return
+    const setShape = this.uiOverlay.setShape
+    if (!setShape) return
+    this.callSafely(this.uiOverlay, () => setShape.call(this.uiOverlay, rects))
   }
 
   /** Closes the pair once and cancels any pending geometry callback. */

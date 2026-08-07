@@ -67,6 +67,25 @@ describe('resolveBinaryPaths', () => {
       ytdlpPath: join('/opt/kizuna/resources', 'yt-dlp', 'yt-dlp')
     })
   })
+
+  it('uses distribution tools for an unpackaged Linux checkout', () => {
+    expect(
+      resolveBinaryPaths({
+        isPackaged: false,
+        resourcesPath: '/ignored',
+        appRoot: '/home/user/kizuna',
+        platform: 'linux'
+      })
+    ).toEqual({
+      mpvPath: '/usr/bin/mpv',
+      ffprobePath: '/usr/bin/ffprobe',
+      ffmpegPath: '/usr/bin/ffmpeg',
+      mecabPath: '/usr/bin/mecab',
+      ipadicDir: '/var/lib/mecab/dic/debian',
+      unidicDir: '/usr/share/mecab/dic/unidic',
+      ytdlpPath: '/usr/bin/yt-dlp'
+    })
+  })
 })
 
 describe('requiredPackagedResources', () => {

@@ -204,12 +204,12 @@ export function buildMpvArgs({
           `--script-opts-append=ytdl_hook-ytdl_path=${ytdlpPath}`,
           '--script-opts-append=ytdl_hook-use_manifests=no'
         ]
-  // Linux embedding runs through Electron's X11 path under WSLg/XWayland.
-  // Make mpv use the matching EGL video context explicitly; otherwise its
-  // default can select a context that cannot render into Electron's X11 child
-  // window. Do not pass newer taskbar options here: Ubuntu 24.04's mpv 0.37
-  // does not implement them and exits before creating the IPC socket.
-  const linuxEmbeddingArgs = platform === 'linux' ? ['--vo=gpu', '--gpu-context=x11egl'] : []
+  // Linux embedding runs through Electron's X11 path under X11/XWayland.
+  // The legacy X11 output is intentionally the correctness baseline: unlike
+  // x11egl it renders in software-only/Xvfb sessions and on machines whose EGL
+  // context initializes but presents only black frames. A future accelerated
+  // path must pass the real-pixel visibility test before replacing it.
+  const linuxEmbeddingArgs = platform === 'linux' ? ['--vo=x11'] : []
   return [
     ...configArgs,
     ...sanitizeExtraMpvArgs(extraArgs),

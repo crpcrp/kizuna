@@ -12,6 +12,7 @@ import {
   type SetWindowBoundsRequest,
   type WindowBounds
 } from '../shared/windowBounds'
+import { normalizeWindowShapeRects, type WindowShapeRect } from '../shared/windowShape'
 
 export type { WindowBounds } from '../shared/windowBounds'
 
@@ -203,6 +204,7 @@ export interface WindowControlTarget {
   getBounds(): WindowBounds
   setBounds(bounds: WindowBounds): void
   setAlwaysOnTop(flag: boolean): void
+  setShape?(rects: WindowShapeRect[]): void
   /** Optional pair-owned fullscreen bookkeeping hooks. */
   capturePreFullscreenBounds?(): void
   hasPreFullscreenBounds?(): boolean
@@ -352,6 +354,13 @@ export function registerWindowControls<E, I>(
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, (event, flag) => {
     windowFromEvent(event)?.setAlwaysOnTop(Boolean(flag))
+  })
+  ipc.on(WINDOW_CONTROL_CHANNELS.setShape, (event, value) => {
+    const win = windowFromEvent(event)
+    if (!win?.setShape) return
+    const bounds = win.getBounds()
+    const rects = normalizeWindowShapeRects(value, bounds.width, bounds.height)
+    if (rects) win.setShape(rects)
   })
   ipc.handle(WINDOW_CONTROL_CHANNELS.getBounds, (event) => {
     const win = windowFromEvent(event)
