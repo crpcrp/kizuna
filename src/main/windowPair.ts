@@ -68,10 +68,11 @@ function sameBounds(left: WindowBounds, right: WindowBounds): boolean {
 }
 
 /**
- * Owns every logical window mutation. Linux uses `videoHost` as the canonical
- * bounds/fullscreen/taskbar owner and mirrors its rectangle to `uiOverlay`.
- * Windows still uses one BrowserWindow, so every operation reaches that native
- * window once.
+ * Owns every logical window mutation. On Linux, native move/resize events are
+ * synchronized from the side that actually changed: normal title-bar dragging
+ * and edge resizing originate in `uiOverlay`, while native fullscreen changes
+ * originate in `videoHost`. Windows still uses one BrowserWindow, so every
+ * operation reaches that native window once.
  */
 export class AppWindowCoordinator implements WindowControlTarget {
   private readonly videoHost: ManagedWindow
@@ -84,6 +85,8 @@ export class AppWindowCoordinator implements WindowControlTarget {
   private syncScheduled = false
   private syncTimer: unknown
   private syncing = false
+  private pendingBoundsSource: ManagedWindow | undefined
+  private readonly expectedProgrammaticBounds = new WeakMap<ManagedWindow, WindowBounds>()
   private preFullscreenBounds: WindowBounds | undefined
   private fullscreenExitRequested = false
   private reenterAfterFullscreenLeave = false
@@ -107,13 +110,13 @@ export class AppWindowCoordinator implements WindowControlTarget {
     this.closePair = attachPairCloseHandlers(videoHost, uiOverlay)
 
     if (paired) {
-      videoHost.on('move', this.queueBoundsSync)
-      videoHost.on('resize', this.queueBoundsSync)
-      // A child move/resize should not become a second source of truth. Queue a
-      // correction from the host instead, which also handles a compositor
-      // update that reaches the child before the parent's event.
-      uiOverlay.on('move', this.queueBoundsSync)
-      uiOverlay.on('resize', this.queueBoundsSync)
+      videoHost.on('move', this.queueHostBoundsSync)
+      videoHost.on('resize', this.queueHostBoundsSync)
+      // The renderer's native drag region and resize border belong to the
+      // overlay. Propagate those user-driven changes to the host instead of
+      // snapping the overlay back to the host's previous rectangle.
+      uiOverlay.on('move', this.queueOverlayBoundsSync)
+      uiOverlay.on('resize', this.queueOverlayBoundsSync)
     }
 
     // Only the canonical host participates in native fullscreen. Listening to
@@ -123,15 +126,17 @@ export class AppWindowCoordinator implements WindowControlTarget {
     videoHost.on('leave-full-screen', () => this.handleFullscreenChanged(false))
   }
 
-  /** Returns the bounds of the canonical host, falling back during teardown. */
+  /** Returns the bounds of the active geometry owner, falling back during teardown. */
   getBounds(): WindowBounds {
-    return this.readBounds(this.videoHost) ?? this.readBounds(this.uiOverlay) ?? emptyBounds()
+    const primary = this.isFullScreen() ? this.videoHost : this.uiOverlay
+    const fallback = primary === this.videoHost ? this.uiOverlay : this.videoHost
+    return this.readBounds(primary) ?? this.readBounds(fallback) ?? emptyBounds()
   }
 
   /** Applies one logical rectangle to the host and overlay, if both are live. */
   setBounds(bounds: WindowBounds): void {
     this.synchronizePair(bounds)
-    this.queueBoundsSync()
+    this.queueBoundsSync(this.isFullScreen() ? this.videoHost : this.uiOverlay)
   }
 
   /** Minimizes the logical pair, without calling the same BrowserWindow twice. */
@@ -229,18 +234,36 @@ export class AppWindowCoordinator implements WindowControlTarget {
     return () => this.fullscreenListeners.delete(listener)
   }
 
-  private readonly queueBoundsSync = (): void => {
-    if (!this.paired || this.syncing || this.syncScheduled) return
+  private readonly queueHostBoundsSync = (): void => {
+    this.queueBoundsSync(this.videoHost)
+  }
+
+  private readonly queueOverlayBoundsSync = (): void => {
+    this.queueBoundsSync(this.uiOverlay)
+  }
+
+  private queueBoundsSync(source: ManagedWindow): void {
+    if (!this.paired || this.syncing) return
+    const current = this.readBounds(source)
+    const expected = this.expectedProgrammaticBounds.get(source)
+    if (current && expected && sameBounds(current, expected)) return
+    if (expected) this.expectedProgrammaticBounds.delete(source)
+    // Fullscreen is a native transition owned by the host. Ignore any delayed
+    // overlay geometry event from the preceding windowed state during it.
+    this.pendingBoundsSource = this.isFullScreen() ? this.videoHost : source
+    if (this.syncScheduled) return
     this.syncScheduled = true
     this.syncTimer = this.setTimeoutFn(() => {
       this.syncScheduled = false
       this.syncTimer = undefined
-      this.synchronizeFromHost()
+      const pendingSource = this.pendingBoundsSource
+      this.pendingBoundsSource = undefined
+      if (pendingSource) this.synchronizeFrom(pendingSource)
     }, 0)
   }
 
-  private synchronizeFromHost(): void {
-    const bounds = this.readBounds(this.videoHost)
+  private synchronizeFrom(source: ManagedWindow): void {
+    const bounds = this.readBounds(source)
     if (!bounds) return
     this.synchronizePair(bounds, false)
   }
@@ -253,19 +276,23 @@ export class AppWindowCoordinator implements WindowControlTarget {
     } finally {
       this.syncing = false
     }
-    if (schedule) this.queueBoundsSync()
+    if (schedule) this.queueBoundsSync(this.isFullScreen() ? this.videoHost : this.uiOverlay)
   }
 
   private setIfDifferent(window: ManagedWindow, bounds: WindowBounds): void {
     const current = this.readBounds(window)
     if (!current || sameBounds(current, bounds) || !this.isLive(window)) return
+    // Electron may emit move/resize asynchronously after setBounds returns.
+    // Remember the requested rectangle so that delayed programmatic events do
+    // not overwrite a newer user drag/resize source in the coalesced queue.
+    this.expectedProgrammaticBounds.set(window, { ...bounds })
     this.callSafely(window, () => window.setBounds(bounds))
   }
 
   private handleFullscreenChanged(fullscreen: boolean): void {
     if (fullscreen) {
       this.fullscreenExitRequested = false
-      this.synchronizeFromHost()
+      this.synchronizeFrom(this.videoHost)
     } else {
       const reenter = this.reenterAfterFullscreenLeave
       this.reenterAfterFullscreenLeave = false
@@ -327,6 +354,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
     this.clearTimeoutFn(this.syncTimer)
     this.syncScheduled = false
     this.syncTimer = undefined
+    this.pendingBoundsSource = undefined
   }
 }
 

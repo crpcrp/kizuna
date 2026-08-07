@@ -241,6 +241,84 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(callbacks).toHaveLength(1)
   })
 
+  it('moves the host when the interactive overlay is dragged', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      setTimeoutFn: (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      clearTimeoutFn: vi.fn()
+    })
+    const [host, overlay] = factory.created
+    overlay.bounds = { x: 240, y: 260, width: 1280, height: 720 }
+
+    overlay.emit('move')
+    callbacks[0]()
+
+    expect(host.bounds).toEqual(overlay.bounds)
+    expect(host.setBounds).toHaveBeenCalledTimes(1)
+    expect(callbacks).toHaveLength(1)
+  })
+
+  it('resizes the host when the interactive overlay is edge-resized', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      setTimeoutFn: (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      clearTimeoutFn: vi.fn()
+    })
+    const [host, overlay] = factory.created
+    overlay.bounds = { x: 30, y: 40, width: 1040, height: 680 }
+
+    overlay.emit('resize')
+    callbacks[0]()
+
+    expect(host.bounds).toEqual(overlay.bounds)
+    expect(host.setBounds).toHaveBeenCalledTimes(1)
+    expect(callbacks).toHaveLength(1)
+  })
+
+  it('ignores a delayed host event from the previous overlay synchronization', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      setTimeoutFn: (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      clearTimeoutFn: vi.fn()
+    })
+    const [host, overlay] = factory.created
+    overlay.bounds = { x: 100, y: 120, width: 1280, height: 720 }
+    overlay.emit('move')
+    callbacks[0]()
+
+    overlay.bounds = { x: 300, y: 320, width: 1280, height: 720 }
+    overlay.emit('move')
+    // Electron can deliver the host event caused by the first synchronization
+    // after the next user-driven overlay event has already been queued.
+    host.emit('move')
+    callbacks[1]()
+
+    expect(host.bounds).toEqual(overlay.bounds)
+    expect(host.setBounds).toHaveBeenCalledTimes(2)
+    expect(callbacks).toHaveLength(2)
+  })
+
   it('resolves renderer IPC to the pair and tolerates either side being destroyed', () => {
     const factory = makeWindowFactory()
     const windows = createAppWindowSet({
@@ -306,6 +384,30 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.bounds).toEqual(original)
     expect(host.setBounds).toHaveBeenCalledTimes(1)
     expect(overlay.setBounds).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the host authoritative for geometry events during fullscreen', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      setTimeoutFn: (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      clearTimeoutFn: vi.fn()
+    })
+    const [host, overlay] = factory.created
+    windows.coordinator.setFullScreen(true)
+    host.bounds = { x: 0, y: 0, width: 1920, height: 1080 }
+    overlay.bounds = { x: 30, y: 40, width: 1280, height: 720 }
+
+    overlay.emit('resize')
+    callbacks[0]()
+
+    expect(overlay.bounds).toEqual(host.bounds)
   })
 
   it('keeps the original bounds across a rapid fullscreen exit and re-entry', () => {
