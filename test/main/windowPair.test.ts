@@ -554,10 +554,15 @@ describe('Linux window pair presentation and shutdown', () => {
     })
     const [host, overlay] = factory.created
 
-    presentAppWindowSet(windows, undefined, (callback) => {
-      callbacks.push(callback)
-      return callback
-    }, vi.fn())
+    presentAppWindowSet(
+      windows,
+      undefined,
+      (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      vi.fn()
+    )
 
     overlay.emit('ready-to-show')
     overlay.emitDidFinishLoad()
@@ -604,10 +609,15 @@ describe('Linux window pair presentation and shutdown', () => {
     host.destroyed = true
     overlay.destroyed = true
 
-    presentAppWindowSet(windows, undefined, (callback) => {
-      callbacks.push(callback)
-      return callback
-    }, vi.fn())
+    presentAppWindowSet(
+      windows,
+      undefined,
+      (callback) => {
+        callbacks.push(callback)
+        return callback
+      },
+      vi.fn()
+    )
 
     overlay.emit('ready-to-show')
     callbacks[0]()
