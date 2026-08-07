@@ -1,8 +1,8 @@
-// Construction options + window-control IPC wiring for the app's single
-// transparent frameless window (spike-validated; see docs/architecture-plan.md,
-// "Window model — SINGLE transparent window").
+// Construction options + window-control IPC wiring. Windows keeps one
+// transparent frameless window; Linux uses the paired options below so mpv can
+// own an opaque host while the DOM stays in a transparent child overlay.
 
-import type { BrowserWindowConstructorOptions } from 'electron'
+import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import type { IpcMainLike } from './ipc'
 import { PRODUCT_NAME } from '../shared/appIdentity'
 import { WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
@@ -37,6 +37,57 @@ export function getMainWindowOptions(preloadPath: string): BrowserWindowConstruc
       // OS-level Chromium sandbox on: the renderer holds a compromised bug to
       // the IPC surface instead of the user's full privileges. The preload only
       // uses contextBridge/ipcRenderer/webUtils, all of which work sandboxed.
+      sandbox: true
+    }
+  }
+}
+
+/**
+ * Options for Linux's opaque mpv host. The host deliberately has no preload:
+ * it never loads the Kizuna renderer and exists only as the X11 parent named by
+ * mpv's `--wid` argument. It stays hidden until the overlay has finished
+ * loading, so startup cannot expose an unpainted host.
+ */
+export function getLinuxVideoHostOptions(): BrowserWindowConstructorOptions {
+  return {
+    width: 1280,
+    height: 720,
+    title: PRODUCT_NAME,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#000000',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  }
+}
+
+/**
+ * Options for Linux's renderer-owning child. `parent` gives Electron ownership
+ * of the stacking relationship; `skipTaskbar` keeps the transparent child from
+ * becoming a second taskbar entry where the platform supports that distinction.
+ */
+export function getLinuxUiOverlayOptions(
+  preloadPath: string,
+  parent: BrowserWindow
+): BrowserWindowConstructorOptions {
+  return {
+    width: 1280,
+    height: 720,
+    title: PRODUCT_NAME,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    show: false,
+    parent,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: true
     }
   }
