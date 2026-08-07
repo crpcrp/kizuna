@@ -27,8 +27,10 @@ The test environment must also have:
   output, and a test video;
 - a current Windows GPU driver. WSLg can fall back to software rendering, but
   record which renderer was used in the evidence section below;
-- the repository cloned inside the Linux filesystem, such as
-  `~/src/kizuna`, **not** under `/mnt/c` or another mounted Windows path; and
+- either the repository cloned inside the Linux filesystem, such as
+  `~/src/kizuna`, for a manual Linux setup, or the shared-checkout launcher
+  from `docs/wsl-development.md`, which intentionally supports a Windows
+  path such as `/mnt/e/...` by bind-mounting Linux-native dependencies; and
 - an x64 environment. ARM64 is outside this spike.
 
 From an elevated PowerShell window, update WSL and verify the versions before

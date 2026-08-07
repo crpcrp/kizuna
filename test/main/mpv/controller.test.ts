@@ -116,15 +116,15 @@ describe('windowIdFromHandleBuffer', () => {
     expect(windowIdFromHandleBuffer(buf, 'win32')).toBe(658188n)
   })
 
-  it('reads a Linux X11 window ID without truncating its 64-bit value', () => {
-    const buf = Buffer.alloc(8)
-    buf.writeBigUInt64LE(0x0000000100000001n, 0)
-    expect(windowIdFromHandleBuffer(buf, 'linux')).toBe(0x0000000100000001n)
+  it('reads the 4-byte X11 window ID Electron returns on Linux', () => {
+    const buf = Buffer.alloc(4)
+    buf.writeUInt32LE(0x10000001, 0)
+    expect(windowIdFromHandleBuffer(buf, 'linux')).toBe(0x10000001n)
   })
 
   it('rejects a native handle buffer that is too small', () => {
-    expect(() => windowIdFromHandleBuffer(Buffer.alloc(7), 'linux')).toThrow(
-      'must contain at least 8 bytes'
+    expect(() => windowIdFromHandleBuffer(Buffer.alloc(3), 'linux')).toThrow(
+      'must contain at least 4 bytes'
     )
   })
 
@@ -137,17 +137,24 @@ describe('windowIdFromHandleBuffer', () => {
 
 describe('buildMpvArgs', () => {
   it('passes a decoded Linux X11 window ID to mpv unchanged', () => {
-    const handle = Buffer.alloc(8)
-    handle.writeBigUInt64LE(0x0000000100000001n, 0)
+    const handle = Buffer.alloc(4)
+    handle.writeUInt32LE(0x10000001, 0)
     const windowId = windowIdFromHandleBuffer(handle, 'linux')
 
-    expect(buildMpvArgs({ windowId, ipcEndpoint: '/test/kizuna-mpv.sock' })).toContain(
-      '--wid=4294967297'
+    const args = buildMpvArgs({
+      platform: 'linux',
+      windowId,
+      ipcEndpoint: '/test/kizuna-mpv.sock'
+    })
+    expect(args).toEqual(
+      expect.arrayContaining(['--vo=gpu', '--gpu-context=x11egl', '--wid=268435457'])
     )
+    expect(args).not.toContain('--show-in-taskbar=no')
   })
 
   it('produces the embedded-playback argv with subs disabled and config off by default', () => {
     const args = buildMpvArgs({
+      platform: 'win32',
       windowId: 658188n,
       ipcEndpoint: '\\\\.\\pipe\\kizuna-mpv-1'
     })
@@ -167,6 +174,7 @@ describe('buildMpvArgs', () => {
 
   it('emits --config=yes/--config-dir when a user config dir is given', () => {
     const args = buildMpvArgs({
+      platform: 'win32',
       windowId: 1n,
       ipcEndpoint: '\\\\.\\pipe\\p',
       userConfigDir: 'C:\\Users\\a\\AppData\\Roaming\\Kizuna\\mpv'
@@ -181,6 +189,7 @@ describe('buildMpvArgs', () => {
 
   it('inserts sanitized user extraArgs after the config block and before the forced args', () => {
     const args = buildMpvArgs({
+      platform: 'win32',
       windowId: 1n,
       ipcEndpoint: '\\\\.\\pipe\\p',
       userConfigDir: '/cfg',
@@ -205,6 +214,7 @@ describe('buildMpvArgs', () => {
 
   it('appends the ytdl hook args after the forced block when a yt-dlp path is given', () => {
     const args = buildMpvArgs({
+      platform: 'win32',
       windowId: 1n,
       ipcEndpoint: '\\\\.\\pipe\\p',
       ytdlpPath: 'C:\\app\\resources\\yt-dlp\\yt-dlp.exe'
@@ -227,7 +237,11 @@ describe('buildMpvArgs', () => {
   })
 
   it('omits the ytdl args entirely when no yt-dlp path is bundled', () => {
-    const args = buildMpvArgs({ windowId: 1n, ipcEndpoint: '\\\\.\\pipe\\p' })
+    const args = buildMpvArgs({
+      platform: 'win32',
+      windowId: 1n,
+      ipcEndpoint: '\\\\.\\pipe\\p'
+    })
     expect(args.some((arg) => arg.startsWith('--ytdl'))).toBe(false)
     expect(args.some((arg) => arg.includes('ytdl_hook'))).toBe(false)
     expect(args).not.toContain('--script-opts-append=ytdl_hook-use_manifests=no')
@@ -235,6 +249,7 @@ describe('buildMpvArgs', () => {
 
   it('drops embedding/config-owning and non---prefixed args from extraArgs', () => {
     const args = buildMpvArgs({
+      platform: 'win32',
       windowId: 1n,
       ipcEndpoint: '\\\\.\\pipe\\p',
       extraArgs: [
@@ -362,7 +377,9 @@ describe('MpvController (fake spawn + fake client)', () => {
     const pipePath = ipcArg?.slice('--input-ipc-server='.length)
     expect(pipePath).toMatch(/^\\\\\.\\pipe\\kizuna-mpv-/)
     expect(client.connectedTo).toBe(pipePath) // client dials the pipe mpv serves
-    expect(spawns[0].args).toEqual(buildMpvArgs({ windowId: 658188n, ipcEndpoint: pipePath! }))
+    expect(spawns[0].args).toEqual(
+      buildMpvArgs({ platform: 'win32', windowId: 658188n, ipcEndpoint: pipePath! })
+    )
     await expect(controller.start({ mpvPath: 'x', windowId: 1n })).rejects.toThrow(
       'already started'
     )
@@ -405,6 +422,9 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(endpoint).toBeTruthy()
     expect(endpoint?.startsWith(join(tempDir, 'kizuna-mpv-'))).toBe(true)
     expect(endpoint).toMatch(/\.sock$/)
+    expect(spawnedArgs[0]).toEqual(
+      buildMpvArgs({ platform: 'linux', windowId: 1n, ipcEndpoint: endpoint! })
+    )
     expect(spawnedArgs[0]).toContain('--input-ipc-server=' + endpoint)
     expect(order).toEqual(['unlink', 'spawn', 'connect'])
 

@@ -84,13 +84,11 @@ applyAppIdentity(app)
 
 configureLinuxX11(app)
 
-// The spike's GO verdict was reached with hardware acceleration disabled
-// (spike/main.ts): with Chromium's DirectComposition surface active, mpv's
-// `--wid` child window can be painted over. Transparency is the primary fix;
-// this ran alongside it for the whole spike, so we keep the validated combo.
-// mpv does its own GPU rendering — Chromium only draws the lightweight UI.
-// Must be called before app ready.
-app.disableHardwareAcceleration()
+// Chromium's DirectComposition surface can paint over mpv's `--wid` child
+// window on Windows, so the transparent-window setup disables Chromium
+// acceleration there. Linux needs Chromium's accelerated X11/WSLg compositor
+// to display the transparent Electron surface, so leave it enabled.
+if (process.platform === 'win32') app.disableHardwareAcceleration()
 
 // One controller for the app's lifetime; started/stopped alongside the
 // (currently single) main window.
@@ -491,18 +489,6 @@ function startIntegrationStatus(paths: BinaryPaths): void {
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
-  const handleBeforeQuit = createQuitCoordinator({
-    defaultSession: session.defaultSession,
-    controller,
-    flushHistory: () => mediaHistory?.flush(),
-    releasePowerSave: () => powerSave?.dispose(),
-    disposeSystemMedia: () => systemMedia?.dispose(),
-    cleanupUrlSubtitles: async () => {
-      await urlSubtitles?.cleanup()
-    },
-    appQuit: () => app.quit()
-  })
-
   const initialLaunchPath = videoPathFromArgv(process.argv, process.cwd())
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
@@ -519,6 +505,22 @@ if (!gotSingleInstanceLock) {
   ipcMain.on(LAUNCH_CHANNELS.rendererReady, () => launchPathBuffer.markReady())
 
   app.whenReady().then(() => {
+    // `session.defaultSession` can only be accessed after Electron is ready.
+    // Keep quit coordination setup here rather than during module evaluation,
+    // otherwise Linux (and other platforms) abort before the app can start.
+    const handleBeforeQuit = createQuitCoordinator({
+      defaultSession: session.defaultSession,
+      controller,
+      flushHistory: () => mediaHistory?.flush(),
+      releasePowerSave: () => powerSave?.dispose(),
+      disposeSystemMedia: () => systemMedia?.dispose(),
+      cleanupUrlSubtitles: async () => {
+        await urlSubtitles?.cleanup()
+      },
+      appQuit: () => app.quit()
+    })
+    app.on('before-quit', handleBeforeQuit)
+
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
       (event) => BrowserWindow.fromWebContents(event.sender),
@@ -573,8 +575,6 @@ if (!gotSingleInstanceLock) {
         createWindow(binaryPaths.mpvPath, ytdlpPath, mediaHistory, settings)
     })
   })
-
-  app.on('before-quit', handleBeforeQuit)
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

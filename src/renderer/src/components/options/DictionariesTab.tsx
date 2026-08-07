@@ -25,7 +25,7 @@ interface ImportStatus {
  */
 export function formatImportProgress(progress: ImportProgress | undefined): string | null {
   if (!progress || progress.total <= 0 || progress.done >= progress.total) return null
-  return `${progress.done.toLocaleString()} / ${progress.total.toLocaleString()} rows`
+  return `${progress.done.toLocaleString('en-US')} / ${progress.total.toLocaleString('en-US')} rows`
 }
 
 /** Maps the "Frequency dictionary" select's raw value ("" or a dict id

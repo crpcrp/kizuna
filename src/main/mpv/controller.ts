@@ -69,6 +69,8 @@ export type SetTimeoutFn = (cb: () => void, ms: number) => unknown
 export type ClearTimeoutFn = (handle: unknown) => void
 
 export interface BuildMpvArgsOptions {
+  /** Host windowing/video-output platform. */
+  platform: NodeJS.Platform
   /** Native window ID mpv should render into. */
   windowId: bigint | string
   /** Complete named-pipe or Unix-domain-socket endpoint for mpv IPC. */
@@ -180,6 +182,7 @@ export function sanitizeExtraMpvArgs(args: string[]): string[] {
  * user drops in can break the integration.
  */
 export function buildMpvArgs({
+  platform,
   windowId,
   ipcEndpoint,
   userConfigDir,
@@ -201,9 +204,16 @@ export function buildMpvArgs({
           `--script-opts-append=ytdl_hook-ytdl_path=${ytdlpPath}`,
           '--script-opts-append=ytdl_hook-use_manifests=no'
         ]
+  // Linux embedding runs through Electron's X11 path under WSLg/XWayland.
+  // Make mpv use the matching EGL video context explicitly; otherwise its
+  // default can select a context that cannot render into Electron's X11 child
+  // window. Do not pass newer taskbar options here: Ubuntu 24.04's mpv 0.37
+  // does not implement them and exits before creating the IPC socket.
+  const linuxEmbeddingArgs = platform === 'linux' ? ['--vo=gpu', '--gpu-context=x11egl'] : []
   return [
     ...configArgs,
     ...sanitizeExtraMpvArgs(extraArgs),
+    ...linuxEmbeddingArgs,
     `--wid=${windowId}`,
     `--input-ipc-server=${ipcEndpoint}`,
     '--idle=yes', // start with no file; wait for loadfile commands
@@ -338,7 +348,14 @@ export class MpvController {
     try {
       this.proc = this.spawnFn(
         mpvPath,
-        buildMpvArgs({ windowId, ipcEndpoint, userConfigDir, extraArgs, ytdlpPath })
+        buildMpvArgs({
+          platform: this.platform,
+          windowId,
+          ipcEndpoint,
+          userConfigDir,
+          extraArgs,
+          ytdlpPath
+        })
       )
       await this.client.connect(ipcEndpoint, connect)
     } catch (err) {
