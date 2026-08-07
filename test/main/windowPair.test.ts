@@ -11,6 +11,7 @@ type WindowEvent =
   | 'close'
   | 'closed'
   | 'ready-to-show'
+  | 'did-finish-load'
   | 'move'
   | 'resize'
   | 'enter-full-screen'
@@ -30,6 +31,7 @@ class FakeWindow {
     this.minimized = false
   })
   readonly show = vi.fn()
+  readonly moveTop = vi.fn()
   readonly focus = vi.fn()
   readonly setFullScreen = vi.fn((value: boolean) => {
     this.fullscreen = value
@@ -47,9 +49,18 @@ class FakeWindow {
       this.bounds = { ...bounds }
     }
   )
+  readonly webContentsListeners = new Set<() => void>()
   readonly webContents = {
-    on: vi.fn(),
-    once: vi.fn()
+    on: vi.fn((_event: 'did-finish-load', listener: () => void) => {
+      this.webContentsListeners.add(listener)
+    }),
+    once: vi.fn((_event: 'did-finish-load', listener: () => void) => {
+      const onceListener = (): void => {
+        this.webContentsListeners.delete(onceListener)
+        listener()
+      }
+      this.webContentsListeners.add(onceListener)
+    })
   }
   destroyed = false
   minimized = false
@@ -75,6 +86,10 @@ class FakeWindow {
 
   emit(event: WindowEvent): void {
     for (const listener of [...(this.listeners.get(event) ?? [])]) listener()
+  }
+
+  emitDidFinishLoad(): void {
+    for (const listener of [...this.webContentsListeners]) listener()
   }
 
   isDestroyed(): boolean {
@@ -458,7 +473,7 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.setAlwaysOnTop).toHaveBeenCalledWith(true)
   })
 
-  it('presents the overlay before the host and does not require global always-on-top', () => {
+  it('shows the host first, raises the overlay, and focuses it last', () => {
     const factory = makeWindowFactory()
     const windows = createAppWindowSet({
       platform: 'linux',
@@ -468,15 +483,152 @@ describe('Linux window pair presentation and shutdown', () => {
     const order: string[] = []
     const overlay = factory.created[1]
     const host = factory.created[0]
-    overlay.show.mockImplementation(() => order.push('overlay-show'))
     host.show.mockImplementation(() => order.push('host-show'))
+    overlay.show.mockImplementation(() => order.push('overlay-show'))
+    overlay.moveTop.mockImplementation(() => order.push('overlay-move-top'))
     overlay.focus.mockImplementation(() => order.push('overlay-focus'))
     presentAppWindowSet(windows)
     expect(order).toEqual([])
 
     overlay.emit('ready-to-show')
 
-    expect(order).toEqual(['overlay-show', 'host-show', 'overlay-focus'])
+    expect(order).toEqual(['host-show', 'overlay-show', 'overlay-move-top', 'overlay-focus'])
+  })
+
+  it('presents when did-finish-load fires without ready-to-show', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+
+    presentAppWindowSet(windows)
+    overlay.emitDidFinishLoad()
+
+    expect(host.show).toHaveBeenCalledTimes(1)
+    expect(overlay.show).toHaveBeenCalledTimes(1)
+  })
+
+  it('presents when only the fallback timeout fires', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+    const clearTimeoutFn = vi.fn()
+
+    presentAppWindowSet(
+      windows,
+      undefined,
+      (callback, delayMs) => {
+        expect(delayMs).toBe(2000)
+        callbacks.push(callback)
+        return callback
+      },
+      clearTimeoutFn
+    )
+
+    expect(callbacks).toHaveLength(1)
+    expect(host.show).not.toHaveBeenCalled()
+    expect(overlay.show).not.toHaveBeenCalled()
+
+    callbacks[0]()
+
+    expect(host.show).toHaveBeenCalledTimes(1)
+    expect(overlay.show).toHaveBeenCalledTimes(1)
+    expect(clearTimeoutFn).not.toHaveBeenCalled()
+  })
+
+  it('presents exactly once when several readiness triggers fire', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+
+    presentAppWindowSet(windows, undefined, (callback) => {
+      callbacks.push(callback)
+      return callback
+    }, vi.fn())
+
+    overlay.emit('ready-to-show')
+    overlay.emitDidFinishLoad()
+    callbacks[0]()
+
+    expect(host.show).toHaveBeenCalledTimes(1)
+    expect(overlay.show).toHaveBeenCalledTimes(1)
+    expect(overlay.moveTop).toHaveBeenCalledTimes(1)
+    expect(overlay.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the pending fallback timer after presentation', () => {
+    const timerHandle = {}
+    const clearTimeoutFn = vi.fn()
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const overlay = factory.created[1]
+
+    presentAppWindowSet(
+      windows,
+      undefined,
+      vi.fn(() => timerHandle),
+      clearTimeoutFn
+    )
+    overlay.emit('ready-to-show')
+
+    expect(clearTimeoutFn).toHaveBeenCalledTimes(1)
+    expect(clearTimeoutFn).toHaveBeenCalledWith(timerHandle)
+  })
+
+  it('does not show either window when both are already destroyed', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+    host.destroyed = true
+    overlay.destroyed = true
+
+    presentAppWindowSet(windows, undefined, (callback) => {
+      callbacks.push(callback)
+      return callback
+    }, vi.fn())
+
+    overlay.emit('ready-to-show')
+    callbacks[0]()
+
+    expect(host.show).not.toHaveBeenCalled()
+    expect(overlay.show).not.toHaveBeenCalled()
+  })
+
+  it('keeps Windows presentation a no-op without scheduling a timer', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const setTimeoutFn = vi.fn((_callback: () => void, _delayMs: number) => undefined)
+
+    presentAppWindowSet(windows, undefined, setTimeoutFn, vi.fn())
+
+    expect(setTimeoutFn).not.toHaveBeenCalled()
+    expect(factory.created[0].show).not.toHaveBeenCalled()
   })
 
   it('closes the other window exactly once when either side closes', () => {
