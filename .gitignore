@@ -33,3 +33,4 @@ test-results.log
 /scripts/setup-kizuna-vm-*.ps1
 /scripts/vm-*.sh
 /scripts/wsl-dev-shell.sh
+/scripts/linux-dev.sh
