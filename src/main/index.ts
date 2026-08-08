@@ -150,13 +150,18 @@ function createWindow(
     sendToWindow(uiOverlay, WINDOW_CONTROL_CHANNELS.fullscreenChanged, fullscreen)
   })
 
+  // mpv's X11 --wid target must already be mapped while it initializes. Keep
+  // only the opaque host visible during startup; the transparent renderer
+  // overlay waits until the IPC bridge and renderer are ready.
+  if (videoHost !== uiOverlay) videoHost.show()
+
   // Do not let renderer effects invoke player channels before their handlers
-  // exist. The windows remain hidden during mpv's short socket startup; a
-  // failed mpv start is caught inside startPlayer and still loads a usable UI.
+  // exist. A failed mpv start is caught inside startPlayer and still loads a
+  // usable UI over the opaque host.
   void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings).then(() => {
     if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
-    // Linux keeps both windows hidden until the renderer has finished its first
-    // document load. Windows retains BrowserWindow's existing eager presentation.
+    // Linux keeps the transparent overlay hidden until the renderer has
+    // finished its first document load. Windows retains eager presentation.
     presentAppWindowSet(windows)
     loadRendererWindow(uiOverlay, {
       devUrl,

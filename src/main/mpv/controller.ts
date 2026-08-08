@@ -302,7 +302,16 @@ export class MpvController {
   private pendingLoadAbort: ((error: Error) => void) | null = null
 
   constructor(deps: MpvControllerDeps = {}) {
-    this.spawnFn = deps.spawnFn ?? ((cmd, args) => spawn(cmd, args, { stdio: 'ignore' }))
+    this.spawnFn =
+      deps.spawnFn ??
+      ((cmd, args) => {
+        const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+        child.stderr?.on('data', (chunk) => {
+          const message = String(chunk).trimEnd()
+          if (message) console.warn(`[kizuna] mpv: ${message}`)
+        })
+        return child
+      })
     this.client = deps.client ?? new MpvIpcClient()
     this.setTimeoutFn = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms))
     this.clearTimeoutFn =
@@ -376,8 +385,18 @@ export class MpvController {
         })
       )
       const proc = this.proc
-      proc.on('exit', () => this.handleProcessExit(proc))
-      proc.on('error', () => this.handleProcessExit(proc))
+      proc.on('exit', (...args) => {
+        const [code, signal] = args
+        if (code !== 0 && code !== null && code !== undefined)
+          console.warn(
+            `[kizuna] mpv exited with code ${String(code)}${signal ? ` (${String(signal)})` : ''}`
+          )
+        this.handleProcessExit(proc)
+      })
+      proc.on('error', (err) => {
+        console.warn('[kizuna] mpv process error:', err)
+        this.handleProcessExit(proc)
+      })
       await this.client.connect(ipcEndpoint, connect)
     } catch (err) {
       // connect failed: don't leak the spawned mpv process or leave a
