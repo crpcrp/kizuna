@@ -3,8 +3,9 @@
  * `BrowserWindow.getNativeWindowHandle()` buffer.
  *
  * Windows exposes an 8-byte HWND in the 64-bit builds Kizuna supports.
- * Electron exposes the Linux X11 Window ID as a 4-byte XID, even when the
- * Electron process itself is 64-bit.
+ * Electron documents Linux's native type as X11 `Window` (`unsigned long`),
+ * but current Electron builds serialize the XID into a 4-byte Buffer on some
+ * 64-bit Linux/Ozone configurations. Accept both observed representations.
  */
 export function windowIdFromHandleBuffer(
   buf: Buffer,
@@ -19,7 +20,16 @@ export function windowIdFromHandleBuffer(
         `Native window handle buffer for ${platform} must contain at least 4 bytes; received ${buf.length}`
       )
     }
-    return BigInt(buf.readUInt32LE(0))
+    const windowId = buf.length >= 8 ? buf.readBigUInt64LE(0) : BigInt(buf.readUInt32LE(0))
+    // Wayland-backed Electron windows can expose a non-X11 sentinel here.
+    // Passing it to mpv produces only a remote XGetWindowAttributes error and
+    // an IPC timeout, so fail at the actual boundary with actionable context.
+    if (windowId <= 1n) {
+      throw new Error(
+        `Invalid Linux X11 native window ID ${windowId} (raw handle ${buf.toString('hex')}); launch Electron with --ozone-platform=x11`
+      )
+    }
+    return windowId
   }
   if (buf.length < 8) {
     throw new Error(

@@ -91,8 +91,8 @@ configureLinuxX11(app)
 
 // Chromium's DirectComposition surface can paint over mpv's `--wid` child
 // window on Windows, so the transparent-window setup disables Chromium
-// acceleration there. Linux needs Chromium's accelerated X11/WSLg compositor
-// to display the transparent Electron surface, so leave it enabled.
+// acceleration there. Linux needs Chromium's accelerated X11 compositor to
+// display the transparent Electron surface, so leave it enabled.
 if (process.platform === 'win32') app.disableHardwareAcceleration()
 
 // One controller for the app's lifetime; started/stopped alongside the

@@ -50,13 +50,6 @@ Windows continues to use the same coordinator interface backed by its one
 transparent BrowserWindow, so window-control IPC does not duplicate platform
 branches or change the existing single-window composition.
 
-`scripts/linux-visibility-test.mjs` is the Linux composition acceptance gate.
-It launches the production build and real mpv on an authenticated private X11
-server, captures desktop pixels, opens a modal, and rejects black/frozen video,
-missing controls, duplicate/unstable geometry, or static-frame flicker. This is
-an environment test in addition to the fake-based unit suite, not part of the
-hermetic `npm test` command.
-
 Runtime executables resolve from `resources/` in development and Electron's
 resource directory in packaged builds. Subprocess output is bounded and
 long-running operations use timeouts or cancellation where appropriate.

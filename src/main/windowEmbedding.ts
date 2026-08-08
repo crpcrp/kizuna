@@ -6,8 +6,8 @@ interface CommandLineApp {
 
 /**
  * Forces Linux onto X11 before the first BrowserWindow is created. mpv's
- * `--wid` embedding targets an X11 window; native Wayland embedding is out of
- * scope for this spike.
+ * `--wid` embedding targets an X11 window; native Wayland embedding is not
+ * supported.
  */
 export function configureLinuxX11(
   electronApp: CommandLineApp,

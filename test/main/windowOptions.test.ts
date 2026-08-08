@@ -17,7 +17,7 @@ import { WINDOW_CONTROL_CHANNELS } from '@src/shared/ipcChannels'
 describe('getMainWindowOptions', () => {
   const opts = getMainWindowOptions('/fake/preload.js')
 
-  it('is the spike-validated transparent frameless window', () => {
+  it('creates the transparent frameless Windows window', () => {
     expect(opts.transparent).toBe(true)
     expect(opts.frame).toBe(false)
     expect(opts.backgroundColor).toBe('#00000000')

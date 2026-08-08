@@ -116,7 +116,13 @@ describe('windowIdFromHandleBuffer', () => {
     expect(windowIdFromHandleBuffer(buf, 'win32')).toBe(658188n)
   })
 
-  it('reads the 4-byte X11 window ID Electron returns on Linux', () => {
+  it('reads an 8-byte unsigned-long X11 window ID on Linux', () => {
+    const buf = Buffer.alloc(8)
+    buf.writeBigUInt64LE(0x10000001n, 0)
+    expect(windowIdFromHandleBuffer(buf, 'linux')).toBe(0x10000001n)
+  })
+
+  it('reads the 4-byte X11 window ID returned by Electron 43 on Linux', () => {
     const buf = Buffer.alloc(4)
     buf.writeUInt32LE(0x10000001, 0)
     expect(windowIdFromHandleBuffer(buf, 'linux')).toBe(0x10000001n)
@@ -125,6 +131,14 @@ describe('windowIdFromHandleBuffer', () => {
   it('rejects a native handle buffer that is too small', () => {
     expect(() => windowIdFromHandleBuffer(Buffer.alloc(3), 'linux')).toThrow(
       'must contain at least 4 bytes'
+    )
+  })
+
+  it('rejects Wayland/non-X11 sentinel handles before mpv startup', () => {
+    const buf = Buffer.alloc(4)
+    buf.writeUInt32LE(1)
+    expect(() => windowIdFromHandleBuffer(buf, 'linux')).toThrow(
+      'Invalid Linux X11 native window ID 1'
     )
   })
 
@@ -137,8 +151,8 @@ describe('windowIdFromHandleBuffer', () => {
 
 describe('buildMpvArgs', () => {
   it('passes a decoded Linux X11 window ID to mpv unchanged', () => {
-    const handle = Buffer.alloc(4)
-    handle.writeUInt32LE(0x10000001, 0)
+    const handle = Buffer.alloc(8)
+    handle.writeBigUInt64LE(0x10000001n, 0)
     const windowId = windowIdFromHandleBuffer(handle, 'linux')
 
     const args = buildMpvArgs({

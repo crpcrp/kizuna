@@ -32,11 +32,6 @@ distribution's `mpv`, FFmpeg/ffprobe, and MeCab commands.
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
 version checks.
 
-Linux development is experimental and unreleased, but the X11 port now has a
-real-pixel automated visibility test. See the [Linux embedding setup and
-evidence](docs/linux-embedding-spike.md). To test the same Windows checkout in
-a full Ubuntu desktop, use the [one-checkout VM setup](docs/vm-development.md).
-
 ## Optional services
 
 - **AnkiConnect** enables individual and bulk card creation plus Anki knowledge
@@ -89,13 +84,6 @@ npm test
 
 Use `npm run test:watch` while iterating locally. CI runs the standard checks
 for pull requests.
-
-On Linux, install Xvfb and xcompmgr, then run the end-to-end pixel acceptance
-test:
-
-```bash
-npm run test:linux-visibility
-```
 
 ## Build and packaging
 

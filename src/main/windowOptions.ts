@@ -17,7 +17,7 @@ import { normalizeWindowShapeRects, type WindowShapeRect } from '../shared/windo
 export type { WindowBounds } from '../shared/windowBounds'
 
 /**
- * Options for the single main window. Load-bearing facts from the spike:
+ * Options for the single Windows main window. Its load-bearing requirements:
  * `transparent: true` is REQUIRED — an opaque Chromium window paints its own
  * surface over mpv's embedded child window and hides the video. `frame: false`
  * follows (transparent windows cannot use the OS frame); custom WindowChrome

@@ -218,9 +218,9 @@ export function buildMpvArgs({
     `--input-ipc-server=${ipcEndpoint}`,
     '--idle=yes', // start with no file; wait for loadfile commands
     '--force-window=yes', // paint into the wid even while idle
-    '--keep-open=yes', // spike-proven: playback end must not kill the window
-    '--no-osc', // spike-proven: our DOM draws all controls
-    '--no-input-default-bindings', // spike-proven: keyboard is ours
+    '--keep-open=yes', // playback end must not kill the embedded window
+    '--no-osc', // Kizuna's DOM draws all controls
+    '--no-input-default-bindings', // Kizuna owns keyboard input
     '--sid=no', // subtitles render in the DOM, never by mpv
     '--volume-max=200', // raise mpv's software-boost ceiling so setVolume can go past 100
     ...ytdlArgs

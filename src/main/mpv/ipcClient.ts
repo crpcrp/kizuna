@@ -1,5 +1,5 @@
 // Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
-// node:net only. Ported/hardened from the throwaway spike's pingMpvIpc().
+// Cross-platform mpv JSON IPC over node:net.
 // No process spawning here — `MpvController` in controller.ts owns mpv.exe.
 
 import { connect, type Socket } from 'node:net'

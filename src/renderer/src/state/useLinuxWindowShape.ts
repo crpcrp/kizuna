@@ -5,6 +5,20 @@ export interface WindowShapeControls {
   setShape(rects: WindowShapeRect[]): void
 }
 
+/** Exact ordered equality for the normalized shape produced below. */
+export function sameWindowShape(left: WindowShapeRect[], right: WindowShapeRect[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (rect, index) =>
+        rect.x === right[index].x &&
+        rect.y === right[index].y &&
+        rect.width === right[index].width &&
+        rect.height === right[index].height
+    )
+  )
+}
+
 function colorHasAlpha(color: string): boolean {
   if (color === 'transparent') return false
   const rgba = color.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\)$/i)
@@ -74,9 +88,13 @@ export function useLinuxWindowShape(controls: WindowShapeControls): void {
     const root = document.querySelector('#app')
     if (!root) return
     let animationFrame = 0
+    let lastShape: WindowShapeRect[] | undefined
     const recompute = (): void => {
       animationFrame = 0
-      controls.setShape(collectPaintedWindowRects(root, window.innerWidth, window.innerHeight))
+      const nextShape = collectPaintedWindowRects(root, window.innerWidth, window.innerHeight)
+      if (lastShape && sameWindowShape(lastShape, nextShape)) return
+      lastShape = nextShape
+      controls.setShape(nextShape)
     }
     const schedule = (): void => {
       if (!animationFrame) animationFrame = requestAnimationFrame(recompute)
