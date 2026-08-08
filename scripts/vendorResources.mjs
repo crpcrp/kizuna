@@ -636,16 +636,38 @@ export async function stageResources({ lock, platformKey, vendorDir, resourcesDi
 export async function stagedResourceProblems({ lock, platformKey, resourcesDir }) {
   const selected = selectPlatformLock(lock, platformKey)
   const problems = []
-  const required = [
-    ...new Set([...(selected.requiredPaths ?? []), ...(selected.requiredExecutables ?? [])])
-  ]
-  for (const path of required) {
-    const target = safePath(resourcesDir, path, 'required path')
+  const required = new Set([
+    ...(selected.requiredPaths ?? []),
+    ...(selected.requiredExecutables ?? [])
+  ])
+  for (const file of selected.files) {
+    const target = safePath(resourcesDir, file.to, 'staged resource')
     try {
       const details = await stat(target)
-      if (!details.isFile()) problems.push('required path is not a file: ' + path)
+      if (!details.isFile()) {
+        problems.push(
+          (required.has(file.to) ? 'required path' : 'staged resource') +
+            ' is not a file: ' +
+            file.to
+        )
+        continue
+      }
+      const actual = await sha256File(target)
+      if (actual !== file.sha256) {
+        problems.push(
+          'staged resource hash mismatch: ' +
+            file.to +
+            ' (expected ' +
+            file.sha256 +
+            ', actual ' +
+            actual +
+            ')'
+        )
+      }
     } catch {
-      problems.push('missing required path: ' + path)
+      problems.push(
+        (required.has(file.to) ? 'missing required path: ' : 'missing staged resource: ') + file.to
+      )
     }
   }
   // Windows can stage a Linux payload for CI schema/copy checks, but NTFS does

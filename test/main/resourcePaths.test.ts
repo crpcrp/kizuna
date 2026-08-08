@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import { requiredPackagedResources, resolveBinaryPaths } from '@src/main/resourcePaths'
 
@@ -62,6 +63,25 @@ describe('resolveBinaryPaths', () => {
 })
 
 describe('requiredPackagedResources', () => {
+  it('keeps every smoke-check path aligned with the platform lock', () => {
+    const lock = JSON.parse(readFileSync('resources.lock.json', 'utf8')) as {
+      platforms: Record<string, { requiredPaths: string[] }>
+    }
+    const windowsRoot = 'C:\\app\\resources'
+    const linuxRoot = '/opt/kizuna/resources'
+
+    expect(
+      requiredPackagedResources(windowsRoot, 'win32').map((resource) =>
+        win32.relative(windowsRoot, resource.path).replaceAll('\\', '/')
+      )
+    ).toEqual(lock.platforms['win32-x64'].requiredPaths)
+    expect(
+      requiredPackagedResources(linuxRoot, 'linux').map((resource) =>
+        posix.relative(linuxRoot, resource.path)
+      )
+    ).toEqual(lock.platforms['linux-x64'].requiredPaths)
+  })
+
   it('enumerates Windows runtime files and dictionary paths', () => {
     expect(requiredPackagedResources('C:\\app\\resources', 'win32')).toEqual([
       { label: 'mpv', path: win32.join('C:\\app\\resources', 'mpv', 'mpv.exe'), kind: 'file' },
@@ -86,9 +106,29 @@ describe('requiredPackagedResources', () => {
         kind: 'file'
       },
       {
-        label: 'MeCab IPADIC',
-        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic'),
-        kind: 'directory'
+        label: 'MeCab configuration',
+        path: win32.join('C:\\app\\resources', 'mecab', 'mecabrc'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC sys.dic',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'sys.dic'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC matrix.bin',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'matrix.bin'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC char.bin',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'char.bin'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC unk.dic',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'unk.dic'),
+        kind: 'file'
       }
     ])
   })
@@ -110,19 +150,44 @@ describe('requiredPackagedResources', () => {
         kind: 'file'
       },
       {
+        label: 'MeCab shared library payload',
+        path: '/opt/kizuna/resources/mecab/lib/libmecab.so.2.0.0',
+        kind: 'file'
+      },
+      {
         label: 'MeCab configuration',
         path: '/opt/kizuna/resources/mecab/mecabrc',
         kind: 'file'
       },
       {
-        label: 'MeCab IPADIC',
-        path: '/opt/kizuna/resources/mecab/ipadic',
-        kind: 'directory'
+        label: 'MeCab IPADIC char.bin',
+        path: '/opt/kizuna/resources/mecab/ipadic/char.bin',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC dicrc',
+        path: '/opt/kizuna/resources/mecab/ipadic/dicrc',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC matrix.bin',
+        path: '/opt/kizuna/resources/mecab/ipadic/matrix.bin',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC sys.dic',
+        path: '/opt/kizuna/resources/mecab/ipadic/sys.dic',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC unk.dic',
+        path: '/opt/kizuna/resources/mecab/ipadic/unk.dic',
+        kind: 'file'
       }
     ])
   })
 
-  it('rejects unsupported targets clearly', () => {
+  it('rejects unsupported platforms clearly', () => {
     expect(() =>
       resolveBinaryPaths({
         isPackaged: true,

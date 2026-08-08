@@ -13,9 +13,9 @@ npm run resources
 ```
 
 The command selects the current host platform, reads
-[`resources.lock.json`](../resources.lock.json), fetches the pinned files from the public
-[`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor) mirror, and
-verifies every file by SHA-256. No credentials are required.
+[`resources.lock.json`](../resources.lock.json), fetches the pinned files from
+the public [`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor)
+mirror, and verifies every file by SHA-256. No credentials are required.
 
 For a CI cross-check or a foreign-platform staging run, pass an explicit lock
 key:
@@ -106,5 +106,5 @@ resources/mecab/mecab -v
 test -x resources/mecab/mecab.bin
 ```
 
-CI uses the same resource command on the host platform. Tests use fakes and fixtures
-instead of invoking these binaries or live services.
+CI uses the same resource command on the host platform. Tests use fakes and
+fixtures instead of invoking these binaries or live services.

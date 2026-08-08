@@ -55,29 +55,48 @@ export function requiredPackagedResources(
     { label: 'mpv', path: paths.mpvPath, kind: 'file' },
     { label: 'ffmpeg', path: paths.ffmpegPath, kind: 'file' },
     { label: 'ffprobe', path: paths.ffprobePath, kind: 'file' },
-    { label: 'MeCab', path: paths.mecabPath, kind: 'file' },
-    { label: 'MeCab IPADIC', path: paths.ipadicDir, kind: 'directory' }
+    { label: 'MeCab', path: paths.mecabPath, kind: 'file' }
   ]
+  const pathApi = platform === 'linux' ? posix : win32
+  const mecabRoot = pathApi.dirname(paths.mecabPath)
+  const ipadic = (name: string): RequiredPackagedResource => ({
+    label: `MeCab IPADIC ${name}`,
+    path: pathApi.join(paths.ipadicDir, name),
+    kind: 'file'
+  })
   if (platform === 'linux') {
-    const base = posix.dirname(posix.dirname(paths.mecabPath))
-    required.splice(
-      4,
-      0,
-      { label: 'MeCab executable', path: posix.join(base, 'mecab', 'mecab.bin'), kind: 'file' },
+    required.push(
+      { label: 'MeCab executable', path: posix.join(mecabRoot, 'mecab.bin'), kind: 'file' },
       {
         label: 'MeCab shared library',
-        path: posix.join(base, 'mecab', 'lib', 'libmecab.so.2'),
+        path: posix.join(mecabRoot, 'lib', 'libmecab.so.2'),
         kind: 'file'
       },
-      { label: 'MeCab configuration', path: posix.join(base, 'mecab', 'mecabrc'), kind: 'file' }
+      {
+        label: 'MeCab shared library payload',
+        path: posix.join(mecabRoot, 'lib', 'libmecab.so.2.0.0'),
+        kind: 'file'
+      },
+      { label: 'MeCab configuration', path: posix.join(mecabRoot, 'mecabrc'), kind: 'file' },
+      ipadic('char.bin'),
+      ipadic('dicrc'),
+      ipadic('matrix.bin'),
+      ipadic('sys.dic'),
+      ipadic('unk.dic')
     )
   } else {
-    const base = win32.dirname(win32.dirname(paths.mecabPath))
-    required.splice(4, 0, {
-      label: 'MeCab shared library',
-      path: win32.join(base, 'mecab', 'libmecab.dll'),
-      kind: 'file'
-    })
+    required.push(
+      {
+        label: 'MeCab shared library',
+        path: win32.join(mecabRoot, 'libmecab.dll'),
+        kind: 'file'
+      },
+      { label: 'MeCab configuration', path: win32.join(mecabRoot, 'mecabrc'), kind: 'file' },
+      ipadic('sys.dic'),
+      ipadic('matrix.bin'),
+      ipadic('char.bin'),
+      ipadic('unk.dic')
+    )
   }
   return required
 }

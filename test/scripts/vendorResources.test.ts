@@ -320,6 +320,18 @@ describe('resource staging', () => {
       stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
     ).resolves.toContain('non-selected optional yt-dlp resource remains: yt-dlp/yt-dlp.exe')
   })
+
+  it('rejects a staged file whose contents drift from the lock', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    await stageResources({ lock: LOCK, platformKey: 'linux-x64', vendorDir, resourcesDir })
+    await writeFile(join(resourcesDir, 'mpv/mpv'), 'tampered after staging')
+
+    await expect(
+      stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).resolves.toEqual(
+      expect.arrayContaining([expect.stringContaining('staged resource hash mismatch: mpv/mpv')])
+    )
+  })
 })
 
 describe('acquireResources', () => {

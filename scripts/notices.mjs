@@ -25,7 +25,8 @@ import {
   SUPPORTED_PLATFORM_KEYS,
   isSafeRelativePath,
   platformKeyFor,
-  sha256File
+  sha256File,
+  stagedResourceProblems
 } from './vendorResources.mjs'
 
 /**
@@ -658,6 +659,19 @@ export async function generateNotices({
   ]
   if (problems.length > 0) {
     throw new Error(`third-party.json is unusable:\n  ${problems.join('\n  ')}`)
+  }
+
+  if (selectedPlatformKey && lock.platforms) {
+    const resourceProblems = await stagedResourceProblems({
+      lock,
+      platformKey: selectedPlatformKey,
+      resourcesDir
+    })
+    if (resourceProblems.length > 0) {
+      throw new Error(
+        `resources/ validation failed for ${selectedPlatformKey}:\n  ${resourceProblems.join('\n  ')}`
+      )
+    }
   }
 
   const notices = resolveComponentVersions(
