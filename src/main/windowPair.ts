@@ -1,5 +1,4 @@
 import { BrowserWindow, type BrowserWindowConstructorOptions } from 'electron'
-import { join } from 'node:path'
 import {
   getLinuxUiOverlayOptions,
   getLinuxVideoHostOptions,
@@ -25,8 +24,6 @@ export interface AppWindowSet {
   readonly videoHost: BrowserWindow
   /** Window containing the preload and React renderer. */
   readonly uiOverlay: BrowserWindow
-  /** True only when Linux has two distinct BrowserWindows. */
-  readonly paired: boolean
   /** The sole owner of logical window operations for this app window set. */
   readonly coordinator: AppWindowCoordinator
   /** Resolves a renderer/native window to the maintained logical pair. */
@@ -394,10 +391,9 @@ export function createAppWindowSet({
     return {
       videoHost: window,
       uiOverlay: window,
-      paired: false,
       coordinator,
       controlsFor: (candidate) =>
-        candidate === window && !bothDestroyed(coordinator) ? coordinator : null,
+        candidate === window && !coordinator.isCompletelyDestroyed() ? coordinator : null,
       onFullscreenChanged: (listener) => coordinator.onFullscreenChanged(listener),
       activate: () => coordinator.activate(),
       close: () => coordinator.close()
@@ -416,20 +412,15 @@ export function createAppWindowSet({
   return {
     videoHost,
     uiOverlay,
-    paired: true,
     coordinator,
     controlsFor: (candidate) =>
-      (candidate === videoHost || candidate === uiOverlay) && !bothDestroyed(coordinator)
+      (candidate === videoHost || candidate === uiOverlay) && !coordinator.isCompletelyDestroyed()
         ? coordinator
         : null,
     onFullscreenChanged: (listener) => coordinator.onFullscreenChanged(listener),
     activate: () => coordinator.activate(),
     close: () => coordinator.close()
   }
-}
-
-function bothDestroyed(coordinator: AppWindowCoordinator): boolean {
-  return coordinator.isCompletelyDestroyed()
 }
 
 export interface ContentBoundsWindow {
@@ -527,7 +518,7 @@ export function presentAppWindowSet(
   clearTimeoutFn: WindowPairClearTimeout = (handle) =>
     clearTimeout(handle as ReturnType<typeof setTimeout>)
 ): void {
-  if (!windows.paired) return
+  if (windows.videoHost === windows.uiOverlay) return
 
   let presented = false
   let fallbackTimer: unknown
@@ -554,9 +545,4 @@ export function presentAppWindowSet(
     present()
   }, PRESENT_FALLBACK_MS)
   onRendererReady(present)
-}
-
-/** The packaged renderer path used by the main-process startup code. */
-export function packagedRendererPath(dirname: string): string {
-  return join(dirname, '../renderer/index.html')
 }

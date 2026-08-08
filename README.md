@@ -32,6 +32,25 @@ distribution's `mpv`, FFmpeg/ffprobe, and MeCab commands.
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
 version checks.
 
+### Linux source development
+
+Kizuna does not publish a Linux package yet. On Ubuntu 24.04, install Node.js
+24 and the native build/runtime dependencies, then use the normal npm
+workflow:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential python3 pkg-config mpv ffmpeg mecab mecab-ipadic-utf8 yt-dlp
+npm ci
+npm run dev
+```
+
+Use a checkout on the Linux filesystem and do not reuse a `node_modules`
+directory produced on Windows; Electron and `better-sqlite3` contain
+platform-specific binaries. Kizuna selects Electron's X11/XWayland backend
+before startup, so no command-line wrapper is required. To run the production
+bundle locally, use `npm run build && npm start`.
+
 ## Optional services
 
 - **AnkiConnect** enables individual and bulk card creation plus Anki knowledge

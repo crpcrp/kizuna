@@ -80,8 +80,12 @@ const api = {
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
     setAlwaysOnTop: (flag: boolean): void =>
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, flag),
-    setShape: (rects: WindowShapeRect[]): void =>
-      ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects),
+    ...(process.platform === 'linux'
+      ? {
+          setShape: (rects: WindowShapeRect[]): void =>
+            ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects)
+        }
+      : {}),
     getBounds: (): Promise<WindowBounds | null> =>
       ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.getBounds),
     setBounds: (request: SetWindowBoundsRequest): Promise<WindowBounds | null> =>

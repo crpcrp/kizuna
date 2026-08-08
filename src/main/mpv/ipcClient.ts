@@ -1,5 +1,4 @@
-// Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
-// Cross-platform mpv JSON IPC over node:net.
+// Speaks mpv's cross-platform newline-delimited JSON IPC protocol over node:net.
 // No process spawning here — `MpvController` in controller.ts owns mpv.exe.
 
 import { connect, type Socket } from 'node:net'

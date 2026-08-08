@@ -33,7 +33,6 @@ import { createFrameCaptureService, createScreenshotService } from './services/s
 import { sweepThumbnailCache, THUMBNAIL_CACHE_MAX_BYTES } from './services/thumbnails/cache'
 import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
-import { configureLinuxX11 } from './windowEmbedding'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
 import { resolveBinaryPaths, type BinaryPaths } from './resourcePaths'
@@ -78,7 +77,6 @@ import { applyAppIdentity, screenshotsDir } from './appIdentity'
 import {
   createAppWindowSet,
   loadRendererWindow,
-  packagedRendererPath,
   presentAppWindowSet,
   type AppWindowSet
 } from './windowPair'
@@ -87,7 +85,10 @@ import {
 // Electron resolves that path once, from the app name, and caches it.
 applyAppIdentity(app)
 
-configureLinuxX11(app)
+// mpv's `--wid` embedding requires an X11 window. Electron also documents
+// XWayland as the supported path when programmatic positioning and resizing
+// are required, as they are for Kizuna's paired windows.
+if (process.platform === 'linux') app.commandLine.appendSwitch('ozone-platform', 'x11')
 
 // Chromium's DirectComposition surface can paint over mpv's `--wid` child
 // window on Windows, so the transparent-window setup disables Chromium
@@ -159,7 +160,7 @@ function createWindow(
     presentAppWindowSet(windows)
     loadRendererWindow(uiOverlay, {
       devUrl,
-      packagedHtmlPath: packagedRendererPath(__dirname)
+      packagedHtmlPath: join(__dirname, '../renderer/index.html')
     })
   })
 }

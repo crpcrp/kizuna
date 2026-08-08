@@ -58,7 +58,7 @@ export interface KizunaApi {
     onFullscreenChange(cb: (value: boolean) => void): () => void
     setSize(width: number, height: number): void
     setAlwaysOnTop(flag: boolean): void
-    setShape(rects: WindowShapeRect[]): void
+    setShape?(rects: WindowShapeRect[]): void
     getBounds(): Promise<WindowBounds | null>
     setBounds(request: SetWindowBoundsRequest): Promise<WindowBounds | null>
   }

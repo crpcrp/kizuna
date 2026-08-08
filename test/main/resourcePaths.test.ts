@@ -49,25 +49,6 @@ describe('resolveBinaryPaths', () => {
     expect(packaged.ytdlpPath).toBe(join('/r', 'yt-dlp', 'yt-dlp.exe'))
   })
 
-  it('resolves extensionless executables on Linux in the existing layout', () => {
-    const result = resolveBinaryPaths({
-      isPackaged: true,
-      resourcesPath: '/opt/kizuna/resources',
-      appRoot: '/ignored',
-      platform: 'linux'
-    })
-
-    expect(result).toEqual({
-      mpvPath: join('/opt/kizuna/resources', 'mpv', 'mpv'),
-      ffprobePath: join('/opt/kizuna/resources', 'ffmpeg', 'ffprobe'),
-      ffmpegPath: join('/opt/kizuna/resources', 'ffmpeg', 'ffmpeg'),
-      mecabPath: join('/opt/kizuna/resources', 'mecab', 'mecab'),
-      ipadicDir: join('/opt/kizuna/resources', 'mecab', 'ipadic'),
-      unidicDir: join('/opt/kizuna/resources', 'mecab', 'unidic'),
-      ytdlpPath: join('/opt/kizuna/resources', 'yt-dlp', 'yt-dlp')
-    })
-  })
-
   it('uses distribution tools for an unpackaged Linux checkout', () => {
     expect(
       resolveBinaryPaths({
@@ -90,7 +71,7 @@ describe('resolveBinaryPaths', () => {
 
 describe('requiredPackagedResources', () => {
   it('lists the required executables and MeCab dictionary layout', () => {
-    expect(requiredPackagedResources('C:\\app\\resources', 'win32')).toEqual([
+    expect(requiredPackagedResources('C:\\app\\resources')).toEqual([
       {
         label: 'mpv',
         path: join('C:\\app\\resources', 'mpv', 'mpv.exe'),
@@ -119,36 +100,6 @@ describe('requiredPackagedResources', () => {
     ])
   })
 
-  it('lists extensionless Linux executables and the same dictionary layout', () => {
-    expect(requiredPackagedResources('/opt/kizuna/resources', 'linux')).toEqual([
-      {
-        label: 'mpv',
-        path: join('/opt/kizuna/resources', 'mpv', 'mpv'),
-        kind: 'file'
-      },
-      {
-        label: 'ffmpeg',
-        path: join('/opt/kizuna/resources', 'ffmpeg', 'ffmpeg'),
-        kind: 'file'
-      },
-      {
-        label: 'ffprobe',
-        path: join('/opt/kizuna/resources', 'ffmpeg', 'ffprobe'),
-        kind: 'file'
-      },
-      {
-        label: 'MeCab',
-        path: join('/opt/kizuna/resources', 'mecab', 'mecab'),
-        kind: 'file'
-      },
-      {
-        label: 'MeCab IPADIC',
-        path: join('/opt/kizuna/resources', 'mecab', 'ipadic'),
-        kind: 'directory'
-      }
-    ])
-  })
-
   it('rejects unsupported platforms clearly', () => {
     expect(() =>
       resolveBinaryPaths({
@@ -158,9 +109,16 @@ describe('requiredPackagedResources', () => {
         platform: 'darwin'
       })
     ).toThrow('Unsupported platform for resource paths: darwin')
+  })
 
-    expect(() => requiredPackagedResources('/resources', 'darwin')).toThrow(
-      'Unsupported platform for resource paths: darwin'
-    )
+  it('rejects packaged Linux until a Linux distribution target exists', () => {
+    expect(() =>
+      resolveBinaryPaths({
+        isPackaged: true,
+        resourcesPath: '/resources',
+        appRoot: '/app',
+        platform: 'linux'
+      })
+    ).toThrow('Packaged Linux builds are not supported')
   })
 })

@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  collectPaintedWindowRects,
-  sameWindowShape
-} from '@src/renderer/src/state/useLinuxWindowShape'
+import { collectPaintedWindowRects } from '@src/renderer/src/state/useLinuxWindowShape'
 
 function setRect(element: Element, x: number, y: number, width: number, height: number): void {
   Object.defineProperty(element, 'getBoundingClientRect', {
@@ -62,15 +59,5 @@ describe('collectPaintedWindowRects', () => {
       width: 20,
       height: 10
     })
-  })
-})
-
-describe('sameWindowShape', () => {
-  it('deduplicates only an exactly unchanged native shape', () => {
-    const shape = [{ x: 0, y: 0, width: 1280, height: 64 }]
-
-    expect(sameWindowShape(shape, [{ ...shape[0] }])).toBe(true)
-    expect(sameWindowShape(shape, [{ ...shape[0], height: 65 }])).toBe(false)
-    expect(sameWindowShape(shape, [])).toBe(false)
   })
 })

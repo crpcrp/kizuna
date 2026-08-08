@@ -1,12 +1,12 @@
 import { useLayoutEffect } from 'react'
 import type { WindowShapeRect } from '../../../shared/windowShape'
 
-export interface WindowShapeControls {
-  setShape(rects: WindowShapeRect[]): void
+interface WindowShapeControls {
+  setShape?(rects: WindowShapeRect[]): void
 }
 
 /** Exact ordered equality for the normalized shape produced below. */
-export function sameWindowShape(left: WindowShapeRect[], right: WindowShapeRect[]): boolean {
+function sameWindowShape(left: WindowShapeRect[], right: WindowShapeRect[]): boolean {
   return (
     left.length === right.length &&
     left.every(
@@ -85,6 +85,8 @@ export function collectPaintedWindowRects(
 /** Keeps Linux's transparent BrowserWindow shaped to its currently painted DOM. */
 export function useLinuxWindowShape(controls: WindowShapeControls): void {
   useLayoutEffect(() => {
+    const setShape = controls.setShape
+    if (!setShape) return
     const root = document.querySelector('#app')
     if (!root) return
     let animationFrame = 0
@@ -94,7 +96,7 @@ export function useLinuxWindowShape(controls: WindowShapeControls): void {
       const nextShape = collectPaintedWindowRects(root, window.innerWidth, window.innerHeight)
       if (lastShape && sameWindowShape(lastShape, nextShape)) return
       lastShape = nextShape
-      controls.setShape(nextShape)
+      setShape(nextShape)
     }
     const schedule = (): void => {
       if (!animationFrame) animationFrame = requestAnimationFrame(recompute)

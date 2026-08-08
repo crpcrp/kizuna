@@ -141,7 +141,6 @@ describe('createAppWindowSet', () => {
 
     expect(factory.created).toHaveLength(1)
     expect(windows.videoHost).toBe(windows.uiOverlay)
-    expect(windows.paired).toBe(false)
     expect(factory.created[0].options).toMatchObject({
       frame: false,
       transparent: true,
@@ -165,7 +164,6 @@ describe('createAppWindowSet', () => {
 
     expect(factory.created).toHaveLength(2)
     expect(windows.videoHost).not.toBe(windows.uiOverlay)
-    expect(windows.paired).toBe(true)
     expect(host.options).toMatchObject({
       frame: false,
       transparent: false,

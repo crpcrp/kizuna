@@ -2,17 +2,9 @@
 // temporary KIZUNA_MPV_PATH / KIZUNA_FFPROBE_PATH / KIZUNA_FFMPEG_PATH
 // env-var hooks in index.ts and mediaService.ts.
 //
-// Packaged (electron-builder extraResources, see package.json "build"):
-//   <resourcesPath>/mpv/{mpv[.exe]}
-//   <resourcesPath>/ffmpeg/{ffmpeg,ffprobe}[.exe]
-//   <resourcesPath>/mecab/mecab[.exe], /mecab/ipadic, /mecab/unidic
-//   <resourcesPath>/yt-dlp/yt-dlp[.exe]
-// Dev (binaries checked out locally, gitignored — see resources/):
-//   <appRoot>/resources/mpv/{mpv[.exe]}
-//   <appRoot>/resources/ffmpeg/{ffmpeg,ffprobe}[.exe]
-//   <appRoot>/resources/mecab/mecab[.exe], /mecab/ipadic, /mecab/unidic
-//   <appRoot>/resources/yt-dlp/yt-dlp[.exe]
-// Both layouts mirror each other so this is a single join per binary.
+// Packaged Windows uses electron-builder's resources layout; Windows
+// development mirrors it under <appRoot>/resources. Linux development uses
+// distribution binaries and dictionaries directly.
 
 import { join } from 'node:path'
 
@@ -46,22 +38,13 @@ export interface RequiredPackagedResource {
   kind: 'file' | 'directory'
 }
 
-function executableName(name: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') return `${name}.exe`
-  if (platform === 'linux') return name
-  throw new Error(`Unsupported platform for resource paths: ${platform}`)
-}
-
-/** Pure. Lists the runtime files and layout that must exist in an installer. */
-export function requiredPackagedResources(
-  resourcesPath: string,
-  platform: NodeJS.Platform = process.platform
-): RequiredPackagedResource[] {
+/** Pure. Lists the runtime files required by the supported Windows installer. */
+export function requiredPackagedResources(resourcesPath: string): RequiredPackagedResource[] {
   const paths = resolveBinaryPaths({
     isPackaged: true,
     resourcesPath,
     appRoot: '',
-    platform
+    platform: 'win32'
   })
   return [
     { label: 'mpv', path: paths.mpvPath, kind: 'file' },
@@ -79,12 +62,8 @@ export function resolveBinaryPaths({
   appRoot,
   platform = process.platform
 }: ResolveBinaryPathsOptions): BinaryPaths {
-  // Linux development uses Ubuntu's distribution packages under /usr/bin. The checked-in
-  // resource lock currently stages Windows binaries only, and trying to join
-  // extensionless names under that tree leaves every Linux checkout pointing
-  // at files which cannot exist. Packaged Linux builds retain the mirrored
-  // resources layout so a future AppImage/deb remains self-contained.
-  if (platform === 'linux' && !isPackaged) {
+  if (platform === 'linux') {
+    if (isPackaged) throw new Error('Packaged Linux builds are not supported')
     return {
       mpvPath: '/usr/bin/mpv',
       ffprobePath: '/usr/bin/ffprobe',
@@ -95,15 +74,17 @@ export function resolveBinaryPaths({
       ytdlpPath: '/usr/bin/yt-dlp'
     }
   }
-  const executable = (name: string): string => executableName(name, platform)
+  if (platform !== 'win32') {
+    throw new Error(`Unsupported platform for resource paths: ${platform}`)
+  }
   const base = isPackaged ? resourcesPath : join(appRoot, 'resources')
   return {
-    mpvPath: join(base, 'mpv', executable('mpv')),
-    ffprobePath: join(base, 'ffmpeg', executable('ffprobe')),
-    ffmpegPath: join(base, 'ffmpeg', executable('ffmpeg')),
-    mecabPath: join(base, 'mecab', executable('mecab')),
+    mpvPath: join(base, 'mpv', 'mpv.exe'),
+    ffprobePath: join(base, 'ffmpeg', 'ffprobe.exe'),
+    ffmpegPath: join(base, 'ffmpeg', 'ffmpeg.exe'),
+    mecabPath: join(base, 'mecab', 'mecab.exe'),
     ipadicDir: join(base, 'mecab', 'ipadic'),
     unidicDir: join(base, 'mecab', 'unidic'),
-    ytdlpPath: join(base, 'yt-dlp', executable('yt-dlp'))
+    ytdlpPath: join(base, 'yt-dlp', 'yt-dlp.exe')
   }
 }
