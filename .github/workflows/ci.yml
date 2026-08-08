@@ -1,7 +1,8 @@
 name: CI
 
-# Windows-only by design: Kizuna ships a Windows installer and the pinned
-# runtime binaries in resources.lock.json are win32-x64 builds.
+# Run the same deterministic resource and application checks on both supported
+# host targets. Release packaging remains Windows-only until Linux publishing
+# is enabled separately.
 # Release tags are handled by release.yml.
 on:
   push:
@@ -24,7 +25,11 @@ permissions:
 # trailing comment records the human-readable version each SHA resolves to.
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-24.04]
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0

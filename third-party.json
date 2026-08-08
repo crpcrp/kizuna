@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "vendorCommit": "4022588e7f53f6de6655e044973a1be3646351ef",
+  "vendorCommit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
   "components": [
     {
       "id": "mpv",
@@ -36,6 +36,27 @@
             "url": "https://github.com/zhongfly/mpv-winbuild/actions/runs/30199331587"
           }
         ]
+      },
+      "platforms": {
+        "linux-x64": {
+          "version": "0.37.0-1ubuntu4",
+          "license": "GPL-2.0-or-later",
+          "licenseFiles": [
+            "mpv/licenses/COPYRIGHT.Ubuntu",
+            "mpv/licenses/GPL-2.txt",
+            "mpv/licenses/LGPL-2.1.txt"
+          ],
+          "notes": [
+            "Ubuntu 24.04 x64 package, redistributed unmodified for the documented Linux baseline.",
+            "The packaged Linux build declares the exact mpv Ubuntu dependency and uses the system X11/codec libraries."
+          ],
+          "source": {
+            "binaryArchive": "http://archive.ubuntu.com/ubuntu/pool/universe/m/mpv/mpv_0.37.0-1ubuntu4_amd64.deb",
+            "binaryArchiveSha256": "26b9273c3cc4c69b55ad908d168c624b95fd6785ea96625143e344b53e786e94",
+            "code": "https://launchpad.net/ubuntu/+source/mpv/0.37.0-1ubuntu4",
+            "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/d2c9aefb9ac46df7066ce2c09ce392c468f1b53c/scripts/refresh-linux-x64.sh"
+          }
+        }
       }
     },
     {
@@ -58,6 +79,29 @@
         "binaryArchiveSha256": "db580001caa24ac104c8cb856cd113a87b0a443f7bdf47d8c12b1d740584a2ec",
         "code": "https://github.com/FFmpeg/FFmpeg/archive/38b88335f99e76ed89ff3c93f877fdefce736c13.zip",
         "buildRecipe": "https://github.com/GyanD/codexffmpeg/tree/8.1.2"
+      },
+      "platforms": {
+        "linux-x64": {
+          "version": "7:6.1.1-3ubuntu5",
+          "license": "GPL-3.0-or-later",
+          "licenseFiles": [
+            "ffmpeg/licenses/COPYRIGHT.Ubuntu",
+            "ffmpeg/licenses/GPL-2.txt",
+            "ffmpeg/licenses/GPL-3.txt",
+            "ffmpeg/licenses/LGPL-2.txt",
+            "ffmpeg/licenses/LGPL-2.1.txt"
+          ],
+          "notes": [
+            "Ubuntu 24.04 x64 FFmpeg package, redistributed unmodified for the documented Linux baseline.",
+            "The packaged Linux build declares the exact FFmpeg Ubuntu dependency and keeps GPL/version-3 licensing coverage in the bundle."
+          ],
+          "source": {
+            "binaryArchive": "http://archive.ubuntu.com/ubuntu/pool/universe/f/ffmpeg/ffmpeg_6.1.1-3ubuntu5_amd64.deb",
+            "binaryArchiveSha256": "1a23baace5f2688a47e28119aedae6993cd638e6279a7227dfc52d9a337a1c17",
+            "code": "https://launchpad.net/ubuntu/+source/ffmpeg/7%3A6.1.1-3ubuntu5",
+            "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/d2c9aefb9ac46df7066ce2c09ce392c468f1b53c/scripts/refresh-linux-x64.sh"
+          }
+        }
       }
     },
     {
@@ -80,6 +124,28 @@
         "code": "https://github.com/shogo82148/mecab/releases/download/v0.996.13/mecab-0.996.13.tar.gz",
         "codeSha256": "3da28541062d6d1cfbb92ab09481779f2ad735c89705d981eb66f072ef776538",
         "buildRecipe": "https://github.com/shogo82148/mecab/tree/v0.996.13"
+      },
+      "platforms": {
+        "linux-x64": {
+          "version": "0.996-14ubuntu4",
+          "license": "BSD-3-Clause",
+          "licenseFiles": [
+            "mecab/licenses/COPYRIGHT.MeCab-Ubuntu",
+            "mecab/licenses/COPYRIGHT.libmecab-Ubuntu",
+            "mecab/licenses/GPL-2.txt",
+            "mecab/licenses/LGPL-2.1.txt"
+          ],
+          "notes": [
+            "Ubuntu 24.04 x64 MeCab package, redistributed with the BSD option selected.",
+            "The mirrored wrapper loads libmecab relative to the packaged component and selects the adjacent UTF-8 IPADIC."
+          ],
+          "source": {
+            "binaryArchive": "http://archive.ubuntu.com/ubuntu/pool/universe/m/mecab/mecab_0.996-14ubuntu4_amd64.deb",
+            "binaryArchiveSha256": "b2b273a40ca0baf818b384a6fe408c9bda8306c11450cfa3f4987115330ca1b5",
+            "code": "https://launchpad.net/ubuntu/+source/mecab/0.996-14ubuntu4",
+            "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/d2c9aefb9ac46df7066ce2c09ce392c468f1b53c/scripts/refresh-linux-x64.sh"
+          }
+        }
       }
     },
     {
@@ -100,6 +166,22 @@
         "binaryArchive": "https://github.com/shogo82148/mecab/releases/download/v0.996.13/mecab-ipadic-2.7.0-20070801.tar.gz",
         "binaryArchiveSha256": "74130f44264ce5b8cfa51e498b99345f71d2f854b74a9e9dfb6489e13e479e67",
         "code": "https://github.com/shogo82148/mecab/tree/v0.996.13/mecab-ipadic"
+      },
+      "platforms": {
+        "linux-x64": {
+          "version": "2.7.0-20070801+main-3",
+          "license": "NAIST-2003",
+          "licenseFiles": ["mecab/licenses/COPYRIGHT.IPADIC-Ubuntu"],
+          "notes": [
+            "Ubuntu 24.04 x64 IPADIC payload compiled for UTF-8 and loaded by the mirrored MeCab wrapper."
+          ],
+          "source": {
+            "binaryArchive": "http://archive.ubuntu.com/ubuntu/pool/main/m/mecab-ipadic/mecab-ipadic_2.7.0-20070801%2Bmain-3_all.deb",
+            "binaryArchiveSha256": "82e538f2015959972b649359159d2984e6d47514d503c9edb5fbda2631a09c50",
+            "code": "https://launchpad.net/ubuntu/+source/mecab-ipadic/2.7.0-20070801%2Bmain-3",
+            "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/d2c9aefb9ac46df7066ce2c09ce392c468f1b53c/scripts/refresh-linux-x64.sh"
+          }
+        }
       }
     },
     {

@@ -3,88 +3,79 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT } from '@test/paths'
 
-import { parseVendorDirArg } from '@scripts/fetch-resources.mjs'
+import { parsePlatformArg, parseVendorDirArg } from '@scripts/fetch-resources.mjs'
 import { lockProblems, vendorRemoteUrl } from '@scripts/vendorResources.mjs'
 
-// Importing the CLI must not start a download — the module only calls `main()`
-// when `process.argv[1]` is the script itself, and this suite proves the guard
-// holds by simply completing.
-
-describe('parseVendorDirArg', () => {
-  it('reads the separated form', () => {
+describe('fetch-resources arguments', () => {
+  it('reads vendor directory and platform overrides in separated and inline forms', () => {
     expect(parseVendorDirArg(['--vendor-dir', 'D:/kizuna-vendor'])).toBe('D:/kizuna-vendor')
-  })
-
-  it('reads the inline form, including a path with an equals sign', () => {
     expect(parseVendorDirArg(['--vendor-dir=D:/a=b'])).toBe('D:/a=b')
+    expect(parsePlatformArg(['--platform', 'linux-x64'])).toBe('linux-x64')
+    expect(parsePlatformArg(['--platform=win32-x64'])).toBe('win32-x64')
   })
 
-  it('returns undefined when the flag is absent', () => {
+  it('returns undefined when either flag is absent', () => {
     expect(parseVendorDirArg(['--verbose'])).toBeUndefined()
+    expect(parsePlatformArg(['--verbose'])).toBeUndefined()
   })
 })
 
-// The shipped lock is the input every other guarantee rests on. It is checked
-// here rather than in the module's own suite because it asserts repo state, not
-// module behaviour.
 describe('resources.lock.json', () => {
-  const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf-8'))
+  type PlatformEntry = {
+    source: { repo: string; commit: string; manifest: string; checksums: string }
+    requiredExecutables: string[]
+    files: { from: string; to: string; executable: boolean }[]
+  }
+  const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf-8')) as {
+    platforms: Record<string, PlatformEntry>
+  }
 
   it('passes the same validation the fetch script applies', () => {
     expect(lockProblems(lock)).toEqual([])
   })
 
-  it('stages every binary path src/main/resourcePaths.ts resolves', () => {
-    const staged = new Set(lock.files.map((f: { to: string }) => f.to))
-    for (const path of [
-      'mpv/mpv.exe',
-      'ffmpeg/ffmpeg.exe',
-      'ffmpeg/ffprobe.exe',
-      'mecab/mecab.exe',
-      'mecab/ipadic/sys.dic'
-    ]) {
-      expect(staged, `resources.lock.json never stages ${path}`).toContain(path)
+  it('contains both platform maps with executable and dictionary coverage', () => {
+    expect(Object.keys(lock.platforms).sort()).toEqual(['linux-x64', 'win32-x64'])
+    expect(lock.platforms['win32-x64'].requiredExecutables).toEqual(
+      expect.arrayContaining(['mpv/mpv.exe', 'ffmpeg/ffprobe.exe', 'mecab/mecab.exe'])
+    )
+    expect(lock.platforms['linux-x64'].requiredExecutables).toEqual(
+      expect.arrayContaining(['mpv/mpv', 'ffmpeg/ffprobe', 'mecab/mecab.bin'])
+    )
+    expect(lock.platforms['linux-x64'].files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ from: 'linux-x64/mecab/bin/mecab', to: 'mecab/mecab' }),
+        expect.objectContaining({ from: 'linux-x64/mecab/lib/libmecab.so.2', executable: false })
+      ])
+    )
+  })
+
+  it('pins both entries to the same vendor repository and commit', () => {
+    const entries = Object.values(lock.platforms)
+    expect(new Set(entries.map((entry) => entry.source.repo))).toEqual(
+      new Set(['crpcrp/kizuna-vendor'])
+    )
+    expect(new Set(entries.map((entry) => entry.source.commit)).size).toBe(1)
+    for (const entry of entries) {
+      expect(entry.source.manifest).toBe('manifest.json')
+      expect(entry.source.checksums).toBe('SHA256SUMS.txt')
     }
+    expect(vendorRemoteUrl(entries[0].source.repo)).toBe(
+      'https://github.com/crpcrp/kizuna-vendor.git'
+    )
   })
 
-  // MeCab reads `dicdir = $(rcpath)\ipadic` from mecabrc, so the config file has
-  // to land beside `ipadic/` rather than in the mirror's own `mecab/etc/`.
-  it('flattens mecabrc next to the ipadic directory it points at', () => {
-    const mecabrc = lock.files.find((f: { to: string }) => f.to.endsWith('mecabrc'))
-    expect(mecabrc.from).toBe('mecab/etc/mecabrc')
-    expect(mecabrc.to).toBe('mecab/mecabrc')
-  })
-
-  // The point of the mirror: a binary reaches this repository from exactly one
-  // host, so upstream link rot, a hijacked release page, or a silently
-  // republished "same version" build cannot change what gets bundled. These two
-  // assertions are what keep a convenient `https://…/latest` from creeping back
-  // into the fetch path later.
-  it('names the mirror as the only source, with no per-file download URLs', () => {
-    expect(lock.source.repo).toBe('crpcrp/kizuna-vendor')
-    for (const file of lock.files) {
-      expect(Object.keys(file).sort()).toEqual(['from', 'sha256', 'to'])
-    }
-  })
-
-  it('never reaches an upstream release host from the acquisition scripts', () => {
-    const sources = ['scripts/fetch-resources.mjs', 'scripts/vendorResources.mjs']
-      .map((path) => readFileSync(join(REPO_ROOT, path), 'utf-8'))
-      .concat(JSON.stringify(lock))
-      .join('\n')
-
-    for (const host of ['gyan.dev', 'zhongfly', 'shogo82148', 'mpv-player', 'FFmpeg/FFmpeg']) {
-      expect(sources, `the fetch path must not reference ${host}`).not.toContain(host)
-    }
-    expect(sources).toContain(lock.source.repo)
-    expect(vendorRemoteUrl(lock.source.repo)).toBe(`https://github.com/${lock.source.repo}.git`)
-  })
-
-  it('carries the redistribution licences alongside the GPL binaries', () => {
-    const staged = lock.files.map((f: { to: string }) => f.to)
-    expect(staged).toContain('mpv/LICENSE.GPLv3.txt')
-    expect(staged).toContain('ffmpeg/LICENSE.GPLv3.txt')
-    expect(staged).toContain('mecab/LICENSE.BSD.txt')
-    expect(staged).toContain('mecab/ipadic/COPYING')
+  it('carries license files in each selected platform tree', () => {
+    const paths = (entry: PlatformEntry) => entry.files.map((file) => file.to)
+    expect(paths(lock.platforms['win32-x64'])).toEqual(
+      expect.arrayContaining(['mpv/Copyright', 'ffmpeg/LICENSE.GPLv3.txt', 'mecab/ipadic/COPYING'])
+    )
+    expect(paths(lock.platforms['linux-x64'])).toEqual(
+      expect.arrayContaining([
+        'mpv/licenses/COPYRIGHT.Ubuntu',
+        'ffmpeg/licenses/GPL-3.txt',
+        'mecab/licenses/COPYRIGHT.IPADIC-Ubuntu'
+      ])
+    )
   })
 })

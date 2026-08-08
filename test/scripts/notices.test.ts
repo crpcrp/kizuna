@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -37,6 +38,7 @@ const invalid = (component: Record<string, unknown>): NoticeComponent =>
   component as unknown as NoticeComponent
 
 const COMMIT = 'a'.repeat(40)
+const sha256 = (contents: string): string => createHash('sha256').update(contents).digest('hex')
 
 /** A minimal but valid notices file, with the one component under test. */
 const noticesWith = (...components: NoticeComponent[]): NoticesFile => ({
@@ -67,6 +69,49 @@ const LOCK = {
     { from: 'mpv/bin/mpv.exe', to: 'mpv/mpv.exe', sha256: 'b'.repeat(64) },
     { from: 'mpv/LICENSE.GPLv3.txt', to: 'mpv/LICENSE.GPLv3.txt', sha256: 'c'.repeat(64) }
   ]
+}
+
+const PLATFORM_LOCK = {
+  schemaVersion: 2,
+  platforms: {
+    'win32-x64': {
+      platform: 'win32',
+      architecture: 'x64',
+      source: {
+        repo: 'crpcrp/kizuna-vendor',
+        commit: COMMIT,
+        manifest: 'manifest.json',
+        checksums: 'SHA256SUMS.txt'
+      },
+      requiredPaths: ['mpv/mpv.exe'],
+      requiredExecutables: ['mpv/mpv.exe'],
+      files: LOCK.files.map((file) => ({
+        ...file,
+        sha256: sha256(file.to.endsWith('.exe') ? 'windows payload' : 'gpl text'),
+        executable: file.to.endsWith('.exe')
+      }))
+    },
+    'linux-x64': {
+      platform: 'linux',
+      architecture: 'x64',
+      source: {
+        repo: 'crpcrp/kizuna-vendor',
+        commit: COMMIT,
+        manifest: 'manifest.json',
+        checksums: 'SHA256SUMS.txt'
+      },
+      requiredPaths: ['mpv/mpv'],
+      requiredExecutables: ['mpv/mpv'],
+      files: [
+        {
+          from: 'linux-x64/mpv/bin/mpv',
+          to: 'mpv/mpv',
+          sha256: sha256('linux payload'),
+          executable: true
+        }
+      ]
+    }
+  }
 }
 
 describe('noticesProblems', () => {
@@ -487,5 +532,26 @@ describe('generateNotices', () => {
     await expect(run(repoRoot, noticesWith(MPV))).rejects.toThrow(
       'Licence texts named by third-party.json are missing'
     )
+  })
+
+  it('refuses to generate notices for a mixed-platform resources tree', async () => {
+    const repoRoot = await makeRepo({
+      ...repoFiles,
+      'resources/mpv/mpv.exe': 'windows payload',
+      'resources/mpv/mpv': 'linux payload'
+    })
+    await expect(
+      generateNotices({
+        notices: noticesWith(MPV),
+        lock: PLATFORM_LOCK,
+        packageLock: PACKAGE_LOCK,
+        repoRoot,
+        resourcesDir: join(repoRoot, 'resources'),
+        outDir: join(repoRoot, 'build', 'notices'),
+        productName: 'Kizuna',
+        appVersion: '0.0.1',
+        platformKey: 'win32-x64'
+      })
+    ).rejects.toThrow('non-selected platform resource remains: mpv/mpv')
   })
 })

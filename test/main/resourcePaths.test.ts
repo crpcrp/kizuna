@@ -1,55 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { posix, win32 } from 'node:path'
 import { requiredPackagedResources, resolveBinaryPaths } from '@src/main/resourcePaths'
 
 describe('resolveBinaryPaths', () => {
-  it('resolves under resourcesPath when packaged', () => {
-    const result = resolveBinaryPaths({
-      isPackaged: true,
-      resourcesPath: 'C:\\Program Files\\Kizuna\\resources',
-      appRoot: 'E:\\ignored',
-      platform: 'win32'
-    })
-    expect(result).toEqual({
-      mpvPath: join('C:\\Program Files\\Kizuna\\resources', 'mpv', 'mpv.exe'),
-      ffprobePath: join('C:\\Program Files\\Kizuna\\resources', 'ffmpeg', 'ffprobe.exe'),
-      ffmpegPath: join('C:\\Program Files\\Kizuna\\resources', 'ffmpeg', 'ffmpeg.exe'),
-      mecabPath: join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'mecab.exe'),
-      ipadicDir: join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'ipadic'),
-      unidicDir: join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'unidic'),
-      ytdlpPath: join('C:\\Program Files\\Kizuna\\resources', 'yt-dlp', 'yt-dlp.exe')
-    })
-  })
-
-  it('resolves under <appRoot>/resources when not packaged', () => {
-    const result = resolveBinaryPaths({
-      isPackaged: false,
-      resourcesPath: 'C:\\ignored',
-      appRoot: 'E:\\repos\\kizuna',
-      platform: 'win32'
-    })
-    expect(result).toEqual({
-      mpvPath: join('E:\\repos\\kizuna', 'resources', 'mpv', 'mpv.exe'),
-      ffprobePath: join('E:\\repos\\kizuna', 'resources', 'ffmpeg', 'ffprobe.exe'),
-      ffmpegPath: join('E:\\repos\\kizuna', 'resources', 'ffmpeg', 'ffmpeg.exe'),
-      mecabPath: join('E:\\repos\\kizuna', 'resources', 'mecab', 'mecab.exe'),
-      ipadicDir: join('E:\\repos\\kizuna', 'resources', 'mecab', 'ipadic'),
-      unidicDir: join('E:\\repos\\kizuna', 'resources', 'mecab', 'unidic'),
-      ytdlpPath: join('E:\\repos\\kizuna', 'resources', 'yt-dlp', 'yt-dlp.exe')
+  it('uses Windows resource paths for packaged and development targets', () => {
+    expect(
+      resolveBinaryPaths({
+        isPackaged: true,
+        resourcesPath: 'C:\\Program Files\\Kizuna\\resources',
+        appRoot: 'E:\\ignored',
+        platform: 'win32'
+      })
+    ).toEqual({
+      mpvPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'mpv', 'mpv.exe'),
+      ffprobePath: win32.join('C:\\Program Files\\Kizuna\\resources', 'ffmpeg', 'ffprobe.exe'),
+      ffmpegPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'ffmpeg', 'ffmpeg.exe'),
+      mecabPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'mecab.exe'),
+      ipadicDir: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'ipadic'),
+      unidicDir: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'unidic'),
+      ytdlpPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'yt-dlp', 'yt-dlp.exe')
     })
   })
 
-  it('bundles yt-dlp under the yt-dlp folder to match electron-builder extraResources', () => {
-    const packaged = resolveBinaryPaths({
-      isPackaged: true,
-      resourcesPath: '/r',
-      appRoot: '/a',
-      platform: 'win32'
+  it('resolves a packaged Linux target with POSIX paths even on a Windows host', () => {
+    expect(
+      resolveBinaryPaths({
+        isPackaged: true,
+        resourcesPath: '/opt/kizuna/resources',
+        appRoot: 'C:\\ignored',
+        platform: 'linux'
+      })
+    ).toEqual({
+      mpvPath: posix.join('/opt/kizuna/resources', 'mpv', 'mpv'),
+      ffprobePath: posix.join('/opt/kizuna/resources', 'ffmpeg', 'ffprobe'),
+      ffmpegPath: posix.join('/opt/kizuna/resources', 'ffmpeg', 'ffmpeg'),
+      mecabPath: posix.join('/opt/kizuna/resources', 'mecab', 'mecab'),
+      ipadicDir: posix.join('/opt/kizuna/resources', 'mecab', 'ipadic'),
+      unidicDir: posix.join('/opt/kizuna/resources', 'mecab', 'unidic'),
+      ytdlpPath: posix.join('/opt/kizuna/resources', 'yt-dlp', 'yt-dlp')
     })
-    expect(packaged.ytdlpPath).toBe(join('/r', 'yt-dlp', 'yt-dlp.exe'))
   })
 
-  it('uses distribution tools for an unpackaged Linux checkout', () => {
+  it('keeps unpackaged Linux development on distro tools', () => {
     expect(
       resolveBinaryPaths({
         isPackaged: false,
@@ -70,32 +63,126 @@ describe('resolveBinaryPaths', () => {
 })
 
 describe('requiredPackagedResources', () => {
-  it('lists the required executables and MeCab dictionary layout', () => {
-    expect(requiredPackagedResources('C:\\app\\resources')).toEqual([
-      {
-        label: 'mpv',
-        path: join('C:\\app\\resources', 'mpv', 'mpv.exe'),
-        kind: 'file'
-      },
+  it('keeps every smoke-check path aligned with the platform lock', () => {
+    const lock = JSON.parse(readFileSync('resources.lock.json', 'utf8')) as {
+      platforms: Record<string, { requiredPaths: string[] }>
+    }
+    const windowsRoot = 'C:\\app\\resources'
+    const linuxRoot = '/opt/kizuna/resources'
+
+    expect(
+      requiredPackagedResources(windowsRoot, 'win32').map((resource) =>
+        win32.relative(windowsRoot, resource.path).replaceAll('\\', '/')
+      )
+    ).toEqual(lock.platforms['win32-x64'].requiredPaths)
+    expect(
+      requiredPackagedResources(linuxRoot, 'linux').map((resource) =>
+        posix.relative(linuxRoot, resource.path)
+      )
+    ).toEqual(lock.platforms['linux-x64'].requiredPaths)
+  })
+
+  it('enumerates Windows runtime files and dictionary paths', () => {
+    expect(requiredPackagedResources('C:\\app\\resources', 'win32')).toEqual([
+      { label: 'mpv', path: win32.join('C:\\app\\resources', 'mpv', 'mpv.exe'), kind: 'file' },
       {
         label: 'ffmpeg',
-        path: join('C:\\app\\resources', 'ffmpeg', 'ffmpeg.exe'),
+        path: win32.join('C:\\app\\resources', 'ffmpeg', 'ffmpeg.exe'),
         kind: 'file'
       },
       {
         label: 'ffprobe',
-        path: join('C:\\app\\resources', 'ffmpeg', 'ffprobe.exe'),
+        path: win32.join('C:\\app\\resources', 'ffmpeg', 'ffprobe.exe'),
         kind: 'file'
       },
       {
         label: 'MeCab',
-        path: join('C:\\app\\resources', 'mecab', 'mecab.exe'),
+        path: win32.join('C:\\app\\resources', 'mecab', 'mecab.exe'),
         kind: 'file'
       },
       {
-        label: 'MeCab IPADIC',
-        path: join('C:\\app\\resources', 'mecab', 'ipadic'),
-        kind: 'directory'
+        label: 'MeCab shared library',
+        path: win32.join('C:\\app\\resources', 'mecab', 'libmecab.dll'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab configuration',
+        path: win32.join('C:\\app\\resources', 'mecab', 'mecabrc'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC sys.dic',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'sys.dic'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC matrix.bin',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'matrix.bin'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC char.bin',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'char.bin'),
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC unk.dic',
+        path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'unk.dic'),
+        kind: 'file'
+      }
+    ])
+  })
+
+  it('enumerates the Linux wrapper, loader library, config, and dictionary', () => {
+    expect(requiredPackagedResources('/opt/kizuna/resources', 'linux')).toEqual([
+      { label: 'mpv', path: '/opt/kizuna/resources/mpv/mpv', kind: 'file' },
+      { label: 'ffmpeg', path: '/opt/kizuna/resources/ffmpeg/ffmpeg', kind: 'file' },
+      { label: 'ffprobe', path: '/opt/kizuna/resources/ffmpeg/ffprobe', kind: 'file' },
+      { label: 'MeCab', path: '/opt/kizuna/resources/mecab/mecab', kind: 'file' },
+      {
+        label: 'MeCab executable',
+        path: '/opt/kizuna/resources/mecab/mecab.bin',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab shared library',
+        path: '/opt/kizuna/resources/mecab/lib/libmecab.so.2',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab shared library payload',
+        path: '/opt/kizuna/resources/mecab/lib/libmecab.so.2.0.0',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab configuration',
+        path: '/opt/kizuna/resources/mecab/mecabrc',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC char.bin',
+        path: '/opt/kizuna/resources/mecab/ipadic/char.bin',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC dicrc',
+        path: '/opt/kizuna/resources/mecab/ipadic/dicrc',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC matrix.bin',
+        path: '/opt/kizuna/resources/mecab/ipadic/matrix.bin',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC sys.dic',
+        path: '/opt/kizuna/resources/mecab/ipadic/sys.dic',
+        kind: 'file'
+      },
+      {
+        label: 'MeCab IPADIC unk.dic',
+        path: '/opt/kizuna/resources/mecab/ipadic/unk.dic',
+        kind: 'file'
       }
     ])
   })
@@ -109,16 +196,5 @@ describe('requiredPackagedResources', () => {
         platform: 'darwin'
       })
     ).toThrow('Unsupported platform for resource paths: darwin')
-  })
-
-  it('rejects packaged Linux until a Linux distribution target exists', () => {
-    expect(() =>
-      resolveBinaryPaths({
-        isPackaged: true,
-        resourcesPath: '/resources',
-        appRoot: '/app',
-        platform: 'linux'
-      })
-    ).toThrow('Packaged Linux builds are not supported')
   })
 })

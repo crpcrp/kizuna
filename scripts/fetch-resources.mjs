@@ -5,8 +5,9 @@
 // pages, so a binary is only ever introduced by a reviewed lock-file diff.
 //
 // Usage:
-//   node scripts/fetch-resources.mjs                 # clone/pull the pinned mirror
-//   node scripts/fetch-resources.mjs --vendor-dir D  # reuse a local checkout
+//   node scripts/fetch-resources.mjs                         # select host platform
+//   node scripts/fetch-resources.mjs --platform linux-x64    # explicit target
+//   node scripts/fetch-resources.mjs --vendor-dir D          # reuse a local checkout
 //
 // Environment:
 //   KIZUNA_VENDOR_DIR  same as --vendor-dir
@@ -21,7 +22,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
-import { acquireResources } from './vendorResources.mjs'
+import { acquireResources, platformKeyFor, selectPlatformLock } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -35,6 +36,21 @@ export function parseVendorDirArg(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--vendor-dir') return argv[i + 1]
     const inline = /^--vendor-dir=(.+)$/.exec(argv[i])
+    if (inline) return inline[1]
+  }
+  return undefined
+}
+
+/**
+ * Read --platform <key> / --platform=<key> out of argv.
+ *
+ * @param {string[]} argv
+ * @returns {string | undefined}
+ */
+export function parsePlatformArg(argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--platform') return argv[i + 1]
+    const inline = /^--platform=(.+)$/.exec(argv[i])
     if (inline) return inline[1]
   }
   return undefined
@@ -69,13 +85,17 @@ function runGit(step, dir) {
 async function main() {
   const lock = JSON.parse(await readFile(join(repoRoot, 'resources.lock.json'), 'utf-8'))
 
-  const existingCheckout = parseVendorDirArg(process.argv.slice(2)) ?? process.env.KIZUNA_VENDOR_DIR
+  const args = process.argv.slice(2)
+  const platformKey = parsePlatformArg(args) ?? platformKeyFor()
+  const selected = selectPlatformLock(lock, platformKey)
+  const existingCheckout = parseVendorDirArg(args) ?? process.env.KIZUNA_VENDOR_DIR
   const vendorDir = existingCheckout
     ? resolve(existingCheckout)
-    : join(repoRoot, '.vendor-cache', lock.source.repo.split('/')[1])
+    : join(repoRoot, '.vendor-cache', selected.source.repo.split('/')[1])
 
   await acquireResources({
     lock,
+    platformKey,
     vendorDir,
     resourcesDir: join(repoRoot, 'resources'),
     // A caller-supplied checkout is used as-is: it may be the developer's own

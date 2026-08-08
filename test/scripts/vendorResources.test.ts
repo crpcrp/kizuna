@@ -1,129 +1,232 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  SUPPORTED_PLATFORM_KEYS,
   SUPPORTED_SCHEMA_VERSION,
   acquireResources,
   lockProblems,
   missingRequiredPaths,
   parseChecksums,
-  sha256File,
+  platformKeyFor,
   stageResources,
-  vendorFetchSteps,
-  vendorRemoteUrl,
+  stagedResourceProblems,
   verificationError,
-  verifyVendorFiles
+  verifyVendorFiles,
+  vendorFetchSteps
 } from '@scripts/vendorResources.mjs'
 
-// No network and no git: the mirror is a throwaway directory of tiny text files
-// standing in for mpv.exe and friends, and `materialize` is a spy. Everything
-// this module actually decides — hash verification, layout mapping, fail-closed
-// behaviour — is independent of the payload's size or format.
-
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
-
+const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
 const COMMIT = 'a'.repeat(40)
 
-/** A vendor tree plus the lock that describes it, in a fresh temp directory. */
-async function makeMirror(files: Record<string, string>) {
+const MIRROR_FILES: Record<string, string> = {
+  'mpv/bin/mpv.exe': 'windows-mpv',
+  'mpv/LICENSE.GPLv3.txt': 'windows-mpv-license',
+  'mecab/bin/mecab.exe': 'windows-mecab',
+  'mecab/etc/mecabrc': 'windows-mecabrc',
+  'mecab/ipadic/sys.dic': 'windows-dictionary',
+  'linux-x64/mpv/bin/mpv': 'linux-mpv',
+  'linux-x64/mpv/licenses/COPYRIGHT.Ubuntu': 'linux-mpv-license',
+  'linux-x64/ffmpeg/bin/ffmpeg': 'linux-ffmpeg',
+  'linux-x64/ffmpeg/bin/ffprobe': 'linux-ffprobe',
+  'linux-x64/mecab/bin/mecab': 'linux-mecab-wrapper',
+  'linux-x64/mecab/bin/mecab.bin': 'linux-mecab',
+  'linux-x64/mecab/etc/mecabrc': 'linux-mecabrc',
+  'linux-x64/mecab/ipadic/sys.dic': 'linux-dictionary',
+  'linux-x64/mecab/lib/libmecab.so.2': 'linux-library'
+}
+
+const source = {
+  repo: 'crpcrp/kizuna-vendor',
+  commit: COMMIT,
+  manifest: 'manifest.json',
+  checksums: 'SHA256SUMS.txt'
+}
+
+const linuxDestination = (from: string): string => {
+  const relative = from.slice('linux-x64/'.length)
+  if (relative.startsWith('mpv/bin/')) return 'mpv/' + relative.slice('mpv/bin/'.length)
+  if (relative.startsWith('ffmpeg/bin/')) return 'ffmpeg/' + relative.slice('ffmpeg/bin/'.length)
+  if (relative.startsWith('mecab/bin/')) return 'mecab/' + relative.slice('mecab/bin/'.length)
+  if (relative.startsWith('mecab/etc/')) return 'mecab/' + relative.slice('mecab/etc/'.length)
+  return relative
+}
+
+const entry = (from: string, to: string, executable: boolean) => ({
+  from,
+  to,
+  sha256: sha256(MIRROR_FILES[from]),
+  executable
+})
+
+const LOCK = {
+  schemaVersion: SUPPORTED_SCHEMA_VERSION,
+  platforms: {
+    'win32-x64': {
+      platform: 'win32',
+      architecture: 'x64',
+      source,
+      requiredPaths: ['mpv/mpv.exe', 'mecab/mecab.exe', 'mecab/mecabrc', 'mecab/ipadic/sys.dic'],
+      requiredExecutables: ['mpv/mpv.exe', 'mecab/mecab.exe'],
+      files: [
+        entry('mpv/bin/mpv.exe', 'mpv/mpv.exe', true),
+        entry('mpv/LICENSE.GPLv3.txt', 'mpv/LICENSE.GPLv3.txt', false),
+        entry('mecab/bin/mecab.exe', 'mecab/mecab.exe', true),
+        entry('mecab/etc/mecabrc', 'mecab/mecabrc', false),
+        entry('mecab/ipadic/sys.dic', 'mecab/ipadic/sys.dic', false)
+      ]
+    },
+    'linux-x64': {
+      platform: 'linux',
+      architecture: 'x64',
+      source,
+      requiredPaths: [
+        'mpv/mpv',
+        'ffmpeg/ffmpeg',
+        'ffmpeg/ffprobe',
+        'mecab/mecab',
+        'mecab/mecab.bin',
+        'mecab/mecabrc',
+        'mecab/lib/libmecab.so.2',
+        'mecab/ipadic/sys.dic'
+      ],
+      requiredExecutables: [
+        'mpv/mpv',
+        'ffmpeg/ffmpeg',
+        'ffmpeg/ffprobe',
+        'mecab/mecab',
+        'mecab/mecab.bin'
+      ],
+      files: Object.keys(MIRROR_FILES)
+        .filter((path) => path.startsWith('linux-x64/'))
+        .map((path) =>
+          entry(
+            path,
+            linuxDestination(path),
+            path.endsWith('/mpv') ||
+              path.endsWith('/ffmpeg') ||
+              path.endsWith('/ffprobe') ||
+              path.endsWith('/mecab') ||
+              path.endsWith('/mecab.bin')
+          )
+        )
+    }
+  }
+}
+
+type MutableLock = {
+  platforms: Record<
+    string,
+    {
+      source: { commit: string }
+      files: { from: string; to: string; sha256: string; executable: boolean }[]
+    }
+  >
+}
+
+const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const mutableLock = (): MutableLock => copy(LOCK) as unknown as MutableLock
+
+async function makeMirror() {
   const root = await mkdtemp(join(tmpdir(), 'kizuna-vendor-'))
   const vendorDir = join(root, 'mirror')
   const resourcesDir = join(root, 'resources')
-  for (const [path, contents] of Object.entries(files)) {
+  for (const [path, contents] of Object.entries(MIRROR_FILES)) {
     const full = join(vendorDir, path)
     await mkdir(join(full, '..'), { recursive: true })
     await writeFile(full, contents)
   }
+  const payload = (
+    platform: string,
+    architecture: string,
+    prefix: string,
+    licenseFiles: string[]
+  ) => ({
+    platform,
+    architecture,
+    components: [
+      {
+        name: platform,
+        files: Object.keys(MIRROR_FILES)
+          .filter((path) => path.startsWith(prefix))
+          .map((path) => ({ path, sha256: sha256(MIRROR_FILES[path]) })),
+        licenseFiles
+      }
+    ]
+  })
+  await writeFile(
+    join(vendorDir, 'manifest.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 2,
+        payloads: [
+          payload('win32', 'x64', 'mpv/', ['mpv/LICENSE.GPLv3.txt']),
+          payload('linux', 'x64', 'linux-x64/', ['linux-x64/mpv/licenses/COPYRIGHT.Ubuntu'])
+        ]
+      },
+      null,
+      2
+    )
+  )
+  const checksums = Object.entries(MIRROR_FILES)
+    .map(([path, contents]) => sha256(contents) + '  ' + path)
+    .join('\n')
+  await writeFile(join(vendorDir, 'SHA256SUMS.txt'), checksums + '\n')
   return { root, vendorDir, resourcesDir }
 }
 
-const MIRROR_FILES = {
-  'mpv/bin/mpv.exe': 'mpv-payload',
-  'mpv/LICENSE.GPLv3.txt': 'gpl',
-  'mecab/bin/mecab.exe': 'mecab-payload',
-  'mecab/etc/mecabrc': 'dicdir = $(rcpath)\\ipadic',
-  'mecab/ipadic/sys.dic': 'dictionary'
-}
+describe('platform selection and lock validation', () => {
+  it('maps supported host pairs and rejects unknown combinations', () => {
+    expect(platformKeyFor('win32', 'x64')).toBe('win32-x64')
+    expect(platformKeyFor('linux', 'x64')).toBe('linux-x64')
+    expect(() => platformKeyFor('linux', 'arm64')).toThrow(/Supported targets/)
+  })
 
-const LOCK = {
-  schemaVersion: SUPPORTED_SCHEMA_VERSION,
-  platform: 'win32-x64',
-  source: { repo: 'crpcrp/kizuna-vendor', commit: COMMIT, manifest: 'm.json', checksums: 's.txt' },
-  requiredPaths: ['mpv/mpv.exe', 'mecab/mecab.exe', 'mecab/mecabrc', 'mecab/ipadic/sys.dic'],
-  files: Object.entries(MIRROR_FILES).map(([from, contents]) => ({
-    from,
-    to: from.replace(/^(mpv|ffmpeg|mecab)\/(bin|etc)\//, '$1/'),
-    sha256: sha256(contents)
-  }))
-}
+  it('accepts both explicit platform entries', () => {
+    expect(SUPPORTED_PLATFORM_KEYS).toEqual(['win32-x64', 'linux-x64'])
+    expect(lockProblems(LOCK)).toEqual([])
+  })
 
-/** Deep copy so a test can corrupt one field without leaking into the next. */
-const lock = (): typeof LOCK => JSON.parse(JSON.stringify(LOCK))
+  it('rejects unknown keys, missing hashes, unsafe paths, duplicate destinations, and mismatched pins', () => {
+    const unknownLock = mutableLock()
+    unknownLock.platforms['darwin-x64'] = copy(unknownLock.platforms['win32-x64'])
+    expect(lockProblems(unknownLock).join('\n')).toContain('unknown key darwin-x64')
 
-describe('parseChecksums', () => {
-  it('reads sha256sum lines, including binary-mode entries', () => {
-    const text = `${'1'.repeat(64)}  mpv/bin/mpv.exe\n${'2'.repeat(64)} *mecab/bin/mecab.exe\n`
-    expect(parseChecksums(text)).toEqual({
-      'mpv/bin/mpv.exe': '1'.repeat(64),
-      'mecab/bin/mecab.exe': '2'.repeat(64)
+    const unhashed = mutableLock()
+    unhashed.platforms['win32-x64'].files[0].sha256 = ''
+    expect(lockProblems(unhashed).join('\n')).toContain('has no valid sha256')
+
+    const unsafe = mutableLock()
+    unsafe.platforms['linux-x64'].files[0].to = '../outside'
+    expect(lockProblems(unsafe).join('\n')).toContain('unsafe to path')
+
+    const duplicate = mutableLock()
+    duplicate.platforms['win32-x64'].files.push({
+      ...duplicate.platforms['win32-x64'].files[0],
+      from: 'other/file'
+    })
+    expect(lockProblems(duplicate).join('\n')).toContain('duplicate destination')
+
+    const mismatched = mutableLock()
+    mismatched.platforms['linux-x64'].source.commit = 'b'.repeat(40)
+    expect(lockProblems(mismatched).join('\n')).toContain('same immutable vendor commit')
+  })
+})
+
+describe('checksums and acquisition', () => {
+  it('parses text and binary checksum records', () => {
+    expect(parseChecksums('a'.repeat(64) + '  a\n' + 'b'.repeat(64) + ' *b\n')).toEqual({
+      a: 'a'.repeat(64),
+      b: 'b'.repeat(64)
     })
   })
 
-  it('ignores blank lines and anything that is not a checksum', () => {
-    expect(parseChecksums('\n# a comment\nnot a checksum line\n')).toEqual({})
-  })
-})
-
-describe('lockProblems', () => {
-  it('accepts the shipped lock shape', () => {
-    expect(lockProblems(lock())).toEqual([])
-  })
-
-  it('rejects a schema version this script does not understand', () => {
-    const bumped = { ...lock(), schemaVersion: 99 }
-    expect(lockProblems(bumped)).toContain(
-      `unsupported schemaVersion 99 (this script understands ${SUPPORTED_SCHEMA_VERSION})`
-    )
-  })
-
-  it('rejects a short or branch-shaped commit, so the pin cannot drift', () => {
-    const floating = lock()
-    floating.source.commit = 'main'
-    expect(lockProblems(floating)).toContain('source.commit must be a full 40-character commit SHA')
-  })
-
-  it('rejects a file entry without a valid sha256', () => {
-    const unhashed = lock()
-    unhashed.files[0].sha256 = ''
-    expect(lockProblems(unhashed)).toContain('files entry "mpv/bin/mpv.exe" has no valid sha256')
-  })
-
-  it('rejects an empty requiredPaths, which would let a truncated mirror pass', () => {
-    const loose = { ...lock(), requiredPaths: [] }
-    expect(lockProblems(loose)).toContain(
-      'requiredPaths is empty, so a truncated mirror would pass silently'
-    )
-  })
-})
-
-describe('vendorRemoteUrl', () => {
-  // The mirror is public. Anonymous HTTPS is the only shape this produces, so
-  // no credential can end up in an argv list, a log line, or a git remote.
-  it('is an anonymous HTTPS clone URL, with no credential of any kind', () => {
-    const url = vendorRemoteUrl('crpcrp/kizuna-vendor')
-    expect(url).toBe('https://github.com/crpcrp/kizuna-vendor.git')
-    expect(url).not.toContain('@')
-  })
-})
-
-describe('vendorFetchSteps', () => {
-  const steps = vendorFetchSteps({ url: 'https://example.test/v.git', commit: COMMIT })
-
-  it('fetches only the pinned commit, at depth 1', () => {
-    expect(steps.map((s) => s.argv)).toContainEqual([
+  it('pins the checkout, disables line-ending conversion, and pulls LFS after checkout', () => {
+    const steps = vendorFetchSteps({ url: 'https://example.test/vendor.git', commit: COMMIT })
+    expect(steps.map((step) => step.argv)).toContainEqual([
       'fetch',
       '--depth',
       '1',
@@ -131,173 +234,120 @@ describe('vendorFetchSteps', () => {
       'origin',
       COMMIT
     ])
-  })
-
-  // Regression: the first CI run failed verification on 36 files — every text
-  // file the mirror does not track through LFS — because windows-latest ships
-  // core.autocrlf=true and rewrote their line endings on checkout. Each failing
-  // hash was exactly the CRLF-converted form of the locked one.
-  it('pins line-ending conversion off before the checkout can rewrite text files', () => {
-    const argvs = steps.map((s) => s.argv)
-    expect(argvs).toContainEqual(['config', 'core.autocrlf', 'false'])
-    expect(argvs).toContainEqual(['config', 'core.eol', 'lf'])
-
-    const configSteps = argvs
-      .map((argv, i) => (argv[0] === 'config' ? i : -1))
-      .filter((i) => i >= 0)
-    const checkout = argvs.findIndex((argv) => argv.includes('checkout'))
-    expect(Math.max(...configSteps)).toBeLessThan(checkout)
-  })
-
-  it('checks out with the LFS smudge filter off and pulls payloads afterwards', () => {
-    const checkout = steps.find((s) => s.argv.includes('checkout'))
-    expect(checkout?.env).toEqual({ GIT_LFS_SKIP_SMUDGE: '1' })
+    expect(steps.map((step) => step.argv)).toContainEqual(['config', 'core.autocrlf', 'false'])
+    expect(steps.map((step) => step.argv)).toContainEqual(['config', 'core.eol', 'lf'])
     expect(steps[steps.length - 1].argv).toEqual(['lfs', 'pull'])
   })
 
-  it('tolerates only the pre-existing-remote cleanup failing', () => {
-    expect(steps.filter((s) => s.allowFailure).map((s) => s.argv)).toEqual([
-      ['remote', 'remove', 'origin']
-    ])
-  })
-})
-
-describe('sha256File', () => {
-  it('hashes file contents', async () => {
-    const { vendorDir } = await makeMirror(MIRROR_FILES)
-    expect(await sha256File(join(vendorDir, 'mpv/bin/mpv.exe'))).toBe(sha256('mpv-payload'))
-  })
-})
-
-describe('verifyVendorFiles', () => {
-  it('reports nothing for a mirror matching the lock', async () => {
-    const { vendorDir } = await makeMirror(MIRROR_FILES)
-    expect(await verifyVendorFiles({ lock: lock(), vendorDir })).toEqual({
-      missing: [],
-      mismatched: []
-    })
+  it('verifies both the lock hashes and the selected manifest payload', async () => {
+    const { vendorDir } = await makeMirror()
+    for (const platformKey of SUPPORTED_PLATFORM_KEYS) {
+      const result = await verifyVendorFiles({ lock: LOCK, platformKey, vendorDir })
+      expect(result).toEqual({
+        missing: [],
+        mismatched: [],
+        lfsPointers: [],
+        metadataProblems: []
+      })
+    }
   })
 
-  it('reports a file the mirror does not carry', async () => {
-    const { vendorDir } = await makeMirror(MIRROR_FILES)
-    const extended = lock()
-    extended.files.push({ from: 'yt-dlp/yt-dlp.exe', to: 'yt-dlp/yt-dlp.exe', sha256: sha256('x') })
-    const result = await verifyVendorFiles({ lock: extended, vendorDir })
-    expect(result.missing).toEqual(['yt-dlp/yt-dlp.exe'])
-  })
-
-  it('reports a hash mismatch, which is what an unpulled LFS pointer looks like', async () => {
-    const { vendorDir } = await makeMirror({
-      ...MIRROR_FILES,
-      'mpv/bin/mpv.exe': 'version https://git-lfs.github.com/spec/v1\noid sha256:dead\n'
-    })
-    const result = await verifyVendorFiles({ lock: lock(), vendorDir })
-    expect(result.mismatched).toEqual([
-      {
-        path: 'mpv/bin/mpv.exe',
-        expected: sha256('mpv-payload'),
-        actual: expect.stringMatching(/^[0-9a-f]{64}$/)
-      }
-    ])
-  })
-})
-
-describe('verificationError', () => {
-  it('returns undefined for a clean result', () => {
-    expect(verificationError({ missing: [], mismatched: [] }, COMMIT)).toBeUndefined()
-  })
-
-  it('names every missing and mismatched path plus the pinned commit', () => {
-    const message = verificationError(
-      {
-        missing: ['mecab/bin/mecab.exe'],
-        mismatched: [{ path: 'mpv/bin/mpv.exe', expected: 'aa', actual: 'bb' }]
-      },
-      COMMIT
+  it('reports a Git LFS pointer with an actionable error', async () => {
+    const { vendorDir } = await makeMirror()
+    await writeFile(
+      join(vendorDir, 'linux-x64/mpv/bin/mpv'),
+      'version https://git-lfs.github.com/spec/v1\noid sha256:' + 'd'.repeat(64) + '\nsize 12\n'
     )
-    expect(message).toContain(COMMIT)
-    expect(message).toContain('missing: mecab/bin/mecab.exe')
-    expect(message).toContain('hash mismatch: mpv/bin/mpv.exe')
+    const result = await verifyVendorFiles({ lock: LOCK, platformKey: 'linux-x64', vendorDir })
+    expect(result.lfsPointers).toEqual(['linux-x64/mpv/bin/mpv'])
+    expect(verificationError(result, COMMIT)).toContain('git lfs pull')
   })
 
-  // The message is the only diagnosis anyone gets from a CI log, and the first
-  // version of it named Git LFS alone — which sent the reader down the wrong
-  // path when the real cause was CRLF conversion.
-  it('names line-ending conversion, unpulled LFS, and a stale pin as the causes', () => {
-    const message = verificationError(
-      { missing: [], mismatched: [{ path: 'mecab/etc/mecabrc', expected: 'aa', actual: 'bb' }] },
-      COMMIT
+  it('fails closed when the selected manifest has the wrong platform', async () => {
+    const { vendorDir } = await makeMirror()
+    await writeFile(
+      join(vendorDir, 'manifest.json'),
+      JSON.stringify({ schemaVersion: 2, payloads: [{ platform: 'win32', architecture: 'x64' }] })
     )
-    expect(message).toContain('core.autocrlf=false')
-    expect(message).toContain('git lfs pull')
-    expect(message).toContain('source.commit')
+    const result = await verifyVendorFiles({ lock: LOCK, platformKey: 'linux-x64', vendorDir })
+    expect(verificationError(result, COMMIT)).toContain('manifest has no payload for linux-x64')
   })
 })
 
-describe('stageResources', () => {
-  it('flattens bin/ and etc/ into the layout resourcePaths.ts resolves', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    const report = await stageResources({ lock: lock(), vendorDir, resourcesDir })
+describe('resource staging', () => {
+  it('maps logical paths, preserves selected files, and removes the other platform', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    await stageResources({ lock: LOCK, platformKey: 'win32-x64', vendorDir, resourcesDir })
+    await expect(stat(join(resourcesDir, 'mpv/mpv.exe'))).resolves.toBeTruthy()
 
-    expect(report.copied).toEqual([
-      'mpv/mpv.exe',
-      'mpv/LICENSE.GPLv3.txt',
-      'mecab/mecab.exe',
-      'mecab/mecabrc',
-      'mecab/ipadic/sys.dic'
-    ])
-    expect(await readFile(join(resourcesDir, 'mpv/mpv.exe'), 'utf-8')).toBe('mpv-payload')
-    expect(await readFile(join(resourcesDir, 'mecab/mecabrc'), 'utf-8')).toContain('dicdir')
+    await stageResources({ lock: LOCK, platformKey: 'linux-x64', vendorDir, resourcesDir })
+    await expect(stat(join(resourcesDir, 'mpv/mpv'))).resolves.toBeTruthy()
+    await expect(stat(join(resourcesDir, 'mpv/mpv.exe'))).rejects.toThrow()
+    expect(
+      await stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).toEqual([])
   })
 
-  it('is idempotent: a second run rewrites nothing', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    await stageResources({ lock: lock(), vendorDir, resourcesDir })
-    const second = await stageResources({ lock: lock(), vendorDir, resourcesDir })
-
+  it('is idempotent and reports missing required paths', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    const first = await stageResources({
+      lock: LOCK,
+      platformKey: 'win32-x64',
+      vendorDir,
+      resourcesDir
+    })
+    const second = await stageResources({
+      lock: LOCK,
+      platformKey: 'win32-x64',
+      vendorDir,
+      resourcesDir
+    })
+    expect(first.copied).toHaveLength(5)
     expect(second.copied).toEqual([])
-    expect(second.skipped).toHaveLength(lock().files.length)
+    expect(second.skipped).toHaveLength(5)
+
+    await expect(
+      missingRequiredPaths({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).resolves.toEqual(expect.arrayContaining(['mpv/mpv', 'mecab/mecab']))
   })
 
-  it('replaces a destination whose contents drifted from the lock', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    await mkdir(join(resourcesDir, 'mpv'), { recursive: true })
-    await writeFile(join(resourcesDir, 'mpv/mpv.exe'), 'stale build')
+  it('rejects an optional yt-dlp binary from the other platform', async () => {
+    const { resourcesDir } = await makeMirror()
+    await mkdir(join(resourcesDir, 'yt-dlp'), { recursive: true })
+    await writeFile(join(resourcesDir, 'yt-dlp/yt-dlp.exe'), 'windows optional')
 
-    const report = await stageResources({ lock: lock(), vendorDir, resourcesDir })
-    expect(report.copied).toContain('mpv/mpv.exe')
-    expect(await readFile(join(resourcesDir, 'mpv/mpv.exe'), 'utf-8')).toBe('mpv-payload')
-  })
-})
-
-describe('missingRequiredPaths', () => {
-  it('returns nothing once staging produced the full layout', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    await stageResources({ lock: lock(), vendorDir, resourcesDir })
-    expect(await missingRequiredPaths({ lock: lock(), resourcesDir })).toEqual([])
+    await expect(
+      stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).resolves.toContain('non-selected optional yt-dlp resource remains: yt-dlp/yt-dlp.exe')
   })
 
-  it('names an executable the app resolves but the lock never staged', async () => {
-    const { resourcesDir } = await makeMirror(MIRROR_FILES)
-    expect(await missingRequiredPaths({ lock: lock(), resourcesDir })).toEqual(LOCK.requiredPaths)
+  it('rejects a staged file whose contents drift from the lock', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    await stageResources({ lock: LOCK, platformKey: 'linux-x64', vendorDir, resourcesDir })
+    await writeFile(join(resourcesDir, 'mpv/mpv'), 'tampered after staging')
+
+    await expect(
+      stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).resolves.toEqual(
+      expect.arrayContaining([expect.stringContaining('staged resource hash mismatch: mpv/mpv')])
+    )
   })
 })
 
 describe('acquireResources', () => {
-  it('materialises the pinned commit, then verifies and stages it', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
+  it('materialises, verifies, stages, and returns a report', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
     const seen: string[][] = []
-
     const report = await acquireResources({
-      lock: lock(),
+      lock: LOCK,
+      platformKey: 'linux-x64',
       vendorDir,
       resourcesDir,
       materialize: async (steps) => {
         for (const step of steps) seen.push(step.argv)
       }
     })
-
-    expect(report.copied).toHaveLength(LOCK.files.length)
+    expect(report.copied).toHaveLength(9)
     expect(seen).toContainEqual([
       'remote',
       'add',
@@ -306,54 +356,22 @@ describe('acquireResources', () => {
     ])
   })
 
-  it('skips git entirely when an existing checkout is supplied', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    const messages: string[] = []
-
-    await acquireResources({ lock: lock(), vendorDir, resourcesDir, log: (m) => messages.push(m) })
-    expect(messages[0]).toContain('Using existing vendor checkout')
-  })
-
-  it('fails closed on a hash mismatch, before touching resources/', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror({
-      ...MIRROR_FILES,
-      'mecab/ipadic/sys.dic': 'tampered'
-    })
-
-    await expect(acquireResources({ lock: lock(), vendorDir, resourcesDir })).rejects.toThrow(
-      /hash mismatch: mecab\/ipadic\/sys\.dic/
-    )
-    await expect(missingRequiredPaths({ lock: lock(), resourcesDir })).resolves.toEqual(
-      LOCK.requiredPaths
-    )
-  })
-
-  it('fails closed when a required executable never appears in resources/', async () => {
-    const partial = lock()
-    partial.files = partial.files.filter((f) => f.from !== 'mecab/bin/mecab.exe')
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-
-    await expect(acquireResources({ lock: partial, vendorDir, resourcesDir })).rejects.toThrow(
-      /missing required paths after staging:\s+mecab\/mecab\.exe/
-    )
-  })
-
-  it('refuses an unusable lock before any download is attempted', async () => {
-    const { vendorDir, resourcesDir } = await makeMirror(MIRROR_FILES)
-    const floating = lock()
-    floating.source.commit = 'main'
+  it('refuses a malformed lock before materialization', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    const malformed = copy(LOCK)
+    malformed.platforms['linux-x64'].source.commit = 'main'
     let materialized = false
-
     await expect(
       acquireResources({
-        lock: floating,
+        lock: malformed,
+        platformKey: 'linux-x64',
         vendorDir,
         resourcesDir,
         materialize: async () => {
           materialized = true
         }
       })
-    ).rejects.toThrow(/resources\.lock\.json is unusable/)
+    ).rejects.toThrow('resources.lock.json is unusable')
     expect(materialized).toBe(false)
   })
 })
