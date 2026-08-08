@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { basename, dirname, join } from 'node:path'
+import { posix } from 'node:path'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   bucketFor,
   seekTimeForBucket,
@@ -51,26 +52,41 @@ describe('seekTimeForBucket', () => {
   })
 })
 
-describe('thumbnailCachePath', () => {
-  it('builds <cacheDir>/<sha1>/<bucket>.jpg', () => {
-    const path = thumbnailCachePath('/cache', '/videos/ep1.mkv', 100, 200, 42)
-    // Asserted structurally rather than against a `/`-separated regex, which
-    // only matched on posix — the source joins with the platform separator.
-    expect(dirname(dirname(path))).toBe(join('/cache'))
-    expect(basename(dirname(path))).toMatch(/^[0-9a-f]{40}$/)
-    expect(basename(path)).toBe('42.jpg')
-  })
+// The cache layout is platform-shaped, so both variants are asserted on either
+// host rather than only the runner's own separator.
+describe.each(PATH_PLATFORMS)(
+  'thumbnailCachePath on $label',
+  ({ platform, path, mediaDir, userDataDir }) => {
+    const cacheDir = path.join(userDataDir, 'thumbnails')
 
+    it('builds <cacheDir>/<sha1>/<bucket>.jpg', () => {
+      const built = thumbnailCachePath(
+        cacheDir,
+        path.join(mediaDir, 'ep1.mkv'),
+        100,
+        200,
+        42,
+        platform
+      )
+
+      expect(path.dirname(path.dirname(built))).toBe(cacheDir)
+      expect(path.basename(path.dirname(built))).toMatch(/^[0-9a-f]{40}$/)
+      expect(path.basename(built)).toBe('42.jpg')
+    })
+  }
+)
+
+describe('thumbnailCachePath', () => {
   it('canonicalizes Windows paths so casing/separators do not fork the key', () => {
-    const a = thumbnailCachePath('/cache', 'E:\\Video\\A.mkv', 1, 2, 0)
-    const b = thumbnailCachePath('/cache', 'e:/video/a.mkv', 1, 2, 0)
+    const a = thumbnailCachePath('/cache', 'E:\\Video\\A.mkv', 1, 2, 0, 'linux')
+    const b = thumbnailCachePath('/cache', 'e:/video/a.mkv', 1, 2, 0, 'linux')
     expect(a).toBe(b)
   })
 
   it('hashes file identity: a new size or mtime yields a different directory', () => {
-    const base = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 5)
-    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 101, 200, 5)).not.toBe(base)
-    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 201, 5)).not.toBe(base)
+    const base = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 5, 'linux')
+    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 101, 200, 5, 'linux')).not.toBe(base)
+    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 201, 5, 'linux')).not.toBe(base)
   })
 })
 
@@ -119,6 +135,8 @@ function fakeFs(
   return { fs, existing, mkdirs }
 }
 
+// The service's caching/serialization behavior does not depend on separators,
+// so it is pinned to one target; the table above covers both path shapes.
 describe('createThumbnailService.getThumbnail', () => {
   it('returns null (no ffmpeg) when the time has no bucket', async () => {
     const ffmpeg = fakeFfmpegSuccess()
@@ -127,7 +145,8 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     expect(await svc.getThumbnail('/v/ep1.mkv', 10, 0.5)).toBeNull()
     expect(ffmpeg.calls).toHaveLength(0)
@@ -140,15 +159,16 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
-    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50)
+    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
 
     const out = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
     expect(out).toBe(expected)
     expect(ffmpeg.calls).toHaveLength(1)
     expect(ffmpeg.calls[0].ffmpegPath).toBe('/bin/ffmpeg')
-    expect(mkdirs).toEqual([dirname(expected)])
+    expect(mkdirs).toEqual([posix.dirname(expected)])
     // ffmpeg wrote to a temp path, not the final one directly.
     expect(ffmpeg.calls[0].args.at(-1)).not.toBe(expected)
     expect(ffmpeg.calls[0].args.at(-1)).toMatch(/\.tmp$/)
@@ -164,10 +184,11 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     const out = await svc.getThumbnail('/v/ep1.mkv', 100, 100) // timeSec >= durationSec
-    expect(out).toBe(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 99))
+    expect(out).toBe(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 99, 'linux'))
     const ssValue = Number(ffmpeg.calls[0].args[ffmpeg.calls[0].args.indexOf('-ss') + 1])
     expect(ssValue).toBeCloseTo(99.5)
     expect(ssValue).toBeLessThan(100)
@@ -175,13 +196,14 @@ describe('createThumbnailService.getThumbnail', () => {
 
   it('serves an existing cache file without spawning ffmpeg', async () => {
     const ffmpeg = fakeFfmpegSuccess()
-    const cached = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50)
+    const cached = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
     const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } }, new Set([cached]))
     const svc = createThumbnailService({
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(cached)
     expect(ffmpeg.calls).toHaveLength(0)
@@ -195,7 +217,8 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
 
     const first = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
@@ -218,7 +241,8 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     const a = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
     const b = await svc.getThumbnail('/v/ep1.mkv', 50.4, 100) // same bucket 50
@@ -237,7 +261,13 @@ describe('createThumbnailService.getThumbnail', () => {
       await gate
     })
     const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({ exec, fs, cacheDir: '/cache', ffmpegPath: '/bin/ffmpeg' })
+    const svc = createThumbnailService({
+      exec,
+      fs,
+      cacheDir: '/cache',
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
+    })
 
     const p1 = svc.getThumbnail('/v/ep1.mkv', 50, 100)
     const p2 = svc.getThumbnail('/v/ep1.mkv', 50, 100)
@@ -254,7 +284,8 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBeNull()
     expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBeNull()
@@ -268,7 +299,8 @@ describe('createThumbnailService.getThumbnail', () => {
       exec: ffmpeg.exec,
       fs,
       cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg'
+      ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux'
     })
     expect(await svc.getThumbnail('/v/gone.mkv', 50, 100)).toBeNull()
     expect(ffmpeg.calls).toHaveLength(0)
@@ -286,13 +318,14 @@ describe('createThumbnailService.getThumbnail', () => {
       fs,
       cacheDir: '/cache',
       ffmpegPath: '/bin/ffmpeg',
+      platform: 'linux',
       evictionScheduler: { schedule }
     })
-    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50)
+    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
 
     expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
     expect(schedule).toHaveBeenCalledTimes(1)
-    expect(dirname(expected)).toContain('cache')
+    expect(posix.dirname(expected)).toContain('cache')
 
     expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
     expect(schedule).toHaveBeenCalledTimes(1)

@@ -34,6 +34,7 @@ vi.mock('electron', () => ({
 }))
 
 import '@src/preload/index'
+import { windowShapeApi } from '@src/preload/index'
 
 describe('preload launch contract', () => {
   beforeEach(() => {
@@ -518,5 +519,37 @@ describe('preload window-controls contract', () => {
       mode: 'explicit',
       bounds: { x: 1, y: 2, width: 3, height: 4 }
     })
+  })
+})
+
+describe('preload window-shape exposure', () => {
+  it('exposes setShape on Linux and omits it on Windows, on either host', () => {
+    const send = vi.fn()
+
+    const linux = windowShapeApi(send, 'linux')
+    linux.setShape?.([{ x: 0, y: 0, width: 10, height: 10 }])
+
+    expect(Object.keys(linux)).toEqual(['setShape'])
+    expect(send).toHaveBeenCalledWith([{ x: 0, y: 0, width: 10, height: 10 }])
+    // Windows runs a single embedded window: the renderer must see no method at
+    // all, not a method that sends an ignored message.
+    expect(windowShapeApi(send, 'win32')).toEqual({})
+  })
+
+  it('sends shape rects on the setShape channel from the exposed API', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      windowControls: { setShape?(rects: unknown[]): void }
+    }
+
+    // The live API follows the host, so assert against the host's own platform
+    // rather than assuming which job is running.
+    expect('setShape' in api.windowControls).toBe(process.platform === 'linux')
+    if (api.windowControls.setShape) {
+      electron.send.mockReset()
+      api.windowControls.setShape([{ x: 1, y: 2, width: 3, height: 4 }])
+      expect(electron.send).toHaveBeenCalledWith(WINDOW_CONTROL_CHANNELS.setShape, [
+        { x: 1, y: 2, width: 3, height: 4 }
+      ])
+    }
   })
 })

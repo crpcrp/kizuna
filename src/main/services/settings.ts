@@ -19,7 +19,11 @@ import {
   type PlayerSettings
 } from '../../shared/playerSettings'
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
-import { normalizeMediaHistory, type MediaHistory } from '../../shared/mediaHistory'
+import {
+  normalizeMediaHistory,
+  type MediaHistory,
+  type PathNormalizationOptions
+} from '../../shared/mediaHistory'
 import { DEFAULT_KNOWLEDGE_TUNING, type KnowledgeTuning } from '../../shared/knowledge'
 
 export interface KnowledgeSettings extends KnowledgeTuning {
@@ -53,8 +57,12 @@ export const defaultSettings: Settings = {
  * Merges arbitrary/untrusted `raw` (parsed JSON, possibly from an older
  * version or corrupted file) into a valid `Settings`, falling back to
  * `defaultSettings` fields for anything missing or malformed. Never throws.
+ *
+ * `options` forwards path-normalization rules (platform, cwd) to the media
+ * history. It defaults to the runtime platform, which is what production wants;
+ * tests pass a platform explicitly so both variants are covered on either host.
  */
-export function mergeSettings(raw: unknown): Settings {
+export function mergeSettings(raw: unknown, options: PathNormalizationOptions = {}): Settings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
   const mecabDictId =
@@ -73,7 +81,7 @@ export function mergeSettings(raw: unknown): Settings {
     anki: mergeAnkiSettings(obj.anki),
     knowledge: mergeKnowledgeSettings(obj.knowledge),
     player: mergePlayerSettings(obj.player),
-    mediaHistory: normalizeMediaHistory(obj.mediaHistory)
+    mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
   }
 }
 

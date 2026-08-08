@@ -67,21 +67,27 @@ describe('FakeMpvServer endpoint selection', () => {
   })
 })
 
-describe('FakeMpvServer lifecycle', () => {
-  it.skipIf(process.platform !== 'linux')(
-    'removes a stale Linux socket before listening',
-    async () => {
-      const server = new FakeMpvServer({ platform: 'linux', tempRoot: makeTempRoot() })
-      writeFileSync(server.endpoint, 'stale socket placeholder')
+// Binding a real Unix domain socket requires a POSIX host, so this one case
+// cannot run on Windows. It is narrow on purpose: what it covers — unlinking a
+// leftover socket file before listening — has no Windows counterpart at all,
+// because a named pipe is a kernel object that disappears with its process and
+// must never be unlinked. That Windows behavior is asserted separately by
+// 'does not invoke Unix cleanup seams for Windows endpoints' below, which runs
+// on every host.
+const SUPPORTS_UNIX_SOCKETS = process.platform !== 'win32'
 
-      try {
-        await server.listen()
-        expect(existsSync(server.endpoint)).toBe(true)
-      } finally {
-        await server.close()
-      }
+describe('FakeMpvServer lifecycle', () => {
+  it.skipIf(!SUPPORTS_UNIX_SOCKETS)('removes a stale Linux socket before listening', async () => {
+    const server = new FakeMpvServer({ platform: 'linux', tempRoot: makeTempRoot() })
+    writeFileSync(server.endpoint, 'stale socket placeholder')
+
+    try {
+      await server.listen()
+      expect(existsSync(server.endpoint)).toBe(true)
+    } finally {
+      await server.close()
     }
-  )
+  })
 
   it('cleans its resources after a listen failure', async () => {
     const tempRoot = makeTempRoot()

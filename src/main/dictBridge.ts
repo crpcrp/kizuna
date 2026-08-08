@@ -1,9 +1,9 @@
 // Database and importer boundaries are injected so bridge and service tests can
 // use in-memory databases.
 
-import { join } from 'node:path'
 import { DICT_CHANNELS } from '../shared/ipcChannels'
 import type { IpcMainHandleLike } from './ipc'
+import { pathApiFor } from './platformPath'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './services/dict/schema'
 import { lookup as runLookup } from './services/dict/lookup'
 import { createDbImporter, type DictionaryImporter } from './services/dict/importer'
@@ -17,8 +17,11 @@ import type { DictInfo, ImportResult, FrequencyMode, LookupResult } from '../sha
  * `__dirname` is `out/main` in both cases and one join covers both, mirroring
  * how `index.ts` already resolves the preload path off the same `__dirname`.
  */
-export function resolveImportWorkerPath(dirname: string): string {
-  return join(dirname, 'importWorker.js')
+export function resolveImportWorkerPath(
+  dirname: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return pathApiFor(platform).join(dirname, 'importWorker.js')
 }
 
 /** The slice of the dict service this bridge needs (fakeable in tests). */

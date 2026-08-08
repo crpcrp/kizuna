@@ -64,9 +64,23 @@ not a live binary, account, or network service.
 Reach for the shared harness before writing a local fake or fixture:
 `fakeIpcMain.ts` (records the handlers a bridge registers), `fakeSettingsIo.ts`
 (in-memory settings file), `deferred.ts` (a promise the test settles),
-`dictFixtures.ts` (`makeLookupResult`, `makeDictInfo`), and
-`fakeKizunaApi.ts` (the typed preload API). Extend one of these rather than
-copying it, so a change to the shape stays a single edit.
+`dictFixtures.ts` (`makeLookupResult`, `makeDictInfo`),
+`fakeKizunaApi.ts` (the typed preload API), and `platformPaths.ts`
+(Windows/Linux path cases). Extend one of these rather than copying it, so a
+change to the shape stays a single edit.
+
+### Derive a filesystem path
+
+Take an optional `platform: NodeJS.Platform` (or a `platform?` field on the
+deps object) defaulting to `process.platform`, and resolve the path API through
+`pathApiFor` in `src/main/platformPath.ts` instead of importing `join`,
+`dirname`, or `basename` straight from `node:path`. Production behavior is
+unchanged; tests then assert the Windows and Linux results on either host with
+`describe.each(PATH_PLATFORMS)` from `test/harness/platformPaths.ts`.
+
+Never hand a Windows-format fixture to the host's default `node:path`:
+`join('C:\\Users\\me', 'Kizuna')` yields `C:\Users\me/Kizuna` on Linux, so
+the assertion passes while describing a path no platform produces.
 
 ### Add persisted settings
 

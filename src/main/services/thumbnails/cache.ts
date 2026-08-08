@@ -10,7 +10,7 @@
 // how they walk and delete — never in policy. The walk and deletes go through
 // an injected fs so both are testable without real disk.
 
-import { join } from 'node:path'
+import { pathApiFor } from '../../platformPath'
 import type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
 
 export type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
@@ -135,7 +135,12 @@ export interface ThumbnailAsyncDirFs {
  * Walks `cacheDir` into one {@link ThumbnailCacheEntry} per file-dir, summing
  * bytes and taking the newest mtime as the recency proxy.
  */
-export function collectCacheEntries(cacheDir: string, fs: ThumbnailDirFs): ThumbnailCacheEntry[] {
+export function collectCacheEntries(
+  cacheDir: string,
+  fs: ThumbnailDirFs,
+  platform: NodeJS.Platform = process.platform
+): ThumbnailCacheEntry[] {
+  const { join } = pathApiFor(platform)
   return fs.readSubdirs(cacheDir).map((name) => {
     const dir = join(cacheDir, name)
     return summarizeCacheDir(
@@ -148,8 +153,10 @@ export function collectCacheEntries(cacheDir: string, fs: ThumbnailDirFs): Thumb
 /** Async counterpart used only for post-write runtime eviction. */
 export async function collectCacheEntriesAsync(
   cacheDir: string,
-  fs: Omit<ThumbnailAsyncDirFs, 'remove'>
+  fs: Omit<ThumbnailAsyncDirFs, 'remove'>,
+  platform: NodeJS.Platform = process.platform
 ): Promise<ThumbnailCacheEntry[]> {
+  const { join } = pathApiFor(platform)
   const subdirs = await fs.readSubdirs(cacheDir)
   return Promise.all(
     subdirs.map(async (name) => {
@@ -171,8 +178,13 @@ export function sweepThumbnailCache(deps: {
   cacheDir: string
   maxBytes: number
   fs: ThumbnailDirFs & { remove(path: string): void }
+  /** Path semantics for the cache walk; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): string[] {
-  const evicted = selectEvictions(collectCacheEntries(deps.cacheDir, deps.fs), deps.maxBytes)
+  const evicted = selectEvictions(
+    collectCacheEntries(deps.cacheDir, deps.fs, deps.platform),
+    deps.maxBytes
+  )
   for (const path of evicted) deps.fs.remove(path)
   return evicted
 }
@@ -182,9 +194,11 @@ export async function sweepThumbnailCacheAsync(deps: {
   cacheDir: string
   maxBytes: number
   fs: ThumbnailAsyncDirFs
+  /** Path semantics for the cache walk; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): Promise<string[]> {
   const evicted = selectEvictions(
-    await collectCacheEntriesAsync(deps.cacheDir, deps.fs),
+    await collectCacheEntriesAsync(deps.cacheDir, deps.fs, deps.platform),
     deps.maxBytes
   )
   await Promise.all(evicted.map((path) => deps.fs.remove(path)))

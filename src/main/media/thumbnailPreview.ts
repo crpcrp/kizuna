@@ -38,18 +38,22 @@ export function createCachedThumbnailService(deps: {
   cacheDir: string
   ffmpegPath: string
   execFfmpeg: FfmpegExec
+  /** Path semantics for the cache layout; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): ThumbnailService {
   return createThumbnailService({
     exec: deps.execFfmpeg,
     fs: nodeThumbnailFs,
     cacheDir: deps.cacheDir,
     ffmpegPath: deps.ffmpegPath,
+    platform: deps.platform,
     evictionScheduler: createDebouncedThumbnailEviction({
       sweep: () =>
         sweepThumbnailCacheAsync({
           cacheDir: deps.cacheDir,
           maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
-          fs: nodeThumbnailAsyncDirFs
+          fs: nodeThumbnailAsyncDirFs,
+          platform: deps.platform
         }).then(() => undefined),
       onError: (error) => console.warn('[kizuna] thumbnail cache sweep failed:', error)
     })

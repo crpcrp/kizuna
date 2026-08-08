@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { join } from 'node:path'
+import { WINDOWS_PATHS } from '@test/harness/platformPaths'
 import {
   createDebouncedThumbnailEviction,
   selectEvictions,
@@ -74,21 +74,36 @@ describe('summarizeCacheDir', () => {
 
 describe('collectCacheEntries', () => {
   it('sums bytes and takes the newest mtime per file-dir', () => {
-    // The source joins through node:path, so the fake's keys must use the host
-    // separator too — hard-coded `/` keys missed every lookup on Windows.
+    // The walk is pinned to Linux path rules so the fake's keys are literal and
+    // host-independent; the Windows layout is asserted separately below.
     const stats: Record<string, ThumbnailStat> = {
-      [join('/cache', 'h1', '0.jpg')]: { size: 100, mtimeMs: 10 },
-      [join('/cache', 'h1', '1.jpg')]: { size: 50, mtimeMs: 40 },
-      [join('/cache', 'h2', '0.jpg')]: { size: 200, mtimeMs: 5 }
+      ['/cache/h1/0.jpg']: { size: 100, mtimeMs: 10 },
+      ['/cache/h1/1.jpg']: { size: 50, mtimeMs: 40 },
+      ['/cache/h2/0.jpg']: { size: 200, mtimeMs: 5 }
     }
     const fs: ThumbnailDirFs = {
       readSubdirs: (dir) => (dir === '/cache' ? ['h1', 'h2'] : []),
-      readFiles: (dir) => (dir === join('/cache', 'h1') ? ['0.jpg', '1.jpg'] : ['0.jpg']),
+      readFiles: (dir) => (dir === '/cache/h1' ? ['0.jpg', '1.jpg'] : ['0.jpg']),
       stat: (p) => stats[p]
     }
-    expect(collectCacheEntries('/cache', fs)).toEqual([
-      { path: join('/cache', 'h1'), bytes: 150, mtimeMs: 40 },
-      { path: join('/cache', 'h2'), bytes: 200, mtimeMs: 5 }
+    expect(collectCacheEntries('/cache', fs, 'linux')).toEqual([
+      { path: '/cache/h1', bytes: 150, mtimeMs: 40 },
+      { path: '/cache/h2', bytes: 200, mtimeMs: 5 }
+    ])
+  })
+
+  it('walks a Windows cache directory with backslash-joined file-dirs', () => {
+    const cacheDir = WINDOWS_PATHS.path.join(WINDOWS_PATHS.userDataDir, 'thumbnails')
+    const fileDir = `${cacheDir}\\h1`
+    const fs: ThumbnailDirFs = {
+      readSubdirs: (dir) => (dir === cacheDir ? ['h1'] : []),
+      readFiles: (dir) => (dir === fileDir ? ['0.jpg'] : []),
+      stat: (p) =>
+        p === `${fileDir}\\0.jpg` ? { size: 100, mtimeMs: 10 } : { size: 0, mtimeMs: 0 }
+    }
+
+    expect(collectCacheEntries(cacheDir, fs, 'win32')).toEqual([
+      { path: fileDir, bytes: 100, mtimeMs: 10 }
     ])
   })
 
@@ -98,15 +113,15 @@ describe('collectCacheEntries', () => {
       readFiles: () => [],
       stat: () => ({ size: 0, mtimeMs: 0 })
     }
-    expect(collectCacheEntries('/cache', fs)).toEqual([])
+    expect(collectCacheEntries('/cache', fs, 'linux')).toEqual([])
   })
 })
 
 describe('sweepThumbnailCache', () => {
   it('removes exactly the LRU file-dirs needed to get under the cap', () => {
     const stats: Record<string, ThumbnailStat> = {
-      [join('/cache', 'old', '0.jpg')]: { size: 400, mtimeMs: 1 },
-      [join('/cache', 'new', '0.jpg')]: { size: 400, mtimeMs: 9 }
+      ['/cache/old/0.jpg']: { size: 400, mtimeMs: 1 },
+      ['/cache/new/0.jpg']: { size: 400, mtimeMs: 9 }
     }
     const removed: string[] = []
     const fs: ThumbnailDirFs & { remove(path: string): void } = {
@@ -115,9 +130,14 @@ describe('sweepThumbnailCache', () => {
       stat: (p) => stats[p],
       remove: (p) => removed.push(p)
     }
-    const result = sweepThumbnailCache({ cacheDir: '/cache', maxBytes: 500, fs })
-    expect(result).toEqual([join('/cache', 'old')])
-    expect(removed).toEqual([join('/cache', 'old')])
+    const result = sweepThumbnailCache({
+      cacheDir: '/cache',
+      maxBytes: 500,
+      fs,
+      platform: 'linux'
+    })
+    expect(result).toEqual(['/cache/old'])
+    expect(removed).toEqual(['/cache/old'])
   })
 
   it('removes nothing when already under the cap', () => {
@@ -128,7 +148,9 @@ describe('sweepThumbnailCache', () => {
       stat: () => ({ size: 10, mtimeMs: 1 }),
       remove
     }
-    expect(sweepThumbnailCache({ cacheDir: '/cache', maxBytes: 500, fs })).toEqual([])
+    expect(
+      sweepThumbnailCache({ cacheDir: '/cache', maxBytes: 500, fs, platform: 'linux' })
+    ).toEqual([])
     expect(remove).not.toHaveBeenCalled()
   })
 })
@@ -146,12 +168,12 @@ describe('sweepThumbnailCacheAsync', () => {
     }
 
     await expect(
-      sweepThumbnailCacheAsync({ cacheDir: '/cache', maxBytes: 500, fs })
-    ).resolves.toEqual([join('/cache', 'old')])
-    expect(removed).toEqual([join('/cache', 'old')])
-    await expect(collectCacheEntriesAsync('/cache', fs)).resolves.toEqual([
-      { path: join('/cache', 'old'), bytes: 400, mtimeMs: 1 },
-      { path: join('/cache', 'new'), bytes: 400, mtimeMs: 9 }
+      sweepThumbnailCacheAsync({ cacheDir: '/cache', maxBytes: 500, fs, platform: 'linux' })
+    ).resolves.toEqual(['/cache/old'])
+    expect(removed).toEqual(['/cache/old'])
+    await expect(collectCacheEntriesAsync('/cache', fs, 'linux')).resolves.toEqual([
+      { path: '/cache/old', bytes: 400, mtimeMs: 1 },
+      { path: '/cache/new', bytes: 400, mtimeMs: 9 }
     ])
   })
 })

@@ -1,30 +1,62 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolve } from 'node:path'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import { createLaunchPathBuffer, videoPathFromArgv } from '@src/main/launchArgs'
 
-describe('videoPathFromArgv', () => {
-  const cwd = '/work/media'
+// Windows and Linux launch arguments are asserted on either host: the platform
+// is passed explicitly, so a POSIX runner still proves that `E:\anime\a.mkv`
+// survives untouched instead of being glued onto the working directory.
+describe.each(PATH_PLATFORMS)('videoPathFromArgv on $label', ({ platform, path, mediaDir }) => {
+  const cwd = path.join(mediaDir, 'work')
+  const launcher = platform === 'win32' ? 'Kizuna.exe' : 'kizuna'
 
-  it('returns a packaged absolute video path', () => {
-    expect(videoPathFromArgv(['Kizuna.exe', 'E:\\anime\\a.mkv'], cwd)).toBe('E:\\anime\\a.mkv')
+  it('returns a packaged absolute video path unchanged', () => {
+    const absolute = path.join(mediaDir, 'a.mkv')
+
+    expect(videoPathFromArgv([launcher, absolute], cwd, platform)).toBe(absolute)
   })
 
   it('skips dev launch entries and flags, resolving the first video against cwd', () => {
-    expect(videoPathFromArgv(['electron', '.', '--inspect=9229', 'clip.mp4'], cwd)).toBe(
-      resolve(cwd, 'clip.mp4')
+    expect(videoPathFromArgv(['electron', '.', '--inspect=9229', 'clip.mp4'], cwd, platform)).toBe(
+      path.resolve(cwd, 'clip.mp4')
     )
   })
 
   it('returns undefined for flags only, non-video positionals, or empty argv', () => {
-    expect(videoPathFromArgv(['electron', '--inspect'], cwd)).toBeUndefined()
-    expect(videoPathFromArgv(['electron', 'notes.txt'], cwd)).toBeUndefined()
-    expect(videoPathFromArgv([], cwd)).toBeUndefined()
+    expect(videoPathFromArgv(['electron', '--inspect'], cwd, platform)).toBeUndefined()
+    expect(videoPathFromArgv(['electron', 'notes.txt'], cwd, platform)).toBeUndefined()
+    expect(videoPathFromArgv([], cwd, platform)).toBeUndefined()
   })
 
-  it('accepts uppercase extensions and UNC absolute paths', () => {
-    expect(videoPathFromArgv(['Kizuna.exe', 'EPISODE.MP4'], cwd)).toBe(resolve(cwd, 'EPISODE.MP4'))
-    expect(videoPathFromArgv(['Kizuna.exe', '\\\\nas\\share\\episode.mkv'], cwd)).toBe(
+  it('accepts uppercase extensions', () => {
+    expect(videoPathFromArgv([launcher, 'EPISODE.MP4'], cwd, platform)).toBe(
+      path.resolve(cwd, 'EPISODE.MP4')
+    )
+  })
+
+  it('resolves a nested relative argument with the platform separator', () => {
+    const relative = platform === 'win32' ? 'sub\\clip.mp4' : 'sub/clip.mp4'
+
+    expect(videoPathFromArgv([launcher, relative], cwd, platform)).toBe(
+      path.join(cwd, 'sub', 'clip.mp4')
+    )
+  })
+})
+
+// Windows-only argument shapes: a UNC share and a drive-qualified path have no
+// Linux counterpart, so they are asserted against the Windows path rules only.
+// Both still run on a Linux host because the platform is explicit.
+describe('videoPathFromArgv with Windows-only path shapes', () => {
+  const cwd = 'C:\\work\\media'
+
+  it('keeps a UNC share path absolute', () => {
+    expect(videoPathFromArgv(['Kizuna.exe', '\\\\nas\\share\\episode.mkv'], cwd, 'win32')).toBe(
       '\\\\nas\\share\\episode.mkv'
+    )
+  })
+
+  it('keeps a path on another drive absolute instead of appending it to cwd', () => {
+    expect(videoPathFromArgv(['Kizuna.exe', 'E:\\anime\\a.mkv'], cwd, 'win32')).toBe(
+      'E:\\anime\\a.mkv'
     )
   })
 })

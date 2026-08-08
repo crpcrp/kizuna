@@ -60,6 +60,23 @@ import type {
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 
+/**
+ * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
+ * X11 renderer overlay of the two-window pair (see `windowPair.ts`); Windows
+ * runs a single embedded window and must not expose the method at all, so the
+ * renderer's optional-method check (`useLinuxWindowShape`) stays the one gate.
+ *
+ * Split out as a pure function with an explicit `platform` so both variants are
+ * asserted on either host — reading `process.platform` inline left the Windows
+ * shape untested on a Linux runner and vice versa.
+ */
+export function windowShapeApi(
+  setShape: (rects: WindowShapeRect[]) => void,
+  platform: NodeJS.Platform = process.platform
+): { setShape?(rects: WindowShapeRect[]): void } {
+  return platform === 'linux' ? { setShape } : {}
+}
+
 function subscribe<T>(channel: string, callback: (value: T) => void): () => void {
   const listener = (_event: Electron.IpcRendererEvent, value: T): void => callback(value)
   ipcRenderer.on(channel, listener)
@@ -80,12 +97,7 @@ const api = {
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
     setAlwaysOnTop: (flag: boolean): void =>
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, flag),
-    ...(process.platform === 'linux'
-      ? {
-          setShape: (rects: WindowShapeRect[]): void =>
-            ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects)
-        }
-      : {}),
+    ...windowShapeApi((rects) => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects)),
     getBounds: (): Promise<WindowBounds | null> =>
       ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.getBounds),
     setBounds: (request: SetWindowBoundsRequest): Promise<WindowBounds | null> =>

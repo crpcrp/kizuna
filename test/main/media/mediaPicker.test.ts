@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { dirname, join } from 'node:path'
+import { posix } from 'node:path'
 import {
   createMediaPicker,
   type MediaPickerDeps,
@@ -23,6 +23,10 @@ function createPicker(overrides: Partial<MediaPickerDeps> = {}) {
     writePlaylistText: vi.fn<WritePlaylistText>(async () => {}),
     listVideosIn: vi.fn(async () => []),
     mediaHistory: history,
+    // Dialog wiring and history bookkeeping do not depend on separators, so the
+    // picker is pinned to one target and its fixtures are literal POSIX paths.
+    // The Windows shapes are asserted in the dedicated describe at the end.
+    platform: 'linux',
     ...overrides
   }
   return { picker: createMediaPicker(deps), history, deps }
@@ -45,18 +49,18 @@ const videoDialogOptions = {
 
 describe('createMediaPicker openFile', () => {
   it('uses the saved folder as the dialog default and persists the selected file folder', async () => {
-    const selectedPath = join('/media', 'series', 'episode.mkv')
+    const selectedPath = '/media/series/episode.mkv'
     const showOpenDialog = vi
       .fn<ShowOpenDialog>()
       .mockResolvedValue({ canceled: false, filePaths: [selectedPath] })
-    const { picker, history } = pickerWithDialog(showOpenDialog, join('/media', 'series'))
+    const { picker, history } = pickerWithDialog(showOpenDialog, '/media/series')
 
     await expect(picker.openFile()).resolves.toBe(selectedPath)
     expect(showOpenDialog).toHaveBeenCalledWith({
       ...videoDialogOptions,
-      defaultPath: join('/media', 'series')
+      defaultPath: '/media/series'
     })
-    expect(history.setLastOpenFolder).toHaveBeenCalledWith(dirname(selectedPath))
+    expect(history.setLastOpenFolder).toHaveBeenCalledWith(posix.dirname(selectedPath))
   })
 
   it('preserves the saved folder when the dialog is cancelled', async () => {
@@ -117,25 +121,25 @@ const subtitleDialogOptions = {
 
 describe('createMediaPicker openSubtitleFile', () => {
   it('filters the dialog to subtitle files and defaults to the last open folder', async () => {
-    const selectedPath = join('/media', 'series', 'episode.srt')
+    const selectedPath = '/media/series/episode.srt'
     const showOpenDialog = vi
       .fn<ShowOpenDialog>()
       .mockResolvedValue({ canceled: false, filePaths: [selectedPath] })
-    const { picker } = pickerWithDialog(showOpenDialog, join('/media', 'series'))
+    const { picker } = pickerWithDialog(showOpenDialog, '/media/series')
 
     await expect(picker.openSubtitleFile()).resolves.toBe(selectedPath)
     expect(showOpenDialog).toHaveBeenCalledWith({
       ...subtitleDialogOptions,
-      defaultPath: join('/media', 'series')
+      defaultPath: '/media/series'
     })
   })
 
   it('leaves the last open folder alone — it is the video picker’s memory', async () => {
-    const selectedPath = join('/downloads', 'subs', 'episode.ass')
+    const selectedPath = '/downloads/subs/episode.ass'
     const showOpenDialog = vi
       .fn<ShowOpenDialog>()
       .mockResolvedValue({ canceled: false, filePaths: [selectedPath] })
-    const { picker, history } = pickerWithDialog(showOpenDialog, join('/media', 'series'))
+    const { picker, history } = pickerWithDialog(showOpenDialog, '/media/series')
 
     await expect(picker.openSubtitleFile()).resolves.toBe(selectedPath)
     expect(history.setLastOpenFolder).not.toHaveBeenCalled()
@@ -175,18 +179,18 @@ const multiFileDialogOptions = {
 
 describe('createMediaPicker openFiles', () => {
   it('multi-selects and persists the folder of the first pick', async () => {
-    const picks = [join('/media', 'series', 'ep1.mkv'), join('/media', 'series', 'ep2.mkv')]
+    const picks = ['/media/series/ep1.mkv', '/media/series/ep2.mkv']
     const showOpenDialog = vi
       .fn<ShowOpenDialog>()
       .mockResolvedValue({ canceled: false, filePaths: picks })
-    const { picker, history } = pickerWithDialog(showOpenDialog, join('/media', 'series'))
+    const { picker, history } = pickerWithDialog(showOpenDialog, '/media/series')
 
     await expect(picker.openFiles()).resolves.toEqual(picks)
     expect(showOpenDialog).toHaveBeenCalledWith({
       ...multiFileDialogOptions,
-      defaultPath: join('/media', 'series')
+      defaultPath: '/media/series'
     })
-    expect(history.setLastOpenFolder).toHaveBeenCalledWith(dirname(picks[0]))
+    expect(history.setLastOpenFolder).toHaveBeenCalledWith(posix.dirname(picks[0]))
   })
 
   it('resolves an empty array and leaves the folder untouched when cancelled', async () => {
@@ -221,10 +225,10 @@ describe('createMediaPicker openFolder', () => {
     const showOpenDialog = vi
       .fn<ShowOpenDialog>()
       .mockResolvedValue({ canceled: false, filePaths: ['/media/season1'] })
-    const listVideosIn = vi.fn(async (folder: string) => [join(folder, 'ep2.mkv')])
+    const listVideosIn = vi.fn(async (folder: string) => [`${folder}/ep2.mkv`])
     const { picker, history } = createPicker({ showOpenDialog, listVideosIn })
 
-    await expect(picker.openFolder()).resolves.toEqual([join('/media/season1', 'ep2.mkv')])
+    await expect(picker.openFolder()).resolves.toEqual(['/media/season1/ep2.mkv'])
     expect(showOpenDialog).toHaveBeenCalledWith({ properties: ['openDirectory'] })
     expect(listVideosIn).toHaveBeenCalledWith('/media/season1')
     expect(history.setLastOpenFolder).toHaveBeenCalledWith('/media/season1')
@@ -269,8 +273,8 @@ describe('createMediaPicker readPlaylist', () => {
     const { picker } = createPicker({ readPlaylistText })
 
     await expect(picker.readPlaylist('/media/list.m3u')).resolves.toEqual([
-      join('/media', 'a.mkv'),
-      join('/media', 'b.mkv')
+      '/media/a.mkv',
+      '/media/b.mkv'
     ])
     expect(readPlaylistText).toHaveBeenCalledWith('/media/list.m3u')
   })
@@ -281,7 +285,7 @@ describe('createMediaPicker readPlaylist', () => {
       .mockResolvedValue('#EXTM3U\n#EXTINF:120,Title\n/media/a.mkv\n\n')
     const { picker } = createPicker({ readPlaylistText })
 
-    await expect(picker.readPlaylist('/media/list.m3u')).resolves.toEqual([join('/media', 'a.mkv')])
+    await expect(picker.readPlaylist('/media/list.m3u')).resolves.toEqual(['/media/a.mkv'])
   })
 })
 
@@ -304,14 +308,14 @@ describe('createMediaPicker savePlaylist', () => {
   it('defaults the save dialog to playlist.m3u inside the last open folder', async () => {
     const showSaveDialog = vi.fn<ShowSaveDialog>().mockResolvedValue({ canceled: true })
     const history = {
-      getLastOpenFolder: vi.fn<() => string | undefined>(() => join('/media', 'series')),
+      getLastOpenFolder: vi.fn<() => string | undefined>(() => '/media/series'),
       setLastOpenFolder: vi.fn()
     }
     const { picker } = createPicker({ showSaveDialog, mediaHistory: history })
 
     await picker.savePlaylist(['/media/a.mkv'])
     expect(showSaveDialog).toHaveBeenCalledWith({
-      defaultPath: join('/media', 'series', 'playlist.m3u'),
+      defaultPath: '/media/series/playlist.m3u',
       filters: [{ name: 'Playlist', extensions: ['m3u', 'm3u8'] }]
     })
   })
@@ -323,5 +327,47 @@ describe('createMediaPicker savePlaylist', () => {
 
     await expect(picker.savePlaylist(['/media/a.mkv'])).resolves.toBeUndefined()
     expect(writePlaylistText).not.toHaveBeenCalled()
+  })
+})
+
+// The two picker seams that are genuinely path-shaped — resolving a playlist's
+// relative entries against its folder, and the save dialog's default path — get
+// their Windows counterpart here, asserted on either host.
+describe('createMediaPicker on Windows', () => {
+  it('resolves relative playlist entries against the playlist folder with backslashes', async () => {
+    const readPlaylistText = vi
+      .fn<ReadPlaylistText>()
+      .mockResolvedValue('#EXTM3U\r\nE:\\anime\\a.mkv\r\nb.mkv\r\n')
+    const { picker } = createPicker({ readPlaylistText, platform: 'win32' })
+
+    await expect(picker.readPlaylist('E:\\anime\\list.m3u')).resolves.toEqual([
+      'E:\\anime\\a.mkv',
+      'E:\\anime\\b.mkv'
+    ])
+  })
+
+  it('defaults the save dialog to playlist.m3u inside the last open folder', async () => {
+    const showSaveDialog = vi.fn<ShowSaveDialog>().mockResolvedValue({ canceled: true })
+    const history = {
+      getLastOpenFolder: vi.fn<() => string | undefined>(() => 'E:\\anime'),
+      setLastOpenFolder: vi.fn()
+    }
+    const { picker } = createPicker({ showSaveDialog, mediaHistory: history, platform: 'win32' })
+
+    await picker.savePlaylist(['E:\\anime\\a.mkv'])
+    expect(showSaveDialog).toHaveBeenCalledWith({
+      defaultPath: 'E:\\anime\\playlist.m3u',
+      filters: [{ name: 'Playlist', extensions: ['m3u', 'm3u8'] }]
+    })
+  })
+
+  it('remembers the selected file folder using Windows path rules', async () => {
+    const showOpenDialog = vi
+      .fn<ShowOpenDialog>()
+      .mockResolvedValue({ canceled: false, filePaths: ['E:\\anime\\show\\ep1.mkv'] })
+    const { picker, history } = createPicker({ showOpenDialog, platform: 'win32' })
+
+    await expect(picker.openFile()).resolves.toBe('E:\\anime\\show\\ep1.mkv')
+    expect(history.setLastOpenFolder).toHaveBeenCalledWith('E:\\anime\\show')
   })
 })

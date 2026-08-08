@@ -15,7 +15,7 @@
 //     are size- and time-bounded, abortable, and removed on failure/success.
 
 import { execFile } from 'node:child_process'
-import { join } from 'node:path'
+import { pathApiFor } from '../platformPath'
 import { randomBytes } from 'node:crypto'
 import type { Cue } from '../../shared/cue'
 import { isExtractorBackedUrl } from '../../shared/ytdlpQuality'
@@ -101,6 +101,8 @@ export interface UrlSubtitleServiceDeps {
   clearTimeout?: (handle: ReturnType<typeof setTimeout>) => void
   /** Injected unguessable token for the per-acquisition subdir name. */
   randomToken?: () => string
+  /** Path semantics for the cache layout; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 export interface UrlSubtitleService {
@@ -125,7 +127,12 @@ export function buildInventoryArgs(url: string): string[] {
  * language is the trusted value from main's own inventory. `srt/vtt` restricts
  * yt-dlp to formats this application can parse.
  */
-export function buildAcquireArgs(url: string, track: UrlSubtitleTrack, outDir: string): string[] {
+export function buildAcquireArgs(
+  url: string,
+  track: UrlSubtitleTrack,
+  outDir: string,
+  platform: NodeJS.Platform = process.platform
+): string[] {
   return [
     '--no-playlist',
     '--skip-download',
@@ -138,7 +145,7 @@ export function buildAcquireArgs(url: string, track: UrlSubtitleTrack, outDir: s
     '--no-warnings',
     '--no-part',
     '-o',
-    join(outDir, 'sub.%(ext)s'),
+    pathApiFor(platform).join(outDir, 'sub.%(ext)s'),
     '--',
     url
   ]
@@ -169,6 +176,7 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
   const setTimeoutFn = deps.setTimeout ?? setTimeout
   const clearTimeoutFn = deps.clearTimeout ?? clearTimeout
   const randomToken = deps.randomToken ?? (() => randomBytes(9).toString('hex'))
+  const { join } = pathApiFor(deps.platform)
 
   let activeUrl: string | undefined
   let inventory: UrlSubtitleInventory | undefined
@@ -289,7 +297,7 @@ export function createUrlSubtitleService(deps: UrlSubtitleServiceDeps): UrlSubti
       }
 
       const outDir = join(deps.cacheDir, randomToken())
-      const args = buildAcquireArgs(url, track, outDir)
+      const args = buildAcquireArgs(url, track, outDir, deps.platform)
       let files: string[] = []
       let stage: 'exec' | 'files' | 'parse' = 'exec'
       try {

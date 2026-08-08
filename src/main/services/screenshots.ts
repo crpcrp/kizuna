@@ -1,7 +1,7 @@
 // mpv and filesystem operations are injected so screenshot tests do not need a
 // live player or real disk.
 
-import { join } from 'node:path'
+import { pathApiFor } from '../platformPath'
 
 /** Characters Windows forbids in a filename (`<>:"/\|?*`), plus ASCII control
  * chars — matched globally so `sanitizeScreenshotName` can replace them. */
@@ -44,13 +44,15 @@ export function screenshotPath(
   dir: string,
   mediaPath: string,
   timePos: number,
-  exists: (path: string) => boolean
+  exists: (path: string) => boolean,
+  platform: NodeJS.Platform = process.platform
 ): string {
   const stem = screenshotStem(mediaPath)
   const timestamp = formatScreenshotTimestamp(timePos)
   const base = `${stem}-${timestamp}`
-  // Join through node:path so the separator matches the platform — a raw `/`
-  // produced mixed separators in the success banner on Windows.
+  // Join through the platform's path API so the separator matches the target —
+  // a raw `/` produced mixed separators in the success banner on Windows.
+  const { join } = pathApiFor(platform)
   const build = (name: string): string => join(dir, `${name}.png`)
 
   let candidate = build(base)
@@ -103,8 +105,11 @@ export function createFrameCaptureService(deps: {
   remove(path: string): Promise<void>
   /** Distinguishes concurrent captures; defaults to a random suffix. */
   uniqueSuffix?: () => string
+  /** Path semantics for the temp file; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): FrameCaptureService {
   const suffix = deps.uniqueSuffix ?? (() => Math.random().toString(36).slice(2, 10))
+  const { join } = pathApiFor(deps.platform)
   return {
     async captureFrameData(): Promise<string> {
       const path = join(deps.tempDir(), `kizuna-frame-${suffix()}.png`)
@@ -125,6 +130,8 @@ export function createScreenshotService(deps: {
   folder(): string // resolves the setting or the Pictures default per call
   exists(path: string): boolean
   mkdir(path: string): void // recursive
+  /** Path semantics for the saved file; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): ScreenshotService {
   // Paths chosen by an in-flight capture but not yet written to disk. Two
   // captures in the same media second would otherwise both see the same
@@ -139,7 +146,13 @@ export function createScreenshotService(deps: {
       } catch {
         throw new ScreenshotFolderError(dir)
       }
-      const path = screenshotPath(dir, mediaPath, timePos, (p) => reserved.has(p) || deps.exists(p))
+      const path = screenshotPath(
+        dir,
+        mediaPath,
+        timePos,
+        (p) => reserved.has(p) || deps.exists(p),
+        deps.platform
+      )
       reserved.add(path)
       try {
         await deps.takeScreenshot(path)

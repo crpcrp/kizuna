@@ -3,10 +3,10 @@
 // reading/writing `.m3u` playlists. mediaService.ts composes this; nothing here
 // knows about ffprobe, subtitles, or thumbnails.
 
-import { dirname, join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 import { dialog, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
 import { parseM3u, serializeM3u } from '../../shared/m3u'
+import { pathApiFor, pathPlatformFor } from '../platformPath'
 import {
   PLAYLIST_EXTENSIONS,
   SUBTITLE_EXTENSIONS,
@@ -66,7 +66,10 @@ function multiFileDialogOptions(defaultPath?: string): OpenDialogOptions {
   }
 }
 
-function savePlaylistDialogOptions(defaultPath?: string): SaveDialogOptions {
+function savePlaylistDialogOptions(
+  join: (...segments: string[]) => string,
+  defaultPath?: string
+): SaveDialogOptions {
   return {
     ...(defaultPath ? { defaultPath: join(defaultPath, 'playlist.m3u') } : {}),
     filters: [{ name: 'Playlist', extensions: [...PLAYLIST_EXTENSIONS] }]
@@ -140,10 +143,13 @@ export interface MediaPickerDeps {
   /** Naturally-sorted absolute video paths in a chosen folder. */
   listVideosIn: (folder: string) => Promise<string[]>
   mediaHistory?: MediaHistoryFolderStore
+  /** Path semantics for playlist and last-folder math; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 export function createMediaPicker(deps: MediaPickerDeps): MediaPicker {
   const lastOpenFolder = (): string | undefined => deps.mediaHistory?.getLastOpenFolder()
+  const { dirname, join } = pathApiFor(deps.platform)
 
   return {
     async openFile(): Promise<string | undefined> {
@@ -177,11 +183,11 @@ export function createMediaPicker(deps: MediaPickerDeps): MediaPicker {
 
     async readPlaylist(filePath: string): Promise<string[]> {
       const text = await deps.readPlaylistText(filePath)
-      return parseM3u(text, dirname(filePath))
+      return parseM3u(text, dirname(filePath), { platform: pathPlatformFor(deps.platform) })
     },
 
     async savePlaylist(paths: string[]): Promise<string | undefined> {
-      const result = await deps.showSaveDialog(savePlaylistDialogOptions(lastOpenFolder()))
+      const result = await deps.showSaveDialog(savePlaylistDialogOptions(join, lastOpenFolder()))
       if (result.canceled || !result.filePath) return undefined
       await deps.writePlaylistText(result.filePath, serializeM3u(paths))
       return result.filePath
