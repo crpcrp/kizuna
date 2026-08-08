@@ -145,7 +145,10 @@ describe('compound knowledge projection rendering', () => {
     })
     const result = await createVocabularySpanController().resolve({
       dict: { lookup: (lemma) => Promise.resolve(lemma === '神' ? [compound] : []) },
-      knowledge: { detailsFor: () => Promise.resolve({ 神様: { level: 'known', sources: [] } }) },
+      knowledge: {
+        detailsFor: () =>
+          Promise.resolve({ 神様: { level: 'known', sourceKinds: [], sources: [] } })
+      },
       cues: [{ cueKey: cueKey(cue), tokens }],
       frequencyDictId: null,
       epoch: { file: 1, track: 1, tokenization: 1, dictionary: 1, knowledge: 1 }

@@ -4,12 +4,13 @@ import {
   type UnderlineLevel
 } from '../../../shared/playerSettings'
 
-/** Theme variable each underline level colors through (see theme.css). */
-export const LEVEL_COLOR_VARS: Record<UnderlineLevel, string> = {
-  unknown: '--level-unknown',
-  inDeck: '--level-in-deck',
-  learning: '--level-learning',
-  known: '--level-known'
+/** Theme variables each level color override controls (see theme.css). */
+export const LEVEL_COLOR_VARS: Record<UnderlineLevel, string[]> = {
+  unknown: ['--level-unknown'],
+  inDeck: ['--level-in-deck'],
+  learning: ['--level-learning'],
+  known: ['--level-known'],
+  wellKnown: ['--level-well-known', '--level-well-known-underline']
 }
 
 /** Fallback hex shown in a color input when no override is set (solid
@@ -18,7 +19,8 @@ export const DEFAULT_LEVEL_COLOR_HEX: Record<UnderlineLevel, string> = {
   unknown: '#e05656',
   inDeck: '#6090e0',
   learning: '#e0a83c',
-  known: '#56be78'
+  known: '#56be78',
+  wellKnown: '#ffffff'
 }
 
 /** The subset of CSSStyleDeclaration `applyLevelColors` needs, so it can be
@@ -37,7 +39,9 @@ export interface LevelColorStyle {
 export function applyLevelColors(style: LevelColorStyle, colors: LevelColors): void {
   for (const level of UNDERLINE_LEVELS) {
     const color = colors[level]
-    if (color) style.setProperty(LEVEL_COLOR_VARS[level], color)
-    else style.removeProperty(LEVEL_COLOR_VARS[level])
+    for (const variable of LEVEL_COLOR_VARS[level]) {
+      if (color) style.setProperty(variable, color)
+      else style.removeProperty(variable)
+    }
   }
 }

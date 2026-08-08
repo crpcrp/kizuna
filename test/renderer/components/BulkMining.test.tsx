@@ -178,6 +178,7 @@ describe('BulkMining SSR', () => {
     const html = render({ phase })
     expect(html).toContain('id="bulk-mining-minimum-count"')
     expect(html).toContain('value="2"')
+    expect(html).toContain('Showing 1 of 3 unknown words')
     expect(html).toContain('included')
     expect(html).not.toContain('aria-label="Mine target"')
     expect(html).not.toContain('aria-label="Mine below-minimum"')

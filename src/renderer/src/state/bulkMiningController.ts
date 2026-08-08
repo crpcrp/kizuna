@@ -166,9 +166,12 @@ export function createBulkMiningController(): BulkMiningController {
           set({ kind: 'unavailable' })
           return
         }
-        details = await input.bridges.knowledge.detailsFor(
-          reportLemmas(cueTokens.flatMap((cue) => cue.tokens))
+        const tokens = cueTokens.flatMap((cue) => cue.tokens)
+        const spanIdentities = cueTokens.flatMap((cue) =>
+          (cue.spans ?? []).flatMap((span) => [span.expression, span.matchedSurface])
         )
+        const identities = [...new Set([...reportLemmas(tokens), ...spanIdentities])]
+        details = await input.bridges.knowledge.detailsFor(identities)
         if (requestToken.current !== request) return
         const candidates = deriveMiningCandidates(cueTokens, details)
         frequencyDictConfigured = input.frequencyDictId !== null

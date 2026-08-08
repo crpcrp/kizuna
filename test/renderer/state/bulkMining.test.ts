@@ -87,7 +87,9 @@ describe('deriveMiningCandidates', () => {
   })
 
   it('excludes symbols, grammar, and lemmas known through a differing surface', () => {
-    const details: Record<string, KnowledgeDetails> = { inflected: { level: 'known', sources: [] } }
+    const details: Record<string, KnowledgeDetails> = {
+      inflected: { level: 'known', sourceKinds: [], sources: [] }
+    }
     const candidates = deriveMiningCandidates(
       [
         {
@@ -109,7 +111,7 @@ describe('deriveMiningCandidates', () => {
     expect(deriveMiningCandidates([], {})).toEqual([])
   })
 
-  it('aggregates accepted compounds, skips members, and keeps a standalone member independent', () => {
+  it('aggregates accepted compounds while a bare member stays its own candidate', () => {
     const compound = [
       token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 2 })
@@ -136,6 +138,46 @@ describe('deriveMiningCandidates', () => {
       surface: '閻魔様',
       startOffset: 0
     })
+  })
+
+  it('does not mine a grammar token covered by a single-token projection', () => {
+    const grammar = token({ lemma: 'に', surface: 'に', pos: '助詞' })
+    expect(
+      deriveMiningCandidates(
+        [
+          {
+            cueKey: 'cue-1',
+            text: 'に',
+            tokens: [grammar],
+            spans: [
+              span({
+                memberTokenOffsets: [grammar.startOffset],
+                expression: 'に',
+                matchedSurface: 'に'
+              })
+            ]
+          }
+        ],
+        {}
+      )
+    ).toEqual([])
+  })
+
+  it('does not mine a symbol-only span', () => {
+    const symbol = token({ lemma: '。', surface: '。', pos: '記号' })
+    expect(
+      deriveMiningCandidates(
+        [
+          {
+            cueKey: 'cue-1',
+            text: '。',
+            tokens: [symbol],
+            spans: [span({ memberTokenOffsets: [symbol.startOffset], expression: '記号' })]
+          }
+        ],
+        {}
+      )
+    ).toEqual([])
   })
 
   it('counts repeated compounds from their first sentence and respects compound knowledge levels', () => {
@@ -229,8 +271,8 @@ describe('deriveMiningCandidates', () => {
   // since the last knowledge sync. Both mechanisms coexist by design.
   it('excludes already-mined lemmas whose level is inDeck, by lemma or by surface', () => {
     const details: Record<string, KnowledgeDetails> = {
-      mined: { level: 'inDeck', sources: [] },
-      minedSurface: { level: 'inDeck', sources: [] }
+      mined: { level: 'inDeck', sourceKinds: [], sources: [] },
+      minedSurface: { level: 'inDeck', sourceKinds: [], sources: [] }
     }
     const candidates = deriveMiningCandidates(
       [

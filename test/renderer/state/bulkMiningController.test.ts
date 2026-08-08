@@ -135,7 +135,7 @@ describe('createBulkMiningController', () => {
     expect(controller.getState()).toEqual({ kind: 'idle' })
   })
 
-  it('uses accepted cue spans so known compound members are not offered while a standalone member remains', async () => {
+  it('uses accepted cue spans, still offering a bare member of a known compound', async () => {
     const bridges = anki()
     const controller = createBulkMiningController()
     await controller.open({
@@ -152,10 +152,35 @@ describe('createBulkMiningController', () => {
       frequencyDictId: 1
     })
 
+    // The known 神様 span is not offered, while the standalone 様 is its own
+    // unknown word rather than being counted as known through the compound.
     expect(controller.getState()).toMatchObject({
       kind: 'ready',
       candidates: [{ lemma: '様', count: 1 }]
     })
+  })
+
+  it('requests projected span identities together with token identities', async () => {
+    const bridges = anki()
+    const detailsFor = vi.fn().mockResolvedValue({})
+    const projected = acceptedSpan('projection', 'unknown')
+    projected.memberTokenOffsets = [0]
+    projected.expression = '奴'
+    projected.matchedSurface = 'ヤツ'
+    await createBulkMiningController().open({
+      bridges: { ...bridges, knowledge: { detailsFor } },
+      cueTokens: [
+        {
+          cueKey: 'projection',
+          text: 'ヤツ',
+          tokens: [token('ヤツ')],
+          spans: [projected]
+        }
+      ],
+      frequencyDictId: 1
+    })
+
+    expect(detailsFor).toHaveBeenCalledWith(['ヤツ', '奴'])
   })
 
   it('opens ready, progressively resolves entries, deselects no-entry words, and finishes resolving', async () => {
@@ -188,7 +213,7 @@ describe('createBulkMiningController', () => {
     const listener = vi.fn()
     const unsubscribe = controller.subscribe(listener)
     const opening = controller.open(firstInput)
-    await controller.open(input(bridges, { two: { level: 'known', sources: [] } }))
+    await controller.open(input(bridges, { two: { level: 'known', sourceKinds: [], sources: [] } }))
     first.resolve({})
     await opening
     controller.setThreshold('3')

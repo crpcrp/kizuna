@@ -174,12 +174,16 @@ describe('normalizeLevelColors', () => {
     })
   })
 
-  it('keeps the valid levels and drops malformed hex values', () => {
-    expect(normalizeLevelColors({ unknown: '#fff', learning: '#e0a83c' })).toEqual({
-      learning: '#e0a83c'
+  it('keeps valid levels, including wellKnown, and drops malformed hex values', () => {
+    expect(
+      normalizeLevelColors({ unknown: '#fff', learning: '#e0a83c', wellKnown: '#AABBCC' })
+    ).toEqual({
+      learning: '#e0a83c',
+      wellKnown: '#aabbcc'
     })
     expect(normalizeLevelColors({ known: 'red' })).toEqual({})
     expect(normalizeLevelColors({ known: '#12345g' })).toEqual({})
+    expect(normalizeLevelColors({ wellKnown: '#12345g' })).toEqual({})
   })
 
   it('drops non-string values', () => {
@@ -188,8 +192,11 @@ describe('normalizeLevelColors', () => {
     )
   })
 
-  it('drops keys that are not underline levels, including wellKnown', () => {
-    expect(normalizeLevelColors({ wellKnown: '#aabbcc', unknown: '#e05656' })).toEqual({
+  it('drops keys that are not underline levels', () => {
+    expect(
+      normalizeLevelColors({ wellKnown: '#aabbcc', unknown: '#e05656', other: '#ffffff' })
+    ).toEqual({
+      wellKnown: '#aabbcc',
       unknown: '#e05656'
     })
   })

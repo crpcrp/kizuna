@@ -358,7 +358,11 @@ export default function WordPopup({
                         key={`${source.source}-${sourceIndex}`}
                       >
                         {source.source === 'wanikani'
-                          ? `WaniKani - Level ${source.curriculumLevel} - ${source.proficiency}`
+                          ? `WaniKani${
+                              source.curriculumLevel === undefined
+                                ? ''
+                                : ` - Level ${source.curriculumLevel}`
+                            } - ${source.proficiency}`
                           : `Anki - ${source.deck} - ${source.intervalDays}d`}
                       </span>
                     ))}

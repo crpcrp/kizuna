@@ -134,6 +134,7 @@ describe('syncAnki', () => {
     expect(detailsFor(asKnowledgeDb(db), ['鳥'])).toEqual({
       鳥: {
         level: 'inDeck',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Japanese', intervalDays: 0, cardId: 7, noteId: 77 }]
       }
     })
@@ -163,6 +164,7 @@ describe('syncAnki', () => {
     expect(detailsFor(asKnowledgeDb(db), ['猫'])).toEqual({
       猫: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'Deck A', intervalDays: 0, cardId: 1, noteId: 101 },
           { source: 'anki', deck: 'Deck B', intervalDays: 30, cardId: 2, noteId: 102 }
@@ -353,6 +355,7 @@ describe('syncAnki', () => {
     expect(detailsFor(asKnowledgeDb(db), ['word'])).toEqual({
       word: {
         level: 'wellKnown',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'Deck A', intervalDays: 21, cardId: 1, noteId: 101 },
           { source: 'anki', deck: 'Deck B', intervalDays: 90, cardId: 2, noteId: 102 }

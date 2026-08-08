@@ -483,6 +483,26 @@ function startIntegrationStatus(paths: BinaryPaths): void {
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
+  const handleBeforeQuit = createQuitCoordinator({
+    // Electron's defaultSession getter is unavailable until app is ready.
+    // Keep the lookup lazy because this coordinator is registered during
+    // module initialization, before the ready promise resolves.
+    defaultSession: {
+      flushStorageData: () => session.defaultSession.flushStorageData()
+    },
+    controller,
+    flushHistory: () => mediaHistory?.flush(),
+    releasePowerSave: () => powerSave?.dispose(),
+    disposeSystemMedia: () => systemMedia?.dispose(),
+    cleanupUrlSubtitles: async () => {
+      await urlSubtitles?.cleanup()
+    },
+    appQuit: () => {
+      appWindows?.close()
+      app.quit()
+    }
+  })
+
   const initialLaunchPath = videoPathFromArgv(process.argv, process.cwd())
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
@@ -495,25 +515,6 @@ if (!gotSingleInstanceLock) {
   ipcMain.on(LAUNCH_CHANNELS.rendererReady, () => launchPathBuffer.markReady())
 
   app.whenReady().then(() => {
-    // `session.defaultSession` can only be accessed after Electron is ready.
-    // Keep quit coordination setup here rather than during module evaluation,
-    // otherwise Linux (and other platforms) abort before the app can start.
-    const handleBeforeQuit = createQuitCoordinator({
-      defaultSession: session.defaultSession,
-      controller,
-      flushHistory: () => mediaHistory?.flush(),
-      releasePowerSave: () => powerSave?.dispose(),
-      disposeSystemMedia: () => systemMedia?.dispose(),
-      cleanupUrlSubtitles: async () => {
-        await urlSubtitles?.cleanup()
-      },
-      appQuit: () => {
-        appWindows?.close()
-        app.quit()
-      }
-    })
-    app.on('before-quit', handleBeforeQuit)
-
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
       (event) => {
@@ -571,6 +572,8 @@ if (!gotSingleInstanceLock) {
         createWindow(binaryPaths.mpvPath, ytdlpPath, mediaHistory, settings)
     })
   })
+
+  app.on('before-quit', handleBeforeQuit)
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

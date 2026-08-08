@@ -20,7 +20,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
     uniqueLemmas: 5,
     tokenLevels: { ...emptyLevels(), unknown: 3, learning: 2, known: 4, wellKnown: 1 },
     lemmaLevels: { ...emptyLevels(), unknown: 2, learning: 1, known: 1, wellKnown: 1 },
-    provenance: { wanikaniOnly: 1, ankiOnly: 1, both: 1, unsourced: 0 },
+    provenance: { wanikaniOnly: 1, ankiOnly: 1, both: 1, grammar: 0, unsourced: 0 },
     ankiDecks: [{ deck: 'Core 2k', lemmaCount: 3 }],
     topUnknown: [{ lemma: '食べる', surface: '食べた', count: 4 }],
     ...overrides
@@ -49,7 +49,7 @@ describe('SubtitleReport closed state', () => {
       <SubtitleReport open={false} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
     )
     expect(html).not.toContain('open')
-    expect(html).not.toContain('Generating subtitle report')
+    expect(html).not.toContain('Generating word report')
   })
 })
 
@@ -59,7 +59,7 @@ describe('SubtitleReport phase markers', () => {
       <SubtitleReport open={true} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
     )
     expect(html).toContain('id="subtitle-report-loading"')
-    expect(html).toContain('Generating subtitle report')
+    expect(html).toContain('Generating word report')
     expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
   })
 
@@ -74,7 +74,7 @@ describe('SubtitleReport phase markers', () => {
     )
     expect(html).toContain('id="subtitle-report-loading"')
     expect(html).toContain('role="status"')
-    expect(html).toContain('Generating subtitle report')
+    expect(html).toContain('Generating word report')
     expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
   })
 
@@ -154,6 +154,11 @@ describe('SubtitleReport ready phase', () => {
     expect(html).toContain('40.0%')
   })
 
+  it('uses the Word report name throughout the open dialog', () => {
+    expect(html).toContain('aria-label="Word report"')
+    expect(html).not.toContain('Subtitle report')
+  })
+
   it('renders every legend level', () => {
     expect(html).toContain('Unknown')
     expect(html).toContain('In deck')
@@ -230,16 +235,36 @@ describe('SubtitleReport ready phase', () => {
     expect(html).not.toContain('Unsourced')
   })
 
-  it('shows the unsourced row when its count is nonzero', () => {
+  it('never renders the diagnostic unsourced count', () => {
     const withUnsourced: SubtitleReportPhase = {
       kind: 'ready',
-      report: makeReport({ provenance: { wanikaniOnly: 0, ankiOnly: 0, both: 0, unsourced: 2 } }),
+      report: makeReport({
+        provenance: { wanikaniOnly: 0, ankiOnly: 0, both: 0, grammar: 0, unsourced: 2 }
+      }),
       sources: { wanikani: true, anki: true }
     }
     const withUnsourcedHtml = renderToStaticMarkup(
       <SubtitleReport open={true} phase={withUnsourced} onClose={() => {}} onRetry={() => {}} />
     )
-    expect(withUnsourcedHtml).toContain('Unsourced: 2')
+    expect(withUnsourcedHtml).not.toContain('Unsourced: 2')
+  })
+
+  it('renders grammar words with their dedicated provenance count', () => {
+    const grammarPhase: SubtitleReportPhase = {
+      kind: 'ready',
+      report: makeReport({
+        provenance: { wanikaniOnly: 1, ankiOnly: 1, both: 1, grammar: 2, unsourced: 0 }
+      }),
+      sources: { wanikani: true, anki: true }
+    }
+    const grammarHtml = renderToStaticMarkup(
+      <SubtitleReport open={true} phase={grammarPhase} onClose={() => {}} onRetry={() => {}} />
+    )
+    expect(grammarHtml).toContain('Grammar words (always counted as known): 2')
+  })
+
+  it('omits the grammar row when its count is zero', () => {
+    expect(html).not.toContain('Grammar words')
   })
 })
 

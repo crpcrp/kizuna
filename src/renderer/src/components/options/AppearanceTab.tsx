@@ -8,13 +8,13 @@ export const APPEARANCE_ROWS: { value: Appearance; label: string; description: s
   { value: 'dark', label: 'Dark', description: 'Always use the dark theme' }
 ]
 
-/** Levels that draw an underline. wellKnown is intentionally absent because it
- * renders a transparent border and has no color to configure. */
+/** Knowledge levels with configurable subtitle underline/report colors. */
 export const UNDERLINE_COLOR_ROWS: { level: UnderlineLevel; label: string }[] = [
   { level: 'unknown', label: 'Unknown' },
   { level: 'inDeck', label: 'In deck' },
   { level: 'learning', label: 'Learning' },
-  { level: 'known', label: 'Known' }
+  { level: 'known', label: 'Known' },
+  { level: 'wellKnown', label: 'Well known' }
 ]
 
 export const APPEARANCE_SETTING_ENTRIES: SettingEntry[] = [
@@ -29,7 +29,7 @@ export const APPEARANCE_SETTING_ENTRIES: SettingEntry[] = [
     id: 'underline-colors',
     label: 'Word underline colors',
     category: 'appearance',
-    keywords: ['unknown', 'in deck', 'learning', 'known', 'highlight'],
+    keywords: ['unknown', 'in deck', 'learning', 'known', 'well known', 'highlight'],
     targetId: 'level-color-unknown'
   }
 ]
@@ -112,7 +112,8 @@ export default function AppearanceTab({
       <div className="options-section">
         <h3>Word underline colors</h3>
         <p className="options-hint">
-          Overrides apply to both light and dark themes; well-known words have no underline.
+          Overrides apply to both light and dark themes; well-known words are not underlined unless
+          a color is chosen here.
         </p>
         <UnderlineColorRows levelColors={levelColors} onChangeLevelColor={onChangeLevelColor} />
       </div>

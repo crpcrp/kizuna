@@ -1,12 +1,8 @@
 import type { LookupResult } from '../../../shared/dictionary'
 import type { AnkiMembershipMatches } from '../../../shared/anki'
-import {
-  maxKnowledgeLevel,
-  type KnowledgeDetails,
-  type KnowledgeLevel
-} from '../../../shared/knowledge'
-import { isGrammarToken, isSymbolToken, type Token } from '../../../shared/token'
-import type { VocabularySpan } from './vocabularySpans'
+import type { KnowledgeDetails } from '../../../shared/knowledge'
+import type { Token } from '../../../shared/token'
+import { deriveVocabularyUnits, type VocabularyUnitCue } from './vocabularyUnits'
 
 export interface MiningCandidate {
   lemma: string
@@ -115,22 +111,9 @@ export function restoreReadyAfterRun(
   return { ...lastReady, selected, resolving, advisoryWarning: undefined }
 }
 
-interface CandidateAggregate {
-  token: Token
-  sentence: string
-  cueStart?: number
-  cueEnd?: number
-  count: number
-  grammar: boolean
-  level: KnowledgeLevel
-  order: number
-}
-
-export interface MiningCueTokens {
+export interface MiningCueTokens extends Omit<VocabularyUnitCue, 'cueKey'> {
   text: string
-  tokens: Token[]
   cueKey?: string
-  spans?: VocabularySpan[]
   /** Cue timing in subtitle seconds, carried through to each candidate's
    * first occurrence for sentence-audio extraction. */
   start?: number
@@ -142,88 +125,24 @@ export function deriveMiningCandidates(
   cueTokens: MiningCueTokens[],
   details: Record<string, KnowledgeDetails>
 ): MiningCandidate[] {
-  const aggregates = new Map<string, CandidateAggregate>()
-  let order = 0
-
-  for (const cue of cueTokens) {
-    const spans =
-      cue.cueKey === undefined
-        ? []
-        : (cue.spans ?? []).filter(
-            (span) =>
-              span.cueKey === cue.cueKey &&
-              span.memberTokenOffsets.length >= 1 &&
-              span.memberTokenOffsets.every((offset) =>
-                cue.tokens.some((token) => token.startOffset === offset)
-              )
-          )
-    const coveredOffsets = new Set(spans.flatMap((span) => span.memberTokenOffsets))
-
-    for (const span of spans) {
-      const firstMember = cue.tokens.find(
-        (token) => token.startOffset === span.memberTokenOffsets[0]
-      )
-      if (!firstMember) continue
-      let aggregate = aggregates.get(span.expression)
-      if (!aggregate) {
-        aggregate = {
-          token: { ...firstMember, lemma: span.expression, surface: span.matchedSurface },
-          sentence: cue.text,
-          cueStart: cue.start,
-          cueEnd: cue.end,
-          count: 0,
-          grammar: false,
-          level: 'unknown',
-          order: order++
-        }
-        aggregates.set(span.expression, aggregate)
-      }
-      aggregate.count++
-      aggregate.level = maxKnowledgeLevel(aggregate.level, span.level)
-    }
-
-    for (const token of cue.tokens) {
-      if (coveredOffsets.has(token.startOffset) || isSymbolToken(token)) continue
-      let aggregate = aggregates.get(token.lemma)
-      if (!aggregate) {
-        aggregate = {
-          token,
-          sentence: cue.text,
-          cueStart: cue.start,
-          cueEnd: cue.end,
-          count: 0,
-          grammar: false,
-          level: 'unknown',
-          order: order++
-        }
-        aggregates.set(token.lemma, aggregate)
-      }
-      aggregate.count++
-      if (isGrammarToken(token)) aggregate.grammar = true
-      aggregate.level = maxKnowledgeLevel(
-        aggregate.level,
-        maxKnowledgeLevel(
-          details[token.lemma]?.level ?? 'unknown',
-          details[token.surface]?.level ?? 'unknown'
-        )
-      )
-    }
-  }
-
-  return Array.from(aggregates.entries())
-    .filter(([, aggregate]) => {
-      if (aggregate.grammar) return false
-      return aggregate.level === 'unknown'
-    })
-    .sort(([, a], [, b]) => b.count - a.count || a.order - b.order)
-    .map(([lemma, aggregate]) => ({
-      lemma,
-      token: aggregate.token,
-      sentence: aggregate.sentence,
-      cueStart: aggregate.cueStart,
-      cueEnd: aggregate.cueEnd,
-      count: aggregate.count,
-      firstOccurrence: aggregate.order
+  return deriveVocabularyUnits(
+    cueTokens.map((cue) => ({
+      ...cue,
+      cueKey: cue.cueKey ?? '',
+      spans: cue.cueKey === undefined ? [] : cue.spans
+    })),
+    details
+  )
+    .filter((unit) => !unit.grammar && unit.level === 'unknown')
+    .sort((a, b) => b.count - a.count || a.order - b.order)
+    .map((unit) => ({
+      lemma: unit.key,
+      token: unit.token,
+      sentence: unit.sentence,
+      cueStart: unit.cueStart,
+      cueEnd: unit.cueEnd,
+      count: unit.count,
+      firstOccurrence: unit.order
     }))
 }
 

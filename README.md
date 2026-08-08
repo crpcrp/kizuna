@@ -24,10 +24,10 @@ Download links for published Windows builds are available on the
 
 ## Requirements
 
-Kizuna currently publishes Windows x64 builds. Building from source requires
-Node.js 24 or newer and npm. Windows uses local runtime copies under
-`resources/`; unpackaged Linux development uses the distribution's `mpv`,
-FFmpeg/ffprobe, and MeCab commands.
+Kizuna currently publishes builds for 64-bit Windows 10 or newer. Building
+from source requires Node.js 24 or newer and npm. Windows uses local runtime
+copies under `resources/`; unpackaged Linux development uses the
+distribution's `mpv`, FFmpeg/ffprobe, and MeCab commands.
 
 See [Binary setup](docs/binaries.md) for download sources, expected paths, and
 version checks.

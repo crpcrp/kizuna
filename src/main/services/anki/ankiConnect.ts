@@ -19,6 +19,12 @@ export function buildRequest(action: string, params?: unknown, apiKey?: string):
 
 export class AnkiConnectError extends Error {}
 
+function isResponseEnvelope(
+  raw: unknown
+): raw is { result: unknown; error: string | null | undefined } {
+  return raw !== null && typeof raw === 'object' && 'result' in raw && 'error' in raw
+}
+
 /**
  * Every AnkiConnect response is `{ result, error }`, arriving with HTTP 200
  * even when `error` is set — so this checks `error` first and never looks at
@@ -26,10 +32,10 @@ export class AnkiConnectError extends Error {}
  * doesn't look like an AnkiConnect envelope at all.
  */
 export function parseResponse(raw: unknown): unknown {
-  if (raw === null || typeof raw !== 'object' || !('error' in raw)) {
+  if (!isResponseEnvelope(raw)) {
     throw new AnkiConnectError('AnkiConnect: malformed response')
   }
-  const { result, error } = raw as { result: unknown; error: string | null | undefined }
+  const { result, error } = raw
   if (error !== null && error !== undefined) {
     throw new AnkiConnectError(error)
   }
@@ -111,7 +117,14 @@ export function createAnkiClient(deps: {
       if (!Array.isArray(responses)) {
         throw new AnkiConnectError('AnkiConnect: malformed multi response')
       }
-      return responses.map((response) => parseResponse(response) as T)
+      // AnkiConnect invokes each child action without a version when the
+      // caller omits one, so successful child responses are raw results. A
+      // child failure is still returned as a `{ result, error }` envelope.
+      // Accept versioned envelopes too, since some compatible servers return
+      // them for every child action.
+      return responses.map((response) =>
+        isResponseEnvelope(response) ? (parseResponse(response) as T) : (response as T)
+      )
     },
     version: () => invoke<number>('version'),
     deckNames: () => invoke<string[]>('deckNames'),

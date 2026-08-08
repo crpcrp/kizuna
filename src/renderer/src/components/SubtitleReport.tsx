@@ -5,12 +5,13 @@ import type { SubtitleReportPhase } from '../state/subtitleReportController'
 import {
   inDeckPct,
   levelTotal,
+  provenanceTotal,
   understandingPct,
   type LevelCounts,
   type SubtitleReport as Report
 } from '../state/subtitleReport'
 
-// Presentational modal for the subtitle report. Always rendered, visibility toggled by
+// Presentational modal for the word report. Always rendered, visibility toggled by
 // the `open` class — same testable-without-a-live-DOM pattern as
 // OptionsMenu. All data arrives via props; subtitleReportController.ts owns
 // every async/staleness concern.
@@ -88,6 +89,7 @@ function ProvenanceSection({
   sources: { wanikani: boolean; anki: boolean }
 }): React.JSX.Element {
   const unconfigured = !sources.wanikani && !sources.anki
+  const knownLemmaCount = provenanceTotal(report.provenance)
   return (
     <section className="report-section">
       <h3>Sources</h3>
@@ -97,11 +99,16 @@ function ProvenanceSection({
           Anki under Settings &rarr; Options &rarr; Known words.
         </p>
       ) : (
-        <ul className="report-provenance">
+        <ul
+          className="report-provenance"
+          aria-label={`Sources for ${knownLemmaCount} unique words`}
+        >
           <li>Via WaniKani only: {report.provenance.wanikaniOnly}</li>
           <li>Via Anki only: {report.provenance.ankiOnly}</li>
           <li>Both: {report.provenance.both}</li>
-          {report.provenance.unsourced > 0 && <li>Unsourced: {report.provenance.unsourced}</li>}
+          {report.provenance.grammar > 0 && (
+            <li>Grammar words (always counted as known): {report.provenance.grammar}</li>
+          )}
         </ul>
       )}
       {report.ankiDecks.length > 0 && (
@@ -178,7 +185,7 @@ function LoadingBody(): React.JSX.Element {
   return (
     <div id="subtitle-report-loading" className="report-loading" role="status" aria-live="polite">
       <span className="report-loading-spinner" aria-hidden="true" />
-      <p>Generating subtitle report&hellip;</p>
+      <p>Generating word report&hellip;</p>
     </div>
   )
 }
@@ -228,13 +235,13 @@ export default function SubtitleReport({
     <ModalOverlay
       id="subtitle-report"
       open={open}
-      label="Subtitle report"
+      label="Word report"
       onClose={onClose}
       headerActions={
         <button
           type="button"
           id="subtitle-report-close"
-          aria-label="Close subtitle report"
+          aria-label="Close word report"
           onClick={onClose}
         >
           &#x2715;

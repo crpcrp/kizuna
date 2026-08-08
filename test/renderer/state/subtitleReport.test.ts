@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildSubtitleReport,
   inDeckPct,
+  provenanceTotal,
   reportLemmas,
   understandingPct,
   TOP_UNKNOWN_CAP,
@@ -10,6 +11,8 @@ import {
 import type { Token } from '@src/shared/token'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
+import { deriveMiningCandidates } from '@src/renderer/src/state/bulkMining'
+import { deriveVocabularyUnits } from '@src/renderer/src/state/vocabularyUnits'
 import { makeToken } from '@test/harness/tokenFixtures'
 
 function token(overrides: Partial<Token>): Token {
@@ -27,6 +30,15 @@ const emptyLevels = (): LevelCounts => ({
   known: 0,
   wellKnown: 0
 })
+
+function expectProvenanceInvariant(report: ReturnType<typeof buildSubtitleReport>): void {
+  expect(provenanceTotal(report.provenance)).toBe(
+    report.lemmaLevels.inDeck +
+      report.lemmaLevels.learning +
+      report.lemmaLevels.known +
+      report.lemmaLevels.wellKnown
+  )
+}
 
 function compoundSpan(overrides: Partial<VocabularySpan> = {}): VocabularySpan {
   return {
@@ -81,10 +93,11 @@ describe('buildSubtitleReport', () => {
     expect(report.tokenLevels).toEqual({ ...emptyLevels(), known: 2 })
     expect(report.uniqueLemmas).toBe(1)
     expect(report.lemmaLevels).toEqual({ ...emptyLevels(), known: 1 })
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([])
   })
 
-  it('keeps a standalone member independent from a compound occurrence', () => {
+  it('keeps a bare compound member as its own word, since 様 is not 神様', () => {
     const tokens = [
       token({ lemma: '神', surface: '神', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 1 }),
@@ -95,6 +108,7 @@ describe('buildSubtitleReport', () => {
       {}
     )
 
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([
       { lemma: '神様', surface: '神様', count: 1 },
       { lemma: '様', surface: '様', count: 1 }
@@ -113,9 +127,9 @@ describe('buildSubtitleReport', () => {
       compoundSpan({ startOffset: 3, endOffset: 5, memberTokenOffsets: [3, 4] })
     ]
 
-    expect(
-      buildSubtitleReport([{ cueKey: 'cue-1', tokens, acceptedSpans: spans }], {}).topUnknown
-    ).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
+    const report = buildSubtitleReport([{ cueKey: 'cue-1', tokens, acceptedSpans: spans }], {})
+    expectProvenanceInvariant(report)
+    expect(report.topUnknown).toEqual([{ lemma: '神様', surface: '神様', count: 2 }])
   })
 
   it('uses each compound occurrence level for tokens and the highest level for its lemma', () => {
@@ -133,6 +147,7 @@ describe('buildSubtitleReport', () => {
 
     expect(report.tokenLevels).toEqual({ ...emptyLevels(), unknown: 2, learning: 2 })
     expect(report.lemmaLevels).toEqual({ ...emptyLevels(), learning: 1 })
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([])
   })
 
@@ -151,6 +166,7 @@ describe('buildSubtitleReport', () => {
     )
 
     expect(report.totalTokens).toBe(3)
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([
       { lemma: '神様', surface: '神様', count: 1 },
       { lemma: '様', surface: '様', count: 1 }
@@ -164,10 +180,13 @@ describe('buildSubtitleReport', () => {
     ]
     const malformed = compoundSpan({ endOffset: 1, memberTokenOffsets: [0] })
 
-    expect(
-      buildSubtitleReport([{ cueKey: 'cue-1', tokens, acceptedSpans: [malformed] }], {}).topUnknown
-    ).toEqual([
-      { lemma: '神', surface: '神', count: 1 },
+    const report = buildSubtitleReport(
+      [{ cueKey: 'cue-1', tokens, acceptedSpans: [malformed] }],
+      {}
+    )
+    expectProvenanceInvariant(report)
+    expect(report.topUnknown).toEqual([
+      { lemma: '神様', surface: '神様', count: 1 },
       { lemma: '様', surface: '様', count: 1 }
     ])
   })
@@ -185,6 +204,7 @@ describe('buildSubtitleReport', () => {
     )
 
     expect(report.uniqueLemmas).toBe(2)
+    expectProvenanceInvariant(report)
     expect(report.topUnknown.map((row) => row.lemma)).toEqual(['神', '様'])
   })
 
@@ -198,12 +218,13 @@ describe('buildSubtitleReport', () => {
     const report = buildSubtitleReport(tokens, {})
     expect(report.totalTokens).toBe(0)
     expect(report.uniqueLemmas).toBe(0)
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([])
   })
 
   it('counts a repeated lemma per-token and per-lemma separately', () => {
     const details: Record<string, KnowledgeDetails> = {
-      食べる: { level: 'known', sources: [] }
+      食べる: { level: 'known', sourceKinds: [], sources: [] }
     }
     const tokens = [
       token({ lemma: '食べる' }),
@@ -215,6 +236,7 @@ describe('buildSubtitleReport', () => {
     expect(report.uniqueLemmas).toBe(1)
     expect(report.tokenLevels.known).toBe(3)
     expect(report.lemmaLevels.known).toBe(1)
+    expectProvenanceInvariant(report)
   })
 
   it('treats a lemma missing from details as unknown and lists it in topUnknown', () => {
@@ -222,12 +244,14 @@ describe('buildSubtitleReport', () => {
     const report = buildSubtitleReport(tokens, {})
     expect(report.tokenLevels.unknown).toBe(1)
     expect(report.lemmaLevels.unknown).toBe(1)
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([{ lemma: '謎', surface: '食べる', count: 1 }])
   })
 
   it('uses differing-surface details for level, provenance, decks, and topUnknown', () => {
     const surfaceDetails: KnowledgeDetails = {
       level: 'known',
+      sourceKinds: ['anki'],
       sources: [{ source: 'anki', deck: 'Listening', intervalDays: 192, cardId: 1, noteId: 1 }]
     }
     const report = buildSubtitleReport([token({ lemma: 'properNounLemma', surface: '悟空' })], {
@@ -236,6 +260,7 @@ describe('buildSubtitleReport', () => {
 
     expect(report.tokenLevels.known).toBe(1)
     expect(report.lemmaLevels.known).toBe(1)
+    expectProvenanceInvariant(report)
     expect(report.provenance.ankiOnly).toBe(1)
     expect(report.ankiDecks).toEqual([{ deck: 'Listening', lemmaCount: 1 }])
     expect(report.topUnknown).toEqual([])
@@ -245,22 +270,26 @@ describe('buildSubtitleReport', () => {
     const report = buildSubtitleReport([token({ lemma: 'lemma', surface: 'surface' })], {
       lemma: {
         level: 'learning',
+        sourceKinds: ['wanikani'],
         sources: [{ source: 'wanikani', curriculumLevel: 1, proficiency: 'apprentice' }]
       },
       surface: {
         level: 'wellKnown',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 100, cardId: 1, noteId: 1 }]
       }
     })
 
     expect(report.lemmaLevels.wellKnown).toBe(1)
+    expectProvenanceInvariant(report)
     expect(report.provenance.both).toBe(1)
   })
 
-  it('classifies provenance: both, wanikani-only, anki-only, unsourced; unknown contributes nothing', () => {
+  it('classifies provenance from source kinds even when metadata is missing', () => {
     const details: Record<string, KnowledgeDetails> = {
       both: {
         level: 'known',
+        sourceKinds: ['wanikani', 'anki'],
         sources: [
           { source: 'wanikani', curriculumLevel: 5, proficiency: 'burned' },
           { source: 'anki', deck: 'Core', intervalDays: 30, cardId: 1, noteId: 1 }
@@ -268,30 +297,91 @@ describe('buildSubtitleReport', () => {
       },
       wkOnly: {
         level: 'known',
+        sourceKinds: ['wanikani'],
         sources: [{ source: 'wanikani', curriculumLevel: 3, proficiency: 'guru' }]
       },
       ankiOnly: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 10, cardId: 2, noteId: 2 }]
       },
-      unsourced: { level: 'known', sources: [] },
-      unknownLemma: { level: 'unknown', sources: [] }
+      incompleteAnki: { level: 'known', sourceKinds: ['anki'], sources: [] },
+      unknownLemma: { level: 'unknown', sourceKinds: [], sources: [] }
     }
     const tokens = [
       token({ lemma: 'both' }),
       token({ lemma: 'wkOnly' }),
       token({ lemma: 'ankiOnly' }),
-      token({ lemma: 'unsourced' }),
+      token({ lemma: 'incompleteAnki' }),
       token({ lemma: 'unknownLemma' })
     ]
     const report = buildSubtitleReport(tokens, details)
-    expect(report.provenance).toEqual({ wanikaniOnly: 1, ankiOnly: 1, both: 1, unsourced: 1 })
+    expectProvenanceInvariant(report)
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 1,
+      ankiOnly: 2,
+      both: 1,
+      grammar: 0,
+      unsourced: 0
+    })
+  })
+
+  it('attributes a projected compound from the expression source kind', () => {
+    const report = buildSubtitleReport(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens: [
+            token({ lemma: '神', surface: '神', startOffset: 0 }),
+            token({ lemma: '様', surface: '様', startOffset: 1 })
+          ],
+          acceptedSpans: [compoundSpan({ level: 'known' })]
+        }
+      ],
+      { 神様: { level: 'known', sourceKinds: ['wanikani'], sources: [] } }
+    )
+
+    expectProvenanceInvariant(report)
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 1,
+      ankiOnly: 0,
+      both: 0,
+      grammar: 0,
+      unsourced: 0
+    })
+  })
+
+  it('does not mutate details when applying a projected compound level', () => {
+    const expressionDetails = Object.freeze({
+      level: 'learning' as const,
+      sourceKinds: ['wanikani' as const],
+      sources: []
+    })
+    const details: Record<string, KnowledgeDetails> = { 神様: expressionDetails }
+
+    const report = buildSubtitleReport(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens: [
+            token({ lemma: '神', surface: '神', startOffset: 0 }),
+            token({ lemma: '様', surface: '様', startOffset: 1 })
+          ],
+          acceptedSpans: [compoundSpan({ level: 'known' })]
+        }
+      ],
+      details
+    )
+
+    expectProvenanceInvariant(report)
+    expect(details.神様.level).toBe('learning')
   })
 
   it('deduplicates decks per lemma and sorts rows count desc then name asc', () => {
     const details: Record<string, KnowledgeDetails> = {
       twoCardsOneDeck: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'A', intervalDays: 5, cardId: 1, noteId: 1 },
           { source: 'anki', deck: 'A', intervalDays: 8, cardId: 2, noteId: 2 }
@@ -299,6 +389,7 @@ describe('buildSubtitleReport', () => {
       },
       twoDecks: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [
           { source: 'anki', deck: 'A', intervalDays: 5, cardId: 3, noteId: 3 },
           { source: 'anki', deck: 'B', intervalDays: 5, cardId: 4, noteId: 4 }
@@ -306,6 +397,7 @@ describe('buildSubtitleReport', () => {
       },
       onlyB: {
         level: 'known',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'B', intervalDays: 5, cardId: 5, noteId: 5 }]
       }
     }
@@ -315,6 +407,7 @@ describe('buildSubtitleReport', () => {
       token({ lemma: 'onlyB' })
     ]
     const report = buildSubtitleReport(tokens, details)
+    expectProvenanceInvariant(report)
     expect(report.ankiDecks).toEqual([
       { deck: 'A', lemmaCount: 2 },
       { deck: 'B', lemmaCount: 2 }
@@ -333,6 +426,7 @@ describe('buildSubtitleReport', () => {
       }
     }
     const report = buildSubtitleReport(tokens, {})
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toHaveLength(TOP_UNKNOWN_CAP)
     expect(report.topUnknown[0]).toEqual({ lemma: 'lemma00', surface: 'lemma00', count: 5 })
     // remaining entries are the count-1 lemmas in first-occurrence order
@@ -350,7 +444,14 @@ describe('buildSubtitleReport', () => {
     expect(report.uniqueLemmas).toBe(0)
     expect(report.tokenLevels).toEqual(emptyLevels())
     expect(report.lemmaLevels).toEqual(emptyLevels())
-    expect(report.provenance).toEqual({ wanikaniOnly: 0, ankiOnly: 0, both: 0, unsourced: 0 })
+    expectProvenanceInvariant(report)
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 0,
+      ankiOnly: 0,
+      both: 0,
+      grammar: 0,
+      unsourced: 0
+    })
     expect(report.ankiDecks).toEqual([])
     expect(report.topUnknown).toEqual([])
   })
@@ -367,13 +468,16 @@ describe('buildSubtitleReport', () => {
     expect(report.lemmaLevels.wellKnown).toBe(2)
     expect(report.tokenLevels.unknown).toBe(1)
     expect(report.lemmaLevels.unknown).toBe(1)
+    expectProvenanceInvariant(report)
+    expect(report.provenance.grammar).toBe(2)
     expect(report.topUnknown.map((r) => r.lemma)).toEqual(['謎'])
   })
 
-  it('excludes grammar lemmas from topUnknown, provenance, and decks even with an anki-sourced details entry (QA-4)', () => {
+  it('accounts grammar lemmas separately from Anki provenance and decks (QA-4)', () => {
     const details: Record<string, KnowledgeDetails> = {
       に: {
         level: 'learning',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Core', intervalDays: 3, cardId: 1, noteId: 1 }]
       }
     }
@@ -383,9 +487,77 @@ describe('buildSubtitleReport', () => {
     )
     expect(report.lemmaLevels.wellKnown).toBe(1)
     expect(report.lemmaLevels.learning).toBe(0)
+    expectProvenanceInvariant(report)
+    expect(report.provenance.grammar).toBe(1)
+    expect(report.provenance.ankiOnly).toBe(0)
     expect(report.topUnknown).toEqual([])
-    expect(report.provenance).toEqual({ wanikaniOnly: 0, ankiOnly: 0, both: 0, unsourced: 0 })
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 0,
+      ankiOnly: 0,
+      both: 0,
+      grammar: 1,
+      unsourced: 0
+    })
     expect(report.ankiDecks).toEqual([])
+  })
+
+  it('keeps level and source breakdowns aligned for a mixed track', () => {
+    const tokens = [
+      token({ lemma: 'に', surface: 'に', pos: '助詞,格助詞', startOffset: 0 }),
+      token({ lemma: 'wkOnly', surface: 'wkOnly', startOffset: 1 }),
+      token({ lemma: 'ankiOnly', surface: 'ankiOnly', startOffset: 2 }),
+      token({ lemma: 'both', surface: 'both', startOffset: 3 }),
+      token({ lemma: '神', surface: '神', startOffset: 4 }),
+      token({ lemma: '様', surface: '様', startOffset: 5 })
+    ]
+    const details: Record<string, KnowledgeDetails> = {
+      に: {
+        level: 'learning',
+        sourceKinds: ['anki'],
+        sources: [{ source: 'anki', deck: 'Grammar', intervalDays: 3, cardId: 1, noteId: 1 }]
+      },
+      wkOnly: { level: 'known', sourceKinds: ['wanikani'], sources: [] },
+      ankiOnly: {
+        level: 'known',
+        sourceKinds: ['anki'],
+        sources: [{ source: 'anki', deck: 'Core', intervalDays: 10, cardId: 2, noteId: 2 }]
+      },
+      both: {
+        level: 'known',
+        sourceKinds: ['wanikani', 'anki'],
+        sources: [{ source: 'anki', deck: 'Both', intervalDays: 30, cardId: 3, noteId: 3 }]
+      }
+    }
+    const report = buildSubtitleReport(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens,
+          acceptedSpans: [
+            compoundSpan({
+              startOffset: 4,
+              endOffset: 6,
+              memberTokenOffsets: [4, 5],
+              level: 'known'
+            })
+          ]
+        }
+      ],
+      details
+    )
+
+    expectProvenanceInvariant(report)
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 1,
+      ankiOnly: 1,
+      both: 1,
+      grammar: 1,
+      unsourced: 1
+    })
+    expect(report.ankiDecks).toEqual([
+      { deck: 'Both', lemmaCount: 1 },
+      { deck: 'Core', lemmaCount: 1 }
+    ])
   })
 
   it('treats a lemma as grammar when any occurrence has a grammar POS, not just the first (QA-4)', () => {
@@ -396,13 +568,16 @@ describe('buildSubtitleReport', () => {
     const report = buildSubtitleReport(tokens, {})
     expect(report.tokenLevels.wellKnown).toBe(2)
     expect(report.lemmaLevels.wellKnown).toBe(1)
+    expectProvenanceInvariant(report)
+    expect(report.provenance.grammar).toBe(1)
     expect(report.topUnknown).toEqual([])
   })
 
   it('always has every LevelCounts key present even when zero', () => {
     const report = buildSubtitleReport([token({ lemma: 'x' })], {
-      x: { level: 'wellKnown', sources: [] }
+      x: { level: 'wellKnown', sourceKinds: [], sources: [] }
     })
+    expectProvenanceInvariant(report)
     expect(Object.keys(report.tokenLevels).sort()).toEqual(
       ['inDeck', 'known', 'learning', 'unknown', 'wellKnown'].sort()
     )
@@ -419,6 +594,7 @@ describe('buildSubtitleReport', () => {
     const details: Record<string, KnowledgeDetails> = {
       新しい: {
         level: 'inDeck',
+        sourceKinds: ['anki'],
         sources: [{ source: 'anki', deck: 'Mining', intervalDays: 0, cardId: 1, noteId: 1 }]
       }
     }
@@ -431,9 +607,77 @@ describe('buildSubtitleReport', () => {
 
     expect(report.tokenLevels.inDeck).toBe(2)
     expect(report.lemmaLevels.inDeck).toBe(1)
+    expectProvenanceInvariant(report)
     expect(report.topUnknown.map((row) => row.lemma)).toEqual(['謎'])
-    expect(report.provenance).toEqual({ wanikaniOnly: 0, ankiOnly: 1, both: 0, unsourced: 0 })
+    expect(report.provenance).toEqual({
+      wanikaniOnly: 0,
+      ankiOnly: 1,
+      both: 0,
+      grammar: 0,
+      unsourced: 0
+    })
     expect(report.ankiDecks).toEqual([{ deck: 'Mining', lemmaCount: 1 }])
+  })
+
+  it('keeps the report and bulk mining unknown identities in parity', () => {
+    const cues = [
+      {
+        cueKey: 'cue-1',
+        text: '神様 ヤツ に 謎。',
+        tokens: [
+          token({ lemma: '神', surface: '神', startOffset: 0 }),
+          token({ lemma: '様', surface: '様', startOffset: 1 }),
+          token({ lemma: 'ヤツ', surface: 'ヤツ', startOffset: 2 }),
+          token({ lemma: 'に', surface: 'に', pos: '助詞', startOffset: 3 }),
+          token({ lemma: '謎', surface: '謎', startOffset: 4 }),
+          symbolToken('。')
+        ],
+        spans: [
+          compoundSpan({ level: 'known' }),
+          compoundSpan({
+            startOffset: 2,
+            endOffset: 3,
+            memberTokenOffsets: [2],
+            expression: '奴',
+            matchedSurface: 'ヤツ'
+          }),
+          compoundSpan({
+            startOffset: 3,
+            endOffset: 4,
+            memberTokenOffsets: [3],
+            expression: 'に',
+            matchedSurface: 'に'
+          })
+        ]
+      },
+      {
+        cueKey: 'cue-2',
+        text: 'ヤツ 謎',
+        tokens: [
+          token({ lemma: 'ヤツ', surface: 'ヤツ', startOffset: 0 }),
+          token({ lemma: '謎', surface: '謎', startOffset: 1 })
+        ],
+        spans: []
+      }
+    ]
+    const details: Record<string, KnowledgeDetails> = {
+      神様: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    }
+    const report = buildSubtitleReport(
+      cues.map(({ cueKey, tokens, spans }) => ({ cueKey, tokens, acceptedSpans: spans })),
+      details
+    )
+    const units = deriveVocabularyUnits(cues, details)
+    const candidates = deriveMiningCandidates(cues, details)
+    const unknownKeys = units
+      .filter((unit) => !unit.grammar && unit.level === 'unknown')
+      .map((unit) => unit.key)
+
+    expect(report.lemmaLevels.unknown).toBe(candidates.length)
+    expect(new Set(report.topUnknown.map((row) => row.lemma))).toEqual(
+      new Set(candidates.map((row) => row.lemma))
+    )
+    expect(new Set(unknownKeys)).toEqual(new Set(candidates.map((row) => row.lemma)))
   })
 
   it('counts an accepted span whose level is inDeck under inDeck, not unknown', () => {
@@ -448,6 +692,7 @@ describe('buildSubtitleReport', () => {
 
     expect(report.tokenLevels).toEqual({ ...emptyLevels(), inDeck: 2 })
     expect(report.lemmaLevels).toEqual({ ...emptyLevels(), inDeck: 1 })
+    expectProvenanceInvariant(report)
     expect(report.topUnknown).toEqual([])
   })
 })
