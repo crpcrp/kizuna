@@ -11,8 +11,10 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:linux": "electron-vite dev -- --ozone-platform=x11",
     "build": "electron-vite build",
     "start": "electron-vite preview",
+    "start:linux": "electron-vite preview -- --ozone-platform=x11",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

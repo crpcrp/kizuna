@@ -7,7 +7,8 @@ describe('resolveBinaryPaths', () => {
     const result = resolveBinaryPaths({
       isPackaged: true,
       resourcesPath: 'C:\\Program Files\\Kizuna\\resources',
-      appRoot: 'E:\\ignored'
+      appRoot: 'E:\\ignored',
+      platform: 'win32'
     })
     expect(result).toEqual({
       mpvPath: join('C:\\Program Files\\Kizuna\\resources', 'mpv', 'mpv.exe'),
@@ -24,7 +25,8 @@ describe('resolveBinaryPaths', () => {
     const result = resolveBinaryPaths({
       isPackaged: false,
       resourcesPath: 'C:\\ignored',
-      appRoot: 'E:\\repos\\kizuna'
+      appRoot: 'E:\\repos\\kizuna',
+      platform: 'win32'
     })
     expect(result).toEqual({
       mpvPath: join('E:\\repos\\kizuna', 'resources', 'mpv', 'mpv.exe'),
@@ -41,9 +43,29 @@ describe('resolveBinaryPaths', () => {
     const packaged = resolveBinaryPaths({
       isPackaged: true,
       resourcesPath: '/r',
-      appRoot: '/a'
+      appRoot: '/a',
+      platform: 'win32'
     })
     expect(packaged.ytdlpPath).toBe(join('/r', 'yt-dlp', 'yt-dlp.exe'))
+  })
+
+  it('uses distribution tools for an unpackaged Linux checkout', () => {
+    expect(
+      resolveBinaryPaths({
+        isPackaged: false,
+        resourcesPath: '/ignored',
+        appRoot: '/home/user/kizuna',
+        platform: 'linux'
+      })
+    ).toEqual({
+      mpvPath: '/usr/bin/mpv',
+      ffprobePath: '/usr/bin/ffprobe',
+      ffmpegPath: '/usr/bin/ffmpeg',
+      mecabPath: '/usr/bin/mecab',
+      ipadicDir: '/var/lib/mecab/dic/debian',
+      unidicDir: '/usr/share/mecab/dic/unidic',
+      ytdlpPath: '/usr/bin/yt-dlp'
+    })
   })
 })
 
@@ -76,5 +98,27 @@ describe('requiredPackagedResources', () => {
         kind: 'directory'
       }
     ])
+  })
+
+  it('rejects unsupported platforms clearly', () => {
+    expect(() =>
+      resolveBinaryPaths({
+        isPackaged: true,
+        resourcesPath: '/resources',
+        appRoot: '/app',
+        platform: 'darwin'
+      })
+    ).toThrow('Unsupported platform for resource paths: darwin')
+  })
+
+  it('rejects packaged Linux until a Linux distribution target exists', () => {
+    expect(() =>
+      resolveBinaryPaths({
+        isPackaged: true,
+        resourcesPath: '/resources',
+        appRoot: '/app',
+        platform: 'linux'
+      })
+    ).toThrow('Packaged Linux builds are not supported')
   })
 })

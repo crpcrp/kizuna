@@ -24,3 +24,13 @@ resources/*
 
 
 test-results.log
+
+# Local Linux development and setup helpers
+/.kizuna-vm-reports/
+/open-kizuna-wsl.bat
+/run-kizuna-linux.bat
+/scripts/electron-x11.sh
+/scripts/setup-kizuna-vm-*.ps1
+/scripts/vm-*.sh
+/scripts/wsl-dev-shell.sh
+/scripts/linux-dev.sh

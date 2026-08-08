@@ -1,8 +1,8 @@
-// Construction options + window-control IPC wiring for the app's single
-// transparent frameless window (spike-validated; see docs/architecture-plan.md,
-// "Window model — SINGLE transparent window").
+// Construction options + window-control IPC wiring. Windows keeps one
+// transparent frameless window; Linux uses the paired options below so mpv can
+// own an opaque host while the DOM stays in a transparent child overlay.
 
-import type { BrowserWindowConstructorOptions } from 'electron'
+import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import type { IpcMainLike } from './ipc'
 import { PRODUCT_NAME } from '../shared/appIdentity'
 import { WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
@@ -12,11 +12,12 @@ import {
   type SetWindowBoundsRequest,
   type WindowBounds
 } from '../shared/windowBounds'
+import { normalizeWindowShapeRects, type WindowShapeRect } from '../shared/windowShape'
 
 export type { WindowBounds } from '../shared/windowBounds'
 
 /**
- * Options for the single main window. Load-bearing facts from the spike:
+ * Options for the single Windows main window. Its load-bearing requirements:
  * `transparent: true` is REQUIRED — an opaque Chromium window paints its own
  * surface over mpv's embedded child window and hides the video. `frame: false`
  * follows (transparent windows cannot use the OS frame); custom WindowChrome
@@ -37,6 +38,57 @@ export function getMainWindowOptions(preloadPath: string): BrowserWindowConstruc
       // OS-level Chromium sandbox on: the renderer holds a compromised bug to
       // the IPC surface instead of the user's full privileges. The preload only
       // uses contextBridge/ipcRenderer/webUtils, all of which work sandboxed.
+      sandbox: true
+    }
+  }
+}
+
+/**
+ * Options for Linux's opaque mpv host. The host deliberately loads no
+ * document: it is a bare X11 `--wid` target, and its black background is the
+ * video's letterbox colour. It stays hidden until the overlay has finished
+ * loading, so startup cannot expose an unpainted host.
+ */
+export function getLinuxVideoHostOptions(): BrowserWindowConstructorOptions {
+  return {
+    width: 1280,
+    height: 720,
+    title: PRODUCT_NAME,
+    frame: false,
+    transparent: false,
+    backgroundColor: '#000000',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  }
+}
+
+/**
+ * Options for Linux's renderer-owning child. `parent` gives Electron ownership
+ * of the stacking relationship; `skipTaskbar` keeps the transparent child from
+ * becoming a second taskbar entry where the platform supports that distinction.
+ */
+export function getLinuxUiOverlayOptions(
+  preloadPath: string,
+  parent: BrowserWindow
+): BrowserWindowConstructorOptions {
+  return {
+    width: 1280,
+    height: 720,
+    title: PRODUCT_NAME,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    show: false,
+    parent,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: true
     }
   }
@@ -152,6 +204,10 @@ export interface WindowControlTarget {
   getBounds(): WindowBounds
   setBounds(bounds: WindowBounds): void
   setAlwaysOnTop(flag: boolean): void
+  setShape?(rects: WindowShapeRect[]): void
+  /** Optional pair-owned fullscreen bookkeeping hooks. */
+  capturePreFullscreenBounds?(): void
+  hasPreFullscreenBounds?(): boolean
 }
 
 /** One display's usable area (`Electron.Display`'s `workArea`). */
@@ -229,10 +285,10 @@ export function capturePreFullscreenBounds(win: WindowControlTarget): void {
 /**
  * Re-applies `win`'s captured pre-fullscreen bounds (if any were captured)
  * and forgets them. Call this after the window has actually left fullscreen
- * (e.g. from the BrowserWindow's `leave-full-screen` event in index.ts) so
- * the restore isn't racing the OS's own fullscreen-exit animation/transition.
- * No-ops if nothing was captured (e.g. the window started fullscreen, or
- * bounds were already consumed by a prior restore).
+ * (e.g. from a BrowserWindow's `leave-full-screen` event) so the restore isn't
+ * racing the OS's own fullscreen-exit animation/transition. The paired Linux
+ * coordinator owns an equivalent pair-wide implementation; this helper keeps
+ * the single-window fallback and its tests small.
  */
 export function restorePreFullscreenBounds(win: WindowControlTarget): void {
   const bounds = preFullscreenBounds.get(win)
@@ -241,15 +297,23 @@ export function restorePreFullscreenBounds(win: WindowControlTarget): void {
   win.setBounds(bounds)
 }
 
+function captureTargetPreFullscreenBounds(win: WindowControlTarget): void {
+  if (win.capturePreFullscreenBounds) win.capturePreFullscreenBounds()
+  else capturePreFullscreenBounds(win)
+}
+
+function targetHasPreFullscreenBounds(win: WindowControlTarget): boolean {
+  return win.hasPreFullscreenBounds?.() ?? preFullscreenBounds.has(win)
+}
+
 /**
  * Registers the window-control channels ('window:minimize' / 'window:close' /
  * 'window:setFullscreen' / 'window:toggleFullscreen'). Pure wiring: the
  * ipcMain-like object and the event→window resolver are injected so tests
  * exercise this with fakes instead of live Electron. The matching
- * 'window:fullscreenChanged' push (main→renderer) is wired at window creation
- * (index.ts), where the BrowserWindow's enter/leave-full-screen events live —
- * that's also where `restorePreFullscreenBounds` is called, since it must run
- * after the OS-level transition finishes, not right after we ask for it.
+ * 'window:fullscreenChanged' push (main→renderer) is wired by the window-pair
+ * coordinator, which listens to the canonical native window and restores
+ * bounds only after the OS-level transition finishes.
  */
 export function registerWindowControls<E, I>(
   ipc: IpcMainLike<E, I>,
@@ -268,7 +332,7 @@ export function registerWindowControls<E, I>(
     const win = windowFromEvent(event)
     if (!win) return
     const fullscreen = Boolean(flag)
-    if (fullscreen) capturePreFullscreenBounds(win)
+    if (fullscreen) captureTargetPreFullscreenBounds(win)
     win.setFullScreen(fullscreen)
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.toggleFullscreen, (event) => {
@@ -278,8 +342,8 @@ export function registerWindowControls<E, I>(
     // is still active. A saved pre-fullscreen rectangle proves this window is
     // in that cycle, so treat toggle as an exit instead of recapturing the
     // fullscreen-sized bounds and requesting fullscreen again.
-    const next = !win.isFullScreen() && !preFullscreenBounds.has(win)
-    if (next) capturePreFullscreenBounds(win)
+    const next = !win.isFullScreen() && !targetHasPreFullscreenBounds(win)
+    if (next) captureTargetPreFullscreenBounds(win)
     win.setFullScreen(next)
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.setSize, (event, width, height) => {
@@ -290,6 +354,13 @@ export function registerWindowControls<E, I>(
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, (event, flag) => {
     windowFromEvent(event)?.setAlwaysOnTop(Boolean(flag))
+  })
+  ipc.on(WINDOW_CONTROL_CHANNELS.setShape, (event, value) => {
+    const win = windowFromEvent(event)
+    if (!win?.setShape) return
+    const bounds = win.getBounds()
+    const rects = normalizeWindowShapeRects(value, bounds.width, bounds.height)
+    if (rects) win.setShape(rects)
   })
   ipc.handle(WINDOW_CONTROL_CHANNELS.getBounds, (event) => {
     const win = windowFromEvent(event)

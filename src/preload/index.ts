@@ -40,6 +40,7 @@ import type {
 } from '../shared/urlSubtitles'
 import type { MediaKeyCommand } from '../shared/mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBounds'
+import type { WindowShapeRect } from '../shared/windowShape'
 import type {
   AnkiExistingMatch,
   AnkiMembershipMatches,
@@ -79,6 +80,12 @@ const api = {
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
     setAlwaysOnTop: (flag: boolean): void =>
       ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, flag),
+    ...(process.platform === 'linux'
+      ? {
+          setShape: (rects: WindowShapeRect[]): void =>
+            ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects)
+        }
+      : {}),
     getBounds: (): Promise<WindowBounds | null> =>
       ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.getBounds),
     setBounds: (request: SetWindowBoundsRequest): Promise<WindowBounds | null> =>

@@ -22,6 +22,7 @@ import type { MediaKeyCommand } from './mediaKey'
 import type { YtdlpQuality } from './ytdlpQuality'
 import type { UrlSubtitleAsset, UrlSubtitleDescriptor, UrlSubtitleInventory } from './urlSubtitles'
 import type { SetWindowBoundsRequest, WindowBounds } from './windowBounds'
+import type { WindowShapeRect } from './windowShape'
 import type {
   AnkiExistingMatch,
   AnkiMembershipMatches,
@@ -57,6 +58,7 @@ export interface KizunaApi {
     onFullscreenChange(cb: (value: boolean) => void): () => void
     setSize(width: number, height: number): void
     setAlwaysOnTop(flag: boolean): void
+    setShape?(rects: WindowShapeRect[]): void
     getBounds(): Promise<WindowBounds | null>
     setBounds(request: SetWindowBoundsRequest): Promise<WindowBounds | null>
   }

@@ -1,5 +1,4 @@
-// Speaks mpv's newline-delimited JSON IPC protocol (input-ipc-server) using
-// node:net only. Ported/hardened from the throwaway spike's pingMpvIpc().
+// Speaks mpv's cross-platform newline-delimited JSON IPC protocol over node:net.
 // No process spawning here — `MpvController` in controller.ts owns mpv.exe.
 
 import { connect, type Socket } from 'node:net'
@@ -39,25 +38,25 @@ export class MpvIpcClient {
   private readonly observers = new Map<number, (value: unknown) => void>()
   private readonly events = new EventEmitter()
 
-  /** Connects to `\\.\pipe\<name>`, retrying while mpv is still creating the pipe. */
-  async connect(pipeName: string, opts: ConnectOptions = {}): Promise<void> {
+  /** Connects to the complete mpv IPC endpoint, retrying while it is created. */
+  async connect(endpoint: string, opts: ConnectOptions = {}): Promise<void> {
     const { retries = 20, retryDelayMs = 100 } = opts
     let lastError: Error = new Error('connect not attempted')
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        this.socket = await this.connectOnce(pipeName)
+        this.socket = await this.connectOnce(endpoint)
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
         if (attempt < retries) await delay(retryDelayMs)
       }
     }
-    throw new Error(`mpv IPC: could not connect to ${pipeName}: ${lastError.message}`)
+    throw new Error(`mpv IPC: could not connect to ${endpoint}: ${lastError.message}`)
   }
 
-  private connectOnce(pipeName: string): Promise<Socket> {
+  private connectOnce(endpoint: string): Promise<Socket> {
     return new Promise((resolve, reject) => {
-      const sock = connect(pipeName)
+      const sock = connect(endpoint)
       const onError = (err: Error): void => {
         sock.destroy()
         reject(err)

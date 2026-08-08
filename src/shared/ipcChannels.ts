@@ -15,6 +15,8 @@ export const WINDOW_CONTROL_CHANNELS = {
   setSize: 'window:setSize',
   /** renderer→main: set/clear always-on-top (payload: boolean). */
   setAlwaysOnTop: 'window:setAlwaysOnTop',
+  /** renderer→main: visible/input rectangles for Linux's transparent UI overlay. */
+  setShape: 'window:setShape',
   /** renderer→main invoke: the window's current bounds `{x,y,width,height}`
    * (used by mini-player to save the pre-mini rectangle). */
   getBounds: 'window:getBounds',

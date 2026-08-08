@@ -289,8 +289,12 @@ describe('DictionariesTab pure helpers', () => {
   })
 
   it('formatImportProgress renders a "done / total rows" reading', () => {
-    expect(formatImportProgress({ done: 500, total: 5000 })).toBe('500 / 5,000 rows')
-    expect(formatImportProgress({ done: 1000, total: 1000000 })).toBe('1,000 / 1,000,000 rows')
+    expect(formatImportProgress({ done: 500, total: 5000 })).toBe(
+      `${(500).toLocaleString()} / ${(5000).toLocaleString()} rows`
+    )
+    expect(formatImportProgress({ done: 1000, total: 1000000 })).toBe(
+      `${(1000).toLocaleString()} / ${(1000000).toLocaleString()} rows`
+    )
   })
 
   it('formatImportProgress returns null when there is nothing worth showing yet', () => {

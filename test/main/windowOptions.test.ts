@@ -17,7 +17,7 @@ import { WINDOW_CONTROL_CHANNELS } from '@src/shared/ipcChannels'
 describe('getMainWindowOptions', () => {
   const opts = getMainWindowOptions('/fake/preload.js')
 
-  it('is the spike-validated transparent frameless window', () => {
+  it('creates the transparent frameless Windows window', () => {
     expect(opts.transparent).toBe(true)
     expect(opts.frame).toBe(false)
     expect(opts.backgroundColor).toBe('#00000000')
@@ -225,11 +225,12 @@ describe('registerWindowControls', () => {
       isFullScreen: () => fullscreen,
       getBounds: vi.fn(() => bounds),
       setBounds: vi.fn(),
-      setAlwaysOnTop: vi.fn()
+      setAlwaysOnTop: vi.fn(),
+      setShape: vi.fn()
     }
   }
 
-  it('registers exactly the six window-control command channels', () => {
+  it('registers exactly the window-control command channels', () => {
     const { listeners } = setup(null)
     expect([...listeners.keys()].sort()).toEqual(
       [
@@ -238,7 +239,8 @@ describe('registerWindowControls', () => {
         WINDOW_CONTROL_CHANNELS.setFullscreen,
         WINDOW_CONTROL_CHANNELS.toggleFullscreen,
         WINDOW_CONTROL_CHANNELS.setSize,
-        WINDOW_CONTROL_CHANNELS.setAlwaysOnTop
+        WINDOW_CONTROL_CHANNELS.setAlwaysOnTop,
+        WINDOW_CONTROL_CHANNELS.setShape
       ].sort()
     )
   })
@@ -399,6 +401,32 @@ describe('registerWindowControls', () => {
 
     listeners.get(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop)!({ senderId: 7 }, false)
     expect(target.setAlwaysOnTop).toHaveBeenCalledWith(false)
+  })
+
+  it('validates, clips, and forwards Linux overlay shape rectangles', () => {
+    const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 })
+    const { listeners } = setup(target)
+
+    listeners.get(WINDOW_CONTROL_CHANNELS.setShape)!({ senderId: 7 }, [
+      { x: -2.4, y: 10.2, width: 100.1, height: 40.2 },
+      { x: 790, y: 590, width: 30, height: 30 }
+    ])
+
+    expect(target.setShape).toHaveBeenCalledWith([
+      { x: 0, y: 10, width: 98, height: 41 },
+      { x: 790, y: 590, width: 10, height: 10 }
+    ])
+  })
+
+  it('rejects a malformed overlay shape payload', () => {
+    const target = fakeTarget()
+    const { listeners } = setup(target)
+
+    listeners.get(WINDOW_CONTROL_CHANNELS.setShape)!({ senderId: 7 }, [
+      { x: 0, y: 0, width: -1, height: 10 }
+    ])
+
+    expect(target.setShape).not.toHaveBeenCalled()
   })
 
   it('setSize/setAlwaysOnTop are no-ops when no window resolves', () => {

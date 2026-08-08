@@ -1,18 +1,10 @@
-// Resolves bundled-binary paths for dev vs packaged
-// runs, replacing the temporary KIZUNA_MPV_PATH / KIZUNA_FFPROBE_PATH /
-// KIZUNA_FFMPEG_PATH env-var hooks in index.ts and mediaService.ts.
+// Resolves bundled-binary paths for dev vs packaged runs, replacing the
+// temporary KIZUNA_MPV_PATH / KIZUNA_FFPROBE_PATH / KIZUNA_FFMPEG_PATH
+// env-var hooks in index.ts and mediaService.ts.
 //
-// Packaged (electron-builder extraResources, see package.json "build"):
-//   <resourcesPath>/mpv/mpv.exe
-//   <resourcesPath>/ffmpeg/{ffmpeg,ffprobe}.exe
-//   <resourcesPath>/mecab/mecab.exe, /mecab/ipadic, /mecab/unidic
-//   <resourcesPath>/yt-dlp/yt-dlp.exe
-// Dev (binaries checked out locally, gitignored — see resources/):
-//   <appRoot>/resources/mpv/mpv.exe
-//   <appRoot>/resources/ffmpeg/{ffmpeg,ffprobe}.exe
-//   <appRoot>/resources/mecab/mecab.exe, /mecab/ipadic, /mecab/unidic
-//   <appRoot>/resources/yt-dlp/yt-dlp.exe
-// Both layouts mirror each other so this is a single join per binary.
+// Packaged Windows uses electron-builder's resources layout; Windows
+// development mirrors it under <appRoot>/resources. Linux development uses
+// distribution binaries and dictionaries directly.
 
 import { join } from 'node:path'
 
@@ -36,6 +28,8 @@ export interface ResolveBinaryPathsOptions {
   resourcesPath: string
   /** Project root in dev (only meaningful when not packaged). */
   appRoot: string
+  /** Defaults to the host platform. Only Windows and Linux are supported. */
+  platform?: NodeJS.Platform
 }
 
 export interface RequiredPackagedResource {
@@ -44,12 +38,13 @@ export interface RequiredPackagedResource {
   kind: 'file' | 'directory'
 }
 
-/** Pure. Lists the runtime files and layout that must exist in an installer. */
+/** Pure. Lists the runtime files required by the supported Windows installer. */
 export function requiredPackagedResources(resourcesPath: string): RequiredPackagedResource[] {
   const paths = resolveBinaryPaths({
     isPackaged: true,
     resourcesPath,
-    appRoot: ''
+    appRoot: '',
+    platform: 'win32'
   })
   return [
     { label: 'mpv', path: paths.mpvPath, kind: 'file' },
@@ -60,12 +55,28 @@ export function requiredPackagedResources(resourcesPath: string): RequiredPackag
   ]
 }
 
-/** Pure. Resolves the three Phase-1 binary paths for the given run mode. */
+/** Pure. Resolves runtime binary paths for the given run mode and platform. */
 export function resolveBinaryPaths({
   isPackaged,
   resourcesPath,
-  appRoot
+  appRoot,
+  platform = process.platform
 }: ResolveBinaryPathsOptions): BinaryPaths {
+  if (platform === 'linux') {
+    if (isPackaged) throw new Error('Packaged Linux builds are not supported')
+    return {
+      mpvPath: '/usr/bin/mpv',
+      ffprobePath: '/usr/bin/ffprobe',
+      ffmpegPath: '/usr/bin/ffmpeg',
+      mecabPath: '/usr/bin/mecab',
+      ipadicDir: '/var/lib/mecab/dic/debian',
+      unidicDir: '/usr/share/mecab/dic/unidic',
+      ytdlpPath: '/usr/bin/yt-dlp'
+    }
+  }
+  if (platform !== 'win32') {
+    throw new Error(`Unsupported platform for resource paths: ${platform}`)
+  }
   const base = isPackaged ? resourcesPath : join(appRoot, 'resources')
   return {
     mpvPath: join(base, 'mpv', 'mpv.exe'),

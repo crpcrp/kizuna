@@ -19,10 +19,36 @@ renderer-facing contract is defined in `src/shared/preloadApi.ts`.
 
 ## Playback and subtitles
 
-mpv renders into Kizuna's window and is controlled through JSON IPC over a
-Windows named pipe. Subtitle tracks are extracted and rendered separately in
-the DOM so their text can be selected, tokenized, looked up, and styled by
-knowledge level.
+On Windows, mpv renders into Kizuna's single transparent frameless window and
+is controlled through JSON IPC over a named pipe. On Linux, Electron uses X11
+and owns an opaque `videoHost` plus a transparent child `uiOverlay`: mpv's
+`--wid` targets only the host, while the renderer, preload, controls, and DOM
+subtitles live only in the overlay. The renderer measures every DOM surface
+which actually paints (chrome, sidebars, subtitles, menus, popups and modals),
+and main applies those rectangles with `BrowserWindow.setShape`. The resulting
+native holes expose mpv instead of asking the Linux compositor to alpha-blend
+two top-level video surfaces, which produced black or flickering windows.
+Electron's parent/child relationship keeps the shaped overlay above the host
+without making Kizuna globally always-on-top.
+
+Subtitle tracks are extracted and rendered separately in the DOM so their text
+can be selected, tokenized, looked up, and styled by knowledge level.
+
+`src/main/windowPair.ts` owns the platform-specific window lifecycle. On
+Linux, `uiOverlay` owns normal user-driven position and size because its DOM
+contains the native title-bar drag region and interactive resize border;
+`videoHost` owns native fullscreen and taskbar surfaces. Move/resize events are
+coalesced and synchronized from whichever side actually changed, while
+programmatic writes are guarded so mirroring does not recurse. Fullscreen is
+initiated only on the host, restored from one saved pre-fullscreen rectangle
+after the native leave event, and reported to the renderer once per logical
+transition. Mini-player bounds and requested always-on-top state are applied to
+both sides as one operation. The parent relationship remains the normal
+stacking mechanism; always-on-top is not used for ordinary Linux playback.
+
+Windows continues to use the same coordinator interface backed by its one
+transparent BrowserWindow, so window-control IPC does not duplicate platform
+branches or change the existing single-window composition.
 
 Runtime executables resolve from `resources/` in development and Electron's
 resource directory in packaged builds. Subprocess output is bounded and

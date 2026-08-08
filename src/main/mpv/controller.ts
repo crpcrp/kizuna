@@ -14,7 +14,9 @@ import { parseAudioDeviceList, type AudioDevice } from '../../shared/audioDevice
 import { parseTrackList, type Track, type VideoDimensions } from '../../shared/track'
 import { ytdlpFormatForQuality, type YtdlpQuality } from '../../shared/ytdlpQuality'
 import { spawn } from 'node:child_process'
+import { unlinkSync } from 'node:fs'
 import { MpvIpcClient, type ConnectOptions, type MpvMessage } from './ipcClient'
+import { createMpvIpcEndpoint, removeMpvIpcEndpoint, type UnlinkFn } from './ipcEndpoint'
 
 /**
  * `loadFile` rejection for the case where mpv accepted the `loadfile` command
@@ -67,10 +69,12 @@ export type SetTimeoutFn = (cb: () => void, ms: number) => unknown
 export type ClearTimeoutFn = (handle: unknown) => void
 
 export interface BuildMpvArgsOptions {
-  /** Native window handle mpv should render into (see hwndFromHandleBuffer). */
-  hwnd: bigint | string
-  /** Bare pipe name — the `\\.\pipe\` prefix is added here. */
-  pipeName: string
+  /** Host windowing/video-output platform. */
+  platform: NodeJS.Platform
+  /** Native window ID mpv should render into. */
+  windowId: bigint | string
+  /** Complete named-pipe or Unix-domain-socket endpoint for mpv IPC. */
+  ipcEndpoint: string
   /**
    * Kizuna-owned mpv config dir (`<userData>/mpv`). When set, mpv reads
    * `mpv.conf`/`input.conf`/`scripts/`/`shaders/` from it
@@ -178,8 +182,9 @@ export function sanitizeExtraMpvArgs(args: string[]): string[] {
  * user drops in can break the integration.
  */
 export function buildMpvArgs({
-  hwnd,
-  pipeName,
+  platform,
+  windowId,
+  ipcEndpoint,
   userConfigDir,
   extraArgs = [],
   ytdlpPath
@@ -199,16 +204,23 @@ export function buildMpvArgs({
           `--script-opts-append=ytdl_hook-ytdl_path=${ytdlpPath}`,
           '--script-opts-append=ytdl_hook-use_manifests=no'
         ]
+  // Linux embedding runs through Electron's X11 path under X11/XWayland.
+  // The legacy X11 output is intentionally the correctness baseline: unlike
+  // x11egl it renders in software-only/Xvfb sessions and on machines whose EGL
+  // context initializes but presents only black frames. A future accelerated
+  // path must pass the real-pixel visibility test before replacing it.
+  const linuxEmbeddingArgs = platform === 'linux' ? ['--vo=x11'] : []
   return [
     ...configArgs,
     ...sanitizeExtraMpvArgs(extraArgs),
-    `--wid=${hwnd}`,
-    `--input-ipc-server=\\\\.\\pipe\\${pipeName}`,
+    ...linuxEmbeddingArgs,
+    `--wid=${windowId}`,
+    `--input-ipc-server=${ipcEndpoint}`,
     '--idle=yes', // start with no file; wait for loadfile commands
     '--force-window=yes', // paint into the wid even while idle
-    '--keep-open=yes', // spike-proven: playback end must not kill the window
-    '--no-osc', // spike-proven: our DOM draws all controls
-    '--no-input-default-bindings', // spike-proven: keyboard is ours
+    '--keep-open=yes', // playback end must not kill the embedded window
+    '--no-osc', // Kizuna's DOM draws all controls
+    '--no-input-default-bindings', // Kizuna owns keyboard input
     '--sid=no', // subtitles render in the DOM, never by mpv
     '--volume-max=200', // raise mpv's software-boost ceiling so setVolume can go past 100
     ...ytdlArgs
@@ -217,7 +229,7 @@ export function buildMpvArgs({
 
 /** The slice of MpvIpcClient the controller needs (fakeable in tests). */
 export interface MpvClientLike {
-  connect(pipePath: string, opts?: ConnectOptions): Promise<void>
+  connect(endpoint: string, opts?: ConnectOptions): Promise<void>
   sendCommand(command: unknown[]): Promise<unknown>
   observeProperty(name: string, cb: (value: unknown) => void): Promise<number>
   on(event: string, listener: (msg: MpvMessage) => void): void
@@ -236,6 +248,12 @@ export type SpawnFn = (command: string, args: string[]) => MpvProcessLike
 export interface MpvControllerDeps {
   spawnFn?: SpawnFn
   client?: MpvClientLike
+  /** Platform seam for endpoint and cleanup tests; defaults to the host platform. */
+  platform?: NodeJS.Platform
+  /** Temp directory seam for deterministic Linux endpoint tests. */
+  tempDir?: string
+  /** Filesystem seam for deterministic Linux endpoint cleanup tests. */
+  unlinkFn?: UnlinkFn
   /** Fakeable timer for load timeouts; defaults to the global `setTimeout`. */
   setTimeoutFn?: SetTimeoutFn
   /** Fakeable timer clear; defaults to the global `clearTimeout`. */
@@ -255,7 +273,7 @@ export interface LoadFileOptions {
 
 export interface StartOptions {
   mpvPath: string
-  hwnd: bigint | string
+  windowId: bigint | string
   connect?: ConnectOptions
   /** Kizuna-owned mpv config dir; forwarded to `buildMpvArgs`. Undefined =
    * `--no-config` (mpv ignores every config source). */
@@ -266,19 +284,16 @@ export interface StartOptions {
   ytdlpPath?: string
 }
 
-let pipeCounter = 0
-
-/** One unique pipe name per mpv instance so parallel runs never collide. */
-function uniquePipeName(): string {
-  return `kizuna-mpv-${process.pid}-${Date.now()}-${pipeCounter++}`
-}
-
 export class MpvController {
   private readonly spawnFn: SpawnFn
   private readonly client: MpvClientLike
   private readonly setTimeoutFn: SetTimeoutFn
   private readonly clearTimeoutFn: ClearTimeoutFn
+  private readonly platform: NodeJS.Platform
+  private readonly tempDir: string | undefined
+  private readonly unlinkFn: UnlinkFn
   private proc: MpvProcessLike | null = null
+  private ipcEndpoint: string | null = null
   /**
    * Abort hook for the currently in-flight `loadFile`, or null when none is
    * pending. `cancelLoad()` invokes it to settle the load early via the same
@@ -287,35 +302,111 @@ export class MpvController {
   private pendingLoadAbort: ((error: Error) => void) | null = null
 
   constructor(deps: MpvControllerDeps = {}) {
-    this.spawnFn = deps.spawnFn ?? ((cmd, args) => spawn(cmd, args, { stdio: 'ignore' }))
+    this.spawnFn =
+      deps.spawnFn ??
+      ((cmd, args) => {
+        const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+        child.stderr?.on('data', (chunk) => {
+          const message = String(chunk).trimEnd()
+          if (message) console.warn(`[kizuna] mpv: ${message}`)
+        })
+        return child
+      })
     this.client = deps.client ?? new MpvIpcClient()
     this.setTimeoutFn = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms))
     this.clearTimeoutFn =
       deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
+    this.platform = deps.platform ?? process.platform
+    this.tempDir = deps.tempDir
+    this.unlinkFn = deps.unlinkFn ?? unlinkSync
   }
 
-  /** Spawns mpv rendering into `hwnd` and connects the IPC client to its pipe. */
+  /** Removes the owned Linux endpoint and releases its ownership. */
+  private cleanupIpcEndpoint(): void {
+    const endpoint = this.ipcEndpoint
+    if (endpoint === null) return
+    try {
+      removeMpvIpcEndpoint(endpoint, this.platform, this.unlinkFn)
+    } finally {
+      this.ipcEndpoint = null
+    }
+  }
+
+  /**
+   * A native mpv exit is a complete controller teardown too. Without this
+   * path, a crash after startup leaves the Linux socket owned by Kizuna and
+   * the controller keeps sending commands to a dead IPC client until app quit.
+   */
+  private handleProcessExit(proc: MpvProcessLike): void {
+    // A killed process may emit its exit event after a new start has already
+    // installed the next process. Never let a late event tear down that new
+    // controller instance.
+    if (this.proc !== proc) return
+    this.proc = null
+    try {
+      this.client.dispose()
+    } finally {
+      this.cleanupIpcEndpoint()
+    }
+  }
+
+  /** Spawns mpv rendering into `windowId` and connects the IPC client to its endpoint. */
   async start({
     mpvPath,
-    hwnd,
+    windowId,
     connect,
     userConfigDir,
     extraArgs,
     ytdlpPath
   }: StartOptions): Promise<void> {
     if (this.proc) throw new Error('MpvController: already started')
-    const pipeName = uniquePipeName()
-    this.proc = this.spawnFn(
-      mpvPath,
-      buildMpvArgs({ hwnd, pipeName, userConfigDir, extraArgs, ytdlpPath })
-    )
+    const ipcEndpoint = createMpvIpcEndpoint(this.platform, this.tempDir)
+    this.ipcEndpoint = ipcEndpoint
+
     try {
-      await this.client.connect(`\\\\.\\pipe\\${pipeName}`, connect)
+      // mpv normally creates the endpoint itself. Remove a leftover Linux
+      // socket before spawning so a previous crash cannot block startup.
+      removeMpvIpcEndpoint(ipcEndpoint, this.platform, this.unlinkFn)
+    } catch (err) {
+      this.ipcEndpoint = null
+      throw err
+    }
+
+    try {
+      this.proc = this.spawnFn(
+        mpvPath,
+        buildMpvArgs({
+          platform: this.platform,
+          windowId,
+          ipcEndpoint,
+          userConfigDir,
+          extraArgs,
+          ytdlpPath
+        })
+      )
+      const proc = this.proc
+      proc.on('exit', (...args) => {
+        const [code, signal] = args
+        if (code !== 0 && code !== null && code !== undefined)
+          console.warn(
+            `[kizuna] mpv exited with code ${String(code)}${signal ? ` (${String(signal)})` : ''}`
+          )
+        this.handleProcessExit(proc)
+      })
+      proc.on('error', (err) => {
+        console.warn('[kizuna] mpv process error:', err)
+        this.handleProcessExit(proc)
+      })
+      await this.client.connect(ipcEndpoint, connect)
     } catch (err) {
       // connect failed: don't leak the spawned mpv process or leave a
       // half-started controller stuck behind the "already started" guard.
-      this.proc.kill()
-      this.proc = null
+      try {
+        this.proc?.kill()
+      } finally {
+        this.proc = null
+        this.cleanupIpcEndpoint()
+      }
       throw err
     }
   }
@@ -667,8 +758,16 @@ export class MpvController {
 
   /** Hard teardown: drops the IPC client and kills the mpv process. */
   dispose(): void {
-    this.client.dispose()
-    this.proc?.kill()
+    const proc = this.proc
     this.proc = null
+    try {
+      this.client.dispose()
+    } finally {
+      try {
+        proc?.kill()
+      } finally {
+        this.cleanupIpcEndpoint()
+      }
+    }
   }
 }
