@@ -50,8 +50,10 @@ Windows continues to use the same coordinator interface backed by its one
 transparent BrowserWindow, so window-control IPC does not duplicate platform
 branches or change the existing single-window composition.
 
-Runtime executables resolve from `resources/` in development and Electron's
-resource directory in packaged builds. Subprocess output is bounded and
+Runtime executables resolve from the host distribution during unpackaged Linux
+development, from `resources/` during unpackaged Windows development, and from
+Electron's resource directory in packaged Windows or Linux builds. The selected
+platform's staged payload is validated before packaging. Subprocess output is bounded and
 long-running operations use timeouts or cancellation where appropriate.
 
 ## Local data
@@ -67,12 +69,15 @@ Translation uses Google's unofficial endpoint and is explicitly opt-in.
 
 ## Packaging
 
-Windows x64 and NSIS are the supported release targets. The installer includes
-the staged runtime binaries and generated third-party notices.
+Windows x64 and NSIS are the published release targets. Windows x64 and Linux
+x64 have immutable runtime payloads in the vendor lock map; the common
+electron-builder resource layout works for either packaged target. The installer
+includes the selected runtime binaries and generated third-party notices.
 `better-sqlite3` is rebuilt for Electron's ABI.
 
-GitHub Actions builds unsigned Windows x64 NSIS installers. The release
-workflow verifies the package, generates checksums, notices, and provenance,
+GitHub Actions validates both Windows and Linux resource staging. The release
+workflow still builds unsigned Windows x64 NSIS installers and verifies the
+package, generates checksums, notices, and provenance,
 and prepares a draft pre-release. Code signing is planned after the project is
 accepted by an open-source signing service; see [Releasing](releasing.md) for
 the authoritative release procedure.

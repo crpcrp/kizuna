@@ -21,7 +21,12 @@
 import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join, posix } from 'node:path'
 
-import { sha256File } from './vendorResources.mjs'
+import {
+  SUPPORTED_PLATFORM_KEYS,
+  isSafeRelativePath,
+  platformKeyFor,
+  sha256File
+} from './vendorResources.mjs'
 
 /**
  * @typedef {object} NoticeSource
@@ -44,6 +49,17 @@ import { sha256File } from './vendorResources.mjs'
  * @property {string} [resourceRoot] Path under `resources/` the component owns.
  * @property {string} [packageName] `node_modules/<packageName>`, for `bundled: 'node_modules'`.
  * @property {string[]} [licenseFiles] Licence texts to copy into the bundle.
+ * @property {Record<string, NoticePlatformOverride>} [platforms] Platform-specific metadata.
+ * @property {string[]} [notes]
+ * @property {boolean} [copyleft]
+ * @property {NoticeSource} [source]
+ */
+
+/**
+ * @typedef {object} NoticePlatformOverride
+ * @property {string} [version]
+ * @property {string} [license]
+ * @property {string[]} [licenseFiles]
  * @property {string[]} [notes]
  * @property {boolean} [copyleft]
  * @property {NoticeSource} [source]
@@ -72,6 +88,34 @@ export const NOTICES_FILE = 'THIRD_PARTY_NOTICES.md'
 
 /** Bundle-relative name of the generated corresponding-source document. */
 export const SOURCE_FILE = 'CORRESPONDING_SOURCE.md'
+
+/**
+ * Resolve platform-specific component metadata without mutating the committed
+ * notices object. Components without an override retain the common metadata.
+ *
+ * @param {NoticesFile} notices
+ * @param {string | undefined} platformKey
+ * @returns {NoticesFile}
+ */
+export function resolvePlatformNotices(notices, platformKey) {
+  if (!platformKey) return notices
+  return {
+    ...notices,
+    components: notices.components.map((component) => {
+      const override = component.platforms?.[platformKey]
+      if (!override) return component
+      return {
+        ...component,
+        ...override,
+        platforms: component.platforms,
+        source: override.source ?? component.source,
+        licenseFiles: override.licenseFiles ?? component.licenseFiles,
+        notes: override.notes ?? component.notes,
+        copyleft: override.copyleft ?? component.copyleft
+      }
+    })
+  }
+}
 
 /** Filenames npm packages use for their licence text, most specific first. */
 const LICENSE_FILE_PATTERN = /^(licen[sc]e|copying|notice)([-_.].*)?(\.(md|txt))?$/i
@@ -130,6 +174,62 @@ export function noticesProblems(notices) {
     if (component?.bundled === 'node_modules' && !component.packageName) {
       problems.push(`component "${label}" has no packageName`)
     }
+    if (component?.platforms !== undefined) {
+      if (
+        component.platforms === null ||
+        typeof component.platforms !== 'object' ||
+        Array.isArray(component.platforms)
+      ) {
+        problems.push('component "' + label + '" platforms must be an object')
+      } else {
+        for (const key of Object.keys(component.platforms)) {
+          if (!SUPPORTED_PLATFORM_KEYS.includes(key)) {
+            problems.push('component "' + label + '" has unknown platform metadata "' + key + '"')
+            continue
+          }
+          const override = component.platforms[key]
+          if (override === null || typeof override !== 'object' || Array.isArray(override)) {
+            problems.push('component "' + label + '" platform "' + key + '" must be an object')
+            continue
+          }
+          if (override.licenseFiles !== undefined) {
+            if (!Array.isArray(override.licenseFiles) || override.licenseFiles.length === 0) {
+              problems.push(
+                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
+              )
+            }
+            for (const path of override.licenseFiles ?? []) {
+              if (!isSafeRelativePath(path)) {
+                problems.push(
+                  'component "' +
+                    label +
+                    '" platform "' +
+                    key +
+                    '" has an unsafe license path ' +
+                    String(path)
+                )
+              }
+            }
+          }
+          const effective = { ...component, ...override }
+          if (component.bundled === 'resources') {
+            if (!effective.version) {
+              problems.push('component "' + label + '" platform "' + key + '" has no version')
+            }
+            if (!effective.licenseFiles?.length) {
+              problems.push(
+                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
+              )
+            }
+            if (effective.copyleft && !effective.source?.code) {
+              problems.push(
+                'copyleft component "' + label + '" platform "' + key + '" has no source.code URL'
+              )
+            }
+          }
+        }
+      }
+    }
   }
   return problems
 }
@@ -147,38 +247,64 @@ export function noticesProblems(notices) {
  *
  * @param {NoticesFile} notices
  * @param {import('./vendorResources.mjs').LockFile} lock
+ * @param {string} [platformKey]
  * @returns {string[]} Empty when the two files agree.
  */
-export function lockAgreementProblems(notices, lock) {
+export function lockAgreementProblems(notices, lock, platformKey) {
   const problems = []
-  if (notices.vendorCommit !== lock.source?.commit) {
-    problems.push(
-      `vendorCommit ${notices.vendorCommit} does not match resources.lock.json source.commit ` +
-        `${lock.source?.commit}. The binaries changed; re-check every component's version, ` +
-        'licence text, and source URL before re-pinning it.'
-    )
-  }
+  const platformKeys = lock?.platforms
+    ? platformKey
+      ? [platformKey]
+      : SUPPORTED_PLATFORM_KEYS
+    : [platformKey ?? lock?.platform ?? 'win32-x64']
 
-  const lockedPaths = new Map((lock.files ?? []).map((file) => [file.to, file.sha256]))
-  const roots = []
-  for (const component of notices.components) {
-    if (component.bundled !== 'resources') continue
-    roots.push(component.resourceRoot)
-    for (const path of component.licenseFiles ?? []) {
-      if (!lockedPaths.has(path)) {
-        problems.push(
-          `component "${component.name}" lists licence file ${path}, which resources.lock.json ` +
-            'does not stage into resources/'
-        )
+  for (const key of platformKeys) {
+    const platformLock = lock?.platforms?.[key] ?? (lock?.platform === key ? lock : undefined)
+    if (!platformLock) {
+      problems.push('resources.lock.json has no platform entry for ' + key)
+      continue
+    }
+    const effective = resolvePlatformNotices(notices, key)
+    if (notices.vendorCommit !== platformLock.source?.commit) {
+      problems.push(
+        'vendorCommit ' +
+          notices.vendorCommit +
+          ' does not match resources.lock.json source.commit ' +
+          platformLock.source?.commit +
+          ' for ' +
+          key +
+          '. The binaries changed; re-check every component version, licence text, and source URL before re-pinning it.'
+      )
+    }
+
+    const lockedPaths = new Map((platformLock.files ?? []).map((file) => [file.to, file.sha256]))
+    const roots = []
+    for (const component of effective.components) {
+      if (component.bundled !== 'resources') continue
+      roots.push(component.resourceRoot)
+      for (const path of component.licenseFiles ?? []) {
+        if (!lockedPaths.has(path)) {
+          problems.push(
+            'component "' +
+              component.name +
+              '" lists licence file ' +
+              path +
+              ', which resources.lock.json does not stage into resources/ for ' +
+              key
+          )
+        }
       }
     }
-  }
 
-  for (const [path] of lockedPaths) {
-    if (!roots.some((root) => path === root || path.startsWith(`${root}/`))) {
-      problems.push(
-        `resources.lock.json stages ${path}, which no component in third-party.json covers`
-      )
+    for (const [path] of lockedPaths) {
+      if (!roots.some((root) => path === root || path.startsWith(root + '/'))) {
+        problems.push(
+          'resources.lock.json stages ' +
+            path +
+            ', which no component in third-party.json covers for ' +
+            key
+        )
+      }
     }
   }
   return problems
@@ -509,6 +635,7 @@ export async function writeNoticeBundle({ outDir, plan, documents }) {
  * @param {string} options.outDir
  * @param {string} options.productName
  * @param {string} options.appVersion
+ * @param {string} [options.platformKey]
  * @param {(message: string) => void} [options.log]
  * @returns {Promise<string[]>} Bundle-relative paths written.
  */
@@ -521,14 +648,22 @@ export async function generateNotices({
   outDir,
   productName,
   appVersion,
+  platformKey,
   log = () => {}
 }) {
-  const problems = [...noticesProblems(declared), ...lockAgreementProblems(declared, lock)]
+  const selectedPlatformKey = platformKey ?? (lock.platforms ? platformKeyFor() : undefined)
+  const problems = [
+    ...noticesProblems(declared),
+    ...lockAgreementProblems(declared, lock, selectedPlatformKey)
+  ]
   if (problems.length > 0) {
     throw new Error(`third-party.json is unusable:\n  ${problems.join('\n  ')}`)
   }
 
-  const notices = resolveComponentVersions(declared, packageLock)
+  const notices = resolveComponentVersions(
+    resolvePlatformNotices(declared, selectedPlatformKey),
+    packageLock
+  )
   const packages = productionPackages(packageLock)
   /** @type {Record<string, string[]>} */
   const packageLicenseNames = {}

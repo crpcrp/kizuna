@@ -5,8 +5,9 @@
 // runs it first, so an installer can never be built without one.
 //
 // Usage:
-//   node scripts/generate-notices.mjs             # write build/notices
-//   node scripts/generate-notices.mjs --out DIR   # write somewhere else
+//   node scripts/generate-notices.mjs                         # select host platform
+//   node scripts/generate-notices.mjs --platform linux-x64    # explicit target
+//   node scripts/generate-notices.mjs --out DIR               # write somewhere else
 //
 // It reads `third-party.json`, `resources.lock.json`, `package-lock.json`, the
 // staged `resources/` tree, and `node_modules/`, and fails closed: a licence
@@ -21,6 +22,7 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
 import { generateNotices } from './notices.mjs'
+import { platformKeyFor } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -42,6 +44,21 @@ export function parseOutDirArg(argv) {
   return undefined
 }
 
+/**
+ * Read --platform <key> / --platform=<key> out of argv.
+ *
+ * @param {string[]} argv
+ * @returns {string | undefined}
+ */
+export function parsePlatformArg(argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--platform') return argv[i + 1]
+    const inline = /^--platform=(.+)$/.exec(argv[i])
+    if (inline) return inline[1]
+  }
+  return undefined
+}
+
 /** @param {string} name @returns {Promise<any>} */
 const readJson = async (name) => JSON.parse(await readFile(join(repoRoot, name), 'utf-8'))
 
@@ -54,7 +71,9 @@ async function main() {
     readJson(join('src', 'shared', 'appIdentity.json'))
   ])
 
-  const outDir = resolve(parseOutDirArg(process.argv.slice(2)) ?? join(repoRoot, DEFAULT_OUT_DIR))
+  const args = process.argv.slice(2)
+  const outDir = resolve(parseOutDirArg(args) ?? join(repoRoot, DEFAULT_OUT_DIR))
+  const platformKey = parsePlatformArg(args) ?? platformKeyFor()
 
   await generateNotices({
     notices,
@@ -65,6 +84,7 @@ async function main() {
     outDir,
     productName: identity.productName,
     appVersion: pkg.version,
+    platformKey,
     log: (message) => console.log(message)
   })
 

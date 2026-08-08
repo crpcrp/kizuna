@@ -1,7 +1,8 @@
 # Runtime Binaries
 
-Kizuna packages Windows x64 builds of mpv, FFmpeg/ffprobe, and MeCab. These files
-are kept out of Git and staged under `resources/`.
+Kizuna stages immutable Windows x64 and Linux x64 builds of mpv,
+FFmpeg/ffprobe, and MeCab. These files are kept out of Git and staged under
+`resources/` using one logical component layout per platform.
 
 ## Setup
 
@@ -11,10 +12,23 @@ Install Git LFS, then run:
 npm run resources
 ```
 
-The command reads [`resources.lock.json`](../resources.lock.json), fetches the
-pinned files from the public
+The command selects the current host platform, reads
+[`resources.lock.json`](../resources.lock.json), fetches the pinned files from the public
 [`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor) mirror, and
 verifies every file by SHA-256. No credentials are required.
+
+For a CI cross-check or a foreign-platform staging run, pass an explicit lock
+key:
+
+```powershell
+npm run resources -- --platform linux-x64
+npm run resources -- --platform win32-x64
+```
+
+The platform override changes only the selected payload; it does not make
+Windows execute Linux binaries. The staging validation removes files managed by
+the other platform and fails closed if optional yt-dlp has the wrong platform
+suffix. First-party resource files are left alone.
 
 To use an existing mirror checkout:
 
@@ -26,12 +40,16 @@ The `KIZUNA_VENDOR_DIR` environment variable provides the same override.
 
 ## Required files
 
-| Component | Installed path | Purpose |
-|---|---|---|
-| mpv | `resources/mpv/mpv.exe` | Video playback |
-| FFmpeg | `resources/ffmpeg/ffmpeg.exe` | Subtitle extraction and sentence-audio clips |
-| ffprobe | `resources/ffmpeg/ffprobe.exe` | Media, track, and chapter inspection |
-| MeCab | `resources/mecab/` | Japanese tokenization |
+| Platform | Component | Installed path | Purpose |
+|---|---|---|---|
+| Windows x64 | mpv | `resources/mpv/mpv.exe` | Video playback |
+| Windows x64 | FFmpeg | `resources/ffmpeg/ffmpeg.exe` | Subtitle extraction and sentence-audio clips |
+| Windows x64 | ffprobe | `resources/ffmpeg/ffprobe.exe` | Media, track, and chapter inspection |
+| Windows x64 | MeCab | `resources/mecab/mecab.exe` | Japanese tokenization |
+| Linux x64 | mpv | `resources/mpv/mpv` | Video playback |
+| Linux x64 | FFmpeg | `resources/ffmpeg/ffmpeg` | Subtitle extraction and sentence-audio clips |
+| Linux x64 | ffprobe | `resources/ffmpeg/ffprobe` | Media, track, and chapter inspection |
+| Linux x64 | MeCab | `resources/mecab/mecab` | Japanese tokenization via the relative-loader wrapper |
 
 MeCab includes a UTF-8 IPADIC dictionary under `resources/mecab/ipadic/`.
 An optional UniDic dictionary can be placed under
@@ -42,9 +60,10 @@ not, card creation continues without that audio clip.
 
 ## Optional yt-dlp
 
-Place `yt-dlp.exe` under `resources/yt-dlp/` to support extractor-backed
-URLs such as YouTube. It is not installed by `npm run resources`, pinned in
-`resources.lock.json`, or updated by Kizuna.
+Place `yt-dlp.exe` under `resources/yt-dlp/` on Windows or `yt-dlp` under that
+directory on Linux to support extractor-backed URLs such as YouTube. It is not
+installed by `npm run resources`, pinned in `resources.lock.json`, or updated
+by Kizuna. Unpackaged Linux development checks `/usr/bin/yt-dlp` instead.
 
 Without yt-dlp, local playback and direct media URLs still work. A packaged
 installer includes yt-dlp only when it was present during packaging.
@@ -75,5 +94,17 @@ resources/ffmpeg/ffprobe.exe -version
 resources/mecab/mecab.exe -v
 ```
 
-CI uses the same resource command on Windows. Tests use fakes and fixtures
+On Ubuntu 24.04 x64, the pinned Linux payload targets glibc 2.39 and keeps
+mpv/FFmpeg's exact Ubuntu package dependencies documented in the vendor
+mirror. Verify the Linux files and modes on Linux:
+
+```bash
+resources/mpv/mpv --version
+resources/ffmpeg/ffmpeg -version
+resources/ffmpeg/ffprobe -version
+resources/mecab/mecab -v
+test -x resources/mecab/mecab.bin
+```
+
+CI uses the same resource command on the host platform. Tests use fakes and fixtures
 instead of invoking these binaries or live services.

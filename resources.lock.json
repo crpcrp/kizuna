@@ -1,289 +1,543 @@
 {
-  "schemaVersion": 1,
-  "platform": "win32-x64",
-  "source": {
-    "repo": "crpcrp/kizuna-vendor",
-    "commit": "4022588e7f53f6de6655e044973a1be3646351ef",
-    "manifest": "manifest.json",
-    "checksums": "SHA256SUMS.txt"
-  },
-  "requiredPaths": [
-    "mpv/mpv.exe",
-    "ffmpeg/ffmpeg.exe",
-    "ffmpeg/ffprobe.exe",
-    "mecab/mecab.exe",
-    "mecab/libmecab.dll",
-    "mecab/mecabrc",
-    "mecab/ipadic/sys.dic",
-    "mecab/ipadic/matrix.bin",
-    "mecab/ipadic/char.bin",
-    "mecab/ipadic/unk.dic"
-  ],
-  "files": [
-    {
-      "from": "ffmpeg/LICENSE.GPLv3.txt",
-      "to": "ffmpeg/LICENSE.GPLv3.txt",
-      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  "schemaVersion": 2,
+  "platforms": {
+    "win32-x64": {
+      "platform": "win32",
+      "architecture": "x64",
+      "source": {
+        "repo": "crpcrp/kizuna-vendor",
+        "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+        "manifest": "manifest.json",
+        "checksums": "SHA256SUMS.txt"
+      },
+      "requiredPaths": [
+        "mpv/mpv.exe",
+        "ffmpeg/ffmpeg.exe",
+        "ffmpeg/ffprobe.exe",
+        "mecab/mecab.exe",
+        "mecab/libmecab.dll",
+        "mecab/mecabrc",
+        "mecab/ipadic/sys.dic",
+        "mecab/ipadic/matrix.bin",
+        "mecab/ipadic/char.bin",
+        "mecab/ipadic/unk.dic"
+      ],
+      "requiredExecutables": [
+        "mpv/mpv.exe",
+        "ffmpeg/ffmpeg.exe",
+        "ffmpeg/ffprobe.exe",
+        "mecab/mecab.exe"
+      ],
+      "files": [
+        {
+          "from": "ffmpeg/LICENSE.GPLv3.txt",
+          "to": "ffmpeg/LICENSE.GPLv3.txt",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "executable": false
+        },
+        {
+          "from": "ffmpeg/README.upstream.txt",
+          "to": "ffmpeg/README.upstream.txt",
+          "sha256": "9172433fb251059a58d2ff11ba8c6132e04819136ed96e809563911ff0d13816",
+          "executable": false
+        },
+        {
+          "from": "ffmpeg/bin/ffmpeg.exe",
+          "to": "ffmpeg/ffmpeg.exe",
+          "sha256": "1326dde4c84ff1f96fe6b8916c5bed29e163e9b5dccf995f6f3db069d143ec5e",
+          "executable": true
+        },
+        {
+          "from": "ffmpeg/bin/ffprobe.exe",
+          "to": "ffmpeg/ffprobe.exe",
+          "sha256": "b49ccc7c6547b141ad5a2f6ec69cc04323d7133d7704d70b331b904c63eecb07",
+          "executable": true
+        },
+        {
+          "from": "mecab/AUTHORS",
+          "to": "mecab/AUTHORS",
+          "sha256": "ed86a26329f93c34c912d20adc99873107f4fab32238fcf5af1f497c425e025a",
+          "executable": false
+        },
+        {
+          "from": "mecab/LICENSE.BSD.txt",
+          "to": "mecab/LICENSE.BSD.txt",
+          "sha256": "62f4b23450a9ad40e4db8063d45c1d13c78d07ca27c9ada62c4ca9c11c1f3e7b",
+          "executable": false
+        },
+        {
+          "from": "mecab/bin/libmecab.dll",
+          "to": "mecab/libmecab.dll",
+          "sha256": "a580a55e7e80aecef9758cb0fbb6363962f4542299f53f175751506d78b1b219",
+          "executable": false
+        },
+        {
+          "from": "mecab/bin/mecab.exe",
+          "to": "mecab/mecab.exe",
+          "sha256": "e445d90f8d37a3fa55f59fd42350ee19b52c16c692936e9499db73eeee89a0e8",
+          "executable": true
+        },
+        {
+          "from": "mecab/etc/mecabrc",
+          "to": "mecab/mecabrc",
+          "sha256": "d8903d54e9f0369df5bfee93d94de82a0d4afb0d8a5c0461f2435e972e3a98a0",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Adj.csv",
+          "to": "mecab/ipadic/Adj.csv",
+          "sha256": "5a654779dd6e5eb8e4c1309779bc4b344298a6418c982a357cf49ea7ae425f36",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Adnominal.csv",
+          "to": "mecab/ipadic/Adnominal.csv",
+          "sha256": "ae284933f4d4f9b1b402e595620bcf98cac65d3f82821f432782267b59d46fdc",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Adverb.csv",
+          "to": "mecab/ipadic/Adverb.csv",
+          "sha256": "c534ec1095e298bc681c281084bd5e398c54fcf26c97a897e9ac198333ce1f3c",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Auxil.csv",
+          "to": "mecab/ipadic/Auxil.csv",
+          "sha256": "076f1efe2f1981a6172dba931e10b8d2e514a2d2814dd64c74e347a62dac462a",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/COPYING",
+          "to": "mecab/ipadic/COPYING",
+          "sha256": "fca02d9adb601d101eccdf3131119abfff2d9c825ef5c759d7a89ebbaa972099",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Conjunction.csv",
+          "to": "mecab/ipadic/Conjunction.csv",
+          "sha256": "cdb4a095d2d191a79f1da769bc34f42aa4b8e61113f71bc68d2205287f389556",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Filler.csv",
+          "to": "mecab/ipadic/Filler.csv",
+          "sha256": "e034d918f3880d2c04844030bd1857c9fd9a2ce32726618dc91d618782b28970",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Interjection.csv",
+          "to": "mecab/ipadic/Interjection.csv",
+          "sha256": "58faea7cb83deda9f04d3a9db93082ea4afc7af8cd8f2513f9a030b415a38fa3",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.adjv.csv",
+          "to": "mecab/ipadic/Noun.adjv.csv",
+          "sha256": "e1be88858408754f45f4f322b15c20c4030e8f60e76af4ad98567bd374a70b4b",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.adverbal.csv",
+          "to": "mecab/ipadic/Noun.adverbal.csv",
+          "sha256": "34df6bed9e23839c9c0ef64271c76d9f94236426cd36e00221d7f5e41cc37c61",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.csv",
+          "to": "mecab/ipadic/Noun.csv",
+          "sha256": "2b3079bc7e30bbd0072d30b0ca859477cc9ca63ab2306f153491ffb97ea13c6e",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.demonst.csv",
+          "to": "mecab/ipadic/Noun.demonst.csv",
+          "sha256": "eb4743b16020cf9af4c55e97e29e8aac1e504dc8ab1a0b207bea763022c2f615",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.nai.csv",
+          "to": "mecab/ipadic/Noun.nai.csv",
+          "sha256": "36c90a2cc394fdce0bbc8c744630136561bd91473d32258a627f0acb9c70be3e",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.name.csv",
+          "to": "mecab/ipadic/Noun.name.csv",
+          "sha256": "792040c47410b60235af15ba84eb2771f035434e18bd3e22e84fa0968fbf2084",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.number.csv",
+          "to": "mecab/ipadic/Noun.number.csv",
+          "sha256": "5004ee2fd5f5fecaee7b8b4c541ba08b7cb94ae2f5db1008b51a11a940ee4347",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.org.csv",
+          "to": "mecab/ipadic/Noun.org.csv",
+          "sha256": "1225cb1b02b374885ba12b3f2023dc1fb65c63bd0a249a9833b24fdda8d29cc5",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.others.csv",
+          "to": "mecab/ipadic/Noun.others.csv",
+          "sha256": "07d6dcd1084dafab81fb4d81dda33e938f2a973f0d744f6a55979aa9a437fc90",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.place.csv",
+          "to": "mecab/ipadic/Noun.place.csv",
+          "sha256": "42f2dcd0c4aff0a3499ebe78a52b7d40bf5199d377c3bf9e8168838e61985db1",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.proper.csv",
+          "to": "mecab/ipadic/Noun.proper.csv",
+          "sha256": "ef2c9f64fbc13988f2ade0eb626c9acb539da833b74a23fef473e4146c49cea3",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Noun.verbal.csv",
+          "to": "mecab/ipadic/Noun.verbal.csv",
+          "sha256": "8cef570bf12a83b8adf569d55921cfd3fa27c769b4e3ed7a3c52d60af28cc2d0",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Others.csv",
+          "to": "mecab/ipadic/Others.csv",
+          "sha256": "8e7cfcee3c441c13c1b615af4a02a505b1c14e7a77da1f02cedc25ed83378bff",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Postp-col.csv",
+          "to": "mecab/ipadic/Postp-col.csv",
+          "sha256": "475a194354489fe94006265f6c6eb33518d87699a0cefd8b7c6ca2cf6e121d12",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Postp.csv",
+          "to": "mecab/ipadic/Postp.csv",
+          "sha256": "09d6c1873321edd52421735302eb800f66ae2d5e5bbcb24d7d88fe4a4ffbbf2e",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Prefix.csv",
+          "to": "mecab/ipadic/Prefix.csv",
+          "sha256": "137f976c93d6de387c283a1d587df9ee4f406e36e39322c2024866af52823168",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Suffix.csv",
+          "to": "mecab/ipadic/Suffix.csv",
+          "sha256": "abf4adea49c49e9007c85b9b06fa18c4b030e1c3adf235463acc58ac34e980b5",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Symbol.csv",
+          "to": "mecab/ipadic/Symbol.csv",
+          "sha256": "193a138437edf447f499506e9edcdfd189663ce11253b4312608d7d366922ca2",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/Verb.csv",
+          "to": "mecab/ipadic/Verb.csv",
+          "sha256": "c61a0174fa0081eff979eda28fc74ba4ff3563b723f435d77ea2b378bc1e494f",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/char.bin",
+          "to": "mecab/ipadic/char.bin",
+          "sha256": "1a3ade6a84c0e6b1cfbd04f3803f32aefe37139724359f2a6cc72abf68099b06",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/char.def",
+          "to": "mecab/ipadic/char.def",
+          "sha256": "ad39c1b38714596c4f1e14e9184eeeb5bf9ec82ce39ef1dd4de774d7756b5d7c",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/dicrc",
+          "to": "mecab/ipadic/dicrc",
+          "sha256": "add6bb131a75e69478961ea59712541ace3779f7c5daa4da80d281f097c9d4d1",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/feature.def",
+          "to": "mecab/ipadic/feature.def",
+          "sha256": "0f34967a52944e95afe388359b38687fd2f1817c8fbe91afb7a135793c833339",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/left-id.def",
+          "to": "mecab/ipadic/left-id.def",
+          "sha256": "6d07aea525bc9730a4a07d12cc9f50abef4700431c938840b68896e79c761fe4",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/matrix.bin",
+          "to": "mecab/ipadic/matrix.bin",
+          "sha256": "ee44d7350cdcb680ebd699f83e121be1dc63310f8832d55bcb537a068177611a",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/matrix.def",
+          "to": "mecab/ipadic/matrix.def",
+          "sha256": "49b0c1cd5a30ef70a61b9b5ba3e0a333fe1030346f6dae45e88dba325e28251d",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/pos-id.def",
+          "to": "mecab/ipadic/pos-id.def",
+          "sha256": "6a8a84243800970fd33327800d71477dbcacb3af71a7de572e1a98ce18f7fafb",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/rewrite.def",
+          "to": "mecab/ipadic/rewrite.def",
+          "sha256": "df412c702cfa8e061500ee9aa77c0e4d4e182eee2790b05cbe8be7adf784bc03",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/right-id.def",
+          "to": "mecab/ipadic/right-id.def",
+          "sha256": "6d07aea525bc9730a4a07d12cc9f50abef4700431c938840b68896e79c761fe4",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/sys.dic",
+          "to": "mecab/ipadic/sys.dic",
+          "sha256": "47ba5ff7f00328a04bde39fa679943c4a87f863dfef0cf1cf4d006dbf2134ab9",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/unk.def",
+          "to": "mecab/ipadic/unk.def",
+          "sha256": "92f69c1a88f72b289c7ea65a8de2d03a4f60d6a1dfd1b32a03c2e538c4e7e00e",
+          "executable": false
+        },
+        {
+          "from": "mecab/ipadic/unk.dic",
+          "to": "mecab/ipadic/unk.dic",
+          "sha256": "a1135afdd0342f19b4e1d425cb8b3303bb27c13d5e5b585b10af35cc346bcc78",
+          "executable": false
+        },
+        {
+          "from": "mpv/Copyright",
+          "to": "mpv/Copyright",
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "executable": false
+        },
+        {
+          "from": "mpv/LICENSE.GPLv2-or-later.txt",
+          "to": "mpv/LICENSE.GPLv2-or-later.txt",
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+          "executable": false
+        },
+        {
+          "from": "mpv/LICENSE.GPLv3.txt",
+          "to": "mpv/LICENSE.GPLv3.txt",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "executable": false
+        },
+        {
+          "from": "mpv/bin/mpv.exe",
+          "to": "mpv/mpv.exe",
+          "sha256": "334cefcbd09df397ec6ba2a900d597553c3d72cae22e18a7cd9995c01f470009",
+          "executable": true
+        }
+      ]
     },
-    {
-      "from": "ffmpeg/README.upstream.txt",
-      "to": "ffmpeg/README.upstream.txt",
-      "sha256": "9172433fb251059a58d2ff11ba8c6132e04819136ed96e809563911ff0d13816"
-    },
-    {
-      "from": "ffmpeg/bin/ffmpeg.exe",
-      "to": "ffmpeg/ffmpeg.exe",
-      "sha256": "1326dde4c84ff1f96fe6b8916c5bed29e163e9b5dccf995f6f3db069d143ec5e"
-    },
-    {
-      "from": "ffmpeg/bin/ffprobe.exe",
-      "to": "ffmpeg/ffprobe.exe",
-      "sha256": "b49ccc7c6547b141ad5a2f6ec69cc04323d7133d7704d70b331b904c63eecb07"
-    },
-    {
-      "from": "mecab/AUTHORS",
-      "to": "mecab/AUTHORS",
-      "sha256": "ed86a26329f93c34c912d20adc99873107f4fab32238fcf5af1f497c425e025a"
-    },
-    {
-      "from": "mecab/LICENSE.BSD.txt",
-      "to": "mecab/LICENSE.BSD.txt",
-      "sha256": "62f4b23450a9ad40e4db8063d45c1d13c78d07ca27c9ada62c4ca9c11c1f3e7b"
-    },
-    {
-      "from": "mecab/bin/libmecab.dll",
-      "to": "mecab/libmecab.dll",
-      "sha256": "a580a55e7e80aecef9758cb0fbb6363962f4542299f53f175751506d78b1b219"
-    },
-    {
-      "from": "mecab/bin/mecab.exe",
-      "to": "mecab/mecab.exe",
-      "sha256": "e445d90f8d37a3fa55f59fd42350ee19b52c16c692936e9499db73eeee89a0e8"
-    },
-    {
-      "from": "mecab/etc/mecabrc",
-      "to": "mecab/mecabrc",
-      "sha256": "d8903d54e9f0369df5bfee93d94de82a0d4afb0d8a5c0461f2435e972e3a98a0"
-    },
-    {
-      "from": "mecab/ipadic/Adj.csv",
-      "to": "mecab/ipadic/Adj.csv",
-      "sha256": "5a654779dd6e5eb8e4c1309779bc4b344298a6418c982a357cf49ea7ae425f36"
-    },
-    {
-      "from": "mecab/ipadic/Adnominal.csv",
-      "to": "mecab/ipadic/Adnominal.csv",
-      "sha256": "ae284933f4d4f9b1b402e595620bcf98cac65d3f82821f432782267b59d46fdc"
-    },
-    {
-      "from": "mecab/ipadic/Adverb.csv",
-      "to": "mecab/ipadic/Adverb.csv",
-      "sha256": "c534ec1095e298bc681c281084bd5e398c54fcf26c97a897e9ac198333ce1f3c"
-    },
-    {
-      "from": "mecab/ipadic/Auxil.csv",
-      "to": "mecab/ipadic/Auxil.csv",
-      "sha256": "076f1efe2f1981a6172dba931e10b8d2e514a2d2814dd64c74e347a62dac462a"
-    },
-    {
-      "from": "mecab/ipadic/COPYING",
-      "to": "mecab/ipadic/COPYING",
-      "sha256": "fca02d9adb601d101eccdf3131119abfff2d9c825ef5c759d7a89ebbaa972099"
-    },
-    {
-      "from": "mecab/ipadic/Conjunction.csv",
-      "to": "mecab/ipadic/Conjunction.csv",
-      "sha256": "cdb4a095d2d191a79f1da769bc34f42aa4b8e61113f71bc68d2205287f389556"
-    },
-    {
-      "from": "mecab/ipadic/Filler.csv",
-      "to": "mecab/ipadic/Filler.csv",
-      "sha256": "e034d918f3880d2c04844030bd1857c9fd9a2ce32726618dc91d618782b28970"
-    },
-    {
-      "from": "mecab/ipadic/Interjection.csv",
-      "to": "mecab/ipadic/Interjection.csv",
-      "sha256": "58faea7cb83deda9f04d3a9db93082ea4afc7af8cd8f2513f9a030b415a38fa3"
-    },
-    {
-      "from": "mecab/ipadic/Noun.adjv.csv",
-      "to": "mecab/ipadic/Noun.adjv.csv",
-      "sha256": "e1be88858408754f45f4f322b15c20c4030e8f60e76af4ad98567bd374a70b4b"
-    },
-    {
-      "from": "mecab/ipadic/Noun.adverbal.csv",
-      "to": "mecab/ipadic/Noun.adverbal.csv",
-      "sha256": "34df6bed9e23839c9c0ef64271c76d9f94236426cd36e00221d7f5e41cc37c61"
-    },
-    {
-      "from": "mecab/ipadic/Noun.csv",
-      "to": "mecab/ipadic/Noun.csv",
-      "sha256": "2b3079bc7e30bbd0072d30b0ca859477cc9ca63ab2306f153491ffb97ea13c6e"
-    },
-    {
-      "from": "mecab/ipadic/Noun.demonst.csv",
-      "to": "mecab/ipadic/Noun.demonst.csv",
-      "sha256": "eb4743b16020cf9af4c55e97e29e8aac1e504dc8ab1a0b207bea763022c2f615"
-    },
-    {
-      "from": "mecab/ipadic/Noun.nai.csv",
-      "to": "mecab/ipadic/Noun.nai.csv",
-      "sha256": "36c90a2cc394fdce0bbc8c744630136561bd91473d32258a627f0acb9c70be3e"
-    },
-    {
-      "from": "mecab/ipadic/Noun.name.csv",
-      "to": "mecab/ipadic/Noun.name.csv",
-      "sha256": "792040c47410b60235af15ba84eb2771f035434e18bd3e22e84fa0968fbf2084"
-    },
-    {
-      "from": "mecab/ipadic/Noun.number.csv",
-      "to": "mecab/ipadic/Noun.number.csv",
-      "sha256": "5004ee2fd5f5fecaee7b8b4c541ba08b7cb94ae2f5db1008b51a11a940ee4347"
-    },
-    {
-      "from": "mecab/ipadic/Noun.org.csv",
-      "to": "mecab/ipadic/Noun.org.csv",
-      "sha256": "1225cb1b02b374885ba12b3f2023dc1fb65c63bd0a249a9833b24fdda8d29cc5"
-    },
-    {
-      "from": "mecab/ipadic/Noun.others.csv",
-      "to": "mecab/ipadic/Noun.others.csv",
-      "sha256": "07d6dcd1084dafab81fb4d81dda33e938f2a973f0d744f6a55979aa9a437fc90"
-    },
-    {
-      "from": "mecab/ipadic/Noun.place.csv",
-      "to": "mecab/ipadic/Noun.place.csv",
-      "sha256": "42f2dcd0c4aff0a3499ebe78a52b7d40bf5199d377c3bf9e8168838e61985db1"
-    },
-    {
-      "from": "mecab/ipadic/Noun.proper.csv",
-      "to": "mecab/ipadic/Noun.proper.csv",
-      "sha256": "ef2c9f64fbc13988f2ade0eb626c9acb539da833b74a23fef473e4146c49cea3"
-    },
-    {
-      "from": "mecab/ipadic/Noun.verbal.csv",
-      "to": "mecab/ipadic/Noun.verbal.csv",
-      "sha256": "8cef570bf12a83b8adf569d55921cfd3fa27c769b4e3ed7a3c52d60af28cc2d0"
-    },
-    {
-      "from": "mecab/ipadic/Others.csv",
-      "to": "mecab/ipadic/Others.csv",
-      "sha256": "8e7cfcee3c441c13c1b615af4a02a505b1c14e7a77da1f02cedc25ed83378bff"
-    },
-    {
-      "from": "mecab/ipadic/Postp-col.csv",
-      "to": "mecab/ipadic/Postp-col.csv",
-      "sha256": "475a194354489fe94006265f6c6eb33518d87699a0cefd8b7c6ca2cf6e121d12"
-    },
-    {
-      "from": "mecab/ipadic/Postp.csv",
-      "to": "mecab/ipadic/Postp.csv",
-      "sha256": "09d6c1873321edd52421735302eb800f66ae2d5e5bbcb24d7d88fe4a4ffbbf2e"
-    },
-    {
-      "from": "mecab/ipadic/Prefix.csv",
-      "to": "mecab/ipadic/Prefix.csv",
-      "sha256": "137f976c93d6de387c283a1d587df9ee4f406e36e39322c2024866af52823168"
-    },
-    {
-      "from": "mecab/ipadic/Suffix.csv",
-      "to": "mecab/ipadic/Suffix.csv",
-      "sha256": "abf4adea49c49e9007c85b9b06fa18c4b030e1c3adf235463acc58ac34e980b5"
-    },
-    {
-      "from": "mecab/ipadic/Symbol.csv",
-      "to": "mecab/ipadic/Symbol.csv",
-      "sha256": "193a138437edf447f499506e9edcdfd189663ce11253b4312608d7d366922ca2"
-    },
-    {
-      "from": "mecab/ipadic/Verb.csv",
-      "to": "mecab/ipadic/Verb.csv",
-      "sha256": "c61a0174fa0081eff979eda28fc74ba4ff3563b723f435d77ea2b378bc1e494f"
-    },
-    {
-      "from": "mecab/ipadic/char.bin",
-      "to": "mecab/ipadic/char.bin",
-      "sha256": "1a3ade6a84c0e6b1cfbd04f3803f32aefe37139724359f2a6cc72abf68099b06"
-    },
-    {
-      "from": "mecab/ipadic/char.def",
-      "to": "mecab/ipadic/char.def",
-      "sha256": "ad39c1b38714596c4f1e14e9184eeeb5bf9ec82ce39ef1dd4de774d7756b5d7c"
-    },
-    {
-      "from": "mecab/ipadic/dicrc",
-      "to": "mecab/ipadic/dicrc",
-      "sha256": "add6bb131a75e69478961ea59712541ace3779f7c5daa4da80d281f097c9d4d1"
-    },
-    {
-      "from": "mecab/ipadic/feature.def",
-      "to": "mecab/ipadic/feature.def",
-      "sha256": "0f34967a52944e95afe388359b38687fd2f1817c8fbe91afb7a135793c833339"
-    },
-    {
-      "from": "mecab/ipadic/left-id.def",
-      "to": "mecab/ipadic/left-id.def",
-      "sha256": "6d07aea525bc9730a4a07d12cc9f50abef4700431c938840b68896e79c761fe4"
-    },
-    {
-      "from": "mecab/ipadic/matrix.bin",
-      "to": "mecab/ipadic/matrix.bin",
-      "sha256": "ee44d7350cdcb680ebd699f83e121be1dc63310f8832d55bcb537a068177611a"
-    },
-    {
-      "from": "mecab/ipadic/matrix.def",
-      "to": "mecab/ipadic/matrix.def",
-      "sha256": "49b0c1cd5a30ef70a61b9b5ba3e0a333fe1030346f6dae45e88dba325e28251d"
-    },
-    {
-      "from": "mecab/ipadic/pos-id.def",
-      "to": "mecab/ipadic/pos-id.def",
-      "sha256": "6a8a84243800970fd33327800d71477dbcacb3af71a7de572e1a98ce18f7fafb"
-    },
-    {
-      "from": "mecab/ipadic/rewrite.def",
-      "to": "mecab/ipadic/rewrite.def",
-      "sha256": "df412c702cfa8e061500ee9aa77c0e4d4e182eee2790b05cbe8be7adf784bc03"
-    },
-    {
-      "from": "mecab/ipadic/right-id.def",
-      "to": "mecab/ipadic/right-id.def",
-      "sha256": "6d07aea525bc9730a4a07d12cc9f50abef4700431c938840b68896e79c761fe4"
-    },
-    {
-      "from": "mecab/ipadic/sys.dic",
-      "to": "mecab/ipadic/sys.dic",
-      "sha256": "47ba5ff7f00328a04bde39fa679943c4a87f863dfef0cf1cf4d006dbf2134ab9"
-    },
-    {
-      "from": "mecab/ipadic/unk.def",
-      "to": "mecab/ipadic/unk.def",
-      "sha256": "92f69c1a88f72b289c7ea65a8de2d03a4f60d6a1dfd1b32a03c2e538c4e7e00e"
-    },
-    {
-      "from": "mecab/ipadic/unk.dic",
-      "to": "mecab/ipadic/unk.dic",
-      "sha256": "a1135afdd0342f19b4e1d425cb8b3303bb27c13d5e5b585b10af35cc346bcc78"
-    },
-    {
-      "from": "mpv/Copyright",
-      "to": "mpv/Copyright",
-      "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
-    },
-    {
-      "from": "mpv/LICENSE.GPLv2-or-later.txt",
-      "to": "mpv/LICENSE.GPLv2-or-later.txt",
-      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
-    },
-    {
-      "from": "mpv/LICENSE.GPLv3.txt",
-      "to": "mpv/LICENSE.GPLv3.txt",
-      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
-    },
-    {
-      "from": "mpv/bin/mpv.exe",
-      "to": "mpv/mpv.exe",
-      "sha256": "334cefcbd09df397ec6ba2a900d597553c3d72cae22e18a7cd9995c01f470009"
+    "linux-x64": {
+      "platform": "linux",
+      "architecture": "x64",
+      "source": {
+        "repo": "crpcrp/kizuna-vendor",
+        "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+        "manifest": "manifest.json",
+        "checksums": "SHA256SUMS.txt"
+      },
+      "requiredPaths": [
+        "mpv/mpv",
+        "ffmpeg/ffmpeg",
+        "ffmpeg/ffprobe",
+        "mecab/mecab",
+        "mecab/mecab.bin",
+        "mecab/lib/libmecab.so.2",
+        "mecab/lib/libmecab.so.2.0.0",
+        "mecab/mecabrc",
+        "mecab/ipadic/char.bin",
+        "mecab/ipadic/dicrc",
+        "mecab/ipadic/matrix.bin",
+        "mecab/ipadic/sys.dic",
+        "mecab/ipadic/unk.dic"
+      ],
+      "requiredExecutables": [
+        "mpv/mpv",
+        "ffmpeg/ffmpeg",
+        "ffmpeg/ffprobe",
+        "mecab/mecab",
+        "mecab/mecab.bin"
+      ],
+      "files": [
+        {
+          "from": "linux-x64/ffmpeg/bin/ffmpeg",
+          "to": "ffmpeg/ffmpeg",
+          "sha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
+          "executable": true
+        },
+        {
+          "from": "linux-x64/ffmpeg/bin/ffprobe",
+          "to": "ffmpeg/ffprobe",
+          "sha256": "272f6ebc634a63d9c8b4ca68e964119d980f25154e5aa2c35e5487da48e9a58f",
+          "executable": true
+        },
+        {
+          "from": "linux-x64/ffmpeg/licenses/COPYRIGHT.Ubuntu",
+          "to": "ffmpeg/licenses/COPYRIGHT.Ubuntu",
+          "sha256": "2be0250f940dc7137c2fb48abdfa3aa09c5900c7e3614127306f0774309d182f",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/ffmpeg/licenses/GPL-2.txt",
+          "to": "ffmpeg/licenses/GPL-2.txt",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/ffmpeg/licenses/GPL-3.txt",
+          "to": "ffmpeg/licenses/GPL-3.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/ffmpeg/licenses/LGPL-2.1.txt",
+          "to": "ffmpeg/licenses/LGPL-2.1.txt",
+          "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/ffmpeg/licenses/LGPL-2.txt",
+          "to": "ffmpeg/licenses/LGPL-2.txt",
+          "sha256": "681e386e44a19d7d0674b4320272c90e66b6610b741e7e6305f8219c42e85366",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/bin/mecab",
+          "to": "mecab/mecab",
+          "sha256": "b2743427db757884c6ee2aa4b4577e7321bd473e7c2a75c86a41d8c9c39f2456",
+          "executable": true
+        },
+        {
+          "from": "linux-x64/mecab/bin/mecab.bin",
+          "to": "mecab/mecab.bin",
+          "sha256": "820b0268efd6cbf06c3f5e15e4405e794498852c54e18a7eded58ea05f49156f",
+          "executable": true
+        },
+        {
+          "from": "linux-x64/mecab/etc/mecabrc",
+          "to": "mecab/mecabrc",
+          "sha256": "0128c3291b5437a3a3f78c94b979ba57dabcd899307bf32865fdf857aa922d79",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/ipadic/char.bin",
+          "to": "mecab/ipadic/char.bin",
+          "sha256": "81bba502ae48fa005a374819f15e44452eb68086a8b323ec20a044d514400832",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/ipadic/dicrc",
+          "to": "mecab/ipadic/dicrc",
+          "sha256": "b58fe2cb8df8cb6f53f382476da104257d6ecbd2fce04eea0c67bec4337c7b2d",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/ipadic/matrix.bin",
+          "to": "mecab/ipadic/matrix.bin",
+          "sha256": "ee44d7350cdcb680ebd699f83e121be1dc63310f8832d55bcb537a068177611a",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/ipadic/sys.dic",
+          "to": "mecab/ipadic/sys.dic",
+          "sha256": "688d016d62e30ffaab3da558823a39932cd14aa0704ad2844d9071bd93c381d3",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/ipadic/unk.dic",
+          "to": "mecab/ipadic/unk.dic",
+          "sha256": "a55cbb28acef6c8b51757e176b7c158540649b6b4d9e5849785b44596017f51f",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/lib/libmecab.so.2",
+          "to": "mecab/lib/libmecab.so.2",
+          "sha256": "6c53f6130a74b600de0338332548a92dff8632e9a2f36abe2a28d257238d49e9",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/lib/libmecab.so.2.0.0",
+          "to": "mecab/lib/libmecab.so.2.0.0",
+          "sha256": "6c53f6130a74b600de0338332548a92dff8632e9a2f36abe2a28d257238d49e9",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/licenses/COPYRIGHT.IPADIC-Ubuntu",
+          "to": "mecab/licenses/COPYRIGHT.IPADIC-Ubuntu",
+          "sha256": "e5cb3fbebfe1ccdceb3cd3e27f045ebf9182c60c8e9cd53a862a386fde1b97f9",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/licenses/COPYRIGHT.libmecab-Ubuntu",
+          "to": "mecab/licenses/COPYRIGHT.libmecab-Ubuntu",
+          "sha256": "cbf53a3a8ae0ce529454311c06e063247205ebf8229d5bdfade8b3bca94e74fc",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/licenses/COPYRIGHT.MeCab-Ubuntu",
+          "to": "mecab/licenses/COPYRIGHT.MeCab-Ubuntu",
+          "sha256": "cbf53a3a8ae0ce529454311c06e063247205ebf8229d5bdfade8b3bca94e74fc",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/licenses/GPL-2.txt",
+          "to": "mecab/licenses/GPL-2.txt",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mecab/licenses/LGPL-2.1.txt",
+          "to": "mecab/licenses/LGPL-2.1.txt",
+          "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mpv/bin/mpv",
+          "to": "mpv/mpv",
+          "sha256": "86cf9d4c8510d0a941953f7f3a181a90eaf965855aa1c5d414eb322f2ba81528",
+          "executable": true
+        },
+        {
+          "from": "linux-x64/mpv/licenses/COPYRIGHT.Ubuntu",
+          "to": "mpv/licenses/COPYRIGHT.Ubuntu",
+          "sha256": "f1f9f9ce1a487034368c9ea00c266b0b111a45aa1dc056e7eb912f6993660ec6",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mpv/licenses/GPL-2.txt",
+          "to": "mpv/licenses/GPL-2.txt",
+          "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "executable": false
+        },
+        {
+          "from": "linux-x64/mpv/licenses/LGPL-2.1.txt",
+          "to": "mpv/licenses/LGPL-2.1.txt",
+          "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+          "executable": false
+        }
+      ]
     }
-  ]
+  }
 }
