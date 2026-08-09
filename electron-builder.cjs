@@ -61,7 +61,9 @@ module.exports = {
     // Both artifacts carry platform and architecture, so a Linux download is
     // never confusable with the Windows installer in a release listing.
     artifactName: '${name}-${version}-linux-${arch}.${ext}',
-    category: 'AudioVideo',
+    // electron-builder writes this value to the generated desktop entry after
+    // applying `desktop.entry`, so the complete category list belongs here.
+    category: 'AudioVideo;Video;Player;Education',
     synopsis: 'Video player for Japanese language learning',
     description:
       'Kizuna plays local and streamed video with mpv, tokenizes Japanese subtitles with MeCab, ' +
@@ -84,11 +86,7 @@ module.exports = {
     desktop: {
       entry: {
         GenericName: 'Video Player',
-        Keywords: 'video;player;japanese;subtitles;mpv;anki;language;',
-        // AudioVideo is the required main category; the rest are the
-        // registered additional categories that place Kizuna sensibly in a
-        // menu without claiming an unrelated section.
-        Categories: 'AudioVideo;Video;Player;Education;'
+        Keywords: 'video;player;japanese;subtitles;mpv;anki;language;'
       }
     }
   },
