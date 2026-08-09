@@ -51,6 +51,7 @@ function setup(
     onNextFile: vi.fn(),
     onScreenshot: vi.fn(),
     onToggleMiniPlayer: vi.fn(),
+    onAdjustSubtitleFontScale: vi.fn(),
     keyBindings
   }
   const input: UseKeyboardShortcutsInput = {

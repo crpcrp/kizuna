@@ -290,6 +290,14 @@ export default function App({
       mediaSession.banner.reportError(errorMessage(err))
     }
   }
+  const handleAdjustSubtitleFontScale = (direction: -1 | 1): void => {
+    dispatch({
+      type: 'setSubtitleStyle',
+      value: {
+        fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, direction)
+      }
+    })
+  }
   const keyContext: KeyboardShortcutContext = {
     ...playbackWindow.keyboard,
     player: playerAdapter,
@@ -307,6 +315,7 @@ export default function App({
     onPrevFile: () => mediaSession.navigate('prev'),
     onNextFile: () => mediaSession.navigate('next'),
     onScreenshot: () => void handleScreenshot(),
+    onAdjustSubtitleFontScale: handleAdjustSubtitleFontScale,
     keyBindings: state.keyBindings
   }
   // Mirrored into a ref so the window-level keydown listener stays mounted once
@@ -425,16 +434,18 @@ export default function App({
           id="content"
           ref={contentRef}
           onWheel={(event) => {
-            if (!isSubtitleFontWheelShortcut(event)) return
+            if (
+              !isSubtitleFontWheelShortcut(
+                event,
+                state.keyBindings.subtitleFontScale,
+                modifiers.held
+              )
+            )
+              return
             const direction = subtitleFontWheelDirection(event.deltaY, event.deltaX)
             if (direction === 0) return
             event.preventDefault()
-            dispatch({
-              type: 'setSubtitleStyle',
-              value: {
-                fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, direction)
-              }
-            })
+            handleAdjustSubtitleFontScale(direction)
           }}
           onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {

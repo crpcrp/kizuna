@@ -1,8 +1,11 @@
 import {
+  DEFAULT_KEY_BINDINGS,
   SUBTITLE_FONT_SCALE_MAX,
   SUBTITLE_FONT_SCALE_MIN,
-  SUBTITLE_FONT_SCALE_STEP
+  SUBTITLE_FONT_SCALE_STEP,
+  type KeyBinding
 } from '../../../shared/playerSettings'
+import { wheelEventKeyBinding } from './keyBindings'
 
 export type SubtitleFontWheelDirection = -1 | 0 | 1
 
@@ -56,13 +59,16 @@ function isTargetInsideCurrentTarget(target: unknown, currentTarget: unknown): b
   return typeof contains === 'function' && contains.call(currentTarget, target)
 }
 
-/** Guards the fixed shortcut before the App prevents the browser's wheel default. */
-export function isSubtitleFontWheelShortcut(event: SubtitleFontWheelEventLike): boolean {
+const NO_HELD_MODIFIERS: ReadonlySet<string> = new Set()
+
+/** Guards the configured shortcut before the App prevents the browser's wheel default. */
+export function isSubtitleFontWheelShortcut(
+  event: SubtitleFontWheelEventLike,
+  binding: KeyBinding = DEFAULT_KEY_BINDINGS.subtitleFontScale,
+  held: ReadonlySet<string> = NO_HELD_MODIFIERS
+): boolean {
   return (
-    event.shiftKey &&
-    !event.ctrlKey &&
-    !event.altKey &&
-    !event.metaKey &&
+    wheelEventKeyBinding(event, held) === binding &&
     subtitleFontWheelDirection(event.deltaY, event.deltaX) !== 0 &&
     isTargetInsideCurrentTarget(event.target, event.currentTarget)
   )

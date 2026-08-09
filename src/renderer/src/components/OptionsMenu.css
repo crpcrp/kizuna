@@ -586,14 +586,6 @@
 .options-keybind-button:hover {
   background: var(--control-hover-bg);
 }
-.options-keybind-static {
-  min-width: 90px;
-  padding: 5px 10px;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  background: var(--control-bg);
-  text-align: center;
-}
 /* Underline-color row: swatch, preceded by Reset only while overridden. */
 .options-color-control {
   display: flex;

@@ -1,5 +1,6 @@
 import {
   DEFAULT_KEY_BINDINGS,
+  MOUSE_WHEEL_BINDING_CODE,
   isKeyModifier,
   type KeyBinding,
   type KeyBindings,
@@ -49,6 +50,13 @@ export interface KeyChord {
   metaKey: boolean
 }
 
+export interface WheelChord {
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+  metaKey: boolean
+}
+
 export function eventKeyBinding(event: KeyChord, held: ReadonlySet<string>): KeyBinding | null {
   if (MODIFIER_KEY_CODES.has(event.code)) return null
   if (event.altKey || event.metaKey) return null
@@ -56,6 +64,37 @@ export function eventKeyBinding(event: KeyChord, held: ReadonlySet<string>): Key
   if (event.ctrlKey) return held.has('ControlLeft') ? `ControlLeft+${event.code}` : null
   if (event.shiftKey) return held.has('ShiftLeft') ? `ShiftLeft+${event.code}` : null
   return event.code
+}
+
+function leftModifierIsHeld(
+  held: ReadonlySet<string>,
+  left: 'ControlLeft' | 'ShiftLeft',
+  right: 'ControlRight' | 'ShiftRight'
+): boolean {
+  // WheelEvent does not identify which side supplied the modifier. During
+  // isolated capture/tests there may be no tracker state, so the modifier
+  // flags are treated as the left-side binding; the live tracker still
+  // rejects an explicitly held right-side modifier.
+  return held.size === 0 || (held.has(left) && !held.has(right))
+}
+
+export function wheelEventKeyBinding(
+  event: WheelChord,
+  held: ReadonlySet<string>
+): KeyBinding | null {
+  if (event.altKey || event.metaKey) return null
+  if (event.ctrlKey && event.shiftKey) return null
+  if (event.ctrlKey) {
+    return leftModifierIsHeld(held, 'ControlLeft', 'ControlRight')
+      ? `ControlLeft+${MOUSE_WHEEL_BINDING_CODE}`
+      : null
+  }
+  if (event.shiftKey) {
+    return leftModifierIsHeld(held, 'ShiftLeft', 'ShiftRight')
+      ? `ShiftLeft+${MOUSE_WHEEL_BINDING_CODE}`
+      : null
+  }
+  return MOUSE_WHEEL_BINDING_CODE
 }
 
 export interface ModifierTracker {
@@ -86,7 +125,8 @@ export function describeKeyCode(code: string): string {
     ArrowLeft: '←',
     ArrowRight: '→',
     ArrowUp: '↑',
-    ArrowDown: '↓'
+    ArrowDown: '↓',
+    [MOUSE_WHEEL_BINDING_CODE]: 'mouse wheel'
   }
   if (named[code]) return named[code]
   if (code.startsWith('Key')) return code.slice(3)

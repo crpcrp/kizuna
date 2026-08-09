@@ -23,6 +23,7 @@ export type PlayerKeyAction =
   | 'nextChapter'
   | 'screenshot'
   | 'miniPlayer'
+  | 'subtitleFontScale'
 
 /**
  * Left-side modifier keys a binding may be prefixed with. Only the left-hand
@@ -40,12 +41,16 @@ export function isKeyModifier(code: string): code is KeyModifier {
 }
 
 /**
- * A key a player action is bound to: a `KeyboardEvent.code`, optionally
- * prefixed with one modifier code — `Space`, `ControlLeft+ArrowUp`,
- * `ShiftLeft+KeyR`. Matching is exact, so a bare `ArrowLeft` binding does *not*
- * fire on Ctrl+ArrowLeft (which is what lets the two be bound separately).
+ * An input code a player action is bound to, optionally prefixed with one
+ * modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
+ * `MouseWheel` pseudo-code is used for the subtitle-size wheel binding.
+ * Matching is exact, so a bare `ArrowLeft` binding does *not* fire on
+ * Ctrl+ArrowLeft (which is what lets the two be bound separately).
  */
 export type KeyBinding = string
+
+/** Pseudo-code used by the editable mouse-wheel binding. */
+export const MOUSE_WHEEL_BINDING_CODE = 'MouseWheel'
 
 /** The binding each action is triggered by. */
 export type KeyBindings = Record<PlayerKeyAction, KeyBinding>
@@ -71,7 +76,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   prevChapter: 'ControlLeft+ArrowLeft',
   nextChapter: 'ControlLeft+ArrowRight',
   screenshot: 'KeyS',
-  miniPlayer: 'ControlLeft+KeyM'
+  miniPlayer: 'ControlLeft+KeyM',
+  subtitleFontScale: 'ShiftLeft+MouseWheel'
 }
 
 /**

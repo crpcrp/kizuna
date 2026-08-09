@@ -39,6 +39,7 @@ describe('performKeyAction', () => {
       onNextFile: vi.fn(),
       onScreenshot: vi.fn(),
       onToggleMiniPlayer: vi.fn(),
+      onAdjustSubtitleFontScale: vi.fn(),
       ...overrides
     }
   }
@@ -156,6 +157,12 @@ describe('performKeyAction', () => {
     const deps = makeDeps()
     expect(performKeyAction('miniPlayer', deps)).toBe(false)
     expect(deps.onToggleMiniPlayer).toHaveBeenCalledTimes(1)
+  })
+
+  it('subtitleFontScale advances one font-size step', () => {
+    const deps = makeDeps()
+    expect(performKeyAction('subtitleFontScale', deps)).toBe(false)
+    expect(deps.onAdjustSubtitleFontScale).toHaveBeenCalledWith(1)
   })
 })
 
