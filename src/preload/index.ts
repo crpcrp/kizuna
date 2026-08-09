@@ -15,6 +15,7 @@ import {
   PLAYER_CHANNELS,
   PLAYER_SETTINGS_CHANNELS,
   TRANSLATE_CHANNELS,
+  UPDATE_CHANNELS,
   URL_SUBTITLE_CHANNELS,
   WINDOW_CONTROL_CHANNELS
 } from '../shared/ipcChannels'
@@ -61,6 +62,7 @@ import type {
 } from '../shared/knowledge'
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
+import type { UpdateCheckOrigin, UpdateState } from '../shared/update'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -320,6 +322,15 @@ const api = {
     openLink: (link: AppInfoLink): Promise<void> =>
       ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link),
     openNotices: (): Promise<NoticeOpenResult> => ipcRenderer.invoke(APP_INFO_CHANNELS.openNotices)
+  },
+  updates: {
+    getState: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
+    check: (origin: UpdateCheckOrigin): Promise<UpdateState> =>
+      ipcRenderer.invoke(UPDATE_CHANNELS.check, origin),
+    download: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.download),
+    install: (): Promise<void> => ipcRenderer.invoke(UPDATE_CHANNELS.install),
+    onStateChange: (cb: (state: UpdateState) => void): (() => void) =>
+      subscribe(UPDATE_CHANNELS.stateChanged, cb)
   },
   clipboard: {
     writeText: (text: string): Promise<void> =>

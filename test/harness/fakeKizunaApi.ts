@@ -156,6 +156,17 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       openLink: vi.fn(async () => undefined),
       openNotices: vi.fn(async () => ({ status: 'opened' as const }))
     },
+    updates: {
+      getState: vi.fn(async () => ({ status: 'idle' as const })),
+      check: vi.fn(async () => ({
+        status: 'upToDate' as const,
+        currentVersion: '0.2.0',
+        checkedAt: ''
+      })),
+      download: vi.fn(async () => ({ status: 'idle' as const })),
+      install: vi.fn(async () => undefined),
+      onStateChange: vi.fn(() => listenerCleanup)
+    },
     clipboard: {
       writeText: vi.fn(async () => undefined)
     },
@@ -189,6 +200,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
   Object.assign(api.playerSettings, overrides.playerSettings)
   Object.assign(api.integration, overrides.integration)
   Object.assign(api.appInfo, overrides.appInfo)
+  Object.assign(api.updates, overrides.updates)
   Object.assign(api.clipboard, overrides.clipboard)
   Object.assign(api.translate, overrides.translate)
   Object.assign(api.urlSubtitles, overrides.urlSubtitles)

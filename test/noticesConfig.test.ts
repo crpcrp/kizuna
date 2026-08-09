@@ -103,7 +103,11 @@ describe('licence texts on disk', () => {
     const missing = productionPackages(packageLock)
       .filter((pkg) => {
         const dir = join(REPO_ROOT, pkg.path)
-        return !existsSync(dir) || licenseFileNames(readdirSync(dir)).length === 0
+        const fallback = notices.npmLicenseFallbacks?.[pkg.name]
+        return (
+          (!existsSync(dir) || licenseFileNames(readdirSync(dir)).length === 0) &&
+          (!fallback || !existsSync(join(REPO_ROOT, fallback)))
+        )
       })
       .map((pkg) => pkg.path)
     expect(missing).toEqual([])

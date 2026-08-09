@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import * as fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
+import { autoUpdater } from 'electron-updater'
 import packageMetadata from '../../package.json'
 import {
   applyNavigationGuards,
@@ -24,9 +25,9 @@ import {
   registerWindowControls,
   sendToWindow
 } from './windowOptions'
-import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
+import { LAUNCH_CHANNELS, UPDATE_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
 import { COPYRIGHT } from '../shared/appIdentity'
-import { createQuitCoordinator } from './appLifecycle'
+import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
 import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
@@ -84,6 +85,10 @@ import {
   presentAppWindowSet,
   type AppWindowSet
 } from './windowPair'
+import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
+import { registerUpdateBridge } from './updateBridge'
+import { createUpdateService, type UpdateService } from './updateService'
+import { detectUpdateSupport } from './updateSupport'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
@@ -121,6 +126,7 @@ let powerSave: ReturnType<typeof createPowerSaveController> | undefined
 let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
 let urlSubtitles: UrlSubtitleService | undefined
+let updates: UpdateService | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -531,10 +537,35 @@ function startAppInfo(): void {
   )
 }
 
+/** Starts the single main-process updater and its renderer-owning IPC bridge. */
+function startUpdates(lifecycle: AppLifecycleCoordinator): UpdateService {
+  let packageType: string | undefined
+  try {
+    packageType = fs.readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
+  } catch {
+    // AppImage and unpackaged builds do not have electron-builder's package marker.
+  }
+  const service = createUpdateService({
+    support: detectUpdateSupport({
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      appImagePath: process.env['APPIMAGE'],
+      packageType,
+      hasUpdateConfiguration: fs.existsSync(join(process.resourcesPath, 'app-update.yml'))
+    }),
+    currentVersion: app.getVersion(),
+    updater: createElectronUpdaterAdapter(autoUpdater),
+    prepareInstall: (install) => lifecycle.prepareForInstall(install)
+  })
+  registerUpdateBridge(ipcMain, service, (sender) => sender === mainWindow?.webContents)
+  service.subscribe((state) => sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state))
+  return service
+}
+
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
-  const handleBeforeQuit = createQuitCoordinator({
+  const lifecycle = createAppLifecycleCoordinator({
     // Electron's defaultSession getter is unavailable until app is ready.
     // Keep the lookup lazy because this coordinator is registered during
     // module initialization, before the ready promise resolves.
@@ -548,6 +579,7 @@ if (!gotSingleInstanceLock) {
     cleanupUrlSubtitles: async () => {
       await urlSubtitles?.cleanup()
     },
+    onShutdownStart: () => updates?.beginShutdown(),
     appQuit: () => {
       appWindows?.close()
       app.quit()
@@ -569,6 +601,10 @@ if (!gotSingleInstanceLock) {
   })
 
   app.whenReady().then(() => {
+    // Register once for the application lifetime. Linux's host/overlay pair
+    // still has only one renderer and one updater service.
+    updates = startUpdates(lifecycle)
+
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
       (event) => {
@@ -628,7 +664,8 @@ if (!gotSingleInstanceLock) {
     })
   })
 
-  app.on('before-quit', handleBeforeQuit)
+  app.on('before-quit', lifecycle.handleBeforeQuit)
+  app.on('will-quit', () => updates?.dispose())
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

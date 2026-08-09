@@ -9,6 +9,7 @@ import {
   PLAYER_CHANNELS,
   PLAYER_SETTINGS_CHANNELS,
   TRANSLATE_CHANNELS,
+  UPDATE_CHANNELS,
   WINDOW_CONTROL_CHANNELS
 } from '@src/shared/ipcChannels'
 import type { SetWindowBoundsRequest } from '@src/shared/windowBounds'
@@ -263,6 +264,37 @@ describe('preload clipboard contract', () => {
       CLIPBOARD_CHANNELS.writeText,
       'first line\nsecond line'
     )
+  })
+})
+
+describe('preload updater contract', () => {
+  it('routes commands and removes the state listener on teardown', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      updates: {
+        getState(): Promise<unknown>
+        check(origin: 'manual'): Promise<unknown>
+        download(): Promise<unknown>
+        install(): Promise<void>
+        onStateChange(cb: (state: unknown) => void): () => void
+      }
+    }
+    const callback = vi.fn()
+
+    api.updates.getState()
+    api.updates.check('manual')
+    api.updates.download()
+    api.updates.install()
+    const off = api.updates.onStateChange(callback)
+    const listener = electron.on.mock.calls.at(-1)![1]
+    listener({}, { status: 'idle' })
+    off()
+
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.getState)
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.check, 'manual')
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.download)
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.install)
+    expect(callback).toHaveBeenCalledWith({ status: 'idle' })
+    expect(electron.removeListener).toHaveBeenCalledWith(UPDATE_CHANNELS.stateChanged, listener)
   })
 })
 
