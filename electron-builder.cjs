@@ -64,6 +64,11 @@ module.exports = {
     // electron-builder writes this value to the generated desktop entry after
     // applying `desktop.entry`, so the complete category list belongs here.
     category: 'AudioVideo;Video;Player;Education',
+    // Kizuna embeds mpv through X11's --wid. Supplying the backend in the
+    // generated desktop entry makes a normal menu/file-manager launch work on
+    // both X11 desktops and Wayland desktops through XWayland; users must not
+    // have to discover and add this implementation detail themselves.
+    executableArgs: ['--ozone-platform=x11'],
     synopsis: 'Video player for Japanese language learning',
     description:
       'Kizuna plays local and streamed video with mpv, tokenizes Japanese subtitles with MeCab, ' +
@@ -89,6 +94,12 @@ module.exports = {
         Keywords: 'video;player;japanese;subtitles;mpv;anki;language;'
       }
     }
+  },
+  appImage: {
+    // AppImage cannot install Electron's setuid sandbox helper. Preserve
+    // electron-builder's default AppImage argument while adding Kizuna's X11
+    // requirement (target-specific options override linux.executableArgs).
+    executableArgs: ['--no-sandbox', '--ozone-platform=x11']
   },
   deb: {
     // Replaces electron-builder's default list rather than extending it, so

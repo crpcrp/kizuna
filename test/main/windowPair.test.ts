@@ -32,6 +32,8 @@ class FakeWindow {
   })
   readonly show = vi.fn()
   readonly moveTop = vi.fn()
+  readonly moveAbove = vi.fn()
+  readonly getMediaSourceId = vi.fn(() => 'window:fake:0')
   readonly focus = vi.fn()
   readonly setFullScreen = vi.fn((value: boolean) => {
     this.fullscreen = value
@@ -397,6 +399,7 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(host.restore).toHaveBeenCalledTimes(1)
     expect(overlay.restore).toHaveBeenCalledTimes(1)
     expect(host.focus).toHaveBeenCalledTimes(1)
+    expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
     expect(overlay.focus).toHaveBeenCalledTimes(1)
   })
 
@@ -501,7 +504,7 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.setAlwaysOnTop).toHaveBeenCalledWith(true)
   })
 
-  it('shows the host first, raises the overlay, and focuses it last', () => {
+  it('raises the host, places the overlay directly above it, and focuses it last', () => {
     const factory = makeWindowFactory()
     const windows = createAppWindowSet({
       platform: 'linux',
@@ -512,15 +515,23 @@ describe('Linux window pair presentation and shutdown', () => {
     const overlay = factory.created[1]
     const host = factory.created[0]
     host.show.mockImplementation(() => order.push('host-show'))
+    host.moveTop.mockImplementation(() => order.push('host-move-top'))
     overlay.show.mockImplementation(() => order.push('overlay-show'))
-    overlay.moveTop.mockImplementation(() => order.push('overlay-move-top'))
+    overlay.moveAbove.mockImplementation(() => order.push('overlay-move-above-host'))
     overlay.focus.mockImplementation(() => order.push('overlay-focus'))
     presentAppWindowSet(windows)
     expect(order).toEqual([])
 
     overlay.emit('ready-to-show')
 
-    expect(order).toEqual(['host-show', 'overlay-show', 'overlay-move-top', 'overlay-focus'])
+    expect(order).toEqual([
+      'host-show',
+      'host-move-top',
+      'overlay-show',
+      'overlay-move-above-host',
+      'overlay-focus'
+    ])
+    expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
   })
 
   it('presents when did-finish-load fires without ready-to-show', () => {
@@ -598,7 +609,8 @@ describe('Linux window pair presentation and shutdown', () => {
 
     expect(host.show).toHaveBeenCalledTimes(1)
     expect(overlay.show).toHaveBeenCalledTimes(1)
-    expect(overlay.moveTop).toHaveBeenCalledTimes(1)
+    expect(host.moveTop).toHaveBeenCalledTimes(1)
+    expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
     expect(overlay.focus).toHaveBeenCalledTimes(1)
   })
 

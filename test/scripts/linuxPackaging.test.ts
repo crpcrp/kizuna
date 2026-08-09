@@ -244,6 +244,7 @@ describe('verifyDesktopEntry', () => {
     commandName: 'kizuna',
     iconName: 'kizuna',
     wmClass: 'kizuna',
+    requiredExecutableArgs: ['--ozone-platform=x11'],
     requiredMimeTypes: ['video/x-matroska', 'video/mp4'],
     requiredCategories: ['AudioVideo', 'Video', 'Player']
   }
@@ -251,7 +252,7 @@ describe('verifyDesktopEntry', () => {
   const good = {
     Name: 'Kizuna',
     Type: 'Application',
-    Exec: '/opt/Kizuna/kizuna %U',
+    Exec: '/opt/Kizuna/kizuna --ozone-platform=x11 %U',
     Icon: 'kizuna',
     StartupWMClass: 'kizuna',
     Categories: 'AudioVideo;Video;Player;Education;',
@@ -264,13 +265,24 @@ describe('verifyDesktopEntry', () => {
 
   // Without a file placeholder the associations register but never deliver.
   it('rejects an Exec that takes no file argument', () => {
-    const problems = verifyDesktopEntry({ ...good, Exec: '/opt/Kizuna/kizuna' }, expected)
+    const problems = verifyDesktopEntry(
+      { ...good, Exec: '/opt/Kizuna/kizuna --ozone-platform=x11' },
+      expected
+    )
     expect(problems).toEqual([expect.stringContaining('accepts no file or URL argument')])
   })
 
   it('rejects a different executable whose name merely contains kizuna', () => {
-    const problems = verifyDesktopEntry({ ...good, Exec: '/opt/Kizuna/not-kizuna %U' }, expected)
+    const problems = verifyDesktopEntry(
+      { ...good, Exec: '/opt/Kizuna/not-kizuna --ozone-platform=x11 %U' },
+      expected
+    )
     expect(problems).toEqual([expect.stringContaining('does not launch')])
+  })
+
+  it('rejects a launcher that leaves Electron on Wayland', () => {
+    const problems = verifyDesktopEntry({ ...good, Exec: '/opt/Kizuna/kizuna %U' }, expected)
+    expect(problems).toEqual([expect.stringContaining('--ozone-platform=x11')])
   })
 
   // A mismatched WM class is the classic "generic icon in the dash" bug.

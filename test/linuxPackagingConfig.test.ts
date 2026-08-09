@@ -31,10 +31,12 @@ interface BuilderConfig {
     maintainer: string
     artifactName: string
     category: string
+    executableArgs: string[]
     mimeTypes: string[]
     syncDesktopName: boolean
     desktop: { entry: Record<string, string> }
   }
+  appImage: { executableArgs: string[] }
   deb: { depends: string[] }
 }
 
@@ -131,6 +133,17 @@ describe('Linux packaging configuration', () => {
     // with its launcher.
     expect(desktopName).toBe(`${EXECUTABLE_NAME}.desktop`)
     expect(config.linux.syncDesktopName).toBe(true)
+  })
+
+  it('selects X11 automatically in every packaged Linux launcher', () => {
+    const config = builderConfig()
+
+    expect(config.linux.executableArgs).toContain('--ozone-platform=x11')
+    expect(config.appImage.executableArgs).toContain('--ozone-platform=x11')
+    // AppImage has no installed setuid sandbox helper, so its existing
+    // electron-builder default must survive the target-specific override.
+    expect(config.appImage.executableArgs).toContain('--no-sandbox')
+    expect(config.linux.executableArgs).not.toContain('--no-sandbox')
   })
 
   it('registers the supported video MIME types', () => {

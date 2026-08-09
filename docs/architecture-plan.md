@@ -28,8 +28,10 @@ which actually paints (chrome, sidebars, subtitles, menus, popups and modals),
 and main applies those rectangles with `BrowserWindow.setShape`. The resulting
 native holes expose mpv instead of asking the Linux compositor to alpha-blend
 two top-level video surfaces, which produced black or flickering windows.
-Electron's parent/child relationship keeps the shaped overlay above the host
-without making Kizuna globally always-on-top.
+Electron's parent/child relationship owns the pair, while presentation and
+focus explicitly raise the host and place the shaped overlay immediately above
+it. This prevents another application from appearing through the video-shaped
+hole without making Kizuna globally always-on-top.
 
 Subtitle tracks are extracted and rendered separately in the DOM so their text
 can be selected, tokenized, looked up, and styled by knowledge level.
@@ -43,8 +45,9 @@ programmatic writes are guarded so mirroring does not recurse. Fullscreen is
 initiated only on the host, restored from one saved pre-fullscreen rectangle
 after the native leave event, and reported to the renderer once per logical
 transition. Mini-player bounds and requested always-on-top state are applied to
-both sides as one operation. The parent relationship remains the normal
-stacking mechanism; always-on-top is not used for ordinary Linux playback.
+both sides as one operation. The parent relationship plus direct host/overlay
+z-ordering remains the normal stacking mechanism; always-on-top is not used for
+ordinary Linux playback.
 
 Windows continues to use the same coordinator interface backed by its one
 transparent BrowserWindow, so window-control IPC does not duplicate platform
@@ -77,6 +80,9 @@ immutable payloads in the vendor lock map, staged into the common
 runtime executables and generated third-party notices. The Linux mpv and
 FFmpeg executables intentionally use shared libraries from the pinned Ubuntu
 packages; MeCab carries its relative loader, library, and dictionary layout.
+Linux launchers select Electron's X11 backend automatically so the
+same packages work from X11 desktops and from Wayland desktops through
+XWayland without user-supplied command-line arguments.
 `better-sqlite3` is rebuilt for each host's Electron ABI.
 
 GitHub Actions runs independent, equally required Windows x64 and Linux x64

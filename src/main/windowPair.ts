@@ -16,6 +16,8 @@ interface ManagedWindow extends WindowControlTarget {
   isDestroyed(): boolean
   isMinimized(): boolean
   restore(): void
+  getMediaSourceId(): string
+  moveAbove(mediaSourceId: string): void
   on(event: WindowPairEvent, listener: () => void): unknown
 }
 
@@ -155,6 +157,11 @@ export class AppWindowCoordinator implements WindowControlTarget {
   focus(): void {
     if (this.isLive(this.videoHost)) this.callSafely(this.videoHost, () => this.videoHost.focus())
     if (this.uiOverlay !== this.videoHost && this.isLive(this.uiOverlay)) {
+      // Focusing only the transparent overlay can leave an unrelated window
+      // between it and the opaque mpv host. Re-establish adjacency before the
+      // overlay receives keyboard focus so its shaped video region reveals the
+      // host, never the terminal or application that launched Kizuna.
+      this.moveOverlayDirectlyAboveHost()
       this.callSafely(this.uiOverlay, () => this.uiOverlay.focus())
     }
   }
@@ -355,6 +362,13 @@ export class AppWindowCoordinator implements WindowControlTarget {
     }
   }
 
+  private moveOverlayDirectlyAboveHost(): void {
+    if (!this.paired || !this.isLive(this.videoHost) || !this.isLive(this.uiOverlay)) return
+    this.callSafely(this.uiOverlay, () =>
+      this.uiOverlay.moveAbove(this.videoHost.getMediaSourceId())
+    )
+  }
+
   private cancelScheduledSync(): void {
     if (!this.syncScheduled) return
     this.clearTimeoutFn(this.syncTimer)
@@ -533,8 +547,13 @@ export function presentAppWindowSet(
       fallbackTimer = undefined
     }
     windows.videoHost.show()
+    // `moveTop` raises the opaque host above the terminal/file manager that
+    // launched Kizuna without stealing focus. `moveAbove` then places the
+    // shaped UI overlay immediately above that host; raising only the overlay
+    // creates a literal hole through to unrelated windows on some X11 WMs.
+    windows.videoHost.moveTop()
     windows.uiOverlay.show()
-    windows.uiOverlay.moveTop()
+    windows.uiOverlay.moveAbove(windows.videoHost.getMediaSourceId())
     windows.uiOverlay.focus()
   }
 
