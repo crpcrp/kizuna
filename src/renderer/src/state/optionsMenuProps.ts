@@ -4,6 +4,7 @@ import type { PlaybackTabProps } from '../components/options/PlaybackTab'
 import type { PlayerAction, PlayerState } from './playerState'
 import type { OptionsDialogActions, OptionsDialogData } from './useOptionsDialog'
 import type { VocabularyKnowledgeOptions } from './useVocabularyMining'
+import type { UpdateSettings } from '../../../shared/update'
 
 /** The player-state fields the dialog shows. Everything else it renders comes
  * from the options-data domains or from another feature's group. */
@@ -51,6 +52,10 @@ export interface OptionsMenuPropsInput {
   playback: OptionsPlaybackGroup
   /** The rows whose effect is to invalidate or rebuild the vocabulary caches. */
   knowledge: VocabularyKnowledgeOptions
+  updates: {
+    settings: UpdateSettings
+    onChangeCheckAutomatically: (value: boolean) => void
+  }
 }
 
 /**
@@ -70,7 +75,8 @@ export function buildOptionsMenuProps({
   onClose,
   onCategoryOpen,
   playback,
-  knowledge
+  knowledge,
+  updates
 }: OptionsMenuPropsInput): OptionsMenuProps {
   // Most rows only dispatch: the settings lifecycle already persists the
   // reducer fields it watches. The two rows that call `actions.persist` below
@@ -159,6 +165,8 @@ export function buildOptionsMenuProps({
       onSyncNow: knowledge.onSyncNow
     },
     setup: {
+      checkAutomatically: updates.settings.checkAutomatically,
+      onChangeCheckAutomatically: updates.onChangeCheckAutomatically,
       setup: data.setup,
       mecabDicts: data.dictionaries.mecabDicts,
       yomitanDicts: data.dictionaries.yomitanDicts,

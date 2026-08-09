@@ -272,6 +272,8 @@ describe('preload updater contract', () => {
     const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
       updates: {
         getState(): Promise<unknown>
+        getSettings(): Promise<unknown>
+        setSettings(patch: { checkAutomatically: boolean }): Promise<unknown>
         check(origin: 'manual'): Promise<unknown>
         download(): Promise<unknown>
         install(): Promise<void>
@@ -281,6 +283,8 @@ describe('preload updater contract', () => {
     const callback = vi.fn()
 
     api.updates.getState()
+    api.updates.getSettings()
+    api.updates.setSettings({ checkAutomatically: false })
     api.updates.check('manual')
     api.updates.download()
     api.updates.install()
@@ -290,6 +294,10 @@ describe('preload updater contract', () => {
     off()
 
     expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.getState)
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.getSettings)
+    expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.setSettings, {
+      checkAutomatically: false
+    })
     expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.check, 'manual')
     expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.download)
     expect(electron.invoke).toHaveBeenCalledWith(UPDATE_CHANNELS.install)

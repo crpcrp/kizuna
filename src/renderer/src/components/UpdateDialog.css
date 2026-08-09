@@ -1,0 +1,40 @@
+.update-release-meta {
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.update-release-notes {
+  max-height: 30vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  margin: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-card);
+  color: inherit;
+  font: inherit;
+}
+
+.update-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.update-actions button,
+#update-status button {
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--surface-panel);
+  color: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.update-actions button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}

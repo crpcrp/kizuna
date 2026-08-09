@@ -265,6 +265,8 @@ export const APP_INFO_CHANNELS = {
 /** Main-owned application updater commands and state push. */
 export const UPDATE_CHANNELS = {
   getState: 'update:getState',
+  getSettings: 'update:getSettings',
+  setSettings: 'update:setSettings',
   check: 'update:check',
   download: 'update:download',
   install: 'update:install',

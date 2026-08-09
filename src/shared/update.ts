@@ -1,5 +1,11 @@
 export type UpdateCheckOrigin = 'automatic' | 'manual'
 
+export interface UpdateSettings {
+  checkAutomatically: boolean
+}
+
+export type UpdatePackage = 'nsis' | 'appImage' | 'deb'
+
 export type UpdateUnsupportedReason =
   'unpackaged' | 'unsupportedPlatform' | 'unsupportedPackage' | 'missingConfiguration'
 
@@ -8,6 +14,7 @@ export type UpdateErrorStage = 'check' | 'download' | 'install'
 export interface UpdateRelease {
   currentVersion: string
   version: string
+  packageType: UpdatePackage
   releaseName?: string
   releaseDate?: string
   releaseNotes?: string

@@ -158,6 +158,10 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     },
     updates: {
       getState: vi.fn(async () => ({ status: 'idle' as const })),
+      getSettings: vi.fn(async () => ({ checkAutomatically: true })),
+      setSettings: vi.fn(async (patch) => ({
+        checkAutomatically: patch.checkAutomatically ?? true
+      })),
       check: vi.fn(async () => ({
         status: 'upToDate' as const,
         currentVersion: '0.2.0',

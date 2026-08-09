@@ -46,7 +46,7 @@ import type {
   StoredSubtitleSelection,
   StoredTrackSelection
 } from './mediaHistory'
-import type { UpdateCheckOrigin, UpdateState } from './update'
+import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -227,6 +227,8 @@ export interface KizunaApi {
   }
   updates: {
     getState(): Promise<UpdateState>
+    getSettings(): Promise<UpdateSettings>
+    setSettings(patch: Partial<UpdateSettings>): Promise<UpdateSettings>
     check(origin: UpdateCheckOrigin): Promise<UpdateState>
     download(): Promise<UpdateState>
     install(): Promise<void>

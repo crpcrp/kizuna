@@ -25,6 +25,7 @@ import {
   type PathNormalizationOptions
 } from '../../shared/mediaHistory'
 import { DEFAULT_KNOWLEDGE_TUNING, type KnowledgeTuning } from '../../shared/knowledge'
+import type { UpdateSettings } from '../../shared/update'
 
 export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
@@ -35,6 +36,7 @@ export interface Settings {
   dictOrder: number[]
   anki: AnkiSettings
   knowledge: KnowledgeSettings
+  updates: UpdateSettings
   player: PlayerSettings
   mediaHistory: MediaHistory
 }
@@ -44,11 +46,16 @@ export const defaultKnowledgeSettings: KnowledgeSettings = {
   ...DEFAULT_KNOWLEDGE_TUNING
 }
 
+export const defaultUpdateSettings: UpdateSettings = {
+  checkAutomatically: true
+}
+
 export const defaultSettings: Settings = {
   mecabDictId: 'ipadic',
   dictOrder: [],
   anki: defaultAnkiSettings,
   knowledge: defaultKnowledgeSettings,
+  updates: defaultUpdateSettings,
   player: DEFAULT_PLAYER_SETTINGS,
   mediaHistory: normalizeMediaHistory(undefined)
 }
@@ -80,8 +87,19 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     dictOrder,
     anki: mergeAnkiSettings(obj.anki),
     knowledge: mergeKnowledgeSettings(obj.knowledge),
+    updates: mergeUpdateSettings(obj.updates),
     player: mergePlayerSettings(obj.player),
     mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
+  }
+}
+
+function mergeUpdateSettings(raw: unknown): UpdateSettings {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    checkAutomatically:
+      typeof obj.checkAutomatically === 'boolean'
+        ? obj.checkAutomatically
+        : defaultUpdateSettings.checkAutomatically
   }
 }
 

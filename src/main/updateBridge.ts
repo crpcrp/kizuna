@@ -1,7 +1,8 @@
 import { UPDATE_CHANNELS } from '../shared/ipcChannels'
-import type { UpdateCheckOrigin, UpdateState } from '../shared/update'
+import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
 import type { IpcMainHandleLike } from './ipc'
 import type { UpdateService } from './updateService'
+import type { SettingsStore } from './services/settings'
 
 export interface UpdateBridgeEvent {
   sender: unknown
@@ -16,6 +17,7 @@ function origin(value: unknown): UpdateCheckOrigin {
 export function registerUpdateBridge<E extends UpdateBridgeEvent>(
   ipc: IpcMainHandleLike<E>,
   service: UpdateService,
+  settings: SettingsStore,
   isAllowedSender: (sender: E['sender']) => boolean
 ): void {
   const allowed = (event: E): void => {
@@ -25,6 +27,23 @@ export function registerUpdateBridge<E extends UpdateBridgeEvent>(
   ipc.handle(UPDATE_CHANNELS.getState, (event): UpdateState => {
     allowed(event)
     return service.getState()
+  })
+  ipc.handle(UPDATE_CHANNELS.getSettings, (event): UpdateSettings => {
+    allowed(event)
+    return settings.get().updates
+  })
+  ipc.handle(UPDATE_CHANNELS.setSettings, (event, value): UpdateSettings => {
+    allowed(event)
+    const patch = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+    const current = settings.get().updates
+    return settings.set({
+      updates: {
+        checkAutomatically:
+          typeof patch.checkAutomatically === 'boolean'
+            ? patch.checkAutomatically
+            : current.checkAutomatically
+      }
+    }).updates
   })
   ipc.handle(UPDATE_CHANNELS.check, (event, value) => {
     allowed(event)

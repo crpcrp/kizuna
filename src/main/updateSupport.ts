@@ -1,6 +1,5 @@
 import type { UpdateUnsupportedReason } from '../shared/update'
-
-export type UpdatePackage = 'nsis' | 'appImage' | 'deb'
+import type { UpdatePackage } from '../shared/update'
 
 export type UpdateSupport =
   | { supported: true; packageType: UpdatePackage }

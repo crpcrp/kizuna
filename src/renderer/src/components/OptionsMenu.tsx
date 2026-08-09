@@ -22,7 +22,7 @@ import KnowledgeTab, {
   KNOWLEDGE_SETTING_ENTRIES,
   type KnowledgeTabProps
 } from './options/KnowledgeTab'
-import SetupTab, { SETUP_SETTING_ENTRIES, type SetupRowsInput } from './options/SetupTab'
+import SetupTab, { SETUP_SETTING_ENTRIES, type SetupTabProps } from './options/SetupTab'
 import {
   CATEGORY_ROWS,
   categoryLabel,
@@ -42,7 +42,7 @@ export interface OptionsMenuProps {
   dictionaries: Omit<DictionariesTabProps, 'active'>
   anki: Omit<AnkiTabProps, 'active'>
   knowledge: Omit<KnowledgeTabProps, 'active'>
-  setup: Omit<SetupRowsInput, 'nowMs'>
+  setup: Omit<SetupTabProps, 'active' | 'nowMs' | 'onGoToCategory' | 'categoryLabel'>
 }
 
 /** The complete search index is assembled here, while each entry list stays

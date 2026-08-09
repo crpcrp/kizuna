@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import './AboutDialog.css'
 import type { AppInfo, AppInfoLink } from '../../../shared/appInfo'
 import ModalOverlay from './ModalOverlay'
+import type { UpdateState } from '../../../shared/update'
 
 export interface AboutDialogProps {
   open: boolean
@@ -10,6 +11,8 @@ export interface AboutDialogProps {
   onClose: () => void
   onOpenLink: (link: AppInfoLink) => void
   onOpenNotices: () => void
+  updateState: UpdateState
+  onCheckForUpdates: () => void
 }
 
 /** Product information and approved project-resource actions. */
@@ -19,7 +22,9 @@ export default function AboutDialog({
   noticeMessage,
   onClose,
   onOpenLink,
-  onOpenNotices
+  onOpenNotices,
+  updateState,
+  onCheckForUpdates
 }: AboutDialogProps): React.JSX.Element {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -85,6 +90,18 @@ export default function AboutDialog({
           </dl>
 
           <div className="about-actions">
+            <button
+              type="button"
+              className="about-button"
+              disabled={
+                updateState.status === 'checking' ||
+                updateState.status === 'downloading' ||
+                updateState.status === 'downloaded'
+              }
+              onClick={onCheckForUpdates}
+            >
+              {updateState.status === 'checking' ? 'Checking for updates…' : 'Check for updates'}
+            </button>
             <button type="button" className="about-button" onClick={onOpenNotices}>
               Third-party notices
             </button>
@@ -92,6 +109,15 @@ export default function AboutDialog({
               Report an issue
             </button>
           </div>
+
+          {updateState.status === 'upToDate' && (
+            <p className="about-notice-message" role="status">
+              Kizuna is up to date.
+            </p>
+          )}
+          {updateState.status === 'unsupported' && (
+            <p className="about-notice-message">Updates are unavailable in this build.</p>
+          )}
 
           {noticeMessage !== null && (
             <p className="about-notice-message" role="status">
