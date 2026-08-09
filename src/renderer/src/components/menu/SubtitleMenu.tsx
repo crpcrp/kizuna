@@ -1,17 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SubtitleEncoding } from '../../../../shared/subtitleEncoding'
 import { SUBTITLE_ENCODING_OPTIONS } from '../../../../shared/subtitleEncoding'
-import { EXTERNAL_SUBTITLE_TRACK_ID, URL_SUBTITLE_TRACK_ID } from '../../../../shared/track'
+import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../../shared/track'
 import type { Track } from '../../../../shared/track'
-import type { UrlSubtitleTrack } from '../../../../shared/urlSubtitles'
-import {
-  filterUrlSubtitleTracks,
-  orderedUrlSubtitleTracksForPreference,
-  urlSubtitleBadgeLabel,
-  urlSubtitleRowLabel,
-  URL_SUBTITLE_FILTER_THRESHOLD,
-  type UrlSubtitleMenuState
-} from '../../state/urlSubtitleController'
 import { Menu, MenuItem, CommandItem } from './primitives'
 import {
   APPLY_FOLDER_FEEDBACK_MS,
@@ -27,130 +18,14 @@ export interface SubtitleMenuProps {
   selectedSubtitleId: number | null
   mediaOpening?: boolean
   externalSubtitleEncoding?: SubtitleEncoding
-  urlSubtitleMenu?: UrlSubtitleMenuState
-  urlSubtitleSelectedId?: string | null
-  urlSubtitleAcquiring?: string | null
-  preferredUrlSubtitleLanguage?: string
   subtitleOffsetMs?: number
   sidebarOpen?: boolean
   onSelectSubtitle: (id: number | null) => void
   onLoadSubtitleFile?: () => void
   onChangeExternalSubtitleEncoding?: (value: SubtitleEncoding) => void
-  onSelectUrlSubtitle?: (id: string) => void
-  onSelectUrlSubtitleOff?: () => void
   onChangeSubtitleOffset?: (value: number) => void
   onApplyOffsetToFolder?: () => void
   onToggleSidebar?: () => void
-}
-
-function OnlineSubtitles({
-  menu,
-  selectedId,
-  acquiring,
-  onSelect,
-  onSelectOff,
-  preferredUrlSubtitleLanguage,
-  hideHeading
-}: {
-  menu: UrlSubtitleMenuState
-  selectedId: string | null
-  acquiring: string | null
-  onSelect: (id: string) => void
-  onSelectOff: () => void
-  preferredUrlSubtitleLanguage?: string
-  hideHeading?: boolean
-}): React.JSX.Element | null {
-  const [filter, setFilter] = useState('')
-  const readyTracks = menu.status === 'ready' ? menu.tracks : null
-  const [seenTracks, setSeenTracks] = useState(readyTracks)
-  if (seenTracks !== readyTracks) {
-    setSeenTracks(readyTracks)
-    setFilter('')
-  }
-  if (menu.status === 'hidden') return null
-  const ordered =
-    menu.status === 'ready'
-      ? orderedUrlSubtitleTracksForPreference(menu.tracks, preferredUrlSubtitleLanguage ?? '')
-      : []
-  const filtered = filterUrlSubtitleTracks(ordered, filter)
-  const visible =
-    selectedId !== null && !filtered.some((track) => track.selectionId === selectedId)
-      ? [...ordered.filter((track) => track.selectionId === selectedId), ...filtered]
-      : filtered
-  const row = (track: UrlSubtitleTrack): React.JSX.Element => (
-    <button
-      type="button"
-      className="menu-item url-subtitle-item"
-      role="menuitemradio"
-      aria-checked={selectedId === track.selectionId}
-      data-selection-id={track.selectionId}
-      onClick={() => onSelect(track.selectionId)}
-    >
-      <span className="menu-item-check">{selectedId === track.selectionId ? '✓' : ''}</span>
-      <span className="menu-item-label">{urlSubtitleRowLabel(track)}</span>
-      <span className="url-subtitle-badge" data-kind={track.kind}>
-        {urlSubtitleBadgeLabel(track.kind)}
-      </span>
-      {acquiring === track.selectionId && (
-        <span className="url-subtitle-acquiring" role="status">
-          …
-        </span>
-      )}
-    </button>
-  )
-  return (
-    <div id="online-subtitles">
-      {!hideHeading && (
-        <>
-          <div className="menu-separator" />
-          <div className="menu-section-label">Online subtitles</div>
-        </>
-      )}
-      {menu.status === 'loading' && (
-        <div className="menu-status" role="status">
-          Loading…
-        </div>
-      )}
-      {menu.status === 'unavailable' && (
-        <div className="menu-status" role="status">
-          No online subtitles
-        </div>
-      )}
-      {menu.status === 'ready' && (
-        <>
-          {menu.tracks.length > URL_SUBTITLE_FILTER_THRESHOLD && (
-            <div
-              className="url-subtitle-filter-row"
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <input
-                type="text"
-                id="url-subtitle-filter"
-                aria-label="Filter subtitle languages"
-                placeholder="Search language…"
-                value={filter}
-                onChange={(event) => setFilter(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.stopPropagation()
-                    setFilter('')
-                  }
-                }}
-              />
-            </div>
-          )}
-          <MenuItem label="Off" checked={selectedId === null} onClick={onSelectOff} />
-          {visible.length === 0 ? (
-            <div className="menu-status" role="status">
-              No matching language
-            </div>
-          ) : (
-            visible.map(row)
-          )}
-        </>
-      )}
-    </div>
-  )
 }
 
 export function SubtitleMenu({
@@ -161,17 +36,11 @@ export function SubtitleMenu({
   selectedSubtitleId,
   mediaOpening = false,
   externalSubtitleEncoding = 'auto',
-  urlSubtitleMenu = { status: 'hidden' },
-  urlSubtitleSelectedId = null,
-  urlSubtitleAcquiring = null,
-  preferredUrlSubtitleLanguage,
   subtitleOffsetMs = 0,
   sidebarOpen = false,
   onSelectSubtitle,
   onLoadSubtitleFile,
   onChangeExternalSubtitleEncoding,
-  onSelectUrlSubtitle,
-  onSelectUrlSubtitleOff,
   onChangeSubtitleOffset,
   onApplyOffsetToFolder,
   onToggleSidebar
@@ -207,8 +76,7 @@ export function SubtitleMenu({
     if (timer.current !== null) clearTimeout(timer.current)
     timer.current = setTimeout(() => setApplied(false), APPLY_FOLDER_FEEDBACK_MS)
   }
-  const subtitles = subtitleTracks(tracks).filter((track) => track.id !== URL_SUBTITLE_TRACK_ID)
-  const onlineOnly = urlSubtitleMenu.status !== 'hidden' && subtitles.length === 0
+  const subtitles = subtitleTracks(tracks)
   return (
     <Menu id="subtitle" label="Subtitle" open={open} onToggle={onToggle}>
       {onLoadSubtitleFile && (
@@ -242,13 +110,11 @@ export function SubtitleMenu({
           </select>
         </div>
       )}
-      {!onlineOnly && (
-        <MenuItem
-          label="Off"
-          checked={selectedSubtitleId === null}
-          onClick={run(() => onSelectSubtitle(null))}
-        />
-      )}
+      <MenuItem
+        label="Off"
+        checked={selectedSubtitleId === null}
+        onClick={run(() => onSelectSubtitle(null))}
+      />
       {subtitles.map((track) => (
         <MenuItem
           key={track.id}
@@ -257,15 +123,6 @@ export function SubtitleMenu({
           onClick={run(() => onSelectSubtitle(track.id))}
         />
       ))}
-      <OnlineSubtitles
-        menu={urlSubtitleMenu}
-        selectedId={urlSubtitleSelectedId}
-        acquiring={urlSubtitleAcquiring}
-        onSelect={(id) => onSelectUrlSubtitle?.(id)}
-        onSelectOff={() => onSelectUrlSubtitleOff?.()}
-        preferredUrlSubtitleLanguage={preferredUrlSubtitleLanguage}
-        hideHeading={onlineOnly}
-      />
       <div className="menu-separator" />
       <div className="menu-offset-row" id="subtitle-offset-row">
         <span className="menu-offset-label">Offset</span>

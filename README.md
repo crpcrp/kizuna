@@ -37,7 +37,7 @@ when it appears.
 - Resume playback, restore subtitle and audio tracks, and navigate recent files.
 - Use playlists, A–B looping, frame stepping, screenshots, mini-player mode, and
   configurable keyboard shortcuts.
-- Optionally translate whole subtitle lines or open network streams.
+- Optionally translate whole subtitle lines.
 
 ## Install a release
 
@@ -101,8 +101,8 @@ Playback, subtitle processing, dictionaries, settings, history, and vocabulary
 data stay on the computer. Kizuna has no telemetry, analytics, account system,
 automatic crash upload, or background update checks.
 
-Network access occurs only when you choose a network feature: opening a remote
-URL, translating a subtitle, syncing WaniKani, or using AnkiConnect. A remote
+Network access occurs only when you choose a network feature: translating a
+subtitle, syncing WaniKani, or using AnkiConnect. A remote
 AnkiConnect endpoint receives mined text and media; plain HTTP does not encrypt
 that traffic.
 
@@ -138,7 +138,7 @@ then use the normal npm workflow:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential python3 pkg-config mpv ffmpeg mecab mecab-ipadic-utf8 yt-dlp
+sudo apt install -y build-essential python3 pkg-config mpv ffmpeg mecab mecab-ipadic-utf8
 npm ci
 npm run dev
 ```

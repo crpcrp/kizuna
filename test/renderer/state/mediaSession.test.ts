@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { matchStoredTrack, shouldProbe } from '@src/renderer/src/state/mediaSession'
+import { matchStoredTrack } from '@src/renderer/src/state/mediaSession'
 import { type Track } from '@src/shared/track'
 
 describe('matchStoredTrack', () => {
@@ -34,15 +34,6 @@ describe('matchStoredTrack', () => {
       matchStoredTrack(tracks, 'audio', { id: 9, language: 'fr', codec: 'aac' })
     ).toBeUndefined()
     expect(matchStoredTrack(tracks, 'audio', { id: 9 })).toBeUndefined()
-  })
-})
-
-describe('shouldProbe', () => {
-  it('is false for http/https URLs and true for local paths', () => {
-    expect(shouldProbe('https://example.com/stream.m3u8')).toBe(false)
-    expect(shouldProbe('http://example.com/live')).toBe(false)
-    expect(shouldProbe('/home/user/video.mkv')).toBe(true)
-    expect(shouldProbe('C:\\videos\\clip.mp4')).toBe(true)
   })
 })
 

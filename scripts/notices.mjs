@@ -1,5 +1,5 @@
-// Kizuna redistributes binaries it did not build (mpv, FFmpeg, MeCab, IPADIC,
-// optionally yt-dlp) and ships Electron plus its production npm dependencies
+// Kizuna redistributes binaries it did not build (mpv, FFmpeg, MeCab, IPADIC)
+// and ships Electron plus its production npm dependencies
 // inside the installer. Several of those are copyleft, so the installer has to
 // carry their licence texts, identify the exact build it distributes, and say
 // where the matching source is.

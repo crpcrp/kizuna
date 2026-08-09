@@ -19,7 +19,7 @@ media, or private dictionary files.
 
 Security issues in Kizuna's Electron processes, IPC, local data handling,
 parsers, network features, packaging, or CI are in scope. Vulnerabilities in
-mpv, FFmpeg, MeCab, yt-dlp, Electron, Chromium, or external services should
+mpv, FFmpeg, MeCab, Electron, Chromium, or external services should
 normally be reported upstream unless Kizuna uses the component unsafely.
 
 Kizuna does not attempt to protect data from an attacker who already controls

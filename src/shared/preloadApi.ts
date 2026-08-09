@@ -20,8 +20,6 @@ import type { BundledBinaryStatus } from './integrationStatus'
 import type { AppInfo, AppInfoLink, NoticeOpenResult } from './appInfo'
 import type { AudioDevice } from './audioDevice'
 import type { MediaKeyCommand } from './mediaKey'
-import type { YtdlpQuality } from './ytdlpQuality'
-import type { UrlSubtitleAsset, UrlSubtitleDescriptor, UrlSubtitleInventory } from './urlSubtitles'
 import type { SetWindowBoundsRequest, WindowBounds } from './windowBounds'
 import type { WindowShapeRect } from './windowShape'
 import type {
@@ -66,15 +64,6 @@ export interface KizunaApi {
   }
   player: {
     load(path: string): Promise<unknown>
-    /** Aborts an in-flight `load` (stream-load timeout hedge or user Cancel);
-     * the pending `load` invoke rejects and its open-lock is released. */
-    cancelLoad(): Promise<void>
-    /** Reads mpv's `track-list` (audio/subtitle streams) — the URL path, where
-     * ffprobe never runs, populates the audio-track menu from this. */
-    getTrackList(): Promise<Track[]>
-    /** Reads mpv's `video-params` resolution (display dimensions) for the URL
-     * path, where ffprobe never runs — the source for the Video size presets. */
-    getVideoDimensions(): Promise<VideoDimensions | undefined>
     setPause(paused: boolean): Promise<unknown>
     seek(seconds: number, absolute?: boolean): Promise<unknown>
     setVolume(volume: number): Promise<unknown>
@@ -88,8 +77,6 @@ export interface KizunaApi {
     setAudioDevice(name: string): Promise<unknown>
     /** Toggles the dynaudnorm loudness-normalization filter. */
     setLoudnessNorm(on: boolean): Promise<unknown>
-    /** Selects the yt-dlp format policy for a subsequent extractor-backed URL load. */
-    setYtdlpQuality(quality: YtdlpQuality): Promise<unknown>
     /** Sets/clears mpv's native A–B loop; endpoints in seconds, `null` clears. */
     setAbLoop(a: number | null, b: number | null): Promise<unknown>
     setVideoMargins(top: number, bottom: number, right?: number, left?: number): Promise<unknown>
@@ -240,14 +227,6 @@ export interface KizunaApi {
   translate: {
     translate(text: string, requestId: string): Promise<string>
     cancel(requestId: string): void
-  }
-  urlSubtitles: {
-    /** Provided/auto subtitle catalog for the active extractor URL. */
-    enumerate(url: string): Promise<UrlSubtitleInventory>
-    /** Acquires one track's normalized cues (verified against the active URL). */
-    acquire(descriptor: UrlSubtitleDescriptor): Promise<UrlSubtitleAsset>
-    /** Aborts any in-flight acquisition. */
-    cancel(): void
   }
   files: {
     /** Real filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`). */

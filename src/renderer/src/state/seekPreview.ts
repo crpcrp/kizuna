@@ -96,7 +96,7 @@ export function previewLeftOffset(
  * Drives the seekbar hover preview. `hover` tracks the cursor synchronously
  * (the box follows immediately, keeping the last frame until a fresh one
  * arrives) while debouncing the thumbnail fetch; `leave` hides it; `setSource`
- * swaps the loaded file (and disables previews for audio-only / URL sources).
+ * swaps the loaded file (and disables previews for sources without dimensions).
  */
 export class SeekPreviewController {
   private path: string | null = null
@@ -123,7 +123,7 @@ export class SeekPreviewController {
 
   /**
    * Point the controller at the loaded file. `enabled` is false for sources
-   * without previews (audio-only, remote URLs); a null path disables too. Any
+   * without previews (audio-only or unsupported sources); a null path disables too. Any
    * pending work is cancelled and the preview hidden.
    */
   setSource(path: string | null, duration: number, enabled: boolean): void {

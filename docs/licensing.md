@@ -12,7 +12,6 @@ own license.
 | FFmpeg and ffprobe | GPL-3.0-or-later for the bundled build | Spawned media tools |
 | MeCab | BSD-3-Clause option | Spawned tokenizer |
 | IPADIC | NAIST-2003 | MeCab dictionary |
-| yt-dlp | Unlicense | Optional spawned URL extractor |
 | Electron | MIT, with Chromium and Node notices | Application runtime |
 | Production npm dependencies | Package-specific permissive licenses | Packaged application code |
 
@@ -20,7 +19,7 @@ Exact versions, copyright statements, license files, and source references live
 in [`third-party.json`](../third-party.json). The generated notice bundle is
 the authoritative record for a particular build.
 
-mpv, FFmpeg/ffprobe, MeCab, and yt-dlp run as separate processes; Kizuna does
+mpv, FFmpeg/ffprobe, and MeCab run as separate processes; Kizuna does
 not link their libraries into Electron. Revisit the licensing setup before
 changing that boundary or adding a redistributed component.
 

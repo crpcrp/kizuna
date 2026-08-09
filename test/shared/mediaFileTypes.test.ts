@@ -47,18 +47,21 @@ describe('classifyMediaFileName', () => {
 })
 
 describe('isRemoteUrl', () => {
-  it('accepts http and https URLs case-insensitively and ignores surrounding whitespace', () => {
+  it('accepts URL schemes case-insensitively and ignores surrounding whitespace', () => {
     expect(isRemoteUrl('http://example.com/video.mp4')).toBe(true)
     expect(isRemoteUrl('https://example.com/watch?v=abc')).toBe(true)
     expect(isRemoteUrl('HTTPS://EXAMPLE.COM/x')).toBe(true)
     expect(isRemoteUrl('  https://example.com/x  ')).toBe(true)
+    expect(isRemoteUrl('ftp://example.com/x')).toBe(true)
+    expect(isRemoteUrl('file:///home/user/video.mkv')).toBe(true)
+    expect(isRemoteUrl('rtsp://example.com/live')).toBe(true)
+    expect(isRemoteUrl('data:video/mp4;base64,AAAA')).toBe(true)
   })
 
-  it('rejects local paths, other schemes, and non-strings', () => {
+  it('rejects local paths, bare hostnames, and non-strings', () => {
     expect(isRemoteUrl('C:\\Media\\episode.mkv')).toBe(false)
+    expect(isRemoteUrl('C:/Media/episode.mkv')).toBe(false)
     expect(isRemoteUrl('/home/user/video.mkv')).toBe(false)
-    expect(isRemoteUrl('file:///home/user/video.mkv')).toBe(false)
-    expect(isRemoteUrl('ftp://example.com/x')).toBe(false)
     expect(isRemoteUrl('example.com/video.mp4')).toBe(false)
     expect(isRemoteUrl('httpsomething')).toBe(false)
     expect(isRemoteUrl('')).toBe(false)

@@ -33,8 +33,7 @@ npm run resources -- --platform win32-x64
 
 The platform override changes only the selected payload; it does not make
 Windows execute Linux binaries. The staging validation removes files managed by
-the other platform and fails closed if optional yt-dlp has the wrong platform
-suffix. First-party resource files are left alone.
+the other platform. First-party resource files are left alone.
 
 To use an existing mirror checkout:
 
@@ -73,16 +72,6 @@ An optional UniDic dictionary can be placed under
 
 The FFmpeg build must provide `libmp3lame` for mined sentence audio. If it does
 not, card creation continues without that audio clip.
-
-## Optional yt-dlp
-
-Place `yt-dlp.exe` under `resources/yt-dlp/` on Windows or `yt-dlp` under that
-directory on Linux to support extractor-backed URLs such as YouTube. It is not
-installed by `npm run resources`, pinned in `resources.lock.json`, or updated
-by Kizuna. Unpackaged Linux development checks `/usr/bin/yt-dlp` instead.
-
-Without yt-dlp, local playback and direct media URLs still work. A packaged
-installer includes yt-dlp only when it was present during packaging.
 
 ## Updating a pinned binary
 

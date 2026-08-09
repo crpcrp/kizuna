@@ -60,6 +60,38 @@ describe('registerMediaBridge', () => {
     )
   })
 
+  it('rejects URL paths before any media service can probe or read them', () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService(tracks, cues)
+    registerMediaBridge(ipc, service)
+    const url = 'https://host.example/media.mkv'
+
+    const calls: [keyof typeof MEDIA_CHANNELS, unknown[]][] = [
+      ['readPlaylist', [url]],
+      ['enumerateTracks', [url]],
+      ['loadSubtitle', [url, 2]],
+      ['loadExternalSubtitle', [url, 'auto']],
+      ['getVideoDimensions', [url]],
+      ['getChapters', [url]],
+      ['folderNeighbors', [url]],
+      ['thumbnail', [url, 10, 100]]
+    ]
+    for (const [channel, args] of calls) {
+      expect(() => handlers.get(MEDIA_CHANNELS[channel])!(event, ...args)).toThrow(
+        'URL playback is not supported.'
+      )
+    }
+
+    expect(service.readPlaylist).not.toHaveBeenCalled()
+    expect(service.enumerateTracks).not.toHaveBeenCalled()
+    expect(service.loadSubtitle).not.toHaveBeenCalled()
+    expect(service.loadExternalSubtitle).not.toHaveBeenCalled()
+    expect(service.getVideoDimensions).not.toHaveBeenCalled()
+    expect(service.getChapters).not.toHaveBeenCalled()
+    expect(service.folderNeighbors).not.toHaveBeenCalled()
+    expect(service.getThumbnail).not.toHaveBeenCalled()
+  })
+
   it('forwards folderNeighbors to service.folderNeighbors and returns its value', async () => {
     const { ipc, handlers } = fakeIpc()
     const { service } = fakeService(tracks, cues)

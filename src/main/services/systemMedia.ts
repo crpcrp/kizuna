@@ -151,7 +151,7 @@ export function createSystemMediaController(deps: SystemMediaDeps): SystemMediaC
       return
     }
     const { paused, timePos, duration } = snapshot
-    // Live/loading streams report no usable duration — show indeterminate rather
+    // Loading or malformed files report no usable duration — show indeterminate rather
     // than dividing by zero into a NaN progress.
     const known = Number.isFinite(duration) && duration > 0
     const mode: ProgressBarMode = !known ? 'indeterminate' : paused ? 'paused' : 'normal'

@@ -59,7 +59,6 @@ describe('app identity configuration', () => {
       'mpv',
       'ffmpeg',
       'mecab',
-      'yt-dlp',
       'icons',
       // Not a runtime resource but shipped the same way; see noticesConfig.test.ts.
       'notices'

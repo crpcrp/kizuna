@@ -130,24 +130,6 @@ describe('preload player contract', () => {
     expect(electron.invoke).toHaveBeenNthCalledWith(2, PLAYER_CHANNELS.frameBackStep)
   })
 
-  it('exposes cancelLoad, getTrackList, and getVideoDimensions through their dedicated IPC channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
-      player: {
-        cancelLoad(): Promise<void>
-        getTrackList(): Promise<unknown>
-        getVideoDimensions(): Promise<unknown>
-      }
-    }
-
-    api.player.cancelLoad()
-    api.player.getTrackList()
-    api.player.getVideoDimensions()
-
-    expect(electron.invoke).toHaveBeenNthCalledWith(1, PLAYER_CHANNELS.cancelLoad)
-    expect(electron.invoke).toHaveBeenNthCalledWith(2, PLAYER_CHANNELS.getTrackList)
-    expect(electron.invoke).toHaveBeenNthCalledWith(3, PLAYER_CHANNELS.getVideoDimensions)
-  })
-
   it('subscribes to mpv pause pushes and unsubscribes on teardown', () => {
     const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
       player: { onPause(cb: (value: boolean) => void): () => void }
@@ -215,16 +197,6 @@ describe('preload player contract', () => {
     expect(electron.invoke).toHaveBeenCalledWith(PLAYER_CHANNELS.getAudioDevices)
     expect(electron.invoke).toHaveBeenCalledWith(PLAYER_CHANNELS.setAudioDevice, 'wasapi/{abc}')
     expect(electron.invoke).toHaveBeenCalledWith(PLAYER_CHANNELS.setLoudnessNorm, true)
-  })
-
-  it('exposes the typed yt-dlp quality channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
-      player: { setYtdlpQuality(quality: '1080'): Promise<unknown> }
-    }
-
-    api.player.setYtdlpQuality('1080')
-
-    expect(electron.invoke).toHaveBeenCalledWith(PLAYER_CHANNELS.setYtdlpQuality, '1080')
   })
 
   it('exposes screenshot through the dedicated IPC channel', () => {

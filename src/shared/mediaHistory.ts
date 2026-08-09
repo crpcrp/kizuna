@@ -69,10 +69,9 @@ export function normalizeMediaPath(
   options: PathNormalizationOptions = {}
 ): string | undefined {
   if (typeof path !== 'string' || path.trim() === '') return undefined
-  // A network URL is already canonical: filesystem normalization (separator
-  // folding, cwd resolution, `..` collapsing) would mangle `https://…` into an
-  // unopenable local-looking path. Trim only and pass it through untouched.
-  if (isRemoteUrl(path)) return path.trim()
+  // URL media is no longer part of the playback surface. Returning undefined
+  // here also drops stale URL entries while normalizing persisted history.
+  if (isRemoteUrl(path)) return undefined
   const platform = options.platform ?? runtimePlatform()
   const cwd = options.cwd ?? runtimeCwd(platform)
   return platform === 'win32' ? normalizeWindowsPath(path, cwd) : normalizePosixPath(path, cwd)
@@ -85,9 +84,6 @@ export function mediaPathKey(
 ): string | undefined {
   const normalized = normalizeMediaPath(path, options)
   if (!normalized) return undefined
-  // URL paths and queries are case-sensitive, so the win32 lowercasing branch
-  // must not touch them — the key is the canonical URL itself.
-  if (isRemoteUrl(normalized)) return normalized
   return (options.platform ?? runtimePlatform()) === 'win32' ? normalized.toLowerCase() : normalized
 }
 

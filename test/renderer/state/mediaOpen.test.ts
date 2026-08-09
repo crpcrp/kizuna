@@ -195,11 +195,18 @@ describe('openAndLoad', () => {
     expect(onPlaylistPicked).not.toHaveBeenCalled()
   })
 
-  it('expands a picked playlist, replaces the queue via onPlaylistPicked, and loads entry 0', async () => {
+  it('expands a picked playlist, skips URL entries, and loads local entry 0', async () => {
     const bridge = makeBridge({
       media: {
         openFile: vi.fn().mockResolvedValue('/queue.m3u'),
-        readPlaylist: vi.fn().mockResolvedValue(['/ep1.mkv', '/ep2.mkv'])
+        readPlaylist: vi
+          .fn()
+          .mockResolvedValue([
+            'https://host/stream.m3u8',
+            '/ep1.mkv',
+            'HTTP://host/live',
+            '/ep2.mkv'
+          ])
       }
     })
     const dispatch = vi.fn()
@@ -265,54 +272,7 @@ describe('loadPath', () => {
     expect(result).toEqual({ status: 'opened', filePath: '/recent.mkv', warnings: [] })
   })
 
-  it('skips ffprobe for a URL and populates audio tracks from mpv’s track-list', async () => {
-    const bridge = makeBridge()
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    const result = await loadPath(session, 'https://example.com/stream.m3u8')
-
-    expect(bridge.media.enumerateTracks).not.toHaveBeenCalled()
-    expect(bridge.player.getTrackList).toHaveBeenCalled()
-    // Only audio streams from the mpv list reach the menu; the subtitle stream
-    // is dropped (URL subtitles are out of scope, the sidebar stays empty).
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'fileLoaded',
-      filePath: 'https://example.com/stream.m3u8',
-      tracks: [audioTrack]
-    })
-    expect(bridge.media.loadSubtitle).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      status: 'opened',
-      filePath: 'https://example.com/stream.m3u8',
-      warnings: []
-    })
-  })
-
-  it('exposes only mpv’s selected audio track for a YouTube URL', async () => {
-    const bridge = makeBridge({
-      player: {
-        getTrackList: vi.fn().mockResolvedValue([
-          { id: 1, kind: 'video', codec: 'vp9' },
-          { id: 2, kind: 'audio', codec: 'opus' },
-          { id: 3, kind: 'audio', codec: 'opus', selected: true },
-          { id: 4, kind: 'audio', codec: 'aac' }
-        ])
-      }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    await loadPath(session, 'https://www.youtube.com/watch?v=dQw4w9WgXcQ')
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'fileLoaded',
-      filePath: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-      tracks: [{ id: 3, kind: 'audio', codec: 'opus', selected: true }]
-    })
-  })
-
-  it('still dispatches every ffprobe audio track for a local file (regression guard)', async () => {
+  it('dispatches every ffprobe track for a local file', async () => {
     const audio2: Track = { id: 3, kind: 'audio', codec: 'ac3' }
     const bridge = makeBridge({
       media: {
@@ -324,7 +284,6 @@ describe('loadPath', () => {
 
     await loadPath(session, '/disc.mkv')
 
-    expect(bridge.player.getTrackList).not.toHaveBeenCalled()
     expect(dispatch).toHaveBeenCalledWith({
       type: 'fileLoaded',
       filePath: '/disc.mkv',
@@ -332,61 +291,25 @@ describe('loadPath', () => {
     })
   })
 
-  it('degrades to no tracks when mpv’s track-list read rejects for a URL', async () => {
+  it('rejects HTTP and HTTPS paths before probing, history, or player load', async () => {
     const bridge = makeBridge()
-    ;(bridge.player.getTrackList as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('no property')
-    )
     const dispatch = vi.fn()
     const session = makeSession({ bridge, dispatch })
 
-    const result = await loadPath(session, 'http://example.com/live')
-
-    expect(dispatch).toHaveBeenCalledWith({
-      type: 'fileLoaded',
-      filePath: 'http://example.com/live',
-      tracks: []
-    })
-    expect(result).toEqual({ status: 'opened', filePath: 'http://example.com/live', warnings: [] })
-  })
-
-  it('still restores the resume position for a URL (history is URL-safe)', async () => {
-    const bridge = makeBridge({
-      mediaHistory: {
-        getPlaybackHistory: vi
-          .fn()
-          .mockResolvedValue({ positionSeconds: 90, durationSeconds: 600, updatedAt: 1 })
-      }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    await loadPath(session, 'https://example.com/movie.mp4')
-
-    expect(bridge.player.seek).toHaveBeenCalledWith(90, true)
-  })
-
-  it('reports failed (releasing the open lock) when a URL load rejects — the timeout/cancel path', async () => {
-    const bridge = makeBridge({
-      player: {
-        load: vi.fn().mockRejectedValue(new Error('Load timed out')),
-        getTrackList: vi.fn()
-      }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    const result = await loadPath(session, 'https://example.com/stalled')
-
-    expect(result).toEqual({
+    await expect(loadPath(session, 'https://example.com/stalled')).resolves.toEqual({
       status: 'failed',
       filePath: 'https://example.com/stalled',
-      message: 'Load timed out'
+      message: 'URL playback is not supported.'
     })
-    expect(bridge.player.getTrackList).not.toHaveBeenCalled()
-    expect(dispatch).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'fileLoaded' }))
-    // mpv was stopped by the abort, so the previous file's media state is cleared.
-    expect(dispatch).toHaveBeenCalledWith({ type: 'mediaClosed' })
+    await expect(loadPath(session, 'HTTP://example.com/live')).resolves.toEqual({
+      status: 'failed',
+      filePath: 'HTTP://example.com/live',
+      message: 'URL playback is not supported.'
+    })
+    expect(bridge.media.enumerateTracks).not.toHaveBeenCalled()
+    expect(bridge.mediaHistory.getPlaybackHistory).not.toHaveBeenCalled()
+    expect(bridge.player.load).not.toHaveBeenCalled()
+    expect(dispatch).not.toHaveBeenCalled()
   })
 
   it('does not clear media state when a local load fails (mpv may keep the prior frame)', async () => {

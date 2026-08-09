@@ -1,4 +1,4 @@
-import { classifyMediaFileName } from '../../../shared/mediaFileTypes'
+import { classifyMediaFileName, isRemoteUrl } from '../../../shared/mediaFileTypes'
 
 export interface PlaylistAppendDeps {
   readPlaylist: (path: string) => Promise<string[]>
@@ -24,9 +24,10 @@ export async function appendPathsToPlaylist(
       expanded.push(path)
     }
   }
-  if (expanded.length === 0) return { status: 'empty' }
-  await deps.addPaths(expanded)
-  return { status: 'added', count: expanded.length }
+  const localPaths = expanded.filter((path) => !isRemoteUrl(path))
+  if (localPaths.length === 0) return { status: 'empty' }
+  await deps.addPaths(localPaths)
+  return { status: 'added', count: localPaths.length }
 }
 
 export async function appendPlaylistFile(

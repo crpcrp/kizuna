@@ -1,7 +1,7 @@
 // Pure renderer player state + reducer. Driven via React useReducer by App.
 // No React import here — kept framework-agnostic and directly unit-testable.
 
-import { URL_SUBTITLE_TRACK_ID, type Track } from '../../../shared/track'
+import type { Track } from '../../../shared/track'
 import type { Chapter } from '../../../shared/chapter'
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
@@ -93,8 +93,6 @@ export interface PlayerState {
   autoPlayNext: boolean
   /** Whether right-clicked subtitle text may use the experimental online translator. */
   translationEnabled: boolean
-  /** Preferred language code for online (yt-dlp URL) subtitles, e.g. 'ja'. Empty = no preference. */
-  preferredUrlSubtitleLanguage: string
   /** Subtitle timing offset (ms) for the currently-loaded file; positive delays
    * subtitles, negative shows them earlier. See `offsetTimePos` in shared/cue. */
   subtitleOffsetMs: number
@@ -159,7 +157,6 @@ export const initialPlayerState: PlayerState = {
   rightClickTogglePause: true,
   autoPlayNext: false,
   translationEnabled: false,
-  preferredUrlSubtitleLanguage: '',
   subtitleOffsetMs: 0,
   audioDelayMs: 0,
   abLoopState: EMPTY_AB_LOOP,
@@ -217,14 +214,6 @@ export type PlayerAction =
       cues: Cue[]
       encoding: SubtitleEncoding
     }
-  /** An acquired online (yt-dlp URL) subtitle track became the active track.
-   * Session-only: unlike `externalSubtitleLoaded` it stores no path/encoding
-   * and is never persisted to `MediaHistory`. */
-  | { type: 'onlineSubtitleLoaded'; track: Track; cues: Cue[] }
-  /** The online subtitle was turned off (menu Off / cancellation). Removes the
-   * synthetic online track and clears its cues; a no-op when no online track
-   * is active, so it never clobbers an embedded/external selection. */
-  | { type: 'onlineSubtitleCleared' }
   | { type: 'setKeyBinding'; action: keyof KeyBindings; binding: KeyBinding }
   | { type: 'setSkipSeconds'; value: number }
   | { type: 'setSubtitleDragEnabled'; value: boolean }
@@ -232,7 +221,6 @@ export type PlayerAction =
   | { type: 'setRightClickTogglePause'; value: boolean }
   | { type: 'setAutoPlayNext'; value: boolean }
   | { type: 'setTranslationEnabled'; value: boolean }
-  | { type: 'setPreferredUrlSubtitleLanguage'; value: string }
   | { type: 'setSubtitleOffset'; value: number }
   | { type: 'setAudioDelay'; value: number }
   | { type: 'setAbLoop'; value: AbLoopState }
@@ -257,7 +245,6 @@ export type PlayerAction =
       rightClickTogglePause: boolean
       autoPlayNext: boolean
       translationEnabled: boolean
-      preferredUrlSubtitleLanguage: string
       appearance: Appearance
       levelColors: LevelColors
       screenshotFolder: string | null
@@ -316,9 +303,9 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         allCueTokens: {}
       }
     case 'mediaClosed':
-      // A stream load was aborted (URL timeout/cancel — mpv sent `stop` and is
-      // idle) or otherwise failed. Drop the previous file's identity so the UI
-      // stops showing tracks/cues/chapters for media mpv is no longer playing.
+      // A media load failed or otherwise ended. Drop the previous file's
+      // identity so the UI stops showing tracks/cues/chapters for media mpv is
+      // no longer playing.
       // Persisted settings (volume, bindings, appearance, …) are untouched.
       return {
         ...state,
@@ -375,30 +362,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         externalSubtitleEncoding: action.encoding,
         allCueTokens: {}
       }
-    case 'onlineSubtitleLoaded':
-      // Mirrors `externalSubtitleLoaded` (replace-then-append the synthetic
-      // track so a second acquisition swaps rather than duplicates) but leaves
-      // `externalSubtitlePath`/encoding untouched — the online track is
-      // session-only and carries neither.
-      return {
-        ...state,
-        tracks: [...state.tracks.filter((track) => track.id !== action.track.id), action.track],
-        cues: action.cues,
-        selectedSubtitleId: action.track.id,
-        allCueTokens: {}
-      }
-    case 'onlineSubtitleCleared':
-      // Only touches state when the online track is actually present, so a
-      // stale/duplicate clear can't wipe an embedded or external selection's cues.
-      if (!state.tracks.some((track) => track.id === URL_SUBTITLE_TRACK_ID)) return state
-      return {
-        ...state,
-        tracks: state.tracks.filter((track) => track.id !== URL_SUBTITLE_TRACK_ID),
-        cues: [],
-        selectedSubtitleId:
-          state.selectedSubtitleId === URL_SUBTITLE_TRACK_ID ? null : state.selectedSubtitleId,
-        allCueTokens: {}
-      }
     case 'setKeyBinding':
       return { ...state, keyBindings: { ...state.keyBindings, [action.action]: action.binding } }
     case 'setSkipSeconds':
@@ -413,8 +376,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, autoPlayNext: action.value }
     case 'setTranslationEnabled':
       return { ...state, translationEnabled: action.value }
-    case 'setPreferredUrlSubtitleLanguage':
-      return { ...state, preferredUrlSubtitleLanguage: action.value }
     case 'setSubtitleOffset':
       return { ...state, subtitleOffsetMs: action.value }
     case 'setAudioDelay':
@@ -452,7 +413,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         rightClickTogglePause: action.rightClickTogglePause,
         autoPlayNext: action.autoPlayNext,
         translationEnabled: action.translationEnabled,
-        preferredUrlSubtitleLanguage: action.preferredUrlSubtitleLanguage,
         appearance: action.appearance,
         levelColors: action.levelColors,
         screenshotFolder: action.screenshotFolder,

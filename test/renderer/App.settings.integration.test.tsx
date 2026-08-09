@@ -202,25 +202,4 @@ describe('App settings hydration', () => {
       ).checked
     ).toBe(true)
   })
-
-  it('persists the preferred online subtitle language when it changes in Options', async () => {
-    const setSettings = installBridge(
-      Promise.resolve(settings({ sidebarOpen: true, preferredUrlSubtitleLanguage: '' }))
-    )
-    render(<App />)
-
-    await screen.findByLabelText('All subtitles')
-    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
-    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
-    const input = screen.getByLabelText(/^Preferred online subtitle language/) as HTMLInputElement
-    expect(input.value).toBe('')
-
-    fireEvent.change(input, { target: { value: 'ja' } })
-    fireEvent.blur(input)
-
-    await waitFor(() =>
-      expect(setSettings).toHaveBeenCalledWith({ preferredUrlSubtitleLanguage: 'ja' })
-    )
-  })
 })

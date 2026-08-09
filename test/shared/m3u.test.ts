@@ -34,28 +34,25 @@ describe('parseM3u', () => {
     ])
   })
 
-  it('passes http(s) URL entries through verbatim alongside local entries', () => {
+  it('skips http(s) URL entries and keeps local entries', () => {
     const text = '#EXTINF:0,Live\nhttps://host/stream.m3u8\nlocal.mkv'
-    const expected = ['https://host/stream.m3u8', '/media/local.mkv']
-    expect(parseM3u(text, '/media', { platform: 'posix' })).toEqual(expected)
-    // URLs are canonical: byte-identical regardless of the platform path rules.
-    expect(parseM3u(text, 'C:\\media', { platform: 'win32' })).toEqual([
-      'https://host/stream.m3u8',
-      'C:\\media\\local.mkv'
-    ])
+    expect(parseM3u(text, '/media', { platform: 'posix' })).toEqual(['/media/local.mkv'])
+    expect(parseM3u(text, 'C:\\media', { platform: 'win32' })).toEqual(['C:\\media\\local.mkv'])
   })
 
   it('skips non-http URL schemes (ftp, file) that are not openable', () => {
-    const text = 'ftp://host/x.mkv\nfile:///abs/y.mkv\nlocal.mkv'
+    const text = 'ftp://host/x.mkv\nfile:///abs/y.mkv\nrtsp:host/live\ndata:video/mp4,x\nlocal.mkv'
     expect(parseM3u(text, '/media', { platform: 'posix' })).toEqual(['/media/local.mkv'])
   })
 
-  it('round-trips an http(s) URL through serialize + parse', () => {
-    const url = 'https://host/stream.m3u8'
-    expect(parseM3u(serializeM3u(['/media/a.mkv', url]), '/media', { platform: 'posix' })).toEqual([
-      '/media/a.mkv',
-      url
-    ])
+  it('drops URL entries when serializing a playlist', () => {
+    expect(
+      parseM3u(
+        serializeM3u(['/media/a.mkv', 'https://host/stream.m3u8', 'rtsp:host/live']),
+        '/media',
+        { platform: 'posix' }
+      )
+    ).toEqual(['/media/a.mkv'])
   })
 
   it('resolves relative entries against a Windows folder', () => {

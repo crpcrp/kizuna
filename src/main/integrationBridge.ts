@@ -24,7 +24,7 @@ export function registerIntegrationBridge<E>(
 
 export interface CreateIntegrationServiceDeps {
   /** The resolved bundled-binary paths (resourcePaths.ts). */
-  paths: { ffmpegPath: string; ffprobePath: string; ytdlpPath: string }
+  paths: { ffmpegPath: string; ffprobePath: string }
   /** Existence probe — never real `fs.existsSync` inside a test. */
   exists: (path: string) => boolean
 }
@@ -42,8 +42,7 @@ export function createIntegrationService(
     binaryStatus(): BundledBinaryStatus {
       return {
         ffmpeg: deps.exists(deps.paths.ffmpegPath),
-        ffprobe: deps.exists(deps.paths.ffprobePath),
-        ytdlp: deps.exists(deps.paths.ytdlpPath)
+        ffprobe: deps.exists(deps.paths.ffprobePath)
       }
     }
   }

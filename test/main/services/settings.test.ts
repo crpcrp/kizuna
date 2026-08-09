@@ -371,8 +371,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
         deinterlace: true
       },
       audioDevice: 'wasapi/{abc-123}',
-      loudnessNormalization: true,
-      preferredUrlSubtitleLanguage: 'ja'
+      loudnessNormalization: true
     }
     expect(mergeSettings({ player }).player).toEqual(player)
   })
@@ -395,20 +394,9 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     }
   })
 
-  it('round-trips a valid preferredUrlSubtitleLanguage and falls back for a malformed one', () => {
-    expect(mergeSettings({ player: {} }).player.preferredUrlSubtitleLanguage).toBe('')
-    expect(
-      mergeSettings({ player: { preferredUrlSubtitleLanguage: 'pt-BR' } }).player
-        .preferredUrlSubtitleLanguage
-    ).toBe('pt-BR')
-    expect(
-      mergeSettings({ player: { preferredUrlSubtitleLanguage: '<script>' } }).player
-        .preferredUrlSubtitleLanguage
-    ).toBe('')
-    expect(
-      mergeSettings({ player: { preferredUrlSubtitleLanguage: 123 } }).player
-        .preferredUrlSubtitleLanguage
-    ).toBe('')
+  it('ignores the removed legacy online-subtitle language setting', () => {
+    const player = mergeSettings({ player: { preferredUrlSubtitleLanguage: 'ja' } }).player
+    expect('preferredUrlSubtitleLanguage' in player).toBe(false)
   })
 
   it('defaults videoAdjustments to neutral and normalizes a malformed block', () => {

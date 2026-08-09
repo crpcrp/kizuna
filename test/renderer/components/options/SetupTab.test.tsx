@@ -41,7 +41,7 @@ function yomitanDict(id: number, enabled: boolean): DictInfo {
 
 function input(overrides: Partial<SetupRowsInput> = {}): SetupRowsInput {
   return {
-    setup: { binaries: { ffmpeg: true, ffprobe: true, ytdlp: true }, anki: { ok: true } },
+    setup: { binaries: { ffmpeg: true, ffprobe: true }, anki: { ok: true } },
     mecabDicts: [mecabDict('ipadic', true), mecabDict('unidic', false)],
     yomitanDicts: [],
     wanikaniConfigured: false,
@@ -151,7 +151,6 @@ describe('buildSetupRows', () => {
       'mpv',
       'ffmpeg',
       'ffprobe',
-      'ytdlp',
       'mecab-ipadic',
       'mecab-unidic',
       'yomitan',
@@ -164,20 +163,18 @@ describe('buildSetupRows', () => {
     const rows = buildSetupRows(
       input({
         setup: {
-          binaries: { ffmpeg: true, ffprobe: false, ytdlp: false },
+          binaries: { ffmpeg: true, ffprobe: false },
           anki: { ok: true }
         }
       })
     )
     expect(row(rows, 'ffmpeg').state).toBe('ready')
     expect(row(rows, 'ffprobe').state).toBe('missing')
-    expect(row(rows, 'ytdlp').state).toBe('missing')
   })
 
   it('shows every probed row as Checking until the setup domain resolves', () => {
     const rows = buildSetupRows(input({ setup: undefined }))
     expect(row(rows, 'ffmpeg').state).toBe('unknown')
-    expect(row(rows, 'ytdlp').state).toBe('unknown')
     expect(row(rows, 'anki').state).toBe('unknown')
   })
 
@@ -209,7 +206,7 @@ describe('buildSetupRows', () => {
 
   it('leaves the bundled binaries without a "Go to" target — nothing configures them', () => {
     const rows = buildSetupRows(input())
-    for (const id of ['mpv', 'ffmpeg', 'ffprobe', 'ytdlp']) {
+    for (const id of ['mpv', 'ffmpeg', 'ffprobe']) {
       expect(row(rows, id).goTo).toBeUndefined()
     }
   })
@@ -246,10 +243,6 @@ describe('SetupTab', () => {
     const html = render()
     expect(html).toContain('status-dot ready')
     expect(html).toContain('state-badge setup-badge missing')
-  })
-
-  it('labels each badge with the capability name, for screen readers', () => {
-    expect(render()).toContain('aria-label="yt-dlp: Ready"')
   })
 
   it('offers a "Go to" link only for the rows another tab configures', () => {

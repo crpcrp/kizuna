@@ -43,7 +43,6 @@ export function makeBridge(overrides: BridgeOverrides = {}): PlayerBridge {
       load: vi.fn().mockResolvedValue(undefined),
       setAudioTrack: vi.fn().mockResolvedValue(undefined),
       seek: vi.fn().mockResolvedValue(undefined),
-      getTrackList: vi.fn().mockResolvedValue([audioTrack, subTrack]),
       ...(overrides.player ?? {})
     },
     mediaHistory: {

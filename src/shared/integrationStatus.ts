@@ -11,6 +11,4 @@ export interface BundledBinaryStatus {
   ffmpeg: boolean
   /** `resources/ffmpeg/ffprobe.exe` — track enumeration, chapters, dimensions. */
   ffprobe: boolean
-  /** `resources/yt-dlp/yt-dlp.exe` — URL streaming and online captions. */
-  ytdlp: boolean
 }

@@ -27,6 +27,27 @@ describe('playlistAppend', () => {
     expect(addPaths).toHaveBeenCalledWith(['E:\\v.mkv'])
   })
 
+  it('skips HTTP and HTTPS entries before adding them', async () => {
+    const { deps, addPaths } = makeDeps(async () => [
+      'https://host/stream.m3u8',
+      'E:\\a.mkv',
+      'HTTP://host/live'
+    ])
+
+    await expect(appendPlaylistFile('E:\\q.m3u', deps)).resolves.toEqual({
+      status: 'added',
+      count: 1
+    })
+    expect(addPaths).toHaveBeenCalledWith(['E:\\a.mkv'])
+  })
+
+  it('treats a playlist containing only URL entries as empty', async () => {
+    const { deps, addPaths } = makeDeps(async () => ['https://host/stream.m3u8'])
+
+    await expect(appendPlaylistFile('E:\\q.m3u', deps)).resolves.toEqual({ status: 'empty' })
+    expect(addPaths).not.toHaveBeenCalled()
+  })
+
   it('reports the added entry count for a single playlist', async () => {
     const { deps } = makeDeps(async () => ['E:\\a.mkv', 'E:\\b.mkv'])
     await expect(appendPlaylistFile('E:\\q.m3u8', deps)).resolves.toEqual({

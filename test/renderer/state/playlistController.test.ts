@@ -164,6 +164,21 @@ describe('playlist controller — add-and-maybe-play', () => {
     expect(load).not.toHaveBeenCalled()
     expect(controller.getState().playlist.entries).toEqual([])
   })
+
+  it('does not report autoplay for an append containing only URLs', async () => {
+    const controller = createPlaylistController()
+    const { deps, load } = okLoad()
+
+    const started = await controller.addPathsAndMaybePlay(
+      ['https://host/stream.m3u8', 'HTTP://host/live'],
+      false,
+      deps
+    )
+
+    expect(started).toBe(false)
+    expect(load).not.toHaveBeenCalled()
+    expect(controller.getState().playlist.entries).toEqual([])
+  })
 })
 
 describe('playlist controller — explicit navigation', () => {
@@ -178,18 +193,15 @@ describe('playlist controller — explicit navigation', () => {
     expect(controller.getState().playlist.currentIndex).toBe(1)
   })
 
-  it('advances normally over an http(s) URL entry', async () => {
-    const url = 'https://host/stream.m3u8'
+  it('drops HTTP and HTTPS URL entries before they reach the playlist', async () => {
     const controller = createPlaylistController()
-    controller.addPaths([A, url, C])
+    controller.addPaths([A, 'https://host/stream.m3u8', 'HTTP://host/live', C])
     const { deps, load } = okLoad()
 
     await controller.playAt(1, deps)
-    expect(load).toHaveBeenCalledWith(url)
+    expect(controller.getState().playlist.entries).toEqual([A, C])
+    expect(load).toHaveBeenCalledWith(C)
     expect(controller.getState().playlist.currentIndex).toBe(1)
-
-    await controller.next(deps)
-    expect(controller.getState().playlist.currentIndex).toBe(2)
   })
 
   it('playAt ignores an out-of-range index without loading', async () => {

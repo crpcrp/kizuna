@@ -9,7 +9,6 @@ export interface MediaMenuProps {
   playlistOpen?: boolean
   hasPlaylist?: boolean
   onOpenFile: () => void
-  onOpenUrl?: () => void
   onPrevFile?: () => void
   onNextFile?: () => void
   onOpenRecent?: (path: string) => void
@@ -44,13 +43,6 @@ export function MediaMenu({
         id="open-file"
         disabled={mediaOpening}
         onClick={run(props.onOpenFile)}
-      />
-      <CommandItem
-        label="Open URL…"
-        ariaLabel="Open URL"
-        id="open-url"
-        disabled={mediaOpening}
-        onClick={run(() => props.onOpenUrl?.())}
       />
       <MenuItem
         label="Previous file"

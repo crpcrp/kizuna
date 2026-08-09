@@ -43,23 +43,15 @@ describe('media history paths', () => {
     expect(normalizeMediaPath('   ', posix)).toBeUndefined()
   })
 
-  it('passes network URLs through untouched and case-preserved on both platforms', () => {
+  it('rejects network URLs on both platforms', () => {
     const posix = { platform: 'posix' as const, cwd: '/home/kizuna' }
     const url = 'https://Host.example/Path/To?q=A&B=c'
-    // No separator folding, no cwd resolution, no case-folding of the key —
-    // identical byte-for-byte on win32 and posix, unlike a filesystem path.
     for (const platform of [windows, posix]) {
-      expect(normalizeMediaPath(url, platform)).toBe(url)
-      expect(mediaPathKey(url, platform)).toBe(url)
+      expect(normalizeMediaPath(url, platform)).toBeUndefined()
+      expect(mediaPathKey(url, platform)).toBeUndefined()
     }
-    expect(normalizeMediaPath('  https://host/x  ', windows)).toBe('https://host/x')
-    // Case-sensitive: two URLs differing only in case are distinct keys, even
-    // on win32 where local paths would collapse together.
-    expect(mediaPathKey('https://host/A', windows)).not.toBe(
-      mediaPathKey('https://host/a', windows)
-    )
-    // A backslash-bearing URL is not rewritten into a Windows path.
-    expect(normalizeMediaPath('http://host/a\\b', windows)).toBe('http://host/a\\b')
+    expect(normalizeMediaPath('  https://host/x  ', windows)).toBeUndefined()
+    expect(normalizeMediaPath('http://host/a\\b', windows)).toBeUndefined()
   })
 })
 
@@ -198,7 +190,7 @@ describe('media-history normalization', () => {
     expect(history.playbackByPath['c:\\media\\500.mkv']).toBeDefined()
   })
 
-  it('keeps a URL recent file and playback entry under its case-preserved URL key', () => {
+  it('drops stale URL recent and playback entries while normalizing history', () => {
     const history = normalizeMediaHistory(
       {
         recentFiles: [{ path: 'https://Host.example/Watch?v=Ab', openedAt: 5 }],
@@ -208,10 +200,8 @@ describe('media-history normalization', () => {
       },
       windows
     )
-    expect(history.recentFiles).toEqual([{ path: 'https://Host.example/Watch?v=Ab', openedAt: 5 }])
-    expect(history.playbackByPath).toEqual({
-      'https://Host.example/Watch?v=Ab': { positionSeconds: 42, updatedAt: 9 }
-    })
+    expect(history.recentFiles).toEqual([])
+    expect(history.playbackByPath).toEqual({})
   })
 
   it('normalizes valid track selections and rejects malformed IDs', () => {

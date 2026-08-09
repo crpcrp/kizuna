@@ -135,7 +135,7 @@ export interface BottomBarProps {
   /** Absolute path of the loaded file, for seekbar hover thumbnails. */
   mediaPath?: string
   /** Whether hover previews are available — false for audio-only files (no
-   * video stream) and remote URLs. Off disables the hover fetch entirely. */
+   * video stream) and unsupported sources. Off disables the hover fetch entirely. */
   thumbnailsEnabled?: boolean
   /** Injectable thumbnail fetch (tests); defaults to the preload bridge. */
   thumbnailFetch?: ThumbnailFetch

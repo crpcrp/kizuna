@@ -35,7 +35,6 @@ function quitEvent(): PreventableQuitEvent & { preventDefault: ReturnType<typeof
 
 function makeFixture(appQuit?: () => void) {
   const calls: string[] = []
-  const cleanup = deferred<void>()
   const controllerQuit = deferred<void>()
   const errors: Array<{ operation: string; error: unknown }> = []
   const session = { flushStorageData: vi.fn(() => calls.push('flush')) }
@@ -52,14 +51,10 @@ function makeFixture(appQuit?: () => void) {
     flushHistory: vi.fn(() => calls.push('history')),
     releasePowerSave: vi.fn(() => calls.push('power')),
     disposeSystemMedia: vi.fn(() => calls.push('systemMedia')),
-    cleanupUrlSubtitles: vi.fn(() => {
-      calls.push('urlSubs')
-      return cleanup.promise
-    }),
     appQuit: vi.fn(appQuit),
     onError: (operation, error) => errors.push({ operation, error })
   })
-  return { calls, cleanup, controllerQuit, controller, errors, handler }
+  return { calls, controllerQuit, controller, errors, handler }
 }
 
 describe('createQuitCoordinator', () => {
@@ -78,57 +73,32 @@ describe('createQuitCoordinator', () => {
     fixture.handler(event)
 
     expect(event.preventDefault).toHaveBeenCalledOnce()
-    expect(fixture.calls).toEqual(['systemMedia', 'power', 'urlSubs', 'history', 'flush', 'quit'])
+    expect(fixture.calls).toEqual(['systemMedia', 'power', 'history', 'flush', 'quit'])
 
-    fixture.cleanup.resolve()
     fixture.controllerQuit.resolve()
     await flushMicrotasks()
 
     expect(fixture.controller.dispose).not.toHaveBeenCalled()
   })
 
-  it('waits for both asynchronous cleanup operations before calling app.quit', async () => {
+  it('waits for controller quit before calling app.quit', async () => {
     const appQuit = vi.fn()
     const fixture = makeFixture(appQuit)
     const event = quitEvent()
 
     fixture.handler(event)
-    fixture.cleanup.resolve()
-    await flushMicrotasks()
-    expect(appQuit).not.toHaveBeenCalled()
-
     fixture.controllerQuit.resolve()
     await flushMicrotasks()
     expect(appQuit).toHaveBeenCalledOnce()
   })
 
-  it('continues after URL-subtitle cleanup rejects and waits for controller quit', async () => {
-    const fixture = makeFixture()
-    const event = quitEvent()
-    const error = new Error('cache cleanup failed')
-
-    fixture.handler(event)
-    fixture.cleanup.reject(error)
-    await flushMicrotasks()
-    expect(fixture.controller.quit).toHaveBeenCalledOnce()
-    expect(fixture.errors).toHaveLength(0)
-
-    fixture.controllerQuit.resolve()
-    await flushMicrotasks()
-    expect(fixture.errors).toEqual([{ operation: 'URL-subtitle cleanup', error }])
-  })
-
-  it('continues after controller quit rejects and waits for URL cleanup', async () => {
+  it('reports a controller quit failure', async () => {
     const fixture = makeFixture()
     const event = quitEvent()
     const error = new Error('mpv quit failed')
 
     fixture.handler(event)
     fixture.controllerQuit.reject(error)
-    await flushMicrotasks()
-    expect(fixture.errors).toHaveLength(0)
-
-    fixture.cleanup.resolve()
     await flushMicrotasks()
     expect(fixture.errors).toEqual([{ operation: 'mpv quit', error }])
   })
@@ -139,7 +109,6 @@ describe('createQuitCoordinator', () => {
     const event = quitEvent()
 
     fixture.handler(event)
-    fixture.cleanup.resolve()
     await vi.advanceTimersByTimeAsync(SHUTDOWN_TIMEOUT_MS)
 
     expect(fixture.controller.dispose).toHaveBeenCalledOnce()
@@ -162,10 +131,9 @@ describe('createQuitCoordinator', () => {
 
     expect(firstEvent.preventDefault).toHaveBeenCalledOnce()
     expect(secondEvent.preventDefault).toHaveBeenCalledOnce()
-    expect(fixture.calls).toEqual(['systemMedia', 'power', 'urlSubs', 'history', 'flush', 'quit'])
+    expect(fixture.calls).toEqual(['systemMedia', 'power', 'history', 'flush', 'quit'])
     expect(fixture.controller.quit).toHaveBeenCalledOnce()
 
-    fixture.cleanup.resolve()
     fixture.controllerQuit.resolve()
     await flushMicrotasks()
   })
@@ -178,14 +146,13 @@ describe('createQuitCoordinator', () => {
     handlerRef.current = fixture.handler
 
     fixture.handler(quitEvent())
-    fixture.cleanup.resolve()
     fixture.controllerQuit.resolve()
     await flushMicrotasks()
 
     expect(appQuit).toHaveBeenCalledOnce()
     expect(reentrantEvent.preventDefault).not.toHaveBeenCalled()
     expect(fixture.controller.quit).toHaveBeenCalledOnce()
-    expect(fixture.calls).toEqual(['systemMedia', 'power', 'urlSubs', 'history', 'flush', 'quit'])
+    expect(fixture.calls).toEqual(['systemMedia', 'power', 'history', 'flush', 'quit'])
   })
 
   it('observes rejected shutdown promises without leaving unhandled rejections', async () => {
@@ -194,10 +161,9 @@ describe('createQuitCoordinator', () => {
     try {
       const fixture = makeFixture()
       fixture.handler(quitEvent())
-      fixture.cleanup.reject(new Error('cleanup failed'))
       fixture.controllerQuit.reject(new Error('quit failed'))
       await flushMicrotasks()
-      expect(fixture.errors).toHaveLength(2)
+      expect(fixture.errors).toHaveLength(1)
       expect(unhandled).not.toHaveBeenCalled()
     } finally {
       process.off('unhandledRejection', unhandled)
@@ -216,16 +182,13 @@ describe('createAppLifecycleCoordinator', () => {
         },
         dispose: vi.fn()
       },
-      cleanupUrlSubtitles: async () => {
-        calls.push('urlSubs')
-      },
       flushHistory: () => calls.push('history'),
       appQuit: vi.fn()
     })
 
     await lifecycle.prepareForInstall(() => calls.push('install'))
 
-    expect(calls).toEqual(['urlSubs', 'history', 'flush', 'mpv', 'install'])
+    expect(calls).toEqual(['history', 'flush', 'mpv', 'install'])
     const reentrantEvent = quitEvent()
     lifecycle.handleBeforeQuit(reentrantEvent)
     expect(reentrantEvent.preventDefault).not.toHaveBeenCalled()

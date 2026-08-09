@@ -175,7 +175,7 @@ describe('mineMediaContext', () => {
     expect(
       mineMediaContext(
         { start: 10, end: 12 },
-        { ...source, filePath: 'https://www.youtube.com/watch?v=abc' }
+        { ...source, filePath: 'https://host.example/media' }
       )
     ).toBeUndefined()
   })

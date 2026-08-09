@@ -11,8 +11,6 @@ import {
   type VideoEqProperty
 } from '../../shared/playerSettings'
 import { parseAudioDeviceList, type AudioDevice } from '../../shared/audioDevice'
-import { parseTrackList, type Track, type VideoDimensions } from '../../shared/track'
-import { ytdlpFormatForQuality, type YtdlpQuality } from '../../shared/ytdlpQuality'
 import { spawn } from 'node:child_process'
 import { unlinkSync } from 'node:fs'
 import { MpvIpcClient, type ConnectOptions, type MpvMessage } from './ipcClient'
@@ -32,41 +30,6 @@ export class MpvLoadError extends Error {
     this.name = 'MpvLoadError'
   }
 }
-
-/**
- * `loadFile` rejection when a URL open never settled within its
- * `timeoutMs`: mpv accepted `loadfile` but emitted neither `file-loaded` nor
- * `end-file`, so the load path sent `['stop']` to unstick it. Extends
- * `MpvLoadError` because the stop drops mpv to idle exactly like a real load
- * failure — the player bridge's `instanceof MpvLoadError` check must release
- * the power-save blocker and the renderer open-lock. Distinguishable by name
- * so the renderer can show a timeout-specific message.
- */
-export class MpvLoadTimeoutError extends MpvLoadError {
-  constructor(message: string) {
-    super(message)
-    this.name = 'MpvLoadTimeoutError'
-  }
-}
-
-/**
- * `loadFile` rejection when the user (or a later open) cancelled an in-flight
- * load via `cancelLoad()`. Like the timeout, it goes through the stop-and-reject
- * path and extends `MpvLoadError` so the pending open-lock is released.
- */
-export class MpvLoadCancelledError extends MpvLoadError {
-  constructor(message: string) {
-    super(message)
-    this.name = 'MpvLoadCancelledError'
-  }
-}
-
-/** The default `loadFile` timeout applied to URL opens (see playerBridge). */
-export const URL_LOAD_TIMEOUT_MS = 60_000
-
-/** Injected `setTimeout`/`clearTimeout` seam so load-timeout tests stay fast. */
-export type SetTimeoutFn = (cb: () => void, ms: number) => unknown
-export type ClearTimeoutFn = (handle: unknown) => void
 
 export interface BuildMpvArgsOptions {
   /** Host windowing/video-output platform. */
@@ -90,13 +53,6 @@ export interface BuildMpvArgsOptions {
    * file-smuggling args can't slip in.
    */
   extraArgs?: string[]
-  /**
-   * Absolute path to the bundled `yt-dlp` binary. When set, the
-   * forced block enables mpv's ytdl hook and points it at this binary so
-   * pasted stream/YouTube URLs resolve. Left undefined in a dev checkout with
-   * no bundled binary — mpv still plays direct-stream URLs without ytdl.
-   */
-  ytdlpPath?: string
 }
 
 /**
@@ -106,9 +62,7 @@ export interface BuildMpvArgsOptions {
  * unrelated-looking options that reach code execution or arbitrary file reads —
  * `--script`/`--scripts` (runs Lua), `--input-conf` (reads any file),
  * `--input-commands` (runs input.conf commands, and the `run` command spawns a
- * detached process), `--ytdl-raw-options` (documented as passing arbitrary
- * unchecked options to youtube-dl, whose own `--exec` runs a command) — and
- * every new mpv release can add more. Since `extraArgs` comes from
+ * detached process) — and every new mpv release can add more. Since `extraArgs` comes from
  * `settings.json` / `playerSettings:setSettings`, an unknown option must fail
  * closed, not open.
  *
@@ -186,24 +140,12 @@ export function buildMpvArgs({
   windowId,
   ipcEndpoint,
   userConfigDir,
-  extraArgs = [],
-  ytdlpPath
+  extraArgs = []
 }: BuildMpvArgsOptions): string[] {
   const configArgs =
     userConfigDir === undefined
       ? ['--no-config'] // block mpv from reading the user's global config
       : ['--config=yes', `--config-dir=${userConfigDir}`]
-  // ytdl hook: only when the binary is bundled. Points mpv's
-  // ytdl_hook at our yt-dlp so pasted URLs resolve; part of the forced block so
-  // user extraArgs can't accidentally disable streaming.
-  const ytdlArgs =
-    ytdlpPath === undefined
-      ? []
-      : [
-          '--ytdl=yes',
-          `--script-opts-append=ytdl_hook-ytdl_path=${ytdlpPath}`,
-          '--script-opts-append=ytdl_hook-use_manifests=no'
-        ]
   // Linux embedding runs through Electron's X11 path under X11/XWayland.
   // The legacy X11 output is intentionally the correctness baseline: unlike
   // x11egl it renders in software-only/Xvfb sessions and on machines whose EGL
@@ -223,8 +165,7 @@ export function buildMpvArgs({
     '--no-osc', // Kizuna's DOM draws all controls
     '--no-input-default-bindings', // Kizuna owns keyboard input
     '--sid=no', // subtitles render in the DOM, never by mpv
-    '--volume-max=200', // raise mpv's software-boost ceiling so setVolume can go past 100
-    ...ytdlArgs
+    '--volume-max=200' // raise mpv's software-boost ceiling so setVolume can go past 100
   ]
 }
 
@@ -255,21 +196,6 @@ export interface MpvControllerDeps {
   tempDir?: string
   /** Filesystem seam for deterministic Linux endpoint cleanup tests. */
   unlinkFn?: UnlinkFn
-  /** Fakeable timer for load timeouts; defaults to the global `setTimeout`. */
-  setTimeoutFn?: SetTimeoutFn
-  /** Fakeable timer clear; defaults to the global `clearTimeout`. */
-  clearTimeoutFn?: ClearTimeoutFn
-}
-
-/** Options for a single `loadFile` call. */
-export interface LoadFileOptions {
-  /**
-   * When set, the load rejects with `MpvLoadTimeoutError` if mpv emits neither
-   * `file-loaded` nor `end-file` within this many milliseconds — the stalled-URL
-   * case that would otherwise leave the promise pending forever.
-   * Local opens omit it and keep the original no-timeout behavior.
-   */
-  timeoutMs?: number
 }
 
 export interface StartOptions {
@@ -281,27 +207,16 @@ export interface StartOptions {
   userConfigDir?: string
   /** User escape-hatch args; sanitized and forwarded to `buildMpvArgs`. */
   extraArgs?: string[]
-  /** Bundled yt-dlp path; forwarded to `buildMpvArgs` to enable the ytdl hook. */
-  ytdlpPath?: string
 }
 
 export class MpvController {
   private readonly spawnFn: SpawnFn
   private readonly client: MpvClientLike
-  private readonly setTimeoutFn: SetTimeoutFn
-  private readonly clearTimeoutFn: ClearTimeoutFn
   private readonly platform: NodeJS.Platform
   private readonly tempDir: string | undefined
   private readonly unlinkFn: UnlinkFn
   private proc: MpvProcessLike | null = null
   private ipcEndpoint: string | null = null
-  /**
-   * Abort hook for the currently in-flight `loadFile`, or null when none is
-   * pending. `cancelLoad()` invokes it to settle the load early via the same
-   * stop-and-reject path a timeout uses.
-   */
-  private pendingLoadAbort: ((error: Error) => void) | null = null
-
   constructor(deps: MpvControllerDeps = {}) {
     this.spawnFn =
       deps.spawnFn ??
@@ -309,9 +224,6 @@ export class MpvController {
         return spawn(cmd, args, { stdio: 'ignore' })
       })
     this.client = deps.client ?? new MpvIpcClient()
-    this.setTimeoutFn = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms))
-    this.clearTimeoutFn =
-      deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
     this.platform = deps.platform ?? process.platform
     this.tempDir = deps.tempDir
     this.unlinkFn = deps.unlinkFn ?? unlinkSync
@@ -352,8 +264,7 @@ export class MpvController {
     windowId,
     connect,
     userConfigDir,
-    extraArgs,
-    ytdlpPath
+    extraArgs
   }: StartOptions): Promise<void> {
     if (this.proc) throw new Error('MpvController: already started')
     const ipcEndpoint = createMpvIpcEndpoint(this.platform, this.tempDir)
@@ -376,8 +287,7 @@ export class MpvController {
           windowId,
           ipcEndpoint,
           userConfigDir,
-          extraArgs,
-          ytdlpPath
+          extraArgs
         })
       )
       const proc = this.proc
@@ -419,35 +329,15 @@ export class MpvController {
    * outgoing file before `file-loaded` for the new one, and that must not be
    * mistaken for a failure.
    */
-  loadFile(path: string, opts: LoadFileOptions = {}): Promise<unknown> {
+  loadFile(path: string): Promise<unknown> {
     return new Promise((resolve, reject) => {
       let commandResult: unknown
       let commandAcknowledged = false
       let fileLoaded = false
       let settled = false
-      let timer: unknown = null
-
       const cleanup = (): void => {
         this.client.off('file-loaded', onFileLoaded)
         this.client.off('end-file', onEndFile)
-        if (timer !== null) {
-          this.clearTimeoutFn(timer)
-          timer = null
-        }
-        // Only clear the shared abort hook if it still points at this load —
-        // a later loadFile may already own it.
-        if (this.pendingLoadAbort === abort) this.pendingLoadAbort = null
-      }
-      // Stop-and-reject path shared by the load timeout and `cancelLoad()`:
-      // send `['stop']` to unstick a stalled mpv, drop listeners, and reject
-      // with the given (timeout/cancel) error. Best-effort — a failed stop
-      // still rejects the load and releases the caller's open-lock.
-      const abort = (error: Error): void => {
-        if (settled) return
-        settled = true
-        cleanup()
-        void this.client.sendCommand(['stop']).catch(() => {})
-        reject(error)
       }
       const onFileLoaded = (): void => {
         fileLoaded = true
@@ -475,15 +365,6 @@ export class MpvController {
       // file-loaded before the command acknowledgement is delivered.
       this.client.on('file-loaded', onFileLoaded)
       this.client.on('end-file', onEndFile)
-      // Expose the abort hook so cancelLoad() can settle this load, and arm the
-      // timeout when one was requested (URL opens only).
-      this.pendingLoadAbort = abort
-      if (opts.timeoutMs !== undefined) {
-        timer = this.setTimeoutFn(
-          () => abort(new MpvLoadTimeoutError('MpvController: timed out loading the file')),
-          opts.timeoutMs
-        )
-      }
       void this.client.sendCommand(['loadfile', path]).then(
         (result) => {
           commandResult = result
@@ -498,15 +379,6 @@ export class MpvController {
         }
       )
     })
-  }
-
-  /**
-   * Aborts the in-flight `loadFile` (if any) immediately, settling it through
-   * the same stop-and-reject path a timeout uses so the renderer's open-lock is
-   * released. No-op when no load is pending.
-   */
-  cancelLoad(): void {
-    this.pendingLoadAbort?.(new MpvLoadCancelledError('MpvController: load cancelled'))
   }
 
   setPause(paused: boolean): Promise<unknown> {
@@ -570,40 +442,6 @@ export class MpvController {
   }
 
   /**
-   * Reads mpv's `track-list` (audio/subtitle/video streams of the current
-   * file or URL). URL playback uses this, where ffprobe never runs, to
-   * populate the audio-track menu. The reply is parsed defensively —
-   * a non-array/garbage payload yields `[]` rather than throwing.
-   */
-  async getTrackList(): Promise<Track[]> {
-    const raw = await this.client.sendCommand(['get_property', 'track-list'])
-    return parseTrackList(raw)
-  }
-
-  /**
-   * Reads the current file's displayed video resolution from mpv
-   * (`video-params/dw` / `video-params/dh` — display dimensions, so anamorphic
-   * content reports its corrected size). The URL path's counterpart to
-   * ffprobe's `getVideoDimensions`; resolves undefined when no video is
-   * playing or mpv reports a non-positive/absent value. Never throws — a
-   * still-loading stream must not break the size-preset menu.
-   */
-  async getVideoDimensions(): Promise<VideoDimensions | undefined> {
-    const positive = (v: unknown): v is number =>
-      typeof v === 'number' && Number.isFinite(v) && v > 0
-    try {
-      const [dw, dh] = await Promise.all([
-        this.client.sendCommand(['get_property', 'video-params/dw']),
-        this.client.sendCommand(['get_property', 'video-params/dh'])
-      ])
-      if (!positive(dw) || !positive(dh)) return undefined
-      return { width: dw, height: dh }
-    } catch {
-      return undefined
-    }
-  }
-
-  /**
    * Reads mpv's `audio-device-list` (the output devices it can switch to, plus
    * the always-present `'auto'`). The reply is parsed defensively — a
    * non-array/garbage payload yields `[]` rather than throwing — so the caller
@@ -641,11 +479,6 @@ export class MpvController {
       on ? 'add' : 'remove',
       '@kizuna-norm:lavfi=[dynaudnorm=f=200]'
     ])
-  }
-
-  /** Sets only mpv's ytdl-hook format policy for a later `loadfile`; it never reloads media. */
-  setYtdlpQuality(quality: YtdlpQuality): Promise<unknown> {
-    return this.client.sendCommand(['set_property', 'ytdl-format', ytdlpFormatForQuality(quality)])
   }
 
   /**

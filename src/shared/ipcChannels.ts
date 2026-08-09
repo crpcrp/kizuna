@@ -40,23 +40,12 @@ export const PLAYER_CHANNELS = {
   setMuted: 'player:setMuted',
   setAudioDelay: 'player:setAudioDelay',
   setAudioTrack: 'player:setAudioTrack',
-  /** renderer→main: read mpv's `track-list` (audio/subtitle streams) for the
-   * URL path, where ffprobe never runs. */
-  getTrackList: 'player:getTrackList',
-  /** renderer→main: read mpv's `video-params` resolution for the URL path,
-   *  where ffprobe never runs. */
-  getVideoDimensions: 'player:getVideoDimensions',
-  /** renderer→main: abort an in-flight `player:load` (stream timeout hedge or
-   * user Cancel); triggers mpv `stop` and rejects the pending load. */
-  cancelLoad: 'player:cancelLoad',
   /** renderer→main: read mpv's `audio-device-list` for the Audio > Device menu. */
   getAudioDevices: 'player:getAudioDevices',
   /** renderer→main: switch the active output device live (payload: device name). */
   setAudioDevice: 'player:setAudioDevice',
   /** renderer→main: toggle the dynaudnorm loudness filter (payload: boolean). */
   setLoudnessNorm: 'player:setLoudnessNorm',
-  /** renderer→main: select the safe yt-dlp format policy for the next URL load. */
-  setYtdlpQuality: 'player:setYtdlpQuality',
   /** renderer→main: set/clear the native A–B loop (payload: a, b in seconds or null). */
   setAbLoop: 'player:setAbLoop',
   setVideoMargins: 'player:setVideoMargins',
@@ -232,18 +221,6 @@ export const PLAYER_SETTINGS_CHANNELS = {
   /** renderer→main: create (if needed) and reveal Kizuna's mpv config folder
    * in the OS file manager (Options → Playback → "Open mpv config folder"). */
   openMpvConfigDir: 'playerSettings:openMpvConfigDir'
-} as const
-
-/**
- * URL-subtitle bridge (yt-dlp): renderer→main invoke channels to enumerate the
- * provided/auto subtitle tracks of the active extractor URL and acquire one
- * normalized track, plus a fire-and-forget cancel. Every input is validated in
- * main; no renderer-supplied flag, path, or URL reaches yt-dlp.
- */
-export const URL_SUBTITLE_CHANNELS = {
-  enumerate: 'urlSubtitles:enumerate',
-  acquire: 'urlSubtitles:acquire',
-  cancel: 'urlSubtitles:cancel'
 } as const
 
 /**

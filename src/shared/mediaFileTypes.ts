@@ -9,16 +9,16 @@ export const PLAYLIST_EXTENSIONS = ['m3u', 'm3u8'] as const
 export type DroppedFileKind = 'video' | 'subtitle' | 'playlist' | 'unknown'
 
 /**
- * True when `path` is an `http:`/`https:` network URL rather than a local
- * filesystem path. The single source of truth for the remote/local
- * branch: every call site that would otherwise probe with ffprobe, normalize as
- * a filesystem path, or touch `fs` checks this first. Only the two web schemes
- * count — `file:`, `ftp:`, bare hostnames, and Windows drive paths
- * (`C:\…`, whose `C:` is a drive letter, not a URL scheme) all stay local.
+ * True when `path` begins with a URL scheme rather than naming a local
+ * filesystem path. Every playback entry point uses this check before probing,
+ * normalizing, or passing a path to mpv. Windows drive paths are explicitly
+ * excluded because their leading letter and colon are not a URL scheme.
  */
 export function isRemoteUrl(path: unknown): boolean {
   if (typeof path !== 'string') return false
-  return /^https?:\/\//i.test(path.trim())
+  const trimmed = path.trim()
+  if (/^[A-Za-z]:[\\/]/.test(trimmed)) return false
+  return /^[A-Za-z][A-Za-z0-9+.-]*:/.test(trimmed)
 }
 
 function extensionOf(fileName: string): string {

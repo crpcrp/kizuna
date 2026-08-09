@@ -161,6 +161,8 @@ describe.each(PATH_PLATFORMS)(
       expect(await service.extract({ ...media, endSec: Number.NaN })).toBeNull()
       expect(await service.extract({ ...media, audioStreamIndex: -1 })).toBeNull()
       expect(await service.extract({ ...media, path: '' })).toBeNull()
+      expect(await service.extract({ ...media, path: 'https://host.example/audio' })).toBeNull()
+      expect(await service.extract({ ...media, path: 'rtsp://host.example/live' })).toBeNull()
       expect(calls.exec).toEqual([])
     })
   }

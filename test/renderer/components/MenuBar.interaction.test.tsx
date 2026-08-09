@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { APPLY_FOLDER_FEEDBACK_MS } from '@src/renderer/src/components/menu/utils'
@@ -25,66 +25,6 @@ afterEach(() => {
 })
 
 describe('MenuBar interactions', () => {
-  it('shows ordered extractor Quality choices, selects one, and suppresses duplicate or in-flight picks', () => {
-    const onSetYtdlpQuality = vi.fn()
-    const { rerender, props } = renderMenu({
-      qualityVisible: true,
-      quality: '1080',
-      onSetYtdlpQuality
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
-    const labels = [
-      'Best available',
-      '2160p or lower',
-      '1440p or lower',
-      '1080p or lower',
-      '720p or lower',
-      '480p or lower',
-      '360p or lower',
-      'Lowest available'
-    ]
-    const videoMenu = screen.getByRole('button', { name: 'Video' }).parentElement!
-    const labelOf = (item: Element): string =>
-      item.querySelector('.menu-item-label')?.textContent ?? ''
-    const items = within(videoMenu)
-      .getAllByRole('menuitemradio')
-      .filter((item) => labels.includes(labelOf(item)))
-    expect(items.map(labelOf)).toEqual(labels)
-    expect(items.map((item) => item.getAttribute('aria-checked'))).toEqual([
-      'false',
-      'false',
-      'false',
-      'true',
-      'false',
-      'false',
-      'false',
-      'false'
-    ])
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '1080p or lower' }))
-    expect(onSetYtdlpQuality).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '720p or lower' }))
-    expect(onSetYtdlpQuality).toHaveBeenCalledOnce()
-    expect(onSetYtdlpQuality).toHaveBeenCalledWith('720')
-
-    rerender(<MenuBar {...props} qualityReloading />)
-    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
-    const reloadingChoice = screen.getByRole('menuitemradio', { name: '480p or lower' })
-    expect((reloadingChoice as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(reloadingChoice)
-    expect(onSetYtdlpQuality).toHaveBeenCalledOnce()
-  })
-
-  it('omits Quality choices when the current media is not extractor-backed', () => {
-    renderMenu({ qualityVisible: false })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Video' }))
-    expect(screen.queryByRole('menuitemradio', { name: 'Best available' })).toBeNull()
-    expect(screen.queryByText('Quality')).toBeNull()
-  })
-
   it('toggles the sidebar and closes the Subtitle menu', () => {
     const onToggleSidebar = vi.fn()
     renderMenu({ onToggleSidebar })
@@ -119,37 +59,6 @@ describe('MenuBar interactions', () => {
     view.unmount()
     vi.runOnlyPendingTimers()
     expect(clearTimeout).toHaveBeenCalledTimes(2)
-  })
-
-  it('on a URL, the sole subtitle Off clears the online caption, not the (absent) embedded one', () => {
-    const onSelectSubtitle = vi.fn()
-    const onSelectUrlSubtitleOff = vi.fn()
-    renderMenu({
-      tracks: [],
-      onSelectSubtitle,
-      onSelectUrlSubtitleOff,
-      urlSubtitleMenu: {
-        status: 'ready',
-        tracks: [
-          {
-            kind: 'provided',
-            lang: 'en',
-            label: 'English',
-            formats: ['srt'],
-            selectionId: 'provided:en'
-          }
-        ]
-      }
-    })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitle' }))
-    // The embedded Off is collapsed away, so exactly one Off remains.
-    const offItems = screen.getAllByRole('menuitemradio', { name: 'Off' })
-    expect(offItems).toHaveLength(1)
-
-    fireEvent.click(offItems[0])
-    expect(onSelectUrlSubtitleOff).toHaveBeenCalledOnce()
-    expect(onSelectSubtitle).not.toHaveBeenCalled()
   })
 
   it('opens Settings and routes Options and About Kizuna separately', () => {
@@ -319,132 +228,6 @@ describe('MenuBar audio delay row', () => {
 
     expect(onChangeAudioDelay).not.toHaveBeenCalled()
     expect(input.value).toBe('75')
-  })
-})
-
-describe('MenuBar online-subtitles language filter', () => {
-  const LANGS = [
-    ['ja', 'Japanese'],
-    ['en', 'English'],
-    ['de', 'German'],
-    ['fr', 'French'],
-    ['es', 'Spanish'],
-    ['it', 'Italian'],
-    ['ru', 'Russian'],
-    ['pt', 'Portuguese'],
-    ['ko', 'Korean'],
-    ['zh', 'Chinese'],
-    ['nl', 'Dutch'],
-    ['pl', 'Polish']
-  ] as const
-
-  const readyMenu = (count: number) => ({
-    status: 'ready' as const,
-    tracks: LANGS.slice(0, count).map(([lang, label]) => ({
-      kind: 'provided' as const,
-      lang,
-      label,
-      formats: ['srt'],
-      selectionId: `provided:${lang}`
-    }))
-  })
-
-  const openSubtitle = (): void => {
-    fireEvent.click(screen.getByRole('button', { name: 'Subtitle' }))
-  }
-
-  it('renders the filter box above 8 tracks and hides it at or below', () => {
-    const many = renderMenu({ urlSubtitleMenu: readyMenu(12) })
-    openSubtitle()
-    expect(screen.getByRole('textbox', { name: 'Filter subtitle languages' })).toBeTruthy()
-    many.unmount()
-
-    renderMenu({ urlSubtitleMenu: readyMenu(3) })
-    openSubtitle()
-    expect(screen.queryByRole('textbox', { name: 'Filter subtitle languages' })).toBeNull()
-  })
-
-  it('narrows the list live, leaving only matching rows and the Off row', () => {
-    renderMenu({ urlSubtitleMenu: readyMenu(12) })
-    openSubtitle()
-    const input = screen.getByRole('textbox', { name: 'Filter subtitle languages' })
-    fireEvent.change(input, { target: { value: 'jap' } })
-
-    const section = document.getElementById('online-subtitles')!
-    const rows = within(section).getAllByRole('menuitemradio')
-    expect(rows.map((r) => r.getAttribute('aria-label') ?? r.textContent)).toContain('Off')
-    const selectionIds = within(section)
-      .getAllByRole('menuitemradio')
-      .map((r) => r.getAttribute('data-selection-id'))
-      .filter((id): id is string => id !== null)
-    expect(selectionIds).toEqual(['provided:ja'])
-  })
-
-  it('shows "No matching language" on a junk query while Off stays clickable', () => {
-    const onSelectUrlSubtitleOff = vi.fn()
-    renderMenu({ urlSubtitleMenu: readyMenu(12), onSelectUrlSubtitleOff })
-    openSubtitle()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Filter subtitle languages' }), {
-      target: { value: 'zzzz' }
-    })
-
-    const section = document.getElementById('online-subtitles')!
-    expect(within(section).getByText('No matching language')).toBeTruthy()
-    // No language rows survive, but Off remains.
-    expect(
-      within(section)
-        .getAllByRole('menuitemradio')
-        .filter((r) => r.getAttribute('data-selection-id') !== null)
-    ).toHaveLength(0)
-    fireEvent.click(within(section).getByRole('menuitemradio', { name: 'Off' }))
-    expect(onSelectUrlSubtitleOff).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the currently selected row visible even when the query excludes it', () => {
-    renderMenu({ urlSubtitleMenu: readyMenu(12), urlSubtitleSelectedId: 'provided:de' })
-    openSubtitle()
-    fireEvent.change(screen.getByRole('textbox', { name: 'Filter subtitle languages' }), {
-      target: { value: 'jap' }
-    })
-
-    const section = document.getElementById('online-subtitles')!
-    const selectionIds = within(section)
-      .getAllByRole('menuitemradio')
-      .map((r) => r.getAttribute('data-selection-id'))
-      .filter((id): id is string => id !== null)
-    // The excluded-but-selected German row is re-inserted alongside the match.
-    expect(selectionIds).toContain('provided:de')
-    expect(selectionIds).toContain('provided:ja')
-    const german = within(section).getByText('German').closest('button')!
-    expect(german.getAttribute('aria-checked')).toBe('true')
-  })
-
-  it('clears the box on Escape without closing the Subtitle panel', () => {
-    renderMenu({ urlSubtitleMenu: readyMenu(12) })
-    openSubtitle()
-    const input = screen.getByRole('textbox', {
-      name: 'Filter subtitle languages'
-    }) as HTMLInputElement
-    fireEvent.change(input, { target: { value: 'jap' } })
-    expect(input.value).toBe('jap')
-
-    fireEvent.keyDown(input, { key: 'Escape' })
-    expect(input.value).toBe('')
-    // The menu's own window-level Escape closer must not have fired.
-    expect(screen.getByRole('button', { name: 'Subtitle' }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
-  })
-
-  it('does not close the menu when the filter box is clicked', () => {
-    renderMenu({ urlSubtitleMenu: readyMenu(12) })
-    openSubtitle()
-    const input = screen.getByRole('textbox', { name: 'Filter subtitle languages' })
-
-    fireEvent.pointerDown(input)
-    expect(screen.getByRole('button', { name: 'Subtitle' }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
   })
 })
 

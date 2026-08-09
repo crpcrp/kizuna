@@ -1,6 +1,6 @@
 // Audio and subtitle track selection: applying a track to mpv, reflecting it in
 // state, persisting the choice against the file, and building the synthetic
-// tracks that external/online subtitle files are represented by.
+// tracks that external subtitle files are represented by.
 
 import { type Cue } from '../../../shared/cue'
 import {
@@ -9,11 +9,7 @@ import {
   mediaFileBasename
 } from '../../../shared/mediaHistory'
 import { type SubtitleEncoding } from '../../../shared/subtitleEncoding'
-import {
-  EXTERNAL_SUBTITLE_TRACK_ID,
-  type Track,
-  URL_SUBTITLE_TRACK_ID
-} from '../../../shared/track'
+import { EXTERNAL_SUBTITLE_TRACK_ID, type Track } from '../../../shared/track'
 import { errorMessage } from '../util/errorMessage'
 import {
   type Dispatch,
@@ -197,23 +193,6 @@ export function externalSubtitleTrack(subtitlePath: string, cues: Cue[]): Track 
     kind: 'subtitle',
     codec,
     title: mediaFileBasename(subtitlePath),
-    ...(detectJapaneseCues(cues) ? { language: 'jpn' } : {})
-  }
-}
-
-/**
- * Builds the synthetic `Track` standing in for an acquired online (yt-dlp URL)
- * subtitle track. Like `externalSubtitleTrack` its
- * `language` is set to 'jpn' only when the cues actually look Japanese — that
- * is what drives MeCab tokenization and knowledge coloring through
- * `isJapaneseSubtitleTrack`. Session-only: it never reaches `MediaHistory`.
- */
-export function onlineSubtitleTrack(cues: Cue[]): Track {
-  return {
-    id: URL_SUBTITLE_TRACK_ID,
-    kind: 'subtitle',
-    codec: 'online',
-    title: 'Online subtitle',
     ...(detectJapaneseCues(cues) ? { language: 'jpn' } : {})
   }
 }

@@ -65,8 +65,8 @@ export interface MineMediaSource {
 
 /**
  * Pure: the sentence-audio media context for one mined cue, or `undefined`
- * when this mine cannot produce one — nothing loaded, a remote URL (ffmpeg
- * cannot clip it), no selected audio stream, or unusable cue timing. Shared by
+ * when this mine cannot produce one — nothing loaded, an unsupported source
+ * (ffmpeg cannot clip it), no selected audio stream, or unusable cue timing. Shared by
  * the popup and bulk mining paths so both omit it under identical conditions.
  */
 export function mineMediaContext(

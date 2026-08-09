@@ -9,8 +9,7 @@ import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const PATHS = {
   ffmpegPath: 'C:\\res\\ffmpeg\\ffmpeg.exe',
-  ffprobePath: 'C:\\res\\ffmpeg\\ffprobe.exe',
-  ytdlpPath: 'C:\\res\\yt-dlp\\yt-dlp.exe'
+  ffprobePath: 'C:\\res\\ffmpeg\\ffprobe.exe'
 }
 
 function existsIn(present: string[]) {
@@ -23,7 +22,7 @@ describe('registerIntegrationBridge', () => {
   it('registers the binary-status channel', () => {
     const { ipc, handlers } = fakeIpc()
     const service: IntegrationServiceLike = {
-      binaryStatus: vi.fn(() => ({ ffmpeg: true, ffprobe: true, ytdlp: true }))
+      binaryStatus: vi.fn(() => ({ ffmpeg: true, ffprobe: true }))
     }
     registerIntegrationBridge(ipc, service)
 
@@ -32,7 +31,7 @@ describe('registerIntegrationBridge', () => {
 
   it('forwards binaryStatus and returns its result', async () => {
     const { ipc, handlers } = fakeIpc()
-    const status = { ffmpeg: true, ffprobe: false, ytdlp: true }
+    const status = { ffmpeg: true, ffprobe: false }
     const service: IntegrationServiceLike = { binaryStatus: vi.fn(() => status) }
     registerIntegrationBridge(ipc, service)
 
@@ -45,28 +44,24 @@ describe('registerIntegrationBridge', () => {
 
 describe('createIntegrationService', () => {
   it('reports every bundled binary present', () => {
-    const exists = existsIn([PATHS.ffmpegPath, PATHS.ffprobePath, PATHS.ytdlpPath])
+    const exists = existsIn([PATHS.ffmpegPath, PATHS.ffprobePath])
     const service = createIntegrationService({ paths: PATHS, exists })
 
-    expect(service.binaryStatus()).toEqual({ ffmpeg: true, ffprobe: true, ytdlp: true })
+    expect(service.binaryStatus()).toEqual({ ffmpeg: true, ffprobe: true })
   })
 
   it('reports every bundled binary absent', () => {
     const service = createIntegrationService({ paths: PATHS, exists: existsIn([]) })
 
-    expect(service.binaryStatus()).toEqual({ ffmpeg: false, ffprobe: false, ytdlp: false })
+    expect(service.binaryStatus()).toEqual({ ffmpeg: false, ffprobe: false })
   })
 
   it('probes each binary at its own resolved path, so one missing file is reported alone', () => {
     const exists = existsIn([PATHS.ffmpegPath, PATHS.ffprobePath])
     const service = createIntegrationService({ paths: PATHS, exists })
 
-    expect(service.binaryStatus()).toEqual({ ffmpeg: true, ffprobe: true, ytdlp: false })
-    expect(exists.mock.calls.map(([path]) => path)).toEqual([
-      PATHS.ffmpegPath,
-      PATHS.ffprobePath,
-      PATHS.ytdlpPath
-    ])
+    expect(service.binaryStatus()).toEqual({ ffmpeg: true, ffprobe: true })
+    expect(exists.mock.calls.map(([path]) => path)).toEqual([PATHS.ffmpegPath, PATHS.ffprobePath])
   })
 
   it('re-probes on every call, so a binary added after startup is picked up', () => {
@@ -76,8 +71,8 @@ describe('createIntegrationService', () => {
       exists: (path: string) => present.includes(path)
     })
 
-    expect(service.binaryStatus().ytdlp).toBe(false)
-    present.push(PATHS.ytdlpPath)
-    expect(service.binaryStatus().ytdlp).toBe(true)
+    expect(service.binaryStatus()).toEqual({ ffmpeg: false, ffprobe: false })
+    present.push(PATHS.ffmpegPath)
+    expect(service.binaryStatus()).toEqual({ ffmpeg: true, ffprobe: false })
   })
 })

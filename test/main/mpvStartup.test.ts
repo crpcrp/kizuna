@@ -98,50 +98,6 @@ describe('startMpvWithConfig', () => {
     expect(reportConfigError).toHaveBeenCalledWith(MPV_CONFIG_ERROR_MESSAGE)
   })
 
-  it('forwards the yt-dlp path to the clean-start attempt', async () => {
-    const { deps, start } = makeDeps({
-      ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe',
-      settings: { mpvUserConfig: false, mpvExtraArgs: [] }
-    })
-
-    await startMpvWithConfig(deps)
-
-    expect(start).toHaveBeenCalledTimes(1)
-    expect(start).toHaveBeenCalledWith(
-      expect.objectContaining({ ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe' })
-    )
-  })
-
-  it('keeps the yt-dlp path on the config-disabled retry so streaming survives a broken mpv.conf', async () => {
-    const start = vi
-      .fn<(opts: MpvStartOptions) => Promise<void>>()
-      .mockRejectedValueOnce(new Error('bad mpv.conf'))
-      .mockResolvedValueOnce(undefined)
-    const { deps } = makeDeps({
-      ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe',
-      settings: { mpvUserConfig: true, mpvExtraArgs: [] },
-      start
-    })
-
-    await startMpvWithConfig(deps)
-
-    expect(start).toHaveBeenCalledTimes(2)
-    // Both the first attempt and the config-dropping retry carry the hook path.
-    expect(start).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe' })
-    )
-    expect(start).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ ytdlpPath: '/data/resources/yt-dlp/yt-dlp.exe' })
-    )
-    // The retry still drops the user config dir.
-    expect(start).toHaveBeenNthCalledWith(
-      2,
-      expect.not.objectContaining({ userConfigDir: '/data/userData/mpv' })
-    )
-  })
-
   it('with config disabled and a failing start: rethrows without retrying or reporting', async () => {
     const err = new Error('mpv missing')
     const start = vi.fn<(opts: MpvStartOptions) => Promise<void>>().mockRejectedValue(err)

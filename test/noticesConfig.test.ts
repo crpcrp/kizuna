@@ -91,7 +91,6 @@ describe('licence texts on disk', () => {
   // fails at packaging time. This fails at test time instead.
   it('ships a committed licence text for every optional component', () => {
     const optional = components.filter((c) => c.bundled === 'optional')
-    expect(optional.length).toBeGreaterThan(0)
     for (const component of optional) {
       for (const path of component.licenseFiles ?? []) {
         expect(existsSync(join(REPO_ROOT, path)), `${path} is missing`).toBe(true)

@@ -28,6 +28,17 @@ function sorted(items: number[]): number[] {
 }
 
 describe('addEntries', () => {
+  it('drops HTTP and HTTPS URL paths', () => {
+    const state = addEntries(EMPTY_PLAYLIST, [
+      '/a.mkv',
+      'https://host/live',
+      'HTTP://host/x',
+      '/b.mkv'
+    ])
+    expect(state.entries).toEqual(['/a.mkv', '/b.mkv'])
+    expect(state.order).toEqual([0, 1])
+  })
+
   it('appends to an empty queue and makes the first entry current', () => {
     const state = addEntries(EMPTY_PLAYLIST, ['/a.mkv', '/b.mkv'])
     expect(state.entries).toEqual(['/a.mkv', '/b.mkv'])

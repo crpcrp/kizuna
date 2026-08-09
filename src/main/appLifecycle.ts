@@ -29,7 +29,6 @@ export interface QuitCoordinatorDeps {
   flushHistory?: () => void
   releasePowerSave?: () => void
   disposeSystemMedia?: () => void
-  cleanupUrlSubtitles?: () => Promise<void>
   appQuit: () => void
   setTimeoutFn?: SetTimeoutFn
   clearTimeoutFn?: ClearTimeoutFn
@@ -58,7 +57,6 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
   const flushHistory = deps.flushHistory ?? (() => {})
   const releasePowerSave = deps.releasePowerSave ?? (() => {})
   const disposeSystemMedia = deps.disposeSystemMedia ?? (() => {})
-  const cleanupUrlSubtitles = deps.cleanupUrlSubtitles ?? (async () => {})
   const setTimeoutFn = deps.setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
   const clearTimeoutFn =
     deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
@@ -122,20 +120,17 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
     runSafely('system-media disposal', disposeSystemMedia)
     runSafely('power-save release', releasePowerSave)
 
-    // Start URL cleanup at its existing position, but let it run alongside
-    // the controller quit so either rejection cannot prevent the other.
-    const urlCleanup = startAsync(cleanupUrlSubtitles)
     runSafely('history flush', flushHistory)
     runSafely('session storage flush', () => deps.defaultSession.flushStorageData())
     const controllerQuit = startAsync(() => deps.controller.quit())
-    const cleanup = Promise.allSettled([urlCleanup, controllerQuit])
+    const cleanup = Promise.allSettled([controllerQuit])
     const timer = setTimeoutFn(() => {
       disposeHard()
       finishShutdown()
     }, SHUTDOWN_TIMEOUT_MS)
 
     shutdownPromise = cleanup.then((results) => {
-      const operations = ['URL-subtitle cleanup', 'mpv quit']
+      const operations = ['mpv quit']
       for (const [index, result] of results.entries()) {
         if (result.status === 'rejected') reportFailure(operations[index], result.reason)
       }

@@ -13,7 +13,6 @@ import PlaylistSidebar from './components/PlaylistSidebar'
 import SubtitleReport from './components/SubtitleReport'
 import BulkMiningModal from './components/BulkMiningModal'
 import VideoAdjustments from './components/VideoAdjustments'
-import OpenUrlDialog from './components/OpenUrlDialog'
 import CardImageCropDialog from './components/CardImageCropDialog'
 import BulkMiningSidebar from './components/BulkMiningSidebar'
 import WordPopup from './components/WordPopup'
@@ -327,12 +326,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended:
-      options.open ||
-      about.open ||
-      updates.modal !== null ||
-      mediaSession.openUrl.open ||
-      vocabulary.modalOpen
+    suspended: options.open || about.open || updates.modal !== null || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -383,7 +377,6 @@ export default function App({
               onTogglePlaylist: playbackWindow.panels.onTogglePlaylist
             }}
             video={{
-              ...mediaSession.qualityMenu,
               ...playbackWindow.videoMenu
             }}
             audio={{
@@ -397,7 +390,6 @@ export default function App({
               tracks: state.tracks,
               selectedSubtitleId: state.selectedSubtitleId,
               externalSubtitleEncoding: state.externalSubtitleEncoding,
-              preferredUrlSubtitleLanguage: state.preferredUrlSubtitleLanguage,
               sidebarOpen
             }}
             playback={{
@@ -541,15 +533,6 @@ export default function App({
       <VideoAdjustments
         {...playbackWindow.videoAdjustmentsDialog}
         adjustments={state.videoAdjustments}
-      />
-
-      <OpenUrlDialog
-        open={mediaSession.openUrl.open}
-        loading={mediaSession.openUrl.loading}
-        recentUrls={mediaSession.openUrl.recentUrls}
-        onSubmit={mediaSession.openUrl.submit}
-        onCancelLoad={mediaSession.openUrl.cancelLoad}
-        onClose={mediaSession.openUrl.close}
       />
 
       <OptionsMenu {...optionsMenu} />

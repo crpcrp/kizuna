@@ -311,16 +311,6 @@ describe('resource staging', () => {
     ).resolves.toEqual(expect.arrayContaining(['mpv/mpv', 'mecab/mecab']))
   })
 
-  it('rejects an optional yt-dlp binary from the other platform', async () => {
-    const { resourcesDir } = await makeMirror()
-    await mkdir(join(resourcesDir, 'yt-dlp'), { recursive: true })
-    await writeFile(join(resourcesDir, 'yt-dlp/yt-dlp.exe'), 'windows optional')
-
-    await expect(
-      stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
-    ).resolves.toContain('non-selected optional yt-dlp resource remains: yt-dlp/yt-dlp.exe')
-  })
-
   it('rejects a staged file whose contents drift from the lock', async () => {
     const { vendorDir, resourcesDir } = await makeMirror()
     await stageResources({ lock: LOCK, platformKey: 'linux-x64', vendorDir, resourcesDir })

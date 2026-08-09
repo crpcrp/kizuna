@@ -1,8 +1,8 @@
 import { useEffect, type Dispatch, type RefObject } from 'react'
 import type { Chapter } from '../../../shared/chapter'
+import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import type { VideoDimensions } from '../../../shared/track'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
-import { shouldProbe } from './mediaSession'
 import { audioDelayForFile, subtitleOffsetForFile } from './perFileOffsets'
 import { type VideoAdjustmentsBridge, applyVideoAdjustments } from './playbackCommands'
 import type { PlayerAction } from './playerState'
@@ -13,7 +13,6 @@ export interface PerFileRestoreBridge {
     setAudioDelay(delayMs: number): Promise<unknown>
     setLoudnessNorm(on: boolean): Promise<unknown>
     setAbLoop(a: number | null, b: number | null): Promise<unknown>
-    getVideoDimensions(): Promise<VideoDimensions | undefined>
   }
   media: {
     getChapters(filePath: string): Promise<Chapter[]>
@@ -73,7 +72,7 @@ export function usePerFileRestore({
   // loads. Both offset refs are populated by the settings-load effect above (or
   // already hold this file's entry if it was set earlier this session).
   useEffect(() => {
-    if (!filePath || !settingsReady) return
+    if (!filePath || !settingsReady || isRemoteUrl(filePath)) return
     void bridge.player.setSpeed(1)
     dispatch({
       type: 'setSubtitleOffset',
@@ -127,39 +126,16 @@ export function usePerFileRestore({
   // that should have previews disabled.
   useEffect(() => {
     setVideoDimensions(undefined)
-    if (!filePath) return
+    if (!filePath || isRemoteUrl(filePath)) return
     let cancelled = false
-    // Local files: ffprobe reads the dimensions off disk in a single shot.
-    // Remote URLs: ffprobe can't read a stream, so mpv is the source — but its
-    // video-params are only populated once decoding has started, so a first
-    // read can legitimately come back empty. Poll a bounded number of times
-    // (5 attempts, 400 ms apart) before giving up. Every resolution is guarded
-    // against `cancelled`, which the cleanup sets whenever filePath (or the
-    // load generation) changes, so a stale read never lands on the wrong file.
-    const local = shouldProbe(filePath)
-    const read = local
-      ? () => bridge.media.getVideoDimensions(filePath)
-      : () => bridge.player.getVideoDimensions()
-    const maxAttempts = local ? 1 : 5
-    let attempt = 0
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const poll = (): void => {
-      attempt += 1
-      void read().then((dims) => {
-        if (cancelled) return
-        if (dims) {
-          setVideoDimensions(dims)
-          return
-        }
-        if (attempt < maxAttempts) timer = setTimeout(poll, 400)
-      })
-    }
-    poll()
+    // ffprobe reads the dimensions from the local file in a single shot.
+    void bridge.media.getVideoDimensions(filePath).then((dims) => {
+      if (!cancelled && dims) setVideoDimensions(dims)
+    })
     return () => {
       cancelled = true
-      if (timer !== undefined) clearTimeout(timer)
     }
-  }, [filePath, loadGeneration, bridge.media, bridge.player, setVideoDimensions])
+  }, [filePath, loadGeneration, bridge.media, setVideoDimensions])
 
   // mpv's ab-loop-a/ab-loop-b properties survive loadfile within the one mpv
   // process, so a new file would inherit the previous file's A–B loop. The
@@ -167,13 +143,13 @@ export function usePerFileRestore({
   // own properties to match. Keyed on loadGeneration so a same-path reopen
   // clears too.
   useEffect(() => {
-    if (!filePath) return
+    if (!filePath || isRemoteUrl(filePath)) return
     void bridge.player.setAbLoop(null, null)
   }, [loadGeneration, filePath, bridge.player])
 
   useEffect(() => {
-    // Chapters come from ffprobe too, so skip them for remote URLs.
-    if (!filePath || !shouldProbe(filePath)) return
+    // Chapters come from ffprobe too and are optional decoration.
+    if (!filePath || isRemoteUrl(filePath)) return
     let active = true
     void loadChaptersForCurrentFile(bridge.media, filePath, () => active, dispatch)
     return () => {

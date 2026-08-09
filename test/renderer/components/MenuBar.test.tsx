@@ -17,7 +17,6 @@ import {
 import { TestMenuBar as MenuBar } from './menu/menuBarTestAdapter'
 import type { Track } from '@src/shared/track'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import type { UrlSubtitleTrack } from '@src/shared/urlSubtitles'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 // Dropdown open/close is client-only useState; the panels are always in the
@@ -95,14 +94,6 @@ describe('MenuBar markup', () => {
 
   it('renders the Open file item', () => {
     expect(html).toContain('aria-label="Open file"')
-  })
-
-  it('renders the Open URL item in the Media menu', () => {
-    expect(html).toContain('id="open-url"')
-    expect(html).toContain('aria-label="Open URL"')
-    expect(html).toContain('Open URL…')
-    // Sits between Open file and the file-navigation items.
-    expect(html.indexOf('id="open-file"')).toBeLessThan(html.indexOf('id="open-url"'))
   })
 
   it('lists audio and subtitle tracks with an Off option', () => {
@@ -237,182 +228,6 @@ describe('MenuBar "Load subtitle file…"', () => {
       )
     expect(render(true)).toMatch(/id="load-subtitle-file"[^>]*disabled/)
     expect(render(false)).not.toMatch(/id="load-subtitle-file"[^>]*disabled/)
-  })
-})
-
-describe('MenuBar online subtitles section', () => {
-  const provJa: UrlSubtitleTrack = {
-    kind: 'provided',
-    lang: 'ja',
-    label: 'Japanese',
-    formats: ['srt'],
-    selectionId: 'provided:ja'
-  }
-  const autoJa: UrlSubtitleTrack = {
-    kind: 'auto',
-    lang: 'ja',
-    label: 'Japanese (auto-generated)',
-    formats: ['srt'],
-    selectionId: 'auto:ja'
-  }
-  const autoEn: UrlSubtitleTrack = {
-    kind: 'auto',
-    lang: 'en',
-    label: 'English (auto-generated)',
-    formats: ['srt'],
-    selectionId: 'auto:en'
-  }
-
-  function render(props: Partial<Parameters<typeof MenuBar>[0]>): string {
-    return renderToStaticMarkup(
-      <MenuBar
-        tracks={[]}
-        selectedSubtitleId={null}
-        onOpenFile={noop}
-        onSelectAudio={noop}
-        onSelectSubtitle={noop}
-        onOpenOptions={noop}
-        {...props}
-      />
-    )
-  }
-
-  it('renders no online-caption UI when the section is hidden (local/direct)', () => {
-    const html = render({ urlSubtitleMenu: { status: 'hidden' } })
-    expect(html).not.toContain('id="online-subtitles"')
-    expect(html).not.toContain('Online subtitles')
-  })
-
-  it('renders the loading state', () => {
-    const html = render({ urlSubtitleMenu: { status: 'loading' } })
-    expect(html).toContain('id="online-subtitles"')
-    expect(html).toContain('Loading…')
-  })
-
-  it('renders the unavailable state', () => {
-    const html = render({ urlSubtitleMenu: { status: 'unavailable' } })
-    expect(html).toContain('No online subtitles')
-  })
-
-  it('renders Off, then provided, then auto rows with source badges and no dedup', () => {
-    const full = render({
-      urlSubtitleMenu: { status: 'ready', tracks: [autoEn, autoJa, provJa] },
-      urlSubtitleSelectedId: null
-    })
-    // Scope to the online section so the plain subtitle "Off" doesn't interfere.
-    const html = full.slice(full.indexOf('id="online-subtitles"'))
-    // Off first, then the provided group, then the auto group.
-    const offIndex = html.indexOf('>Off<')
-    const providedRow = html.indexOf('data-selection-id="provided:ja"')
-    const autoJaRow = html.indexOf('data-selection-id="auto:ja"')
-    const autoEnRow = html.indexOf('data-selection-id="auto:en"')
-    expect(offIndex).toBeGreaterThan(-1)
-    expect(offIndex).toBeLessThan(providedRow)
-    expect(providedRow).toBeLessThan(autoEnRow) // provided group before auto group
-    expect(autoEnRow).toBeLessThan(autoJaRow) // stable label order within auto (en < ja)
-    // Both an equal-language provided and auto Japanese row survive (no dedup).
-    expect(html).toContain('data-kind="provided"')
-    expect((html.match(/data-kind="auto"/g) ?? []).length).toBe(2)
-    // Auto row label strips the redundant suffix; the badge carries the kind.
-    expect(html).not.toContain('(auto-generated)')
-  })
-
-  it('checks the selected online track and leaves the online Off unchecked', () => {
-    const html = render({
-      urlSubtitleMenu: { status: 'ready', tracks: [provJa] },
-      urlSubtitleSelectedId: 'provided:ja'
-    })
-    // The provided:ja row is the checked radio.
-    expect(html).toMatch(/aria-checked="true" data-selection-id="provided:ja"/)
-  })
-
-  it('hoists tracks matching preferredUrlSubtitleLanguage above the rest', () => {
-    const full = render({
-      urlSubtitleMenu: { status: 'ready', tracks: [autoEn, autoJa, provJa] },
-      urlSubtitleSelectedId: null,
-      preferredUrlSubtitleLanguage: 'ja'
-    })
-    const html = full.slice(full.indexOf('id="online-subtitles"'))
-    // The first data-selection-id in the section is the preferred (provided,
-    // tie-broken over auto) Japanese track, ahead of the English tracks.
-    const firstSelectionId = html.match(/data-selection-id="([^"]+)"/)
-    expect(firstSelectionId?.[1]).toBe('provided:ja')
-  })
-})
-
-describe('MenuBar subtitle Off collapses to the online section on a URL', () => {
-  const provEn: UrlSubtitleTrack = {
-    kind: 'provided',
-    lang: 'en',
-    label: 'English',
-    formats: ['srt'],
-    selectionId: 'provided:en'
-  }
-  const autoJa: UrlSubtitleTrack = {
-    kind: 'auto',
-    lang: 'ja',
-    label: 'Japanese (auto-generated)',
-    formats: ['srt'],
-    selectionId: 'auto:ja'
-  }
-
-  function render(props: Partial<Parameters<typeof MenuBar>[0]>): string {
-    return renderToStaticMarkup(
-      <MenuBar
-        tracks={[]}
-        selectedSubtitleId={null}
-        onOpenFile={noop}
-        onSelectAudio={noop}
-        onSelectSubtitle={noop}
-        onOpenOptions={noop}
-        {...props}
-      />
-    )
-  }
-
-  const subtitlePanel = (html: string): string =>
-    html.slice(html.indexOf('id="menu-subtitle"'), html.indexOf('id="menu-playback"'))
-
-  it('URL ready: exactly one Off, living inside the online section, and no heading', () => {
-    const panel = subtitlePanel(
-      render({ urlSubtitleMenu: { status: 'ready', tracks: [provEn, autoJa] } })
-    )
-    // The embedded Off is gone; the only Off is the online one.
-    expect((panel.match(/aria-label="Off"/g) ?? []).length).toBe(1)
-    // …and it renders after the online-subtitles wrapper opens.
-    expect(panel.indexOf('id="online-subtitles"')).toBeLessThan(panel.indexOf('aria-label="Off"'))
-    // The lone-section heading is suppressed.
-    expect(panel).not.toContain('Online subtitles')
-  })
-
-  it('URL loading: shows Loading…, no heading, no embedded Off', () => {
-    const panel = subtitlePanel(render({ urlSubtitleMenu: { status: 'loading' } }))
-    expect(panel).toContain('Loading…')
-    expect(panel).not.toContain('Online subtitles')
-    expect(panel).not.toContain('aria-label="Off"')
-  })
-
-  it('URL unavailable: shows No online subtitles, no heading, no embedded Off', () => {
-    const panel = subtitlePanel(render({ urlSubtitleMenu: { status: 'unavailable' } }))
-    expect(panel).toContain('No online subtitles')
-    expect(panel).not.toContain('Online subtitles')
-    expect(panel).not.toContain('aria-label="Off"')
-  })
-
-  it('local file (hidden): embedded Off renders, no online section', () => {
-    const panel = subtitlePanel(render({ tracks: [sub1], urlSubtitleMenu: { status: 'hidden' } }))
-    expect((panel.match(/aria-label="Off"/g) ?? []).length).toBe(1)
-    expect(panel).not.toContain('id="online-subtitles"')
-  })
-
-  it('mixed (embedded tracks + online ready): both the embedded Off and the heading render', () => {
-    const panel = subtitlePanel(
-      render({ tracks: [sub1], urlSubtitleMenu: { status: 'ready', tracks: [provEn] } })
-    )
-    // Two real sections → two Off rows (one embedded, one online) …
-    expect((panel.match(/aria-label="Off"/g) ?? []).length).toBe(2)
-    // … and the section heading is kept.
-    expect(panel).toContain('Online subtitles')
   })
 })
 

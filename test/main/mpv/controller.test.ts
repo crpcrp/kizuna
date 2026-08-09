@@ -9,15 +9,11 @@ import {
   sanitizeExtraMpvArgs,
   MpvController,
   MpvLoadError,
-  MpvLoadTimeoutError,
-  MpvLoadCancelledError,
   type MpvClientLike,
   type MpvProcessLike,
-  type SetTimeoutFn,
   type SpawnFn
 } from '@src/main/mpv/controller'
 import type { ConnectOptions, MpvMessage } from '@src/main/mpv/ipcClient'
-import type { YtdlpQuality } from '@src/shared/ytdlpQuality'
 
 class FakeClient implements MpvClientLike {
   connectedTo: string | null = null
@@ -227,42 +223,6 @@ describe('buildMpvArgs', () => {
     ])
   })
 
-  it('appends the ytdl hook args after the forced block when a yt-dlp path is given', () => {
-    const args = buildMpvArgs({
-      platform: 'win32',
-      windowId: 1n,
-      ipcEndpoint: '\\\\.\\pipe\\p',
-      ytdlpPath: 'C:\\app\\resources\\yt-dlp\\yt-dlp.exe'
-    })
-    expect(args).toEqual([
-      '--no-config',
-      '--wid=1',
-      '--input-ipc-server=\\\\.\\pipe\\p',
-      '--idle=yes',
-      '--force-window=yes',
-      '--keep-open=yes',
-      '--terminal=no',
-      '--no-osc',
-      '--no-input-default-bindings',
-      '--sid=no',
-      '--volume-max=200',
-      '--ytdl=yes',
-      '--script-opts-append=ytdl_hook-ytdl_path=C:\\app\\resources\\yt-dlp\\yt-dlp.exe',
-      '--script-opts-append=ytdl_hook-use_manifests=no'
-    ])
-  })
-
-  it('omits the ytdl args entirely when no yt-dlp path is bundled', () => {
-    const args = buildMpvArgs({
-      platform: 'win32',
-      windowId: 1n,
-      ipcEndpoint: '\\\\.\\pipe\\p'
-    })
-    expect(args.some((arg) => arg.startsWith('--ytdl'))).toBe(false)
-    expect(args.some((arg) => arg.includes('ytdl_hook'))).toBe(false)
-    expect(args).not.toContain('--script-opts-append=ytdl_hook-use_manifests=no')
-  })
-
   it('drops embedding/config-owning and non---prefixed args from extraArgs', () => {
     const args = buildMpvArgs({
       platform: 'win32',
@@ -331,7 +291,6 @@ describe('sanitizeExtraMpvArgs', () => {
         '--script-opts=foo=1',
         '--input-conf=/x', // reads any file
         '--input-commands=run "calc.exe"', // `run` spawns a detached process
-        '--ytdl-raw-options=exec=calc.exe', // unchecked pass-through to youtube-dl
         '--osc=no'
       ])
     ).toEqual(['--osc=no'])
@@ -362,28 +321,6 @@ describe('sanitizeExtraMpvArgs', () => {
 })
 
 describe('MpvController (fake spawn + fake client)', () => {
-  it('sets each yt-dlp policy through ytdl-hook without loading media', async () => {
-    const { controller, client } = makeFixture()
-    const expected: Record<YtdlpQuality, string> = {
-      best: 'bv*+ba/b',
-      '2160': 'bv*[height<=2160]+ba/b[height<=2160]',
-      '1440': 'bv*[height<=1440]+ba/b[height<=1440]',
-      '1080': 'bv*[height<=1080]+ba/b[height<=1080]',
-      '720': 'bv*[height<=720]+ba/b[height<=720]',
-      '480': 'bv*[height<=480]+ba/b[height<=480]',
-      '360': 'bv*[height<=360]+ba/b[height<=360]',
-      worst: 'worstvideo+worstaudio/worst'
-    }
-
-    for (const quality of Object.keys(expected) as YtdlpQuality[])
-      await controller.setYtdlpQuality(quality)
-
-    expect(client.sent).toEqual(
-      Object.entries(expected).map(([, format]) => ['set_property', 'ytdl-format', format])
-    )
-    expect(client.sent.flat()).not.toContain('loadfile')
-  })
-
   it('start spawns mpvPath with built args and connects to the same endpoint', async () => {
     const { controller, client, spawns } = makeFixture()
     await controller.start({ mpvPath: 'C:\\bin\\mpv.exe', windowId: 658188n })
@@ -554,8 +491,7 @@ describe('MpvController (fake spawn + fake client)', () => {
       mpvPath: 'mpv.exe',
       windowId: 658188n,
       userConfigDir: '/data/mpv',
-      extraArgs: ['--hwdec=auto', '--wid=999'],
-      ytdlpPath: '/data/yt-dlp/yt-dlp.exe'
+      extraArgs: ['--hwdec=auto', '--wid=999']
     })
     const args = spawns[0].args
     expect(args[0]).toBe('--config=yes')
@@ -563,9 +499,6 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(args).toContain('--hwdec=auto')
     // The sanitizer strips the smuggled --wid; only the forced one remains.
     expect(args.filter((a) => a.startsWith('--wid='))).toEqual(['--wid=658188'])
-    // ytdlpPath is forwarded into the ytdl hook args.
-    expect(args).toContain('--script-opts-append=ytdl_hook-ytdl_path=/data/yt-dlp/yt-dlp.exe')
-    expect(args).toContain('--script-opts-append=ytdl_hook-use_manifests=no')
   })
 
   it('maps each command method to the exact mpv IPC command array', async () => {
@@ -731,79 +664,6 @@ describe('MpvController (fake spawn + fake client)', () => {
     await expect(controller.getAudioDevices()).resolves.toEqual([])
   })
 
-  it('getTrackList sends the get_property command and parses the track list', async () => {
-    const { controller, client } = makeFixture()
-    client.sendCommand = async (command: unknown[]) => {
-      client.sent.push(command)
-      return [
-        { id: 1, type: 'video', codec: 'h264' },
-        { id: 1, type: 'audio', codec: 'aac', lang: 'jpn', title: 'JP' },
-        { id: 2, type: 'sub', codec: 'ass' }
-      ]
-    }
-    const tracks = await controller.getTrackList()
-    expect(client.sent).toEqual([['get_property', 'track-list']])
-    expect(tracks).toEqual([
-      { id: 1, kind: 'audio', codec: 'aac', language: 'jpn', title: 'JP' },
-      { id: 2, kind: 'subtitle', codec: 'ass' }
-    ])
-  })
-
-  it('getTrackList returns [] for a non-array / malformed track-list payload', async () => {
-    const { controller, client } = makeFixture()
-    client.sendCommand = async () => null
-    await expect(controller.getTrackList()).resolves.toEqual([])
-  })
-
-  it('getVideoDimensions reads mpv video-params/dw and dh', async () => {
-    const { controller, client } = makeFixture()
-    client.sendCommand = async (command: unknown[]) => {
-      client.sent.push(command)
-      const prop = command[1]
-      if (prop === 'video-params/dw') return 1920
-      if (prop === 'video-params/dh') return 1080
-      return undefined
-    }
-    await expect(controller.getVideoDimensions()).resolves.toEqual({ width: 1920, height: 1080 })
-    expect(client.sent).toEqual([
-      ['get_property', 'video-params/dw'],
-      ['get_property', 'video-params/dh']
-    ])
-  })
-
-  it('getVideoDimensions returns undefined for absent/non-positive/non-number values', async () => {
-    const { controller } = makeFixture()
-    const cases: [unknown, unknown][] = [
-      [undefined, 1080],
-      [1920, undefined],
-      [0, 1080],
-      [1920, 0],
-      [-1, 1080],
-      [1920, -1],
-      [null, 1080],
-      [1920, null],
-      ['1920', 1080],
-      [1920, '1080'],
-      [Number.NaN, 1080],
-      [Number.POSITIVE_INFINITY, 1080]
-    ]
-    for (const [dw, dh] of cases) {
-      const { controller: c, client } = makeFixture()
-      client.sendCommand = async (command: unknown[]) =>
-        command[1] === 'video-params/dw' ? dw : dh
-      await expect(c.getVideoDimensions()).resolves.toBeUndefined()
-    }
-    // Baseline sanity: a fresh fixture with no override reports undefined too
-    // (the default FakeClient resolves every property to undefined).
-    await expect(controller.getVideoDimensions()).resolves.toBeUndefined()
-  })
-
-  it('getVideoDimensions returns undefined (does not reject) when the IPC call rejects', async () => {
-    const { controller, client } = makeFixture()
-    client.sendCommand = () => Promise.reject(new Error('mpv IPC: not connected'))
-    await expect(controller.getVideoDimensions()).resolves.toBeUndefined()
-  })
-
   it('waits for file-loaded before resolving loadFile and removes its listener', async () => {
     const { controller, client } = makeFixture()
     let resolved = false
@@ -874,69 +734,6 @@ describe('MpvController (fake spawn + fake client)', () => {
     // already-settled promise; its listener was removed on resolve.
     expect(client.listenerCount('end-file')).toBe(0)
     expect(() => client.emit('end-file', { event: 'end-file', reason: 'eof' })).not.toThrow()
-  })
-
-  it('times out a stalled loadFile: sends stop, cleans up listeners, and releases the lock', async () => {
-    const client = new FakeClient()
-    // Capture the injected timeout so the test fires it deterministically.
-    let fireTimeout: (() => void) | undefined
-    const setTimeoutFn: SetTimeoutFn = (cb) => {
-      fireTimeout = cb
-      return 1
-    }
-    const controller = new MpvController({ client, setTimeoutFn, clearTimeoutFn: () => {} })
-
-    // mpv acknowledges loadfile (sendCommand resolves) but never emits
-    // file-loaded/end-file — the stalled-URL case.
-    const load = controller.loadFile('https://host/stream.m3u8', { timeoutMs: 60_000 })
-    await Promise.resolve()
-    expect(client.sent).toEqual([['loadfile', 'https://host/stream.m3u8']])
-    expect(client.listenerCount('file-loaded')).toBe(1)
-    expect(client.listenerCount('end-file')).toBe(1)
-
-    fireTimeout!()
-    await expect(load).rejects.toBeInstanceOf(MpvLoadTimeoutError)
-    // Stop was issued to unstick mpv; both listeners were dropped.
-    expect(client.sent).toContainEqual(['stop'])
-    expect(client.listenerCount('file-loaded')).toBe(0)
-    expect(client.listenerCount('end-file')).toBe(0)
-
-    // The lock is released: a subsequent load settles normally.
-    const next = controller.loadFile('E:\\anime\\ep1.mkv')
-    client.emit('file-loaded', { event: 'file-loaded' })
-    await expect(next).resolves.toBeUndefined()
-  })
-
-  it('cancelLoad aborts an in-flight load immediately via the stop-and-reject path', async () => {
-    const { controller, client } = makeFixture()
-    const load = controller.loadFile('https://host/stream.m3u8', { timeoutMs: 60_000 })
-    await Promise.resolve()
-
-    controller.cancelLoad()
-    await expect(load).rejects.toBeInstanceOf(MpvLoadCancelledError)
-    // A cancel is idle-dropping, so it must count as an MpvLoadError subclass.
-    await expect(load).rejects.toBeInstanceOf(MpvLoadError)
-    expect(client.sent).toContainEqual(['stop'])
-    expect(client.listenerCount('file-loaded')).toBe(0)
-    expect(client.listenerCount('end-file')).toBe(0)
-  })
-
-  it('cancelLoad is a no-op when no load is in flight', () => {
-    const { controller, client } = makeFixture()
-    expect(() => controller.cancelLoad()).not.toThrow()
-    expect(client.sent).toEqual([])
-  })
-
-  it('a completed local load clears the abort hook so a later cancelLoad is a no-op', async () => {
-    const { controller, client } = makeFixture()
-    const load = controller.loadFile('E:\\anime\\ep1.mkv')
-    client.emit('file-loaded', { event: 'file-loaded' })
-    await load
-    client.sent.length = 0
-
-    controller.cancelLoad()
-    // No stray stop for an already-settled load.
-    expect(client.sent).toEqual([])
   })
 
   it('observeTimePos / observePath / observeDuration / observePause observe the right properties', async () => {

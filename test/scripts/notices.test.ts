@@ -299,14 +299,7 @@ describe('bundle paths', () => {
 
 describe('licenseCopyPlan', () => {
   const plan = licenseCopyPlan({
-    notices: noticesWith(MPV, {
-      id: 'yt-dlp',
-      name: 'yt-dlp',
-      license: 'Unlicense',
-      copyright: 'Public domain.',
-      bundled: 'optional',
-      licenseFiles: ['licenses/yt-dlp/LICENSE']
-    }),
+    notices: noticesWith(MPV),
     repoRoot: join('/repo'),
     resourcesDir: join('/repo', 'resources'),
     packages: [{ name: 'react', version: '19.2.7', license: 'MIT', path: 'node_modules/react' }],
@@ -317,15 +310,6 @@ describe('licenseCopyPlan', () => {
     expect(plan).toContainEqual({
       from: join('/repo', 'resources', 'mpv/LICENSE.GPLv3.txt'),
       to: 'licenses/mpv/LICENSE.GPLv3.txt'
-    })
-  })
-
-  // yt-dlp is a manual drop-in that may be absent at packaging time, so its
-  // notice comes from a committed text instead of the resources tree.
-  it('reads an optional component from the committed repository licences', () => {
-    expect(plan).toContainEqual({
-      from: join('/repo', 'licenses/yt-dlp/LICENSE'),
-      to: 'licenses/yt-dlp/LICENSE'
     })
   })
 

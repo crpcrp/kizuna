@@ -72,52 +72,6 @@ describe('OptionsMenu screenshot folder', () => {
   })
 })
 
-function renderMenuWithPreferredUrlSubtitleLanguage(
-  preferredUrlSubtitleLanguage: string,
-  onChangePreferredUrlSubtitleLanguage = vi.fn()
-): void {
-  const base = baseOptionsMenuProps()
-  render(
-    <OptionsMenu
-      {...base}
-      playback={{
-        ...base.playback,
-        preferredUrlSubtitleLanguage,
-        onChangePreferredUrlSubtitleLanguage
-      }}
-    />
-  )
-}
-
-describe('OptionsMenu preferred online subtitle language', () => {
-  it('shows the stored value and commits a normalized edited value on blur', () => {
-    const onChangePreferredUrlSubtitleLanguage = vi.fn()
-    renderMenuWithPreferredUrlSubtitleLanguage('en', onChangePreferredUrlSubtitleLanguage)
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
-    const input = screen.getByLabelText(/^Preferred online subtitle language/) as HTMLInputElement
-    expect(input.value).toBe('en')
-
-    fireEvent.change(input, { target: { value: 'ja' } })
-    fireEvent.blur(input)
-    expect(onChangePreferredUrlSubtitleLanguage).toHaveBeenCalledWith('ja')
-  })
-
-  it('reverts the displayed value without committing on Escape', () => {
-    const onChangePreferredUrlSubtitleLanguage = vi.fn()
-    renderMenuWithPreferredUrlSubtitleLanguage('en', onChangePreferredUrlSubtitleLanguage)
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
-    const input = screen.getByLabelText(/^Preferred online subtitle language/) as HTMLInputElement
-    fireEvent.change(input, { target: { value: 'ja' } })
-    expect(input.value).toBe('ja')
-
-    fireEvent.keyDown(input, { key: 'Escape' })
-    expect(input.value).toBe('en')
-    expect(onChangePreferredUrlSubtitleLanguage).not.toHaveBeenCalled()
-  })
-})
-
 function renderMenuWithMpv(overrides: Partial<OptionsMenuProps['playback']>): void {
   const base = baseOptionsMenuProps()
   render(<OptionsMenu {...base} playback={{ ...base.playback, ...overrides }} />)
