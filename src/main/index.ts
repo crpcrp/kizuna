@@ -559,6 +559,9 @@ function startUpdates(lifecycle: AppLifecycleCoordinator): UpdateService {
   })
   registerUpdateBridge(ipcMain, service, (sender) => sender === mainWindow?.webContents)
   service.subscribe((state) => sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state))
+  // One startup check only. The service rejects any later automatic attempt;
+  // manual checks remain available to explicit UI actions.
+  void service.check('automatic')
   return service
 }
 

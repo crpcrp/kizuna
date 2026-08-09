@@ -74,9 +74,11 @@ Translation uses Google's unofficial endpoint and is explicitly opt-in.
 Application updates are also main-process-owned. One service uses the packaged
 electron-builder GitHub configuration, keeps download and installation behind
 separate user actions, and publishes only a serializable state snapshot through
-the preload bridge. The renderer never receives update URLs, credentials, cache
-paths, or installer paths. Unpackaged and unknown package formats remain offline
-and report an unsupported state.
+the preload bridge. It checks automatically once at application startup and does
+not schedule repeated checks; later checks require an explicit manual action. The
+renderer never receives update URLs, credentials, cache paths, or installer paths.
+Unpackaged and unknown package formats remain offline and report an unsupported
+state.
 
 ## Packaging
 

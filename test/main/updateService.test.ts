@@ -109,6 +109,21 @@ describe('createUpdateService', () => {
     })
   })
 
+  it('runs the automatic startup check at most once while retaining manual checks', async () => {
+    const fixture = serviceFixture()
+    fixture.updater.checkForUpdates = vi.fn(async () => ({
+      isUpdateAvailable: false,
+      updateInfo: { version: '0.2.0' }
+    }))
+
+    await fixture.service.check('automatic')
+    await fixture.service.check('automatic')
+    expect(fixture.updater.checkForUpdates).toHaveBeenCalledOnce()
+
+    await fixture.service.check('manual')
+    expect(fixture.updater.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
   it('downloads only after consent, coalesces calls, throttles progress, and waits for verification', async () => {
     const fixture = serviceFixture()
     await fixture.service.check('manual')

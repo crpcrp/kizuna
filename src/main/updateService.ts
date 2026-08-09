@@ -124,6 +124,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
   let checkPromise: Promise<UpdateState> | undefined
   let downloadPromise: Promise<UpdateState> | undefined
   let installPromise: Promise<void> | undefined
+  let automaticCheckStarted = false
   let shuttingDown = false
   let disposed = false
   let lastProgressAt = -Infinity
@@ -178,6 +179,10 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
     getState: () => state,
     check(origin) {
       if (!deps.support.supported || disposed || shuttingDown) return Promise.resolve(state)
+      if (origin === 'automatic') {
+        if (automaticCheckStarted) return Promise.resolve(state)
+        automaticCheckStarted = true
+      }
       if (checkPromise) return checkPromise
       if (state.status === 'downloading' || state.status === 'downloaded')
         return Promise.resolve(state)
