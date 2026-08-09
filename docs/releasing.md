@@ -72,6 +72,8 @@ deb and `npm run smoke:linux` verifies that:
   bundled IPADIC;
 - the deb declares the exact mpv and FFmpeg dependencies, installs, reinstalls,
   registers its desktop entry and icons, and uninstalls without package files;
+- the deb and AppImage launchers select X11 automatically, which mpv's embedded
+  `--wid` surface requires even when the desktop session is Wayland;
 - the AppImage runs from a clean user directory through the supported
   `--appimage-extract-and-run` no-FUSE path;
 - the application starts under `xvfb-run` with isolated user data and generated

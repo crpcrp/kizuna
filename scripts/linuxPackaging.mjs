@@ -233,13 +233,21 @@ export function parseDesktopEntry(text) {
  *
  * @param {Record<string, string>} entry
  * @param {{ productName: string, commandName: string, iconName: string, wmClass: string,
- *           requiredMimeTypes: readonly string[], requiredCategories: readonly string[] }} expected
+ *           requiredExecutableArgs: readonly string[], requiredMimeTypes: readonly string[],
+ *           requiredCategories: readonly string[] }} expected
  * @returns {string[]} problems, empty when the entry matched
  */
 export function verifyDesktopEntry(entry, expected) {
   const problems = []
-  const { productName, commandName, iconName, wmClass, requiredMimeTypes, requiredCategories } =
-    expected
+  const {
+    productName,
+    commandName,
+    iconName,
+    wmClass,
+    requiredExecutableArgs,
+    requiredMimeTypes,
+    requiredCategories
+  } = expected
 
   if (entry.Name !== productName) {
     problems.push(`Name is "${entry.Name ?? ''}", expected "${productName}"`)
@@ -251,6 +259,11 @@ export function verifyDesktopEntry(entry, expected) {
   const command = (commandMatch?.[1] ?? commandMatch?.[2] ?? '').replace(/\\/g, '/')
   if (command.split('/').at(-1) !== commandName) {
     problems.push(`Exec "${entry.Exec ?? ''}" does not launch "${commandName}"`)
+  }
+  for (const argument of requiredExecutableArgs) {
+    if (!(entry.Exec ?? '').includes(argument)) {
+      problems.push(`Exec "${entry.Exec ?? ''}" is missing required argument "${argument}"`)
+    }
   }
   // Without a %U/%F placeholder the file associations register but a
   // double-clicked video never reaches the app.

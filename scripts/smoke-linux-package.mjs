@@ -438,6 +438,7 @@ function desktopExpectations(commandName = identity.executableName) {
     // electron-builder derives StartupWMClass from `desktopName` minus the
     // suffix, which is what Electron uses as its X11 app_id.
     wmClass: pkg.desktopName.replace(/\.desktop$/, ''),
+    requiredExecutableArgs: ['--ozone-platform=x11'],
     requiredMimeTypes: [
       'video/x-matroska',
       'video/mp4',
