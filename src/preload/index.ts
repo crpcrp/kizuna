@@ -3,6 +3,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   ANKI_CHANNELS,
+  APP_INFO_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   INTEGRATION_CHANNELS,
@@ -14,6 +15,7 @@ import {
   PLAYER_CHANNELS,
   PLAYER_SETTINGS_CHANNELS,
   TRANSLATE_CHANNELS,
+  UPDATE_CHANNELS,
   WINDOW_CONTROL_CHANNELS
 } from '../shared/ipcChannels'
 import type { Track, VideoDimensions } from '../shared/track'
@@ -30,6 +32,7 @@ import type {
 } from '../shared/dictionary'
 import type { PlayerSettings, VideoAdjustments } from '../shared/playerSettings'
 import type { BundledBinaryStatus } from '../shared/integrationStatus'
+import type { AppInfo, AppInfoLink, NoticeOpenResult } from '../shared/appInfo'
 import type { AudioDevice } from '../shared/audioDevice'
 import type { MediaKeyCommand } from '../shared/mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBounds'
@@ -52,6 +55,7 @@ import type {
 } from '../shared/knowledge'
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
+import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -299,6 +303,24 @@ const api = {
   integration: {
     binaryStatus: (): Promise<BundledBinaryStatus> =>
       ipcRenderer.invoke(INTEGRATION_CHANNELS.binaryStatus)
+  },
+  appInfo: {
+    get: (): Promise<AppInfo> => ipcRenderer.invoke(APP_INFO_CHANNELS.get),
+    openLink: (link: AppInfoLink): Promise<void> =>
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link),
+    openNotices: (): Promise<NoticeOpenResult> => ipcRenderer.invoke(APP_INFO_CHANNELS.openNotices)
+  },
+  updates: {
+    getState: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
+    getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke(UPDATE_CHANNELS.getSettings),
+    setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
+      ipcRenderer.invoke(UPDATE_CHANNELS.setSettings, patch),
+    check: (origin: UpdateCheckOrigin): Promise<UpdateState> =>
+      ipcRenderer.invoke(UPDATE_CHANNELS.check, origin),
+    download: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.download),
+    install: (): Promise<void> => ipcRenderer.invoke(UPDATE_CHANNELS.install),
+    onStateChange: (cb: (state: UpdateState) => void): (() => void) =>
+      subscribe(UPDATE_CHANNELS.stateChanged, cb)
   },
   clipboard: {
     writeText: (text: string): Promise<void> =>

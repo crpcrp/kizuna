@@ -17,6 +17,7 @@ import type {
 } from './dictionary'
 import type { PlayerSettings, VideoAdjustments } from './playerSettings'
 import type { BundledBinaryStatus } from './integrationStatus'
+import type { AppInfo, AppInfoLink, NoticeOpenResult } from './appInfo'
 import type { AudioDevice } from './audioDevice'
 import type { MediaKeyCommand } from './mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from './windowBounds'
@@ -43,6 +44,7 @@ import type {
   StoredSubtitleSelection,
   StoredTrackSelection
 } from './mediaHistory'
+import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -204,6 +206,20 @@ export interface KizunaApi {
     /** Read-only diagnostics for the "Setup & integrations" tab: which optional
      * bundled binaries are present on disk. Never mutates anything. */
     binaryStatus(): Promise<BundledBinaryStatus>
+  }
+  appInfo: {
+    get(): Promise<AppInfo>
+    openLink(link: AppInfoLink): Promise<void>
+    openNotices(): Promise<NoticeOpenResult>
+  }
+  updates: {
+    getState(): Promise<UpdateState>
+    getSettings(): Promise<UpdateSettings>
+    setSettings(patch: Partial<UpdateSettings>): Promise<UpdateSettings>
+    check(origin: UpdateCheckOrigin): Promise<UpdateState>
+    download(): Promise<UpdateState>
+    install(): Promise<void>
+    onStateChange(cb: (state: UpdateState) => void): () => void
   }
   clipboard: {
     writeText(text: string): Promise<void>

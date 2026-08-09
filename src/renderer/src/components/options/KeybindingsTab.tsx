@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { describeKeyBinding, eventKeyBinding } from '../../state/keyBindings'
+import { describeKeyBinding, eventKeyBinding, wheelEventKeyBinding } from '../../state/keyBindings'
 import type { KeyBinding, KeyBindings, PlayerKeyAction } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 
@@ -25,7 +25,8 @@ export const ACTION_ROWS: { action: PlayerKeyAction; label: string }[] = [
   { action: 'prevChapter', label: 'Previous chapter' },
   { action: 'nextChapter', label: 'Next chapter' },
   { action: 'screenshot', label: 'Save screenshot' },
-  { action: 'miniPlayer', label: 'Mini player' }
+  { action: 'miniPlayer', label: 'Mini player' },
+  { action: 'subtitleFontScale', label: 'Subtitle size ±10%' }
 ]
 
 export const KEYBINDINGS_SETTING_ENTRIES: SettingEntry[] = ACTION_ROWS.map(
@@ -60,16 +61,36 @@ export default function KeybindingsTab({
 
   useEffect(() => {
     if (!open || !listeningFor) return
-    const capture = (e: KeyboardEvent): void => {
+    const captureKey = (e: KeyboardEvent): void => {
       e.preventDefault()
       e.stopPropagation()
+      if (listeningFor === 'subtitleFontScale') {
+        if (e.code === 'Escape') {
+          setListeningFor(null)
+          return
+        }
+      }
       const binding = eventKeyBinding(e, heldModifiers)
       if (!binding) return
       onChangeKeyBinding(listeningFor, binding)
       setListeningFor(null)
     }
-    window.addEventListener('keydown', capture, true)
-    return () => window.removeEventListener('keydown', capture, true)
+    const captureWheel = (e: WheelEvent): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      const binding = wheelEventKeyBinding(e, heldModifiers)
+      if (!binding) return
+      onChangeKeyBinding(listeningFor, binding)
+      setListeningFor(null)
+    }
+    window.addEventListener('keydown', captureKey, true)
+    if (listeningFor === 'subtitleFontScale') {
+      window.addEventListener('wheel', captureWheel, true)
+    }
+    return () => {
+      window.removeEventListener('keydown', captureKey, true)
+      window.removeEventListener('wheel', captureWheel, true)
+    }
   }, [open, listeningFor, onChangeKeyBinding, heldModifiers])
 
   useEffect(() => {
@@ -92,7 +113,11 @@ export default function KeybindingsTab({
                 aria-label={`Rebind ${label}`}
                 onClick={() => setListeningFor(action)}
               >
-                {listeningFor === action ? 'Press a key…' : describeKeyBinding(keyBindings[action])}
+                {listeningFor === action
+                  ? action === 'subtitleFontScale'
+                    ? 'Press a key or scroll…'
+                    : 'Press a key…'
+                  : describeKeyBinding(keyBindings[action])}
               </button>
             </div>
           ))}

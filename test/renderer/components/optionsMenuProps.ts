@@ -99,6 +99,8 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       onSyncNow: async () => DEFAULT_SYNC_STATUS
     },
     setup: {
+      checkAutomatically: true,
+      onChangeCheckAutomatically: noop,
       setup: undefined,
       mecabDicts: [],
       yomitanDicts: [],

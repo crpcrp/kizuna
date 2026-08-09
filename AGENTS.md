@@ -4,11 +4,6 @@ Kizuna is a Windows and Linux Electron and TypeScript application. Use
 `docs/codebase-map.md` when you need help locating a subsystem and
 `docs/architecture-plan.md` when a change affects architecture.
 
-## Workspace convention
-
-Feature development uses `E:\Programozás\repos\kizuna-feature`. Keep the main
-checkout for read-only orientation and perform feature work in that worktree.
-
 ## Working principles
 
 - Keep changes focused on the requested outcome and preserve unrelated work.

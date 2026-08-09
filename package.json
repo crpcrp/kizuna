@@ -46,6 +46,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.0",
     "happy-dom": "^20.10.6",
+    "js-yaml": "^4.3.1",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
@@ -62,6 +63,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^13.0.1",
+    "electron-updater": "^6.8.9",
     "fflate": "^0.8.2",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

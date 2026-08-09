@@ -319,7 +319,7 @@ describe('runBulkMining sentence-audio media context', () => {
   it('omits it for a remote URL, which ffmpeg cannot clip', async () => {
     const anki = await mine([timedCandidate('one', 10, 12)], {
       ...source,
-      filePath: 'https://www.youtube.com/watch?v=abc'
+      filePath: 'https://host.example/media'
     })
 
     expect((anki.anki.addNote as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toHaveProperty(

@@ -6,9 +6,14 @@ import {
   eventKeyBinding,
   isEditableTarget,
   keyToAction,
+  wheelEventKeyBinding,
   type KeyChord
 } from '@src/renderer/src/state/keyBindings'
-import { DEFAULT_KEY_BINDINGS, type KeyBindings } from '@src/shared/playerSettings'
+import {
+  DEFAULT_KEY_BINDINGS,
+  MOUSE_WHEEL_BINDING_CODE,
+  type KeyBindings
+} from '@src/shared/playerSettings'
 
 describe('keyToAction', () => {
   it('maps default bindings and rejects unmapped keys', () => {
@@ -66,6 +71,46 @@ describe('eventKeyBinding', () => {
   })
 })
 
+describe('wheelEventKeyBinding', () => {
+  const noModifiers: ReadonlySet<string> = new Set()
+
+  it('returns a wheel code or a tracked modifier chord', () => {
+    expect(
+      wheelEventKeyBinding(
+        { ctrlKey: false, shiftKey: false, altKey: false, metaKey: false },
+        noModifiers
+      )
+    ).toBe(MOUSE_WHEEL_BINDING_CODE)
+    expect(
+      wheelEventKeyBinding(
+        { ctrlKey: false, shiftKey: true, altKey: false, metaKey: false },
+        new Set(['ShiftLeft'])
+      )
+    ).toBe('ShiftLeft+MouseWheel')
+  })
+
+  it('rejects unsupported modifiers and right-side tracked modifiers', () => {
+    expect(
+      wheelEventKeyBinding(
+        { ctrlKey: true, shiftKey: true, altKey: false, metaKey: false },
+        new Set(['ControlLeft', 'ShiftLeft'])
+      )
+    ).toBeNull()
+    expect(
+      wheelEventKeyBinding(
+        { ctrlKey: false, shiftKey: true, altKey: false, metaKey: false },
+        new Set(['ShiftRight'])
+      )
+    ).toBeNull()
+    expect(
+      wheelEventKeyBinding(
+        { ctrlKey: false, shiftKey: false, altKey: true, metaKey: false },
+        noModifiers
+      )
+    ).toBeNull()
+  })
+})
+
 describe('isEditableTarget', () => {
   it('recognizes text-entry elements and contenteditable nodes', () => {
     expect(isEditableTarget({ tagName: 'INPUT' } as unknown as EventTarget)).toBe(true)
@@ -110,6 +155,7 @@ describe('key binding labels', () => {
     expect(describeKeyCode('KeyF')).toBe('F')
     expect(describeKeyCode('Digit5')).toBe('5')
     expect(describeKeyCode('F11')).toBe('F11')
+    expect(describeKeyCode(MOUSE_WHEEL_BINDING_CODE)).toBe('mouse wheel')
   })
 
   it('includes modifier labels in chords', () => {

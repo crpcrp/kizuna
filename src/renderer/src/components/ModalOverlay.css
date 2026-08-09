@@ -33,6 +33,10 @@
   flex-shrink: 0;
   margin-bottom: 12px;
 }
+.modal-title {
+  margin: 0;
+  font: inherit;
+}
 .modal-header button {
   background: transparent;
   border: none;

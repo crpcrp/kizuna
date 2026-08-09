@@ -10,6 +10,7 @@
 import { pathApiFor } from '../../platformPath'
 import type { FfmpegExec } from '../../media/ffmpeg'
 import type { MineMediaContext } from '../../../shared/anki'
+import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 
 /**
  * Shortest window worth encoding. Anything below this is either a malformed
@@ -78,7 +79,7 @@ export interface SentenceAudioService {
 /** True when `media` describes a window ffmpeg could actually encode. */
 function usableWindow(media: MineMediaContext): boolean {
   const { startSec, endSec, audioStreamIndex } = media
-  if (media.path === '') return false
+  if (media.path === '' || isRemoteUrl(media.path)) return false
   if (!Number.isInteger(audioStreamIndex) || audioStreamIndex < 0) return false
   if (!Number.isFinite(startSec) || !Number.isFinite(endSec)) return false
   if (startSec < 0) return false

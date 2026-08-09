@@ -215,7 +215,13 @@ describe('buildSetupRows', () => {
 describe('SetupTab', () => {
   function render(overrides: Partial<SetupRowsInput> = {}): string {
     return renderToStaticMarkup(
-      <SetupTab {...input(overrides)} onGoToCategory={noop} categoryLabel={categoryLabel} />
+      <SetupTab
+        {...input(overrides)}
+        checkAutomatically
+        onChangeCheckAutomatically={noop}
+        onGoToCategory={noop}
+        categoryLabel={categoryLabel}
+      />
     )
   }
 
@@ -247,9 +253,11 @@ describe('SetupTab', () => {
     expect(html.match(/Go to /g)?.length).toBe(5)
   })
 
-  it('renders no form control — the page reports, it never configures', () => {
+  it('renders only the automatic-update form control', () => {
     const html = render()
-    expect(html).not.toContain('<input')
+    expect(html.match(/<input/g)?.length).toBe(1)
+    expect(html).toContain('Automatically check for Kizuna updates')
+    expect(html).toContain('id="automatic-update-checks"')
     expect(html).not.toContain('<select')
     expect(html).not.toContain('<textarea')
   })

@@ -306,7 +306,7 @@ describe('registerPlayerBridge', () => {
     expect(controller.setAudioTrack).toHaveBeenCalledWith(3)
   })
 
-  it('rejects HTTP and HTTPS URLs before controller or history access', async () => {
+  it('rejects URL schemes before controller or history access', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
     const history = fakeHistory()
@@ -317,6 +317,12 @@ describe('registerPlayerBridge', () => {
     ).rejects.toThrow('URL playback is not supported.')
     await expect(
       handlers.get(PLAYER_CHANNELS.load)!(event, 'HTTP://host/video.mp4')
+    ).rejects.toThrow('URL playback is not supported.')
+    await expect(handlers.get(PLAYER_CHANNELS.load)!(event, 'rtsp://host/live')).rejects.toThrow(
+      'URL playback is not supported.'
+    )
+    await expect(
+      handlers.get(PLAYER_CHANNELS.load)!(event, 'file:///media/video.mp4')
     ).rejects.toThrow('URL playback is not supported.')
     expect(controller.loadFile).not.toHaveBeenCalled()
     expect(history.beginLoad).not.toHaveBeenCalled()

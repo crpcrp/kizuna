@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import {
   DEFAULT_SUBTITLE_STYLE,
+  SUBTITLE_FONT_SCALE_MAX,
+  SUBTITLE_FONT_SCALE_MIN,
+  SUBTITLE_FONT_SCALE_STEP,
   type SubtitleStyleSettings
 } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
@@ -18,7 +21,11 @@ export interface SubtitlesTabProps {
 
 export function parseFontScalePercent(rawValue: string): number | null {
   const value = Number(rawValue)
-  return Number.isFinite(value) && value >= 50 && value <= 300 ? value / 100 : null
+  return Number.isFinite(value) &&
+    value >= SUBTITLE_FONT_SCALE_MIN * 100 &&
+    value <= SUBTITLE_FONT_SCALE_MAX * 100
+    ? value / 100
+    : null
 }
 
 export function parsePositionPercent(rawValue: string): number | null {
@@ -113,9 +120,9 @@ export default function SubtitlesTab({
           <input
             type="number"
             id="subtitle-font-scale-input"
-            min={50}
-            max={300}
-            step={10}
+            min={SUBTITLE_FONT_SCALE_MIN * 100}
+            max={SUBTITLE_FONT_SCALE_MAX * 100}
+            step={SUBTITLE_FONT_SCALE_STEP * 100}
             value={fontScaleDraft ?? Math.round(subtitleStyle.fontScale * 100)}
             onChange={(e) => {
               setFontScaleDraft(e.target.value)

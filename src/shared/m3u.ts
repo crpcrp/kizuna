@@ -8,18 +8,12 @@
 // ever sees decoded text.
 
 import { normalizeMediaPath, type PathPlatform } from './mediaHistory'
+import { isRemoteUrl } from './mediaFileTypes'
 
 export interface M3uParseOptions {
   /** Platform whose path rules apply; defaults to the runtime platform. */
   platform?: PathPlatform
 }
-
-/**
- * Any `scheme://` URL entry (`https://`, `ftp://`, `file://`, …). Windows drive
- * paths (`C:\…`) and UNC roots (`\\nas\…`) have no `//` after the colon, so
- * they are not caught here and resolve as local paths.
- */
-const URL_ENTRY = /^[a-z][a-z0-9+.-]*:\/\//i
 
 /**
  * Parses M3U/M3U8 text into media entries. Comment/directive lines
@@ -34,7 +28,7 @@ export function parseM3u(text: string, baseDir: string, options: M3uParseOptions
   for (const rawLine of withoutBom.split(/\r?\n/)) {
     const line = rawLine.trim()
     if (line === '' || line.startsWith('#')) continue
-    if (URL_ENTRY.test(line)) continue
+    if (isRemoteUrl(line)) continue
     const resolved = normalizeMediaPath(line, { platform: options.platform, cwd: baseDir })
     if (resolved) paths.push(resolved)
   }
@@ -43,5 +37,5 @@ export function parseM3u(text: string, baseDir: string, options: M3uParseOptions
 
 /** Serializes paths to M3U text: an `#EXTM3U` header then one path per line. */
 export function serializeM3u(paths: string[]): string {
-  return `${['#EXTM3U', ...paths.filter((path) => !URL_ENTRY.test(path.trim()))].join('\n')}\n`
+  return `${['#EXTM3U', ...paths.filter((path) => !isRemoteUrl(path))].join('\n')}\n`
 }

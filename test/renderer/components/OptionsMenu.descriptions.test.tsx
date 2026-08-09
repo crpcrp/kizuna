@@ -17,6 +17,13 @@ function renderMenu(): string {
 }
 
 describe('OptionsMenu setting descriptions', () => {
+  it('shows the subtitle-size wheel shortcut as a rebindable action', () => {
+    const html = renderMenu()
+    expect(html).toContain('Subtitle size ±10%')
+    expect(html).toContain('Shift + mouse wheel')
+    expect(html).toContain('aria-label="Rebind Subtitle size ±10%"')
+  })
+
   it('describes the Playback settings that are not self-explanatory', () => {
     const html = renderMenu()
     expect(html).toContain('Used by the arrow keys and the transport skip buttons.')

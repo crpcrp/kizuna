@@ -17,14 +17,17 @@ import { join } from 'node:path'
 import * as fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
+import { autoUpdater } from 'electron-updater'
+import packageMetadata from '../../package.json'
 import {
   applyNavigationGuards,
   applyReloadGuard,
   registerWindowControls,
   sendToWindow
 } from './windowOptions'
-import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
-import { createQuitCoordinator } from './appLifecycle'
+import { LAUNCH_CHANNELS, UPDATE_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
+import { COPYRIGHT } from '../shared/appIdentity'
+import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
 import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
@@ -35,7 +38,8 @@ import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
-import { resolveBinaryPaths, type BinaryPaths } from './resourcePaths'
+import { resolveBinaryPaths, resolveThirdPartyNoticesPath, type BinaryPaths } from './resourcePaths'
+import { createAppInfoService, registerAppInfoBridge } from './appInfoBridge'
 import { registerMecabBridge, createMecabService } from './mecabBridge'
 import {
   registerDictBridge,
@@ -73,6 +77,10 @@ import {
   presentAppWindowSet,
   type AppWindowSet
 } from './windowPair'
+import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
+import { registerUpdateBridge } from './updateBridge'
+import { createUpdateService, type UpdateService } from './updateService'
+import { detectUpdateSupport } from './updateSupport'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
@@ -109,6 +117,7 @@ let mediaHistory: MediaHistoryService | undefined
 let powerSave: ReturnType<typeof createPowerSaveController> | undefined
 let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
+let updates: UpdateService | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -464,10 +473,60 @@ function startIntegrationStatus(paths: BinaryPaths): void {
   )
 }
 
+/** Registers the About-dialog bridge with runtime version and packaged notices. */
+function startAppInfo(): void {
+  const noticesPath = resolveThirdPartyNoticesPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appRoot: app.getAppPath()
+  })
+  registerAppInfoBridge(
+    ipcMain,
+    createAppInfoService({
+      getVersion: () => app.getVersion(),
+      metadata: {
+        description: packageMetadata.description,
+        license: packageMetadata.license,
+        copyright: COPYRIGHT
+      },
+      noticesPath,
+      exists: (path) => fs.existsSync(path),
+      openExternal: (url) => shell.openExternal(url),
+      openPath: (path) => shell.openPath(path)
+    })
+  )
+}
+
+/** Starts the single main-process updater and its renderer-owning IPC bridge. */
+function startUpdates(lifecycle: AppLifecycleCoordinator, settings: SettingsStore): UpdateService {
+  let packageType: string | undefined
+  try {
+    packageType = fs.readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
+  } catch {
+    // AppImage and unpackaged builds do not have electron-builder's package marker.
+  }
+  const service = createUpdateService({
+    support: detectUpdateSupport({
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      appImagePath: process.env['APPIMAGE'],
+      packageType,
+      hasUpdateConfiguration: fs.existsSync(join(process.resourcesPath, 'app-update.yml'))
+    }),
+    currentVersion: app.getVersion(),
+    updater: createElectronUpdaterAdapter(autoUpdater),
+    prepareInstall: (install) => lifecycle.prepareForInstall(install),
+    allowAutomaticChecks: process.env[STARTUP_PROBE_ENV] !== '1'
+  })
+  registerUpdateBridge(ipcMain, service, settings, (sender) => sender === mainWindow?.webContents)
+  service.subscribe((state) => sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state))
+  return service
+}
+
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
-  const handleBeforeQuit = createQuitCoordinator({
+  const lifecycle = createAppLifecycleCoordinator({
     // Electron's defaultSession getter is unavailable until app is ready.
     // Keep the lookup lazy because this coordinator is registered during
     // module initialization, before the ready promise resolves.
@@ -478,6 +537,7 @@ if (!gotSingleInstanceLock) {
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
     disposeSystemMedia: () => systemMedia?.dispose(),
+    onShutdownStart: () => updates?.beginShutdown(),
     appQuit: () => {
       appWindows?.close()
       app.quit()
@@ -515,6 +575,9 @@ if (!gotSingleInstanceLock) {
       appRoot: app.getAppPath()
     })
     const settings = createAppSettingsStore()
+    // Register once for the application lifetime. The overlay renderer starts
+    // the optional startup check only after it has subscribed to state pushes.
+    updates = startUpdates(lifecycle, settings)
     mpvConfig = createMpvConfigManager({
       userDataDir: app.getPath('userData'),
       fs,
@@ -531,6 +594,7 @@ if (!gotSingleInstanceLock) {
     startKnowledge(settings)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
+    startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
     registerTranslateBridge(ipcMain, createGoogleTranslator(httpFetch))
     createWindow(binaryPaths.mpvPath, mediaHistory, settings)
@@ -550,7 +614,8 @@ if (!gotSingleInstanceLock) {
     })
   })
 
-  app.on('before-quit', handleBeforeQuit)
+  app.on('before-quit', lifecycle.handleBeforeQuit)
+  app.on('will-quit', () => updates?.dispose())
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

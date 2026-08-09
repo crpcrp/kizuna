@@ -5,6 +5,8 @@ import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
+import AboutDialog from './components/AboutDialog'
+import UpdateDialog from './components/UpdateDialog'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -33,6 +35,8 @@ import { usePlayerEvents } from './state/usePlayerEvents'
 import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
 import { useAppearance } from './state/useAppearance'
 import { useOptionsDialog } from './state/useOptionsDialog'
+import { useAboutDialog } from './state/useAboutDialog'
+import { useUpdates } from './state/useUpdates'
 import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
@@ -43,6 +47,11 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
+import {
+  adjustSubtitleFontScale,
+  isSubtitleFontWheelShortcut,
+  subtitleFontWheelDirection
+} from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
@@ -136,6 +145,11 @@ export default function App({
     settingsPersistenceRef,
     reportError: mediaSession.banner.reportError
   })
+  const about = useAboutDialog({
+    bridge: kizuna,
+    reportError: mediaSession.banner.reportError
+  })
+  const updates = useUpdates(kizuna)
   // Applies the appearance settings ('system'|'light'|'dark' theme, underline
   // color overrides) to <html> — see state/useAppearance.ts.
   useAppearance({ appearance: state.appearance, levelColors: state.levelColors })
@@ -278,6 +292,14 @@ export default function App({
       mediaSession.banner.reportError(errorMessage(err))
     }
   }
+  const handleAdjustSubtitleFontScale = (direction: -1 | 1): void => {
+    dispatch({
+      type: 'setSubtitleStyle',
+      value: {
+        fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, direction)
+      }
+    })
+  }
   const keyContext: KeyboardShortcutContext = {
     ...playbackWindow.keyboard,
     player: playerAdapter,
@@ -295,6 +317,7 @@ export default function App({
     onPrevFile: () => mediaSession.navigate('prev'),
     onNextFile: () => mediaSession.navigate('next'),
     onScreenshot: () => void handleScreenshot(),
+    onAdjustSubtitleFontScale: handleAdjustSubtitleFontScale,
     keyBindings: state.keyBindings
   }
   // Mirrored into a ref so the window-level keydown listener stays mounted once
@@ -303,7 +326,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: options.open || vocabulary.modalOpen
+    suspended: options.open || about.open || updates.modal !== null || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -326,7 +349,11 @@ export default function App({
     onClose: options.closeDialog,
     onCategoryOpen: options.onCategoryOpen,
     playback: playbackWindow.optionsPlayback,
-    knowledge: vocabulary.knowledgeOptions
+    knowledge: vocabulary.knowledgeOptions,
+    updates: {
+      settings: updates.settings,
+      onChangeCheckAutomatically: updates.setCheckAutomatically
+    }
   })
 
   return (
@@ -374,6 +401,7 @@ export default function App({
             }}
             vocabulary={vocabulary.vocabularyMenu}
             onOpenOptions={options.openDialog}
+            onOpenAbout={about.openDialog}
             onOpenChange={setMenuBarOpen}
           />
         )}
@@ -385,6 +413,22 @@ export default function App({
           <button type="button" aria-label="Dismiss" onClick={mediaSession.banner.dismiss}>
             ×
           </button>
+        </div>
+      )}
+
+      {updates.statusText && !about.open && (
+        <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
+          <span>{updates.statusText}</span>
+          {updates.snapshot.status === 'error' && (
+            <button type="button" onClick={updates.retry}>
+              Retry
+            </button>
+          )}
+          {updates.snapshot.status === 'downloaded' && (
+            <button type="button" onClick={updates.install}>
+              Install and restart
+            </button>
+          )}
         </div>
       )}
 
@@ -409,6 +453,20 @@ export default function App({
         <main
           id="content"
           ref={contentRef}
+          onWheel={(event) => {
+            if (
+              !isSubtitleFontWheelShortcut(
+                event,
+                state.keyBindings.subtitleFontScale,
+                modifiers.held
+              )
+            )
+              return
+            const direction = subtitleFontWheelDirection(event.deltaY, event.deltaX)
+            if (direction === 0) return
+            event.preventDefault()
+            handleAdjustSubtitleFontScale(direction)
+          }}
           onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {
             e.preventDefault()
@@ -478,6 +536,28 @@ export default function App({
       />
 
       <OptionsMenu {...optionsMenu} />
+
+      <AboutDialog
+        open={about.open}
+        info={about.info}
+        noticeMessage={about.noticeMessage}
+        onClose={about.closeDialog}
+        onOpenLink={about.openLink}
+        onOpenNotices={about.openNotices}
+        updateState={updates.snapshot}
+        onCheckForUpdates={updates.checkManually}
+        onDownloadUpdate={updates.download}
+        onInstallUpdate={updates.install}
+        onRetryUpdate={updates.retry}
+      />
+
+      <UpdateDialog
+        modal={about.open ? null : updates.modal}
+        onDismissAvailable={updates.dismissAvailable}
+        onDownload={updates.download}
+        onDeferInstall={updates.deferInstall}
+        onInstall={updates.install}
+      />
 
       <WordPopup
         {...vocabulary.wordPopup}

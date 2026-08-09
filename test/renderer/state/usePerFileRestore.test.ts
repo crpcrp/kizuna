@@ -78,7 +78,7 @@ describe('usePerFileRestore', () => {
   })
 
   it('does not send URL state to mpv or local-media probes', () => {
-    const result = setup('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    const result = setup('https://host.example/media')
     expect(result.bridge.player.setSpeed).not.toHaveBeenCalled()
     expect(result.bridge.player.setAudioDelay).not.toHaveBeenCalled()
     expect(result.bridge.player.setAbLoop).not.toHaveBeenCalled()

@@ -41,15 +41,18 @@ describe('parseM3u', () => {
   })
 
   it('skips non-http URL schemes (ftp, file) that are not openable', () => {
-    const text = 'ftp://host/x.mkv\nfile:///abs/y.mkv\nlocal.mkv'
+    const text = 'ftp://host/x.mkv\nfile:///abs/y.mkv\nrtsp:host/live\ndata:video/mp4,x\nlocal.mkv'
     expect(parseM3u(text, '/media', { platform: 'posix' })).toEqual(['/media/local.mkv'])
   })
 
-  it('drops an http(s) URL when serializing a playlist', () => {
-    const url = 'https://host/stream.m3u8'
-    expect(parseM3u(serializeM3u(['/media/a.mkv', url]), '/media', { platform: 'posix' })).toEqual([
-      '/media/a.mkv'
-    ])
+  it('drops URL entries when serializing a playlist', () => {
+    expect(
+      parseM3u(
+        serializeM3u(['/media/a.mkv', 'https://host/stream.m3u8', 'rtsp:host/live']),
+        '/media',
+        { platform: 'posix' }
+      )
+    ).toEqual(['/media/a.mkv'])
   })
 
   it('resolves relative entries against a Windows folder', () => {

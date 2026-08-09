@@ -3,6 +3,7 @@
   "executableName": "kizuna",
   "appId": "com.crp.kizuna",
   "userDataDirName": "Kizuna",
+  "copyright": "Copyright © 2026 Adam Kocsis",
   "repositoryUrl": "https://github.com/crpcrp/kizuna",
   "vendorRepositoryUrl": "https://github.com/crpcrp/kizuna-vendor"
 }

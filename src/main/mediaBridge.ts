@@ -6,7 +6,14 @@ import type { Track, VideoDimensions } from '../shared/track'
 import type { Chapter } from '../shared/chapter'
 import type { Cue } from '../shared/cue'
 import { isSubtitleEncoding, type SubtitleEncoding } from '../shared/subtitleEncoding'
+import { isRemoteUrl } from '../shared/mediaFileTypes'
 import type { IpcMainHandleLike } from './ipc'
+
+const LOCAL_MEDIA_ONLY_MESSAGE = 'URL playback is not supported.'
+
+function assertLocalPath(path: string): void {
+  if (isRemoteUrl(path)) throw new Error(LOCAL_MEDIA_ONLY_MESSAGE)
+}
 
 /** The slice of the media service this bridge needs (fakeable in tests). */
 export interface MediaServiceLike {
@@ -56,24 +63,40 @@ export function registerMediaBridge<E>(ipc: IpcMainHandleLike<E>, service: Media
   ipc.handle(MEDIA_CHANNELS.openFile, () => service.openFile())
   ipc.handle(MEDIA_CHANNELS.openFiles, () => service.openFiles())
   ipc.handle(MEDIA_CHANNELS.openFolder, () => service.openFolder())
-  ipc.handle(MEDIA_CHANNELS.readPlaylist, (_e, filePath) => service.readPlaylist(filePath))
+  ipc.handle(MEDIA_CHANNELS.readPlaylist, (_e, filePath) => {
+    assertLocalPath(filePath)
+    return service.readPlaylist(filePath)
+  })
   ipc.handle(MEDIA_CHANNELS.savePlaylist, (_e, paths) => service.savePlaylist(paths))
   ipc.handle(MEDIA_CHANNELS.openSubtitleFile, () => service.openSubtitleFile())
-  ipc.handle(MEDIA_CHANNELS.enumerateTracks, (_e, filePath) => service.enumerateTracks(filePath))
-  ipc.handle(MEDIA_CHANNELS.loadSubtitle, (_e, filePath, streamIndex) =>
-    service.loadSubtitle(filePath, streamIndex)
-  )
+  ipc.handle(MEDIA_CHANNELS.enumerateTracks, (_e, filePath) => {
+    assertLocalPath(filePath)
+    return service.enumerateTracks(filePath)
+  })
+  ipc.handle(MEDIA_CHANNELS.loadSubtitle, (_e, filePath, streamIndex) => {
+    assertLocalPath(filePath)
+    return service.loadSubtitle(filePath, streamIndex)
+  })
   ipc.handle(MEDIA_CHANNELS.loadExternalSubtitle, (_e, subtitlePath, suppliedEncoding: unknown) => {
+    assertLocalPath(subtitlePath)
     const encoding = suppliedEncoding === undefined ? 'auto' : suppliedEncoding
     if (!isSubtitleEncoding(encoding)) throw new Error('Unsupported subtitle encoding.')
     return service.loadExternalSubtitle(subtitlePath, encoding)
   })
-  ipc.handle(MEDIA_CHANNELS.getVideoDimensions, (_e, filePath) =>
-    service.getVideoDimensions(filePath)
-  )
-  ipc.handle(MEDIA_CHANNELS.getChapters, (_e, filePath) => service.getChapters(filePath))
-  ipc.handle(MEDIA_CHANNELS.folderNeighbors, (_e, filePath) => service.folderNeighbors(filePath))
-  ipc.handle(MEDIA_CHANNELS.thumbnail, (_e, filePath, timeSec, durationSec) =>
-    service.getThumbnail(filePath, timeSec, durationSec)
-  )
+  ipc.handle(MEDIA_CHANNELS.getVideoDimensions, (_e, filePath) => {
+    assertLocalPath(filePath)
+    return service.getVideoDimensions(filePath)
+  })
+  ipc.handle(MEDIA_CHANNELS.getChapters, (_e, filePath) => {
+    assertLocalPath(filePath)
+    return service.getChapters(filePath)
+  })
+  ipc.handle(MEDIA_CHANNELS.folderNeighbors, (_e, filePath) => {
+    assertLocalPath(filePath)
+    return service.folderNeighbors(filePath)
+  })
+  ipc.handle(MEDIA_CHANNELS.thumbnail, (_e, filePath, timeSec, durationSec) => {
+    assertLocalPath(filePath)
+    return service.getThumbnail(filePath, timeSec, durationSec)
+  })
 }

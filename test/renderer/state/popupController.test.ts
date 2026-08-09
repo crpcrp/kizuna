@@ -592,7 +592,7 @@ describe('popupController sentence-audio media context', () => {
   it('omits the context for a remote URL', async () => {
     const anki = await mine(cueInput, {
       ...localSource,
-      filePath: 'https://www.youtube.com/watch?v=abc'
+      filePath: 'https://host.example/media'
     })
 
     expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')

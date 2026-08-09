@@ -71,6 +71,10 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
       onChangeKnowledgeSettings: vi.fn(),
       onSyncNow: vi.fn(async () => DEFAULT_SYNC_STATUS)
     },
+    updates: {
+      settings: { checkAutomatically: true },
+      onChangeCheckAutomatically: vi.fn()
+    },
     ...patch
   }
 }

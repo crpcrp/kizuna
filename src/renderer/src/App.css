@@ -74,6 +74,22 @@ body {
   background: var(--hover-bg);
 }
 
+#update-status {
+  position: fixed;
+  right: 14px;
+  bottom: 58px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 28px));
+  padding: 10px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-panel);
+  box-shadow: var(--shadow-menu);
+}
+
 /* Global completion feedback stays visible when bulk mining is hidden or its
    detailed modal is closed; dismissing it never changes controller state. */
 #bulk-mining-completion-toast {

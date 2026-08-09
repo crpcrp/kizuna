@@ -50,6 +50,8 @@ export interface KeyActionDeps {
   onScreenshot: () => void
   /** Toggles compact mini-player (picture-in-picture) mode; see `state/miniPlayer.ts`. */
   onToggleMiniPlayer: () => void
+  /** Adjusts the persisted subtitle font scale by one ten-point step. */
+  onAdjustSubtitleFontScale: (direction: -1 | 1) => void
 }
 
 /**
@@ -141,6 +143,9 @@ export function performKeyAction(action: PlayerKeyAction, deps: KeyActionDeps): 
       return false
     case 'miniPlayer':
       deps.onToggleMiniPlayer()
+      return false
+    case 'subtitleFontScale':
+      deps.onAdjustSubtitleFontScale(1)
       return false
   }
 }

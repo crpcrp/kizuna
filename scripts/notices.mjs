@@ -71,6 +71,7 @@ import {
  * @property {number} schemaVersion
  * @property {string} vendorCommit Must equal `resources.lock.json`'s `source.commit`.
  * @property {NoticeComponent[]} components
+ * @property {Record<string, string>} [npmLicenseFallbacks] Committed license text for an npm package whose tarball omits it.
  */
 
 /**
@@ -141,6 +142,21 @@ export function noticesProblems(notices) {
   }
   if (!Array.isArray(n.components) || n.components.length === 0) {
     problems.push('components is empty')
+  }
+  if (n.npmLicenseFallbacks !== undefined) {
+    if (
+      n.npmLicenseFallbacks === null ||
+      typeof n.npmLicenseFallbacks !== 'object' ||
+      Array.isArray(n.npmLicenseFallbacks)
+    ) {
+      problems.push('npmLicenseFallbacks must be an object')
+    } else {
+      for (const [packageName, path] of Object.entries(n.npmLicenseFallbacks)) {
+        if (!packageName || typeof path !== 'string' || !isSafeRelativePath(path)) {
+          problems.push(`npmLicenseFallbacks has an unsafe entry for ${packageName || '(empty)'}`)
+        }
+      }
+    }
   }
   const ids = new Set()
   for (const component of n.components ?? []) {
@@ -389,7 +405,14 @@ export function componentLicensePath(component, sourcePath) {
  */
 export function npmLicensePath(pkg, fileName) {
   const nested = pkg.path.replace(/^node_modules\//, '').replace(/\/node_modules\//g, '/')
-  return posix.join('licenses', 'npm', nested, fileName)
+  return posix.join('licenses', 'npm', nested, posix.basename(fileName))
+}
+
+/** A `repo:` entry names a committed fallback instead of a file in node_modules. */
+function npmLicenseSource(repoRoot, pkg, name) {
+  return name.startsWith('repo:')
+    ? join(repoRoot, name.slice('repo:'.length))
+    : join(repoRoot, pkg.path, name)
 }
 
 /**
@@ -567,7 +590,7 @@ export function licenseCopyPlan({
   }
   for (const pkg of packages) {
     for (const name of packageLicenseNames[pkg.path] ?? []) {
-      plan.push({ from: join(repoRoot, pkg.path, name), to: npmLicensePath(pkg, name) })
+      plan.push({ from: npmLicenseSource(repoRoot, pkg, name), to: npmLicensePath(pkg, name) })
     }
   }
   return plan
@@ -683,6 +706,10 @@ export async function generateNotices({
   const packageLicenseNames = {}
   for (const pkg of packages) {
     packageLicenseNames[pkg.path] = await findPackageLicenses({ repoRoot, pkg })
+    const fallback = declared.npmLicenseFallbacks?.[pkg.name]
+    if (packageLicenseNames[pkg.path].length === 0 && fallback) {
+      packageLicenseNames[pkg.path] = [`repo:${fallback}`]
+    }
   }
   for (const component of notices.components) {
     // Electron is a devDependency — electron-builder ships it, npm's production

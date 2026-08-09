@@ -33,9 +33,16 @@ export interface QuitCoordinatorDeps {
   setTimeoutFn?: SetTimeoutFn
   clearTimeoutFn?: ClearTimeoutFn
   onError?: (operation: string, error: unknown) => void
+  onShutdownStart?: () => void
 }
 
 export type QuitHandler = (event: PreventableQuitEvent) => void
+
+export interface AppLifecycleCoordinator {
+  handleBeforeQuit: QuitHandler
+  /** Runs the normal shutdown sequence before invoking an explicit installer. */
+  prepareForInstall(install: () => void): Promise<void>
+}
 
 function defaultOnError(operation: string, error: unknown): void {
   console.error(`[kizuna] ${operation} failed during shutdown`, error)
@@ -46,7 +53,7 @@ function defaultOnError(operation: string, error: unknown): void {
  * listener. The returned handler is safe to register directly with
  * `app.on('before-quit', ...)`.
  */
-export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
+export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLifecycleCoordinator {
   const flushHistory = deps.flushHistory ?? (() => {})
   const releasePowerSave = deps.releasePowerSave ?? (() => {})
   const disposeSystemMedia = deps.disposeSystemMedia ?? (() => {})
@@ -58,7 +65,9 @@ export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
   let shutdownStarted = false
   let shutdownAllowed = false
   let hardDisposed = false
-  let appQuitCalled = false
+  let continuationCalled = false
+  let continuation: () => void = deps.appQuit
+  let shutdownPromise: Promise<void> | undefined
 
   const reportFailure = (operation: string, error: unknown): void => {
     try {
@@ -92,20 +101,19 @@ export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
     runSafely('mpv hard disposal', () => deps.controller.dispose())
   }
 
-  const allowQuit = (): void => {
+  const finishShutdown = (): void => {
     if (shutdownAllowed) return
     shutdownAllowed = true
-    if (appQuitCalled) return
-    appQuitCalled = true
-    runSafely('app.quit', deps.appQuit)
+    if (continuationCalled) return
+    continuationCalled = true
+    runSafely(continuation === deps.appQuit ? 'app.quit' : 'update installation', continuation)
   }
 
-  return (event): void => {
-    if (shutdownAllowed) return
-
-    event.preventDefault()
-    if (shutdownStarted) return
+  const startShutdown = (next: () => void): Promise<void> => {
+    if (shutdownPromise) return shutdownPromise
     shutdownStarted = true
+    continuation = next
+    runSafely('shutdown notification', () => deps.onShutdownStart?.())
 
     // Keep the existing synchronous order: release media surfaces, then the
     // power-save blocker, then flush history and renderer storage.
@@ -118,17 +126,37 @@ export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
     const cleanup = Promise.allSettled([controllerQuit])
     const timer = setTimeoutFn(() => {
       disposeHard()
-      allowQuit()
+      finishShutdown()
     }, SHUTDOWN_TIMEOUT_MS)
 
-    void cleanup.then((results) => {
+    shutdownPromise = cleanup.then((results) => {
       const operations = ['mpv quit']
       for (const [index, result] of results.entries()) {
         if (result.status === 'rejected') reportFailure(operations[index], result.reason)
       }
       if (shutdownAllowed) return
       clearTimeoutFn(timer)
-      allowQuit()
+      finishShutdown()
     })
+    return shutdownPromise
   }
+
+  const handleBeforeQuit = (event: PreventableQuitEvent): void => {
+    if (shutdownAllowed) return
+    event.preventDefault()
+    if (shutdownStarted) return
+    void startShutdown(deps.appQuit)
+  }
+
+  return {
+    handleBeforeQuit,
+    prepareForInstall(install) {
+      return startShutdown(install)
+    }
+  }
+}
+
+/** Backward-compatible handler factory for callers that only need normal quit. */
+export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
+  return createAppLifecycleCoordinator(deps).handleBeforeQuit
 }
