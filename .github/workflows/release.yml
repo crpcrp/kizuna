@@ -19,9 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build unsigned installer
-    runs-on: windows-latest
+  validate:
+    name: Validate release ref
+    runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
@@ -31,44 +31,56 @@ jobs:
           fetch-depth: 0
           lfs: false
 
+      - name: Verify release ref
+        id: release
+        env:
+          CREATE_RELEASE: ${{ inputs.create_release || false }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+              echo "Invalid release tag: $REF_NAME" >&2
+              exit 1
+            fi
+            if [[ "$REF_NAME" != "$tag" ]]; then
+              echo "Tag $REF_NAME does not match package.json version $version" >&2
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor HEAD origin/main; then
+              echo 'The tagged commit is not in main history' >&2
+              exit 1
+            fi
+          elif [[ "$CREATE_RELEASE" == "true" && "$REF_NAME" != "main" ]]; then
+            echo 'Manual runs that create a release must run from main' >&2
+            exit 1
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Build and smoke-test Windows x64
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          lfs: false
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
 
-      - name: Verify release ref
-        id: release
-        shell: pwsh
-        env:
-          REF_TYPE: ${{ github.ref_type }}
-          REF_NAME: ${{ github.ref_name }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tag = "v$version"
-
-          if ($env:REF_TYPE -eq 'tag') {
-            if ($env:REF_NAME -notmatch '^v\d+\.\d+\.\d+(?:-[0-9A-Za-z][0-9A-Za-z.-]*)?$') {
-              throw "Invalid release tag: $env:REF_NAME"
-            }
-            if ($env:REF_NAME -ne $tag) {
-              throw "Tag $env:REF_NAME does not match package.json version $version"
-            }
-            git merge-base --is-ancestor HEAD origin/main
-            if ($LASTEXITCODE -ne 0) {
-              throw 'The tagged commit is not in main history'
-            }
-          } elseif ($env:REF_NAME -ne 'main') {
-            throw 'Manual release builds must run from main'
-          }
-
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "version=$version" >> $env:GITHUB_OUTPUT
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Fetch pinned runtime binaries
-        run: npm run resources
+      - name: Fetch pinned Windows resources
+        run: npm run resources -- --platform win32-x64
 
       - name: Typecheck
         run: npm run typecheck
@@ -138,44 +150,44 @@ jobs:
             Remove-Item $installDir -Recurse -Force -ErrorAction SilentlyContinue
           }
 
-      - name: Create release assets
+      - name: Create Windows release assets
         shell: pwsh
         env:
-          VERSION: ${{ steps.release.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          Compress-Archive -Path build\notices\* -DestinationPath "dist\kizuna-$env:VERSION-notices.zip"
-          $assets = Get-ChildItem dist\*.exe, dist\*-notices.zip | Sort-Object Name
-          $lines = foreach ($asset in $assets) {
-            "$((Get-FileHash $asset.FullName -Algorithm SHA256).Hash.ToLower())  $($asset.Name)"
+          $ErrorActionPreference = 'Stop'
+          $installerName = "kizuna-$env:VERSION-setup.exe"
+          $noticesName = "kizuna-$env:VERSION-windows-x64-notices.zip"
+          if (-not (Test-Path "dist\$installerName" -PathType Leaf)) {
+            throw "Expected installer is missing: $installerName"
+          }
+
+          Compress-Archive -Path build\notices\* -DestinationPath "dist\$noticesName"
+          $assetNames = @($installerName, $noticesName)
+          $lines = foreach ($name in $assetNames) {
+            $asset = Join-Path dist $name
+            "$((Get-FileHash $asset -Algorithm SHA256).Hash.ToLower())  $name"
           }
           [System.IO.File]::WriteAllText(
-            "$PWD\dist\SHA256SUMS.txt",
+            "$PWD\dist\SHA256SUMS-windows.txt",
             (($lines -join "`n") + "`n"),
             [System.Text.ASCIIEncoding]::new()
           )
 
-      - name: Upload release assets
+      - name: Upload Windows release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: kizuna-windows-release
+          name: kizuna-windows-x64-release
           path: |
-            dist/*.exe
-            dist/*-notices.zip
-            dist/SHA256SUMS.txt
+            dist/kizuna-${{ needs.validate.outputs.version }}-setup.exe
+            dist/kizuna-${{ needs.validate.outputs.version }}-windows-x64-notices.zip
+            dist/SHA256SUMS-windows.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
-  # Linux x64 packaging and its packaged smoke test. Deliberately part of the
-  # release workflow rather than per-commit CI: it is minutes of electron-builder
-  # plus a real Electron launch under a virtual X server, and a pull request
-  # should still run exactly the CI and CodeQL checks branch protection
-  # requires. `test/linuxPackagingConfig.test.ts` runs in ordinary CI and
-  # catches configuration drift long before this job does.
-  #
-  # The artifacts are verified and uploaded but not attached to the draft
-  # release: Linux publishing is enabled separately (see docs/releasing.md).
   build-linux:
-    name: Package and smoke-test Linux x64
+    name: Build and smoke-test Linux x64
+    needs: validate
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -186,15 +198,6 @@ jobs:
         with:
           node-version: 24
 
-      # The documented Linux build toolchain, plus what the packaged smoke test
-      # itself needs. `xvfb` provides the virtual X server mpv's `--wid`
-      # embedding requires; `fakeroot` is fpm's unprivileged packaging helper.
-      #
-      # mpv and ffmpeg are installed at the exact versions the deb depends on:
-      # the bundled executables are unmodified files from those Ubuntu packages
-      # and load their shared libraries from them (see the vendor mirror's
-      # LINUX_X64_DEPENDENCIES.md). Installing them here is also what lets the
-      # AppImage run at all, since it bundles no such libraries.
       - name: Install packaging and smoke-test dependencies
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -207,39 +210,57 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Fetch pinned runtime binaries
-        run: npm run resources
+      - name: Fetch pinned Linux resources
+        run: npm run resources -- --platform linux-x64
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Test
+        run: npm test
 
       - name: Package AppImage and deb
         run: npm run dist:linux
 
-      # Installs and uninstalls the deb, runs the AppImage from a clean
-      # directory, and starts the real application under Xvfb with an isolated
-      # user-data directory. No network, no accounts, and the only media is a
-      # fixture the script generates with the freshly packaged ffmpeg.
       - name: Verify packaged artifacts
         run: npm run smoke:linux
 
-      - name: Record artifact checksums
+      - name: Create Linux release assets
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          cd dist
-          sha256sum ./*.AppImage ./*.deb > SHA256SUMS-linux.txt
-          cat SHA256SUMS-linux.txt
+          set -euo pipefail
+          appimage="kizuna-$VERSION-linux-x86_64.AppImage"
+          deb="kizuna-$VERSION-linux-amd64.deb"
+          notices="kizuna-$VERSION-linux-x64-notices.tar.gz"
 
-      - name: Upload Linux artifacts
+          [[ -f "dist/$appimage" ]] || { echo "Missing $appimage" >&2; exit 1; }
+          [[ -f "dist/$deb" ]] || { echo "Missing $deb" >&2; exit 1; }
+          tar -czf "dist/$notices" -C build/notices .
+          (
+            cd dist
+            sha256sum "$appimage" "$deb" "$notices" > SHA256SUMS-linux.txt
+            sha256sum --check --strict SHA256SUMS-linux.txt
+          )
+
+      - name: Upload Linux release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: kizuna-linux-artifacts
+          name: kizuna-linux-x64-release
           path: |
-            dist/*.AppImage
-            dist/*.deb
+            dist/kizuna-${{ needs.validate.outputs.version }}-linux-x86_64.AppImage
+            dist/kizuna-${{ needs.validate.outputs.version }}-linux-amd64.deb
+            dist/kizuna-${{ needs.validate.outputs.version }}-linux-x64-notices.tar.gz
             dist/SHA256SUMS-linux.txt
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
-      # The smoke test writes one file per failed check, each carrying the
-      # app's and mpv's stderr and the milestones the launch did reach — enough
-      # to tell an Electron, mpv, dependency, sandbox, or display failure apart.
       - name: Upload packaging failure logs
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -251,10 +272,11 @@ jobs:
 
   publish:
     name: Create draft pre-release
-    needs: build
+    needs: [validate, build-windows, build-linux]
     if: >-
-      (github.event_name == 'push' && github.ref_type == 'tag') ||
-      (github.event_name == 'workflow_dispatch' && inputs.create_release)
+      success() &&
+      ((github.event_name == 'push' && github.ref_type == 'tag') ||
+      (github.event_name == 'workflow_dispatch' && inputs.create_release))
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -263,12 +285,76 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: kizuna-windows-release
-          path: dist
+          name: kizuna-windows-x64-release
+          path: artifacts/windows
 
-      - name: Verify checksums
-        working-directory: dist
-        run: sha256sum --check SHA256SUMS.txt
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: kizuna-linux-x64-release
+          path: artifacts/linux
+
+      - name: Verify and combine release assets
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          windows_assets=(
+            "kizuna-$VERSION-setup.exe"
+            "kizuna-$VERSION-windows-x64-notices.zip"
+          )
+          linux_assets=(
+            "kizuna-$VERSION-linux-x86_64.AppImage"
+            "kizuna-$VERSION-linux-amd64.deb"
+            "kizuna-$VERSION-linux-x64-notices.tar.gz"
+          )
+
+          verify_platform() {
+            local directory=$1
+            local manifest=$2
+            shift 2
+            local expected=("$@")
+            local actual manifest_entries
+
+            mapfile -t actual < <(find "$directory" -maxdepth 1 -type f -printf '%f\n' | sort)
+            mapfile -t expected_with_manifest < <(printf '%s\n' "${expected[@]}" "$manifest" | sort)
+            if [[ "${actual[*]}" != "${expected_with_manifest[*]}" ]]; then
+              echo "Unexpected files in $directory" >&2
+              printf 'Expected: %s\nActual: %s\n' "${expected_with_manifest[*]}" "${actual[*]}" >&2
+              exit 1
+            fi
+
+            mapfile -t manifest_entries < <(
+              sed -nE 's/^[0-9a-f]{64}  ([^/]+)$/\1/p' "$directory/$manifest" | sort
+            )
+            mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+            if [[ "${manifest_entries[*]}" != "${expected_sorted[*]}" ]]; then
+              echo "$manifest does not cover exactly the expected assets" >&2
+              exit 1
+            fi
+            if [[ "${#manifest_entries[@]}" -ne "$(wc -l < "$directory/$manifest")" ]]; then
+              echo "$manifest contains an invalid checksum entry" >&2
+              exit 1
+            fi
+            (cd "$directory" && sha256sum --check --strict "$manifest")
+          }
+
+          verify_platform artifacts/windows SHA256SUMS-windows.txt "${windows_assets[@]}"
+          verify_platform artifacts/linux SHA256SUMS-linux.txt "${linux_assets[@]}"
+
+          mapfile -t duplicate_names < <(
+            printf '%s\n' "${windows_assets[@]}" "${linux_assets[@]}" | sort | uniq -d
+          )
+          if [[ "${#duplicate_names[@]}" -ne 0 ]]; then
+            echo "Duplicate release asset names: ${duplicate_names[*]}" >&2
+            exit 1
+          fi
+
+          mkdir dist
+          for name in "${windows_assets[@]}"; do cp "artifacts/windows/$name" dist/; done
+          for name in "${linux_assets[@]}"; do cp "artifacts/linux/$name" dist/; done
+          all_assets=("${windows_assets[@]}" "${linux_assets[@]}")
+          (cd dist && sha256sum "${all_assets[@]}" > SHA256SUMS.txt)
+          (cd dist && sha256sum --check --strict SHA256SUMS.txt)
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
@@ -280,15 +366,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           REF_TYPE: ${{ github.ref_type }}
-          TAG: ${{ needs.build.outputs.tag }}
+          TAG: ${{ needs.validate.outputs.tag }}
           TARGET_SHA: ${{ github.sha }}
-          VERSION: ${{ needs.build.outputs.version }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           cat > release-notes.md <<EOF
-          Kizuna $VERSION is an unsigned Windows pre-release.
+          Kizuna $VERSION is an unsigned x64 pre-release for:
 
-          Automated checks, packaged smoke tests, checksums, and build provenance passed.
-          Windows will show an unknown-publisher warning and may display Microsoft Defender SmartScreen.
+          - Windows 10 or newer: NSIS installer (.exe)
+          - Ubuntu 24.04: AppImage and Debian package (.deb)
+
+          The Windows installer and Linux packages are unsigned. Windows may show an unknown-publisher or Microsoft Defender SmartScreen warning.
+          Automated checks and packaged smoke tests passed on both platforms. SHA256SUMS.txt covers every downloadable platform asset, and GitHub build provenance is available for each asset.
           EOF
 
           args=(
@@ -303,4 +392,10 @@ jobs:
           else
             args+=(--target "$TARGET_SHA")
           fi
-          gh "${args[@]}" dist/*.exe dist/SHA256SUMS.txt dist/*-notices.zip
+          gh "${args[@]}" \
+            dist/*.exe \
+            dist/*.AppImage \
+            dist/*.deb \
+            dist/*-notices.zip \
+            dist/*-notices.tar.gz \
+            dist/SHA256SUMS.txt

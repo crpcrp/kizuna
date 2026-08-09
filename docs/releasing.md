@@ -1,8 +1,8 @@
 # Releasing
 
-Kizuna's early Windows pre-releases are built unsigned by GitHub Actions. The
-workflow still runs the full test suite, installs and smoke-tests the packaged
-app, records checksums, and creates build provenance.
+Kizuna's early Windows and Linux x64 pre-releases are built unsigned by GitHub
+Actions. Separate platform jobs run the full test suite and packaged smoke
+tests before one draft release is created with checksums and build provenance.
 
 Windows will show an unknown-publisher warning and may display Microsoft
 Defender SmartScreen. Signed releases are planned after the project is accepted
@@ -15,11 +15,13 @@ by an open-source signing service.
 2. Open **Actions**, select **Release**, and choose **Run workflow**.
 3. Select `main`, enable **Create the version tag and a draft pre-release**, and
    run the workflow.
-4. Wait for both the build and publish jobs to pass. The workflow creates the
-   version tag only after the installer has passed its automated checks.
-5. Download the installer from the draft release and manually check install,
-   upgrade from the previous release when applicable, playback, subtitle
-   extraction, MeCab tokenization, the vocabulary database, and uninstall.
+4. Wait for the validation, Windows x64, Linux x64, and publish jobs to pass.
+   The workflow creates the version tag only after both platform packages pass
+   their automated and packaged smoke checks.
+5. Download the Windows installer, Linux AppImage and Debian package from the
+   draft. Verify `SHA256SUMS.txt`, inspect their provenance, and manually check
+   install, upgrade when applicable, playback, subtitle extraction, MeCab
+   tokenization, the vocabulary database, and uninstall.
 6. Keep the release marked as a pre-release and publish the draft.
 
 Leave the release option disabled to run the same build and smoke checks without
@@ -55,16 +57,15 @@ release run. `npm run dist:linux` produces a versioned AppImage and `.deb`, and
   directory and reports its window, mpv IPC, and renderer milestones.
 
 Failures upload one log file per failed check as the `linux-packaging-logs`
-artifact; the built artifacts upload as `kizuna-linux-artifacts`.
+artifact; the release files upload temporarily as `kizuna-linux-x64-release`.
 
 Packaging is deliberately not part of per-commit CI, which stays at the
 `CI / Windows x64`, `CI / Linux x64`, and `CodeQL` checks. Configuration drift
 is caught there instead by `test/linuxPackagingConfig.test.ts`.
 
-These artifacts are **not** attached to the draft release: Linux publishing is
-enabled separately, and the draft remains a Windows-only pre-release. The
-Linux job therefore does not gate the `publish` job — a Linux packaging failure
-turns the workflow run red without blocking a Windows release.
+The Linux job gates publishing just like the Windows job. A failure or
+cancellation on either platform prevents the tag and draft release from being
+created.
 
 To run the same checks locally on Ubuntu 24.04:
 
@@ -76,11 +77,14 @@ npm run smoke:linux
 
 ## Release contents
 
-The draft contains the unsigned installer, `SHA256SUMS.txt`, the third-party
-notices and corresponding-source bundle, and GitHub build provenance. The
-installer is not bit-for-bit reproducible; the workflow instead pins its inputs
-and records checksums and provenance for its outputs.
+The draft contains the unsigned Windows installer, unsigned Linux x64 AppImage
+and Debian package, platform-specific third-party notices and
+corresponding-source bundles, one canonical `SHA256SUMS.txt`, and GitHub build
+provenance. Ubuntu 24.04 is the minimum Linux baseline because the bundled
+runtime tools depend on its pinned mpv and FFmpeg packages. The packages are
+not bit-for-bit reproducible; the workflow instead pins its inputs and records
+checksums and provenance for its outputs.
 
-The automated smoke check catches missing packaged resources and a broken
-`better-sqlite3` Electron ABI. It deliberately does not use media, networks, or
-accounts.
+The Windows smoke check catches missing packaged resources and a broken
+`better-sqlite3` Electron ABI. The Linux smoke check uses generated local media
+but no networks or accounts.
