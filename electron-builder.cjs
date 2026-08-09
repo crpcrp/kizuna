@@ -14,6 +14,19 @@ module.exports = {
   directories: {
     output: 'dist'
   },
+  // Generate electron-updater metadata without letting platform jobs publish
+  // anything themselves (`dist` commands keep using `--publish never`).
+  publish: [
+    {
+      provider: 'github',
+      owner: 'crpcrp',
+      repo: 'kizuna',
+      channel: 'latest',
+      releaseType: 'prerelease'
+    }
+  ],
+  // The updater service must use this generation of electron-updater or newer.
+  electronUpdaterCompatibility: '>=6.8.9',
   // Stable, shell-safe release asset name. Windows publishes a single
   // installer, so the name needs no platform segment; `linux.artifactName`
   // below overrides this because Linux emits two artifacts per architecture.

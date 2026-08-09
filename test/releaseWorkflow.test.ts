@@ -65,12 +65,15 @@ describe('release workflow', () => {
   it('uploads only collision-proof platform assets and their own checksum manifests', () => {
     const expectedWindows = [
       'dist/kizuna-${{ needs.validate.outputs.version }}-setup.exe',
+      'dist/kizuna-${{ needs.validate.outputs.version }}-setup.exe.blockmap',
+      'dist/latest.yml',
       'dist/kizuna-${{ needs.validate.outputs.version }}-windows-x64-notices.zip',
       'dist/SHA256SUMS-windows.txt'
     ]
     const expectedLinux = [
       'dist/kizuna-${{ needs.validate.outputs.version }}-linux-x86_64.AppImage',
       'dist/kizuna-${{ needs.validate.outputs.version }}-linux-amd64.deb',
+      'dist/latest-linux.yml',
       'dist/kizuna-${{ needs.validate.outputs.version }}-linux-x64-notices.tar.gz',
       'dist/SHA256SUMS-linux.txt'
     ]
@@ -82,6 +85,12 @@ describe('release workflow', () => {
     expect(windows).not.toContain('.AppImage')
     expect(windows).not.toContain('.deb')
     expect(linux).not.toContain('.exe')
+    expect(windows).toContain(
+      'node scripts/validate-update-metadata.mjs dist/latest.yml $installerName'
+    )
+    expect(linux).toContain(
+      'node scripts/validate-update-metadata.mjs dist/latest-linux.yml "$appimage" "$deb"'
+    )
   })
 
   it('publishes only after both platform jobs succeed', () => {
@@ -103,8 +112,10 @@ describe('release workflow', () => {
   it('uploads the exact release formats and documents both platforms', () => {
     for (const glob of [
       'dist/*.exe',
+      'dist/*.blockmap',
       'dist/*.AppImage',
       'dist/*.deb',
+      'dist/*.yml',
       'dist/*-notices.zip',
       'dist/*-notices.tar.gz',
       'dist/SHA256SUMS.txt'

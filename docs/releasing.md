@@ -99,11 +99,11 @@ For version `1.2.3`, the draft must contain exactly:
 
 | Platform | Release assets |
 |---|---|
-| Windows x64 | `kizuna-1.2.3-setup.exe`, `kizuna-1.2.3-windows-x64-notices.zip` |
-| Linux x64 | `kizuna-1.2.3-linux-x86_64.AppImage`, `kizuna-1.2.3-linux-amd64.deb`, `kizuna-1.2.3-linux-x64-notices.tar.gz` |
+| Windows x64 | `kizuna-1.2.3-setup.exe`, `kizuna-1.2.3-setup.exe.blockmap`, `latest.yml`, `kizuna-1.2.3-windows-x64-notices.zip` |
+| Linux x64 | `kizuna-1.2.3-linux-x86_64.AppImage`, `kizuna-1.2.3-linux-amd64.deb`, `latest-linux.yml`, `kizuna-1.2.3-linux-x64-notices.tar.gz` |
 | Shared | `SHA256SUMS.txt` and GitHub build provenance for every asset |
 
-Download all six files into one clean directory and run:
+Download all nine files into one clean directory and run:
 
 ```bash
 sha256sum --check --strict SHA256SUMS.txt
@@ -116,6 +116,22 @@ Also verify the tag targets the intended `main` commit, the draft identifies
 Windows 10+ and Ubuntu 24.04 x64, the release remains a pre-release, and every
 asset is unsigned as stated. The packages are not bit-for-bit reproducible;
 the workflow instead pins inputs and records checksums and provenance.
+
+Inspect `latest.yml` and `latest-linux.yml` before publishing. Each `files.url`
+must be a bare filename present in the draft, and its `size` and `sha512` must
+match that asset. `latest.yml` selects only the NSIS installer.
+`latest-linux.yml` contains both the AppImage and deb; electron-updater 6.8.9+
+uses the packaged `package-type` marker to select the matching format. The
+workflow performs these filename, size, and SHA-512 checks before creating the
+draft and rejects missing, extra, duplicate, cross-platform, or unsafe paths.
+
+The workflow and builder use the `latest` channel for published pre-releases.
+The updater service must use electron-updater 6.8.9 or newer and explicitly
+enable pre-release updates for clients that should receive them. GitHub drafts
+are not discoverable. A future stable release can use the same metadata names;
+stable clients must leave pre-release updates disabled, and normal semantic
+version comparison prevents installing an older release. Update downloads use
+the public GitHub HTTPS provider and require no token in the application.
 
 ## Manual QA
 
@@ -132,6 +148,32 @@ commands, release links, warnings, and UI labels as you follow the checklist.
 | Local data | Import a small dictionary, change settings, restart, and confirm the SQLite-backed state returns | Same | Same |
 | Offline behavior | With networking disabled, repeat local playback, subtitles, tokenization, and database startup | Same | Same |
 | Upgrade/cleanup | Upgrade from the previous pre-release when available, then uninstall and confirm the app is removed | Reinstall/upgrade with `apt`, then `sudo apt remove kizuna` and confirm the launcher is removed | Replace the file with the new AppImage, then delete it and confirm no installed launcher was claimed |
+
+## Packaged update rehearsal
+
+After the runtime updater service is available, rehearse every N-1 to N release
+before publishing. Keep the N draft unpublished while checking its metadata,
+then publish it as a pre-release so the test clients can discover it; drafts
+must not be discoverable.
+
+1. Install the previous published pre-release on clean Windows 10/11 and Ubuntu
+   24.04 test systems. On Linux, test the deb and AppImage separately.
+2. Start N-1 once and confirm it identifies its installed package type. For the
+   AppImage, launch the file directly so the `APPIMAGE` environment is present.
+3. Publish N as a pre-release and check for updates from N-1.
+4. Confirm NSIS downloads the `.exe`, deb downloads the `.deb` and requests the
+   expected package-manager authentication/elevation, and AppImage downloads
+   the `.AppImage`. No Linux installation may select the other format.
+5. Install the update, restart, and confirm the running version is N and the
+   existing user data remains intact. Repeat the playback, subtitle,
+   tokenization, and dictionary checks from the manual QA table.
+6. For NSIS, confirm the `.blockmap` is available and a differential download
+   can fall back to the full installer. For AppImage, confirm the embedded
+   blockmap can likewise fall back to the full image. The deb update is a full
+   package download.
+7. Restore or uninstall each test installation and record the result in the
+   release notes. If any update path fails, withdraw the pre-release and fix it
+   before treating N as the supported update.
 
 macOS, ARM, Windows older than 10, Linux distributions other than Ubuntu 24.04,
 native Wayland without XWayland, and headless sessions are unsupported. Do not
