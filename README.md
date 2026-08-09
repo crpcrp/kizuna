@@ -1,12 +1,12 @@
 # Kizuna (絆)
 
-Kizuna is a Windows-first video player for Japanese learners, with built-in
+Kizuna is a Windows and Linux video player for Japanese learners, with built-in
 vocabulary knowledge tracking and bulk Anki card extraction from subtitles.
 
 Watch a video, see which words you already know, look up unfamiliar vocabulary,
 and turn useful lines into study cards without leaving the player.
 
-Download links for published Windows builds are available on the
+Download links for published builds are available on the
 [Releases page](../../releases).
 
 ## Features
@@ -22,34 +22,53 @@ Download links for published Windows builds are available on the
   configurable keyboard shortcuts.
 - Optionally translate whole subtitle lines or open network streams.
 
-## Requirements
+## Install a release
 
-Kizuna currently publishes builds for 64-bit Windows 10 or newer. Building
-from source requires Node.js 24 or newer and npm. Windows uses local runtime
-copies under `resources/`; unpackaged Linux development uses the
-distribution's `mpv`, FFmpeg/ffprobe, and MeCab commands.
+Kizuna publishes unsigned x64 builds for Windows 10 or newer and Ubuntu 24.04
+(glibc 2.39). macOS, ARM systems, older Windows releases, and other Linux
+distributions are not currently supported. Download the package and
+`SHA256SUMS.txt` from the same entry on the [Releases page](../../releases).
 
-See [Binary setup](docs/binaries.md) for download sources, expected paths, and
-version checks.
+On Windows, run `kizuna-<version>-setup.exe` and follow the installer. The
+installer is unsigned, so Windows may show an unknown-publisher or Microsoft
+Defender SmartScreen warning.
 
-### Linux source development
+On Ubuntu 24.04 x64, first verify the downloaded Linux package:
 
-Kizuna does not publish a Linux package yet. On Ubuntu 24.04, install Node.js
-24 and the native build/runtime dependencies, then use the normal npm
-workflow:
+```bash
+sha256sum --ignore-missing --check SHA256SUMS.txt
+```
+
+For desktop integration and automatic dependency installation, install the
+Debian package:
+
+```bash
+sudo apt install ./kizuna-<version>-linux-amd64.deb
+# Later, to uninstall:
+sudo apt remove kizuna
+```
+
+Alternatively, the AppImage runs without installation. Its bundled media tools
+use the exact Ubuntu 24.04 mpv and FFmpeg libraries shown below:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential python3 pkg-config mpv ffmpeg mecab mecab-ipadic-utf8 yt-dlp
-npm ci
-npm run dev
+sudo apt install 'mpv=0.37.0-1ubuntu4' 'ffmpeg=7:6.1.1-3ubuntu5'
+chmod +x kizuna-<version>-linux-x86_64.AppImage
+./kizuna-<version>-linux-x86_64.AppImage
 ```
 
-Use a checkout on the Linux filesystem and do not reuse a `node_modules`
-directory produced on Windows; Electron and `better-sqlite3` contain
-platform-specific binaries. Kizuna selects Electron's X11/XWayland backend
-before startup, so no command-line wrapper is required. To run the production
-bundle locally, use `npm run build && npm start`.
+If FUSE mounting is unavailable, use the AppImage runtime's tested no-FUSE
+path: `./kizuna-<version>-linux-x86_64.AppImage --appimage-extract-and-run`.
+Kizuna requires X11 or XWayland for mpv embedding; native Wayland-only,
+headless, container, and SSH-only sessions are unsupported. Run it as a normal
+desktop user with Electron's sandbox available. Do not work around a sandbox
+error with `--no-sandbox`; use the deb instead.
+
+Both Linux packages are unsigned and may prompt a warning in software that
+checks package signatures. Kizuna has no automatic updater. Download new
+versions from the Releases page and verify their checksum before installing or
+replacing the AppImage.
 
 ## Optional services
 
@@ -76,6 +95,12 @@ Report security problems privately as described in
 
 ## Development
 
+Building from source requires Node.js 24 or newer and npm. Windows development
+uses staged runtime copies under `resources/`; unpackaged Linux development
+uses the distribution's `mpv`, FFmpeg/ffprobe, and MeCab commands. See
+[Binary setup](docs/binaries.md) for download sources, expected paths, and
+version checks.
+
 Install dependencies and start the development app:
 
 ```powershell
@@ -89,6 +114,24 @@ To build once and run the production preview:
 npm run build
 npm start
 ```
+
+### Linux source development
+
+On Ubuntu 24.04, install Node.js 24 and the native build/runtime dependencies,
+then use the normal npm workflow:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential python3 pkg-config mpv ffmpeg mecab mecab-ipadic-utf8 yt-dlp
+npm ci
+npm run dev
+```
+
+Use a checkout on the Linux filesystem and do not reuse a `node_modules`
+directory produced on Windows; Electron and `better-sqlite3` contain
+platform-specific binaries. Kizuna selects Electron's X11/XWayland backend
+before startup, so no command-line wrapper is required. To run the production
+bundle locally, use `npm run build && npm start`.
 
 ## Testing
 
@@ -110,11 +153,12 @@ x64 for every pull request; see [Contributing](CONTRIBUTING.md).
 ```powershell
 npm run build  # Production build in out/
 npm run dist   # Windows NSIS installer in dist/
+npm run dist:linux # Linux AppImage and deb in dist/ (Ubuntu 24.04 only)
 ```
 
 Packaging uses the runtime binaries in `resources/` and generates the required
 third-party notices. Published pre-releases are built by the release workflow
-and are currently unsigned; Windows will show an unknown-publisher warning. See
+and are currently unsigned. See
 [Binary setup](docs/binaries.md),
 [Licensing and notices](docs/licensing.md), and
 [Releasing](docs/releasing.md) for details.

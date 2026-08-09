@@ -62,7 +62,7 @@ export interface SubtitleOverlayProps {
 /** Base subtitle font size (rem) at fontScale 1, matching the previous fixed 1.1rem. */
 const BASE_SUBTITLE_FONT_REM = 1.1
 
-/** Windows-first stack with coverage for Japanese compatibility punctuation such as `｡`. */
+/** Cross-platform stack with coverage for Japanese compatibility punctuation such as `｡`. */
 const SUBTITLE_FONT_FAMILY = '"Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif'
 
 /** Pure: turns SubtitleStyleSettings into the inline style for #subtitle's box. */

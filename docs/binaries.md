@@ -17,6 +17,12 @@ The command selects the current host platform, reads
 the public [`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor)
 mirror, and verifies every file by SHA-256. No credentials are required.
 
+Each platform lock owns its `requiredPaths`, `requiredExecutables`, and file
+map. Both locks must name the same immutable mirror commit, manifest, and
+checksum file. Windows sources live at the mirror root; Linux sources live
+under `linux-x64/`. Both are copied into the platform-neutral `resources/`
+layout below, so runtime path selection does not leak vendor-mirror paths.
+
 For a CI cross-check or a foreign-platform staging run, pass an explicit lock
 key:
 
@@ -51,7 +57,9 @@ The `KIZUNA_VENDOR_DIR` environment variable provides the same override.
 | Linux x64 | ffprobe | `resources/ffmpeg/ffprobe` | Media, track, and chapter inspection |
 | Linux x64 | MeCab | `resources/mecab/bin/mecab` | Japanese tokenization via the relative-loader wrapper |
 
-The Linux MeCab payload keeps the mirror's own `bin/`, `lib/`, and `etc/`
+Linux executable modes come from the lock and are restored during staging;
+packaging fails if a required executable loses its execute bit. The Linux
+MeCab payload keeps the mirror's own `bin/`, `lib/`, and `etc/`
 layout rather than being flattened like the other components. Its wrapper
 resolves `../lib` for `libmecab.so.2` and `../etc/mecabrc` for its
 configuration, both relative to the wrapper's own directory, and `mecabrc`
@@ -78,17 +86,28 @@ installer includes yt-dlp only when it was present during packaging.
 
 ## Updating a pinned binary
 
-1. Add the reviewed build, license texts, source reference, and build recipe to
-   the vendor mirror.
-2. Update the mirror commit and affected hashes in `resources.lock.json`.
-3. Update the matching metadata in [`third-party.json`](../third-party.json).
-4. Run:
+1. Add the reviewed build, license texts, source reference, build recipe, and
+   updated `manifest.json`/`SHA256SUMS.txt` to the vendor mirror. Do not replace
+   files at an existing pin.
+2. Pin the new full mirror commit in both platform locks, but change file maps
+   and hashes only for the platform being updated. The lock validator requires
+   both platforms to use one immutable vendor snapshot.
+3. Update only the matching platform metadata in
+   [`third-party.json`](../third-party.json).
+4. Stage and verify the changed platform explicitly, then verify both lock
+   selections and notices:
 
-   ```powershell
-   npm run resources
+   ```bash
+   npm run resources -- --platform win32-x64
+   npm run notices
+   npm run resources -- --platform linux-x64
    npm run notices
    npm test
    ```
+
+5. Build and smoke-test the changed package on its native host. A platform
+   override verifies schema, hashes, and copying but cannot execute a foreign
+   payload or prove Linux file modes on Windows.
 
 The resource and notice checks reject mismatched pins, missing files, and
 uncovered packaged components. See [Licensing and notices](licensing.md).
@@ -102,9 +121,13 @@ resources/ffmpeg/ffprobe.exe -version
 resources/mecab/mecab.exe -v
 ```
 
-On Ubuntu 24.04 x64, the pinned Linux payload targets glibc 2.39 and keeps
-mpv/FFmpeg's exact Ubuntu package dependencies documented in the vendor
-mirror. Verify the Linux files and modes on Linux:
+On Ubuntu 24.04 x64, the pinned Linux payload targets glibc 2.39. Its mpv,
+FFmpeg, and ffprobe executables are unmodified distro binaries and deliberately
+load non-baseline shared libraries from `mpv (= 0.37.0-1ubuntu4)` and
+`ffmpeg (= 7:6.1.1-3ubuntu5)`; those libraries are not copied into Kizuna.
+MeCab carries its own relative wrapper and `libmecab.so.2`. The exact loader
+policy and package list live in the vendor mirror's
+`LINUX_X64_DEPENDENCIES.md`. Verify the Linux files and modes on Linux:
 
 ```bash
 resources/mpv/mpv --version

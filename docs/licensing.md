@@ -36,8 +36,10 @@ This creates `build/notices/` containing:
 - third-party notices and license texts;
 - corresponding-source and build-recipe references.
 
-`npm run dist` generates the bundle before packaging it with the application.
-The release workflow also publishes it as a separate archive.
+`npm run dist` and `npm run dist:linux` generate the selected platform's bundle
+before packaging it with the application. The release workflow also publishes
+`kizuna-<version>-windows-x64-notices.zip` and
+`kizuna-<version>-linux-x64-notices.tar.gz` as separate archives.
 
 Notice generation fails when the vendor pin, packaged files, metadata, or
 license texts do not agree. Repository tests check the same configuration so

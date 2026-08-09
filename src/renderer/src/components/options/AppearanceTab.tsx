@@ -3,7 +3,7 @@ import { DEFAULT_LEVEL_COLOR_HEX } from '../../util/levelColors'
 import type { SettingEntry } from './types'
 
 export const APPEARANCE_ROWS: { value: Appearance; label: string; description: string }[] = [
-  { value: 'system', label: 'System', description: 'Follow the Windows light/dark setting' },
+  { value: 'system', label: 'System', description: 'Follow the operating system theme' },
   { value: 'light', label: 'Light', description: 'Always use the light theme' },
   { value: 'dark', label: 'Dark', description: 'Always use the dark theme' }
 ]

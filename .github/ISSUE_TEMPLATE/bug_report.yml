@@ -78,12 +78,26 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: windows
+  - type: dropdown
+    id: platform
     attributes:
-      label: Windows version
-      description: Run `winver`.
-      placeholder: Windows 11 Pro 26200
+      label: Platform
+      options:
+        - Windows 10 x64
+        - Windows 11 x64
+        - Ubuntu 24.04 x64 (deb)
+        - Ubuntu 24.04 x64 (AppImage)
+        - Source build
+        - Unsupported platform
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS and desktop details
+      description: For Linux, include the desktop session and whether it uses X11 or XWayland.
+      placeholder: Ubuntu 24.04.3, GNOME 46, XWayland
     validations:
       required: true
 

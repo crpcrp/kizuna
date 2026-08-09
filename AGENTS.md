@@ -1,6 +1,6 @@
 # Agent guidelines
 
-Kizuna is a Windows-first Electron and TypeScript application. Use
+Kizuna is a Windows and Linux Electron and TypeScript application. Use
 `docs/codebase-map.md` when you need help locating a subsystem and
 `docs/architecture-plan.md` when a change affects architecture.
 

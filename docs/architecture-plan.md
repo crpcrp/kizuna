@@ -1,6 +1,6 @@
 # Kizuna Architecture
 
-Kizuna is a Windows-first Electron application. This document records the
+Kizuna is a Windows and Linux Electron application. This document records the
 stable boundaries contributors should preserve; feature-level file locations
 are listed in [the codebase map](codebase-map.md).
 
@@ -70,19 +70,21 @@ Translation uses Google's unofficial endpoint and is explicitly opt-in.
 
 ## Packaging
 
-Windows x64 and NSIS are the published release targets. Windows x64 and Linux
-x64 have immutable runtime payloads in the vendor lock map; the common
-electron-builder resource layout works for either packaged target. The
-installer includes the selected runtime binaries and generated third-party
-notices.
-`better-sqlite3` is rebuilt for Electron's ABI.
+Published targets are Windows x64 as an NSIS installer and Ubuntu 24.04 x64 as
+an AppImage and Debian package. Windows x64 and Linux x64 have separate
+immutable payloads in the vendor lock map, staged into the common
+`resources/` layout before packaging. Each artifact includes only its selected
+runtime executables and generated third-party notices. The Linux mpv and
+FFmpeg executables intentionally use shared libraries from the pinned Ubuntu
+packages; MeCab carries its relative loader, library, and dictionary layout.
+`better-sqlite3` is rebuilt for each host's Electron ABI.
 
 GitHub Actions runs independent, equally required Windows x64 and Linux x64
 jobs that stage each host's runtime payload and run every quality check plus a
-production build. The release
-workflow still builds unsigned Windows x64 NSIS installers and verifies the
-package, generates checksums, notices, and provenance, and prepares a draft
-pre-release. Code signing is planned after the project is accepted by an
+production build. The release workflow builds and smoke-tests the unsigned
+NSIS, AppImage, and deb artifacts in separate platform jobs, then combines
+their platform assets under one checksum manifest and prepares a draft pre-release.
+Code signing is planned after the project is accepted by an
 open-source signing service; see [Releasing](releasing.md) for the authoritative
 release procedure.
 
