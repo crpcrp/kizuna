@@ -409,6 +409,7 @@ export default function App({
         <main
           id="content"
           ref={contentRef}
+          onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {
             e.preventDefault()
             toggleFromRightClick(state.rightClickTogglePause, state.paused, playerAdapter.setPause)
