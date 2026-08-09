@@ -141,6 +141,37 @@ describe('createAnkiClient', () => {
     expect(JSON.parse(bodies[0]).key).toBe('secret')
   })
 
+  it('sends the configured api key on the multi request and every nested action', async () => {
+    const bodies: string[] = []
+    const capturingFetch: HttpFetch = async (_url, init) => {
+      bodies.push(init?.body ?? '{}')
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => null },
+        json: async () => ({ result: [[], []], error: null }),
+        text: async () => ''
+      }
+    }
+    const client = createAnkiClient({
+      url: 'http://127.0.0.1:8765',
+      fetch: capturingFetch,
+      apiKey: 'secret'
+    })
+
+    await client.multi<number[]>([
+      { action: 'findCards', params: { query: 'Word:"cat"' } },
+      { action: 'findCards', params: { query: 'Word:"dog"' } }
+    ])
+
+    const body = JSON.parse(bodies[0])
+    expect(body.key).toBe('secret')
+    expect(body.params.actions).toEqual([
+      { action: 'findCards', params: { query: 'Word:"cat"' }, key: 'secret' },
+      { action: 'findCards', params: { query: 'Word:"dog"' }, key: 'secret' }
+    ])
+  })
+
   it('sends no key when apiKey is unset', async () => {
     const anki = fakeAnkiConnect({ version: { result: 6 } })
     const bodies: string[] = []
