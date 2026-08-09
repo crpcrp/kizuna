@@ -96,6 +96,10 @@ export default function KeybindingsTab({
               </button>
             </div>
           ))}
+          <div className="options-row options-shortcut-row" aria-label="Subtitle size shortcut">
+            <span className="options-row-label">Subtitle size ±10%</span>
+            <span className="options-keybind-static">Shift + mouse wheel</span>
+          </div>
         </div>
       </div>
     </section>

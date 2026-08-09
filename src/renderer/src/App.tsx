@@ -46,6 +46,11 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
+import {
+  adjustSubtitleFontScale,
+  isSubtitleFontWheelShortcut,
+  subtitleFontWheelDirection
+} from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
@@ -419,6 +424,18 @@ export default function App({
         <main
           id="content"
           ref={contentRef}
+          onWheel={(event) => {
+            if (!isSubtitleFontWheelShortcut(event)) return
+            const direction = subtitleFontWheelDirection(event.deltaY, event.deltaX)
+            if (direction === 0) return
+            event.preventDefault()
+            dispatch({
+              type: 'setSubtitleStyle',
+              value: {
+                fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, direction)
+              }
+            })
+          }}
           onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {
             e.preventDefault()

@@ -155,6 +155,11 @@ export interface SubtitleStyleSettings {
   backgroundEnabled: boolean
 }
 
+/** Shared bounds and UI step for the persisted subtitle font scale. */
+export const SUBTITLE_FONT_SCALE_MIN = 0.5
+export const SUBTITLE_FONT_SCALE_MAX = 3
+export const SUBTITLE_FONT_SCALE_STEP = 0.1
+
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyleSettings = {
   fontScale: 1,
   xPct: 50,
@@ -439,7 +444,9 @@ export function normalizeSubtitleStyle(
   const inRange = (value: unknown, min: number, max: number): value is number =>
     typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
   return {
-    fontScale: inRange(parsed.fontScale, 0.5, 3) ? parsed.fontScale : defaults.fontScale,
+    fontScale: inRange(parsed.fontScale, SUBTITLE_FONT_SCALE_MIN, SUBTITLE_FONT_SCALE_MAX)
+      ? parsed.fontScale
+      : defaults.fontScale,
     xPct: inRange(parsed.xPct, 0, 100) ? parsed.xPct : defaults.xPct,
     yPct: inRange(parsed.yPct, 0, 100) ? parsed.yPct : defaults.yPct,
     backgroundEnabled:
