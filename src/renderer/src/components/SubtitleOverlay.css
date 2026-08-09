@@ -11,6 +11,19 @@
   text-align: center;
   max-width: 80%;
   cursor: grab;
+  /* Glyph outline (not a box border) so subtitle text stays readable over
+     bright/complex video, especially with the background disabled. Inherited
+     by both plain-text and tokenized spans; all eight directions keep the
+     outline solid-looking around curves and diagonals. */
+  text-shadow:
+    -1px -1px 0 var(--subtitle-outline),
+    0 -1px 0 var(--subtitle-outline),
+    1px -1px 0 var(--subtitle-outline),
+    -1px 0 0 var(--subtitle-outline),
+    1px 0 0 var(--subtitle-outline),
+    -1px 1px 0 var(--subtitle-outline),
+    0 1px 0 var(--subtitle-outline),
+    1px 1px 0 var(--subtitle-outline);
 }
 #subtitle:active {
   cursor: grabbing;

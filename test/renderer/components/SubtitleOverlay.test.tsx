@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import SubtitleOverlay, {
   tokenSpans,
@@ -9,6 +11,7 @@ import { DEFAULT_SUBTITLE_STYLE } from '@src/shared/playerSettings'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import { makeToken } from '@test/harness/tokenFixtures'
+import { REPO_ROOT } from '@test/paths'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 
@@ -16,6 +19,58 @@ const cues: Cue[] = [
   { start: 0, end: 2, text: 'hello' },
   { start: 3, end: 5, text: 'a\nb' }
 ]
+
+describe('SubtitleOverlay.css glyph outline (issue #132)', () => {
+  const css = readFileSync(
+    join(REPO_ROOT, 'src', 'renderer', 'src', 'components', 'SubtitleOverlay.css'),
+    'utf-8'
+  )
+  // Isolate the #subtitle rule block so the outline is asserted as a
+  // property of #subtitle itself (inherited by both plain-text and
+  // tokenized descendants), not merely present anywhere in the file.
+  const subtitleRule = css.slice(css.indexOf('#subtitle {'), css.indexOf('\n}') + 2)
+
+  it('declares a black text-shadow outline in all eight surrounding directions', () => {
+    expect(subtitleRule).toContain('text-shadow:')
+    const directions = [
+      '-1px -1px 0',
+      '0 -1px 0',
+      '1px -1px 0',
+      '-1px 0 0',
+      '1px 0 0',
+      '-1px 1px 0',
+      '0 1px 0',
+      '1px 1px 0'
+    ]
+    for (const direction of directions) {
+      expect(subtitleRule, `#subtitle text-shadow is missing the ${direction} offset`).toContain(
+        direction
+      )
+    }
+  })
+
+  it('outlines with the black --subtitle-outline token, not a literal color', () => {
+    expect(subtitleRule).toContain('var(--subtitle-outline)')
+  })
+
+  it('does not add a rectangular border to #subtitle', () => {
+    expect(subtitleRule).not.toMatch(
+      /\bborder(?:-(?:top|right|bottom|left|width|style|color))?\s*:/
+    )
+  })
+})
+
+describe('theme.css --subtitle-outline (issue #132)', () => {
+  const themeCss = readFileSync(join(REPO_ROOT, 'src', 'renderer', 'src', 'theme.css'), 'utf-8')
+
+  it('defines the same black outline color in both the dark and light blocks', () => {
+    const matches = [...themeCss.matchAll(/--subtitle-outline:\s*(#[0-9a-fA-F]{3,8})/g)]
+    expect(matches, 'expected --subtitle-outline in both :root blocks').toHaveLength(2)
+    for (const [, value] of matches) {
+      expect(value.toLowerCase()).toBe('#000000')
+    }
+  })
+})
 
 describe('SubtitleOverlay markup', () => {
   it('renders the active cue text', () => {
