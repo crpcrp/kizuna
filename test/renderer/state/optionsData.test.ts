@@ -58,7 +58,7 @@ function fakeBridge(overrides: BridgeOverrides = {}): OptionsDataBridge {
       ...overrides.knowledge
     },
     integration: {
-      binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true, ytdlp: true }),
+      binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true }),
       ...overrides.integration
     }
   }
@@ -371,7 +371,7 @@ describe('createOptionsDataController', () => {
     const bridge = fakeBridge({
       anki: { ping: vi.fn().mockResolvedValue({ ok: true, version: 6 }) },
       integration: {
-        binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true, ytdlp: false })
+        binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true })
       }
     })
     const controller = createOptionsDataController(bridge)
@@ -381,7 +381,7 @@ describe('createOptionsDataController', () => {
     const state = controller.getState('setup')
     expect(state.status).toBe('ready')
     expect(state.data).toEqual({
-      binaries: { ffmpeg: true, ffprobe: true, ytdlp: false },
+      binaries: { ffmpeg: true, ffprobe: true },
       anki: { ok: true, version: 6 }
     })
   })

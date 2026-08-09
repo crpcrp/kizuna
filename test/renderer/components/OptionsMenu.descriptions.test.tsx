@@ -21,7 +21,6 @@ describe('OptionsMenu setting descriptions', () => {
     const html = renderMenu()
     expect(html).toContain('Used by the arrow keys and the transport skip buttons.')
     expect(html).toContain('an active playlist takes priority')
-    expect(html).toContain('Matching online (yt-dlp) caption tracks sort first.')
     expect(html).toContain('Right-clicking the video pauses or resumes instead of opening a menu.')
     expect(html).toContain(`Blank saves to Pictures\\${APP_NAME}.`)
   })

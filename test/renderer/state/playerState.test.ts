@@ -9,7 +9,7 @@ import {
   type PlayerState,
   type PlayerAction
 } from '@src/renderer/src/state/playerState'
-import { EXTERNAL_SUBTITLE_TRACK_ID, URL_SUBTITLE_TRACK_ID, type Track } from '@src/shared/track'
+import { EXTERNAL_SUBTITLE_TRACK_ID, type Track } from '@src/shared/track'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import {
@@ -57,7 +57,6 @@ describe('initialPlayerState', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       translationEnabled: false,
-      preferredUrlSubtitleLanguage: '',
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
       abLoopState: { a: null, b: null },
@@ -200,7 +199,6 @@ describe('playerReducer', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       translationEnabled: false,
-      preferredUrlSubtitleLanguage: '',
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
       // A–B loop is per-file and clears on load.
@@ -370,74 +368,6 @@ describe('playerReducer', () => {
 
     expect(next.tracks).toEqual([audioTrack, second])
     expect(next.externalSubtitlePath).toBe('/subs/second.ass')
-  })
-
-  it('onlineSubtitleLoaded appends the synthetic online track, selects it, and stores no path', () => {
-    const onlineTrack: Track = {
-      id: URL_SUBTITLE_TRACK_ID,
-      kind: 'subtitle',
-      codec: 'online',
-      title: 'Online subtitle',
-      language: 'jpn'
-    }
-    const cues: Cue[] = [{ start: 0, end: 1, text: '日本語' }]
-    const loaded: PlayerState = {
-      ...initialPlayerState,
-      tracks: [audioTrack],
-      selectedSubtitleId: null,
-      allCueTokens: { '0|1|old': [] }
-    }
-
-    const next = playerReducer(loaded, { type: 'onlineSubtitleLoaded', track: onlineTrack, cues })
-
-    expect(next.tracks).toEqual([audioTrack, onlineTrack])
-    expect(next.cues).toBe(cues)
-    expect(next.selectedSubtitleId).toBe(URL_SUBTITLE_TRACK_ID)
-    expect(next.externalSubtitlePath).toBeUndefined()
-    expect(next.allCueTokens).toEqual({})
-  })
-
-  it('onlineSubtitleLoaded replaces a previous online track rather than duplicating it', () => {
-    const first: Track = { id: URL_SUBTITLE_TRACK_ID, kind: 'subtitle', codec: 'online' }
-    const second: Track = {
-      id: URL_SUBTITLE_TRACK_ID,
-      kind: 'subtitle',
-      codec: 'online',
-      language: 'jpn'
-    }
-    const withFirst = playerReducer(
-      { ...initialPlayerState, tracks: [audioTrack] },
-      { type: 'onlineSubtitleLoaded', track: first, cues: [] }
-    )
-    const next = playerReducer(withFirst, {
-      type: 'onlineSubtitleLoaded',
-      track: second,
-      cues: [{ start: 1, end: 2, text: 'あ' }]
-    })
-    expect(next.tracks).toEqual([audioTrack, second])
-  })
-
-  it('onlineSubtitleCleared removes the online track, clears cues, and turns subtitles off', () => {
-    const onlineTrack: Track = { id: URL_SUBTITLE_TRACK_ID, kind: 'subtitle', codec: 'online' }
-    const loaded = playerReducer(
-      { ...initialPlayerState, tracks: [audioTrack] },
-      { type: 'onlineSubtitleLoaded', track: onlineTrack, cues: [{ start: 0, end: 1, text: 'あ' }] }
-    )
-    const next = playerReducer(loaded, { type: 'onlineSubtitleCleared' })
-    expect(next.tracks).toEqual([audioTrack])
-    expect(next.cues).toEqual([])
-    expect(next.selectedSubtitleId).toBeNull()
-  })
-
-  it('onlineSubtitleCleared is a no-op when no online track is active', () => {
-    const withEmbedded: PlayerState = {
-      ...initialPlayerState,
-      tracks: [audioTrack, subTrack],
-      selectedSubtitleId: 3,
-      cues: [{ start: 0, end: 1, text: 'embedded' }]
-    }
-    const next = playerReducer(withEmbedded, { type: 'onlineSubtitleCleared' })
-    expect(next).toBe(withEmbedded)
   })
 
   it('fileLoaded clears the external subtitle path', () => {
@@ -690,7 +620,6 @@ describe('playerReducer', () => {
       rightClickTogglePause: false,
       autoPlayNext: false,
       translationEnabled: true,
-      preferredUrlSubtitleLanguage: 'ja',
       appearance: 'light',
       levelColors,
       screenshotFolder: 'D:\\Shots',
@@ -715,7 +644,6 @@ describe('playerReducer', () => {
     expect(next.subtitleDragEnabled).toBe(false)
     expect(next.rightClickTogglePause).toBe(false)
     expect(next.translationEnabled).toBe(true)
-    expect(next.preferredUrlSubtitleLanguage).toBe('ja')
     expect(next.appearance).toBe('light')
     expect(next.levelColors).toBe(levelColors)
     expect(next.screenshotFolder).toBe('D:\\Shots')
@@ -841,15 +769,6 @@ describe('playerReducer', () => {
   it('setTranslationEnabled changes only the translation policy', () => {
     const next = playerReducer(initialPlayerState, { type: 'setTranslationEnabled', value: true })
     expect(next.translationEnabled).toBe(true)
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
-  })
-
-  it('setPreferredUrlSubtitleLanguage changes only that field', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setPreferredUrlSubtitleLanguage',
-      value: 'ja'
-    })
-    expect(next.preferredUrlSubtitleLanguage).toBe('ja')
     expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
   })
 

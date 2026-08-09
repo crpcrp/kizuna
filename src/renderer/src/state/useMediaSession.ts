@@ -10,16 +10,10 @@ import {
 } from 'react'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { Cue } from '../../../shared/cue'
-import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
-import { URL_SUBTITLE_TRACK_ID } from '../../../shared/track'
-import type { YtdlpQuality } from '../../../shared/ytdlpQuality'
-import { isExtractorBackedUrl } from '../../../shared/ytdlpQuality'
 import type { PlayerApi } from '../components/BottomBar'
 import type { MediaMenuProps } from '../components/menu/MediaMenu'
 import type { SubtitleMenuProps } from '../components/menu/SubtitleMenu'
-import type { VideoMenuProps } from '../components/menu/VideoMenu'
-import { errorMessage } from '../util/errorMessage'
 import { handleDroppedFiles } from './dropHandling'
 import { performFileNavigation } from './keyActions'
 import type { OpenMediaResult, OpenSession, SubtitleRequestToken } from './mediaSession'
@@ -36,28 +30,13 @@ import {
 } from './playlistController'
 import type { PlayerAction, PlayerState } from './playerState'
 import { createRecentFilesController } from './recentFilesController'
-import {
-  loadExternalSubtitle,
-  loadSubtitleFromPicker,
-  onlineSubtitleTrack,
-  selectSubtitle
-} from './trackSelection'
-import { createUrlSubtitleController } from './urlSubtitleController'
+import { loadExternalSubtitle, loadSubtitleFromPicker, selectSubtitle } from './trackSelection'
 import { useLatestCallback, useLatestRef } from './useLatestRef'
-import { createYtdlpQualityReloadController } from './ytdlpQualityReload'
 
-/** The render-driven fields this feature reads. Values it only needs at the
- * moment a handler fires (the playback position a quality reload restores, the
- * preferred URL-subtitle language) come from `stateRef` instead, so a change to
- * them never re-runs anything here. */
+/** The render-driven fields this feature reads. */
 type SessionState = Pick<
   PlayerState,
-  | 'externalSubtitleEncoding'
-  | 'externalSubtitlePath'
-  | 'filePath'
-  | 'loadGeneration'
-  | 'selectedSubtitleId'
-  | 'tracks'
+  'externalSubtitleEncoding' | 'externalSubtitlePath' | 'filePath' | 'selectedSubtitleId' | 'tracks'
 >
 
 export interface UseMediaSessionInput {
@@ -95,35 +74,13 @@ export interface MediaSessionBanner {
   reportTransient(message: string, ttlMs?: number): void
 }
 
-export interface OpenUrlViewModel {
-  open: boolean
-  loading: boolean
-  recentUrls: string[]
-  close(): void
-  submit(url: string): void
-  cancelLoad(): void
-}
-
 export interface UseMediaSessionResult {
   mediaMenu: Omit<MediaMenuProps, 'onTogglePlaylist' | 'playlistOpen'>
-  qualityMenu: Pick<
-    VideoMenuProps,
-    'qualityVisible' | 'quality' | 'qualityReloading' | 'onSetYtdlpQuality'
-  >
   subtitleMenu: Pick<
     SubtitleMenuProps,
-    | 'mediaOpening'
-    | 'onChangeExternalSubtitleEncoding'
-    | 'onLoadSubtitleFile'
-    | 'onSelectSubtitle'
-    | 'onSelectUrlSubtitle'
-    | 'onSelectUrlSubtitleOff'
-    | 'urlSubtitleAcquiring'
-    | 'urlSubtitleMenu'
-    | 'urlSubtitleSelectedId'
+    'mediaOpening' | 'onChangeExternalSubtitleEncoding' | 'onLoadSubtitleFile' | 'onSelectSubtitle'
   >
   playlist: PlaylistViewModel
-  openUrl: OpenUrlViewModel
   events: MediaSessionEvents
   banner: MediaSessionBanner
   navigate(direction: 'prev' | 'next'): void
@@ -131,7 +88,7 @@ export interface UseMediaSessionResult {
 
 /**
  * Owns the renderer media-session lifecycle: opening media, recents, queue
- * navigation, file drops, local/online subtitles, and URL quality reloads.
+ * navigation, file drops, and local subtitles.
  * The returned groups match their UI consumers instead of exposing one flat
  * application-controller contract.
  */
@@ -145,12 +102,6 @@ export function useMediaSession({
   const subtitleToken = useRef<SubtitleRequestToken>({ current: 0 })
   const subtitleCueCache = useRef(new Map<number, Cue[]>())
   const fileLoadToken = useRef<SubtitleRequestToken>({ current: 0 })
-  const [openUrlDialogOpen, setOpenUrlDialogOpen] = useState(false)
-  const [ytdlpQuality, setYtdlpQuality] = useState<{
-    path: string
-    value: YtdlpQuality
-  } | null>(null)
-  const [qualityReloading, setQualityReloading] = useState(false)
 
   const [recentFiles] = useState(createRecentFilesController)
   const recentFilesState = useSyncExternalStore(
@@ -164,32 +115,6 @@ export function useMediaSession({
     () => playlistController.getState(),
     () => playlistController.getState()
   )
-  const [urlSubtitleController] = useState(() =>
-    createUrlSubtitleController({
-      bridge: {
-        enumerate: (url) => bridge.urlSubtitles.enumerate(url),
-        acquire: (descriptor) => bridge.urlSubtitles.acquire(descriptor),
-        cancel: () => bridge.urlSubtitles?.cancel?.()
-      },
-      sink: {
-        injectCues: (asset) =>
-          dispatch({
-            type: 'onlineSubtitleLoaded',
-            track: onlineSubtitleTrack(asset.cues),
-            cues: asset.cues
-          }),
-        clear: () => dispatch({ type: 'onlineSubtitleCleared' })
-      },
-      onWarning: (message) => recentFiles.reportError(message),
-      preferredLanguage: () => stateRef.current.preferredUrlSubtitleLanguage
-    })
-  )
-  const urlSubtitleState = useSyncExternalStore(
-    urlSubtitleController.subscribe,
-    () => urlSubtitleController.getState(),
-    () => urlSubtitleController.getState()
-  )
-
   const openSession = useLatestCallback((): OpenSession & { bridge: KizunaApi } => ({
     bridge,
     dispatch,
@@ -277,10 +202,6 @@ export function useMediaSession({
 
   const handleSelectSubtitle = (id: number | null): void => {
     if (!state.filePath) return
-    if (id === null && state.selectedSubtitleId === URL_SUBTITLE_TRACK_ID) {
-      urlSubtitleController.selectOff()
-      return
-    }
     const track =
       id === null ? null : state.tracks.find((item) => item.kind === 'subtitle' && item.id === id)
     if (track === undefined) return
@@ -331,50 +252,10 @@ export function useMediaSession({
     })
   const handleDropRef = useLatestRef(handleDrop)
 
-  const [qualityController] = useState(() =>
-    createYtdlpQualityReloadController({
-      setYtdlpQuality: (quality) => bridge.player.setYtdlpQuality(quality),
-      openUrl: openPath,
-      seek: (seconds, absolute) => bridge.player.seek(seconds, absolute),
-      setPause: (paused) => bridge.player.setPause(paused),
-      cancelLoad: () => bridge.player.cancelLoad()
-    })
-  )
-  const setQuality = useLatestCallback(async (quality: YtdlpQuality): Promise<void> => {
-    const current = stateRef.current
-    if (!isExtractorBackedUrl(current.filePath)) return
-    setQualityReloading(true)
-    try {
-      const result = await qualityController.reload({
-        quality,
-        url: current.filePath,
-        timePos: current.timePos,
-        paused: current.paused
-      })
-      if (result === 'reloaded' && stateRef.current.filePath === current.filePath) {
-        setYtdlpQuality({ path: current.filePath, value: quality })
-      }
-    } catch (error) {
-      recentFiles.reportError(errorMessage(error))
-    } finally {
-      setQualityReloading(false)
-    }
-  })
-
   useEffect(() => {
     void recentFiles.init(bridge)
     return () => recentFiles.dispose()
   }, [bridge, recentFiles])
-  useEffect(() => {
-    urlSubtitleController.load(state.filePath)
-  }, [state.filePath, state.loadGeneration, urlSubtitleController])
-  useEffect(() => () => urlSubtitleController.dispose(), [urlSubtitleController])
-  useEffect(
-    () => () => {
-      void qualityController.cancel()
-    },
-    [state.filePath, qualityController]
-  )
   useEffect(() => {
     const onDragOver = (event: DragEvent): void => event.preventDefault()
     const onDrop = (event: DragEvent): void => {
@@ -389,9 +270,6 @@ export function useMediaSession({
     }
   }, [handleDropRef])
 
-  const qualityVisible = isExtractorBackedUrl(state.filePath)
-  const displayedQuality =
-    ytdlpQuality && ytdlpQuality.path === state.filePath ? ytdlpQuality.value : ('best' as const)
   const events = useMemo<MediaSessionEvents>(
     () => ({
       openPath,
@@ -413,7 +291,6 @@ export function useMediaSession({
       recentFiles: recentFilesState.recentFiles,
       hasPlaylist: playlistState.playlist.entries.length > 0,
       onOpenFile: () => void recentFiles.openPicker(openSession()),
-      onOpenUrl: () => setOpenUrlDialogOpen(true),
       onPrevFile: () => navigate('prev'),
       onNextFile: () => navigate('next'),
       onOpenRecent: (path) => void recentFiles.openRecent(openSession(), path),
@@ -422,22 +299,11 @@ export function useMediaSession({
       onAddFolder: () => void addFolderToPlaylist(),
       onSavePlaylist: () => void savePlaylist()
     },
-    qualityMenu: {
-      qualityVisible,
-      quality: displayedQuality,
-      qualityReloading,
-      onSetYtdlpQuality: (quality) => void setQuality(quality)
-    },
     subtitleMenu: {
       mediaOpening: recentFilesState.mediaOpening,
       onSelectSubtitle: handleSelectSubtitle,
       onLoadSubtitleFile: state.filePath ? handleLoadSubtitleFile : undefined,
-      onChangeExternalSubtitleEncoding: handleChangeExternalSubtitleEncoding,
-      urlSubtitleMenu: urlSubtitleState.menu,
-      urlSubtitleSelectedId: urlSubtitleState.selectedId,
-      urlSubtitleAcquiring: urlSubtitleState.acquiring,
-      onSelectUrlSubtitle: (selectionId) => urlSubtitleController.select(selectionId),
-      onSelectUrlSubtitleOff: () => urlSubtitleController.selectOff()
+      onChangeExternalSubtitleEncoding: handleChangeExternalSubtitleEncoding
     },
     playlist: {
       state: playlistState,
@@ -446,18 +312,6 @@ export function useMediaSession({
       move: playlistController.moveEntry,
       setRepeat: playlistController.setRepeat,
       toggleShuffle: () => playlistController.setShuffle(!playlistState.playlist.shuffle)
-    },
-    openUrl: {
-      open: openUrlDialogOpen,
-      loading: recentFilesState.mediaOpening,
-      recentUrls: recentFilesState.recentFiles.map((file) => file.path).filter(isRemoteUrl),
-      close: () => setOpenUrlDialogOpen(false),
-      submit: (url) => {
-        void openPath(url).then((result) => {
-          if (result.status === 'opened') setOpenUrlDialogOpen(false)
-        })
-      },
-      cancelLoad: () => void bridge.player.cancelLoad()
     },
     events,
     banner: {

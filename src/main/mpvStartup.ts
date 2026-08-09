@@ -8,8 +8,6 @@ export interface MpvStartOptions {
   windowId: bigint | string
   userConfigDir?: string
   extraArgs?: string[]
-  /** Bundled yt-dlp path; enables mpv's ytdl hook when present. */
-  ytdlpPath?: string
 }
 
 /** Shown to the user when their own mpv config broke startup and we retried
@@ -20,10 +18,6 @@ export const MPV_CONFIG_ERROR_MESSAGE =
 export interface StartMpvWithConfigDeps {
   mpvPath: string
   windowId: bigint | string
-  /** Bundled yt-dlp path; forwarded to every `start` attempt so mpv
-   * gets the ytdl hook. Undefined when the binary isn't bundled — mpv still
-   * plays direct-stream URLs, only extractor-backed ones stop resolving. */
-  ytdlpPath?: string
   /** The persisted mpv settings block (mpvUserConfig / mpvExtraArgs). */
   settings: { mpvUserConfig: boolean; mpvExtraArgs: string[] }
   /** Kizuna's mpv config dir, used only when `mpvUserConfig` is true. */
@@ -59,18 +53,16 @@ export async function startMpvWithConfig(deps: StartMpvWithConfigDeps): Promise<
       mpvPath: deps.mpvPath,
       windowId: deps.windowId,
       userConfigDir,
-      extraArgs: mpvExtraArgs,
-      ytdlpPath: deps.ytdlpPath
+      extraArgs: mpvExtraArgs
     })
   } catch (err) {
     if (!userConfigDir) throw err // no user config in play — nothing to fall back to
     deps.warn?.(err)
-    // The retry drops only the user config — the ytdl hook still applies.
+    // The retry drops only the user config.
     await deps.start({
       mpvPath: deps.mpvPath,
       windowId: deps.windowId,
-      extraArgs: mpvExtraArgs,
-      ytdlpPath: deps.ytdlpPath
+      extraArgs: mpvExtraArgs
     })
     deps.reportConfigError(MPV_CONFIG_ERROR_MESSAGE)
   }

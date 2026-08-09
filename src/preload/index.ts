@@ -14,7 +14,6 @@ import {
   PLAYER_CHANNELS,
   PLAYER_SETTINGS_CHANNELS,
   TRANSLATE_CHANNELS,
-  URL_SUBTITLE_CHANNELS,
   WINDOW_CONTROL_CHANNELS
 } from '../shared/ipcChannels'
 import type { Track, VideoDimensions } from '../shared/track'
@@ -32,12 +31,6 @@ import type {
 import type { PlayerSettings, VideoAdjustments } from '../shared/playerSettings'
 import type { BundledBinaryStatus } from '../shared/integrationStatus'
 import type { AudioDevice } from '../shared/audioDevice'
-import type { YtdlpQuality } from '../shared/ytdlpQuality'
-import type {
-  UrlSubtitleAsset,
-  UrlSubtitleDescriptor,
-  UrlSubtitleInventory
-} from '../shared/urlSubtitles'
 import type { MediaKeyCommand } from '../shared/mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBounds'
 import type { WindowShapeRect } from '../shared/windowShape'
@@ -108,10 +101,6 @@ const api = {
   // unsubscribe function so callers can clean up (e.g. on unmount).
   player: {
     load: (path: string): Promise<unknown> => ipcRenderer.invoke(PLAYER_CHANNELS.load, path),
-    cancelLoad: (): Promise<void> => ipcRenderer.invoke(PLAYER_CHANNELS.cancelLoad),
-    getTrackList: (): Promise<Track[]> => ipcRenderer.invoke(PLAYER_CHANNELS.getTrackList),
-    getVideoDimensions: (): Promise<VideoDimensions | undefined> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.getVideoDimensions),
     setPause: (paused: boolean): Promise<unknown> =>
       ipcRenderer.invoke(PLAYER_CHANNELS.setPause, paused),
     seek: (seconds: number, absolute?: boolean): Promise<unknown> =>
@@ -132,8 +121,6 @@ const api = {
       ipcRenderer.invoke(PLAYER_CHANNELS.setAudioDevice, name),
     setLoudnessNorm: (on: boolean): Promise<unknown> =>
       ipcRenderer.invoke(PLAYER_CHANNELS.setLoudnessNorm, on),
-    setYtdlpQuality: (quality: YtdlpQuality): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setYtdlpQuality, quality),
     setAbLoop: (a: number | null, b: number | null): Promise<unknown> =>
       ipcRenderer.invoke(PLAYER_CHANNELS.setAbLoop, a, b),
     setVideoMargins: (
@@ -321,15 +308,6 @@ const api = {
     translate: (text: string, requestId: string): Promise<string> =>
       ipcRenderer.invoke(TRANSLATE_CHANNELS.translate, { text, requestId }),
     cancel: (requestId: string): void => ipcRenderer.send(TRANSLATE_CHANNELS.cancel, { requestId })
-  },
-  // URL-subtitle bridge (yt-dlp): enumerate/acquire the active extractor URL's
-  // provided/auto tracks; cancel is fire-and-forget. Main validates every input.
-  urlSubtitles: {
-    enumerate: (url: string): Promise<UrlSubtitleInventory> =>
-      ipcRenderer.invoke(URL_SUBTITLE_CHANNELS.enumerate, url),
-    acquire: (descriptor: UrlSubtitleDescriptor): Promise<UrlSubtitleAsset> =>
-      ipcRenderer.invoke(URL_SUBTITLE_CHANNELS.acquire, descriptor),
-    cancel: (): void => ipcRenderer.send(URL_SUBTITLE_CHANNELS.cancel)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the

@@ -56,14 +56,6 @@ import { registerIntegrationBridge, createIntegrationService } from './integrati
 import { createMpvConfigManager, type MpvConfigManager } from './services/mpvConfig'
 import { startMpvWithConfig } from './mpvStartup'
 import { registerClipboardBridge } from './clipboardBridge'
-import { registerUrlSubtitleBridge } from './urlSubtitleBridge'
-import {
-  createUrlSubtitleService,
-  execYtdlp,
-  type UrlSubtitleService
-} from './services/urlSubtitles'
-import { parseSrt } from './media/srtParser'
-import { parseVtt } from './media/vttParser'
 import { httpFetch } from './services/http'
 import { registerTranslateBridge } from './translateBridge'
 import { createGoogleTranslator } from './services/translate/googleTranslate'
@@ -117,7 +109,6 @@ let mediaHistory: MediaHistoryService | undefined
 let powerSave: ReturnType<typeof createPowerSaveController> | undefined
 let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
-let urlSubtitles: UrlSubtitleService | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -134,7 +125,6 @@ const launchPathBuffer = createLaunchPathBuffer(
 
 function createWindow(
   mpvPath: string,
-  ytdlpPath: string | undefined,
   history: MediaHistoryService,
   settings: SettingsStore
 ): void {
@@ -172,7 +162,7 @@ function createWindow(
   // Do not let renderer effects invoke player channels before their handlers
   // exist. A failed mpv start is caught inside startPlayer and still loads a
   // usable UI over the opaque host.
-  void startPlayer(videoHost, uiOverlay, mpvPath, ytdlpPath, history, settings).then(() => {
+  void startPlayer(videoHost, uiOverlay, mpvPath, history, settings).then(() => {
     if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
     // Linux keeps the transparent overlay hidden until the renderer has
     // finished its first document load. Windows retains eager presentation.
@@ -193,7 +183,6 @@ function createWindow(
 function startMpvForWindow(
   uiOverlay: BrowserWindow,
   mpvPath: string,
-  ytdlpPath: string | undefined,
   windowId: bigint | string,
   settings: SettingsStore
 ): Promise<void> {
@@ -201,7 +190,6 @@ function startMpvForWindow(
   return startMpvWithConfig({
     mpvPath,
     windowId,
-    ytdlpPath,
     settings: { mpvUserConfig, mpvExtraArgs },
     configDir: mpvConfig?.configDir ?? '',
     ensureConfigDir: () => mpvConfig?.ensureDir(),
@@ -270,13 +258,12 @@ async function startPlayer(
   videoHost: BrowserWindow,
   uiOverlay: BrowserWindow,
   mpvPath: string,
-  ytdlpPath: string | undefined,
   history: MediaHistoryService,
   settings: SettingsStore
 ): Promise<void> {
   try {
     const windowId = windowIdFromHandleBuffer(videoHost.getNativeWindowHandle())
-    await startMpvForWindow(uiOverlay, mpvPath, ytdlpPath, windowId, settings)
+    await startMpvForWindow(uiOverlay, mpvPath, windowId, settings)
     powerSave = createPowerSaveController(powerSaveBlocker)
     systemMedia = createSystemMediaForWindow(videoHost, uiOverlay)
     const screenshots = createScreenshotService({
@@ -304,7 +291,6 @@ async function startPlayer(
       powerSave,
       screenshots,
       systemMedia,
-      ytdlpPath !== undefined,
       frames
     )
     launchPathBuffer.markPlayerReady()
@@ -454,32 +440,6 @@ function startKnowledge(settings: SettingsStore): void {
 }
 
 /**
- * Registers the URL-subtitle IPC bridge: enumerate/acquire the
- * provided/auto subtitle tracks of the active extractor URL through the bundled
- * yt-dlp, into a main-owned cache dir below `userData`. yt-dlp only runs for
- * extractor-backed URLs when the binary exists; here we supply the real
- * node:fs/promises adapter — the service itself stays fully fakeable.
- */
-function startUrlSubtitles(ytdlpPath: string | undefined): void {
-  const cacheDir = join(app.getPath('userData'), 'url-subtitles')
-  urlSubtitles = createUrlSubtitleService({
-    ytdlpPath,
-    cacheDir,
-    exec: execYtdlp,
-    fs: {
-      mkdir: async (dir) => {
-        await fs.promises.mkdir(dir, { recursive: true })
-      },
-      readdir: (dir) => fs.promises.readdir(dir),
-      readFile: (path) => fs.promises.readFile(path, 'utf-8'),
-      remove: (path) => fs.promises.rm(path, { recursive: true, force: true })
-    },
-    parse: (content, format) => (format === 'vtt' ? parseVtt(content) : parseSrt(content))
-  })
-  registerUrlSubtitleBridge(ipcMain, urlSubtitles)
-}
-
-/**
  * Registers the player-settings IPC bridge (getSettings/setSettings for the
  * Options menu's contents: keybindings, skip amount, popup/subtitle display),
  * backed by the shared settings store's `player` block.
@@ -518,9 +478,6 @@ if (!gotSingleInstanceLock) {
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
     disposeSystemMedia: () => systemMedia?.dispose(),
-    cleanupUrlSubtitles: async () => {
-      await urlSubtitles?.cleanup()
-    },
     appQuit: () => {
       appWindows?.close()
       app.quit()
@@ -557,11 +514,6 @@ if (!gotSingleInstanceLock) {
       resourcesPath: process.resourcesPath,
       appRoot: app.getAppPath()
     })
-    // Probe the bundled yt-dlp once at startup: only pass its path
-    // to mpv's ytdl hook when the binary actually exists, so a dev checkout
-    // without it doesn't hand mpv a dangling path.
-    const ytdlpPath = fs.existsSync(binaryPaths.ytdlpPath) ? binaryPaths.ytdlpPath : undefined
-
     const settings = createAppSettingsStore()
     mpvConfig = createMpvConfigManager({
       userDataDir: app.getPath('userData'),
@@ -581,9 +533,7 @@ if (!gotSingleInstanceLock) {
     startIntegrationStatus(binaryPaths)
     registerClipboardBridge(ipcMain, clipboard)
     registerTranslateBridge(ipcMain, createGoogleTranslator(httpFetch))
-    startUrlSubtitles(ytdlpPath)
-
-    createWindow(binaryPaths.mpvPath, ytdlpPath, mediaHistory, settings)
+    createWindow(binaryPaths.mpvPath, mediaHistory, settings)
 
     // macOS dock re-activation. This path is dead on Windows (the primary
     // target): `window-all-closed` quits the app there, so all windows are
@@ -596,7 +546,7 @@ if (!gotSingleInstanceLock) {
     // controller/bridge per window — out of scope until macOS is supported.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && mediaHistory)
-        createWindow(binaryPaths.mpvPath, ytdlpPath, mediaHistory, settings)
+        createWindow(binaryPaths.mpvPath, mediaHistory, settings)
     })
   })
 

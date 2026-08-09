@@ -140,23 +140,23 @@ describe('createMediaHistoryService', () => {
     })
     expect(await history.checkFileAvailability('')).toEqual({ status: 'missing' })
 
-    // A network URL is always available without touching the filesystem.
+    // URL playback is removed, so stale URL shortcuts are treated as gone.
     expect(await history.checkFileAvailability('https://host.example/stream.m3u8')).toEqual({
-      status: 'available'
+      status: 'missing'
     })
     expect(stat).toHaveBeenCalledTimes(4)
   })
 
-  it('records a URL as a recent file and reads it back byte-identical', () => {
-    const { history } = service()
+  it('ignores URL recent and playback history entries', () => {
+    const { history, settings } = service()
     const url = 'https://Host.example/Watch?v=Ab'
     history.recordOpened(url)
     history.observePosition(42)
 
-    expect(history.getRecentFiles()[0].path).toBe(url)
-    // The position lookup hits the same key the record was written under.
+    expect(history.getRecentFiles()).toEqual([])
     history.flush()
-    expect(history.getPlaybackHistory(url)).toMatchObject({ positionSeconds: 42 })
+    expect(history.getPlaybackHistory(url)).toBeUndefined()
+    expect(settings.writes()).toBe(0)
   })
 
   it('reorders and caps recents while preserving playback history when a shortcut is removed or cleared', () => {

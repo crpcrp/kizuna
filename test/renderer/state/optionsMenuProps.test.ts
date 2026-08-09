@@ -84,18 +84,12 @@ describe('buildOptionsMenuProps', () => {
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
-  it('both dispatches and persists the rows nothing else writes', () => {
+  it('persists the translation policy row while other rows only dispatch', () => {
     const input = buildInput()
     const props = buildOptionsMenuProps(input)
-    props.playback.onChangePreferredUrlSubtitleLanguage('ja')
     props.subtitles.onChangeTranslationEnabled(true)
 
-    expect(input.dispatch).toHaveBeenCalledWith({
-      type: 'setPreferredUrlSubtitleLanguage',
-      value: 'ja'
-    })
     expect(input.dispatch).toHaveBeenCalledWith({ type: 'setTranslationEnabled', value: true })
-    expect(input.actions.persist).toHaveBeenCalledWith({ preferredUrlSubtitleLanguage: 'ja' })
     expect(input.actions.persist).toHaveBeenCalledWith({ translationEnabled: true })
   })
 

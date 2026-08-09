@@ -38,9 +38,6 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     },
     player: {
       load: vi.fn(async () => undefined),
-      cancelLoad: vi.fn(async () => undefined),
-      getTrackList: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
       setPause: vi.fn(async () => undefined),
       seek: vi.fn(async () => undefined),
       setVolume: vi.fn(async () => undefined),
@@ -51,7 +48,6 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       getAudioDevices: vi.fn(async () => []),
       setAudioDevice: vi.fn(async () => undefined),
       setLoudnessNorm: vi.fn(async () => undefined),
-      setYtdlpQuality: vi.fn(async () => undefined),
       setAbLoop: vi.fn(async () => undefined),
       setVideoMargins: vi.fn(async () => undefined),
       setVideoAdjustments: vi.fn(async () => undefined),
@@ -141,22 +137,13 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       openMpvConfigDir: vi.fn(async () => '')
     },
     integration: {
-      binaryStatus: vi.fn(async () => ({ ffmpeg: false, ffprobe: false, ytdlp: false }))
+      binaryStatus: vi.fn(async () => ({ ffmpeg: false, ffprobe: false }))
     },
     clipboard: {
       writeText: vi.fn(async () => undefined)
     },
     translate: {
       translate: vi.fn(async (text) => text),
-      cancel: vi.fn()
-    },
-    urlSubtitles: {
-      enumerate: vi.fn(async (url) => ({ url, available: false, tracks: [] })),
-      acquire: vi.fn(async (descriptor) => ({
-        selectionId: descriptor.selectionId,
-        format: 'srt' as const,
-        cues: []
-      })),
       cancel: vi.fn()
     },
     files: {
@@ -177,7 +164,6 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
   Object.assign(api.integration, overrides.integration)
   Object.assign(api.clipboard, overrides.clipboard)
   Object.assign(api.translate, overrides.translate)
-  Object.assign(api.urlSubtitles, overrides.urlSubtitles)
   Object.assign(api.files, overrides.files)
 
   return api

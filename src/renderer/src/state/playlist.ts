@@ -4,6 +4,8 @@
 // no Electron; every function is a pure state transition so it is fully unit
 // testable.
 
+import { isRemoteUrl } from '../../../shared/mediaFileTypes'
+
 export type RepeatMode = 'off' | 'one' | 'all'
 
 /** Injectable randomness seam so shuffles are deterministic in tests. */
@@ -72,8 +74,9 @@ export function addEntries(
   paths: string[],
   rng: Rng = Math.random
 ): PlaylistState {
-  if (paths.length === 0) return state
-  const entries = [...state.entries, ...paths]
+  const localPaths = paths.filter((path) => !isRemoteUrl(path))
+  if (localPaths.length === 0) return state
+  const entries = [...state.entries, ...localPaths]
   const newPositions = range(entries.length).slice(state.entries.length)
   const order = state.shuffle
     ? [...state.order, ...shuffled(newPositions, rng)]

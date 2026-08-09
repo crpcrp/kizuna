@@ -1,14 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   registerPlayerBridge,
-  isExtractorBackedUrl,
   type PlayerControllerLike,
   type PlayerHistoryObserver
 } from '@src/main/playerBridge'
 import { MpvLoadError } from '@src/main/mpv/controller'
 import { ScreenshotFolderError } from '@src/main/services/screenshots'
 import { PLAYER_CHANNELS } from '@src/shared/ipcChannels'
-import type { YtdlpQuality } from '@src/shared/ytdlpQuality'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 /** Fake mpv controller: records calls and captures observe callbacks. */
@@ -20,20 +18,9 @@ function fakeController() {
   let pauseCb: ((v: unknown) => void) | undefined
   let eofCb: ((v: unknown) => void) | undefined
   const controller: PlayerControllerLike = {
-    loadFile: vi.fn(async (path: string, opts?: { timeoutMs?: number }) => {
-      calls.loadFile = [path, opts]
+    loadFile: vi.fn(async (path: string) => {
+      calls.loadFile = [path]
       return undefined
-    }),
-    cancelLoad: vi.fn(() => {
-      calls.cancelLoad = []
-    }),
-    getTrackList: vi.fn(async () => {
-      calls.getTrackList = []
-      return [{ id: 1, kind: 'audio' as const, codec: 'aac' }]
-    }),
-    getVideoDimensions: vi.fn(async () => {
-      calls.getVideoDimensions = []
-      return { width: 1920, height: 1080 }
     }),
     setPause: vi.fn(async (paused: boolean) => {
       calls.setPause = [paused]
@@ -73,10 +60,6 @@ function fakeController() {
     }),
     setLoudnessNormalization: vi.fn(async (on: boolean) => {
       calls.setLoudnessNormalization = [on]
-      return undefined
-    }),
-    setYtdlpQuality: vi.fn(async (quality: YtdlpQuality) => {
-      calls.setYtdlpQuality = [quality]
       return undefined
     }),
     setAbLoop: vi.fn(async (a: number | null, b: number | null) => {
@@ -153,13 +136,6 @@ function fakeHistory(): PlayerHistoryObserver {
 describe('registerPlayerBridge', () => {
   const event: FakeEvent = { senderId: 7 }
 
-  it('recognizes extractor-backed YouTube URLs without treating direct URLs as extractors', () => {
-    expect(isExtractorBackedUrl('https://www.youtube.com/watch?v=abc')).toBe(true)
-    expect(isExtractorBackedUrl('https://youtu.be/abc')).toBe(true)
-    expect(isExtractorBackedUrl('https://cdn.example.com/video.mp4')).toBe(false)
-    expect(isExtractorBackedUrl('E:\\anime\\episode.mkv')).toBe(false)
-  })
-
   it('registers every command channel', () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
@@ -175,13 +151,9 @@ describe('registerPlayerBridge', () => {
         PLAYER_CHANNELS.setMuted,
         PLAYER_CHANNELS.setAudioDelay,
         PLAYER_CHANNELS.setAudioTrack,
-        PLAYER_CHANNELS.cancelLoad,
-        PLAYER_CHANNELS.getTrackList,
-        PLAYER_CHANNELS.getVideoDimensions,
         PLAYER_CHANNELS.getAudioDevices,
         PLAYER_CHANNELS.setAudioDevice,
         PLAYER_CHANNELS.setLoudnessNorm,
-        PLAYER_CHANNELS.setYtdlpQuality,
         PLAYER_CHANNELS.setAbLoop,
         PLAYER_CHANNELS.setVideoMargins,
         PLAYER_CHANNELS.setVideoAdjustments,
@@ -210,8 +182,7 @@ describe('registerPlayerBridge', () => {
     resolveLoad()
     await loading
 
-    // Local path → no load timeout (undefined opts); only URL opens get bounded.
-    expect(controller.loadFile).toHaveBeenCalledWith('/tmp/video.mp4', undefined)
+    expect(controller.loadFile).toHaveBeenCalledWith('/tmp/video.mp4')
     expect(calls.loadFile).toEqual(['/tmp/video.mp4'])
     expect(history.recordOpened).toHaveBeenCalledWith('/tmp/video.mp4')
   })
@@ -335,110 +306,20 @@ describe('registerPlayerBridge', () => {
     expect(controller.setAudioTrack).toHaveBeenCalledWith(3)
   })
 
-  it('passes the URL load timeout only when the path is a remote URL', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    await handlers.get(PLAYER_CHANNELS.load)!(event, 'https://host/stream.m3u8')
-    expect(calls.loadFile).toEqual(['https://host/stream.m3u8', { timeoutMs: 60_000 }])
-
-    await handlers.get(PLAYER_CHANNELS.load)!(event, 'E:\\anime\\ep1.mkv')
-    expect(calls.loadFile).toEqual(['E:\\anime\\ep1.mkv', undefined])
-  })
-
-  it('explains when an extractor-backed URL needs the missing yt-dlp binary', async () => {
+  it('rejects HTTP and HTTPS URLs before controller or history access', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
-    vi.mocked(controller.loadFile).mockRejectedValueOnce(new MpvLoadError('mpv internal failure'))
-    registerPlayerBridge(
-      ipc,
-      controller,
-      vi.fn(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      false
-    )
+    const history = fakeHistory()
+    registerPlayerBridge(ipc, controller, vi.fn(), history)
 
     await expect(
-      handlers.get(PLAYER_CHANNELS.load)!(event, 'https://www.youtube.com/watch?v=abc')
-    ).rejects.toThrow('This URL requires yt-dlp, but the yt-dlp binary is missing.')
-  })
-
-  it('sanitizes direct-stream and present-yt-dlp failures without mislabeling them', async () => {
-    const direct = fakeIpc()
-    const directController = fakeController()
-    vi.mocked(directController.controller.loadFile).mockRejectedValueOnce(
-      new Error('mpv IPC: secret')
-    )
-    registerPlayerBridge(
-      direct.ipc,
-      directController.controller,
-      vi.fn(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      false
-    )
-
+      handlers.get(PLAYER_CHANNELS.load)!(event, 'https://host/stream.m3u8')
+    ).rejects.toThrow('URL playback is not supported.')
     await expect(
-      direct.handlers.get(PLAYER_CHANNELS.load)!(event, 'https://cdn.example.com/video.mp4')
-    ).rejects.toThrow('Could not load the URL.')
-
-    const extractor = fakeIpc()
-    const extractorController = fakeController()
-    vi.mocked(extractorController.controller.loadFile).mockRejectedValueOnce(
-      new MpvLoadError('mpv failure')
-    )
-    registerPlayerBridge(
-      extractor.ipc,
-      extractorController.controller,
-      vi.fn(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      true
-    )
-
-    await expect(
-      extractor.handlers.get(PLAYER_CHANNELS.load)!(event, 'https://www.youtube.com/watch?v=abc')
-    ).rejects.toThrow('Could not load the URL.')
-  })
-
-  it('forwards cancelLoad to controller.cancelLoad', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.cancelLoad)!(event)
-
-    expect(controller.cancelLoad).toHaveBeenCalledTimes(1)
-  })
-
-  it('forwards getTrackList to controller.getTrackList and returns the tracks', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    const tracks = await handlers.get(PLAYER_CHANNELS.getTrackList)!(event)
-
-    expect(controller.getTrackList).toHaveBeenCalledTimes(1)
-    expect(tracks).toEqual([{ id: 1, kind: 'audio', codec: 'aac' }])
-  })
-
-  it('forwards getVideoDimensions to controller.getVideoDimensions and returns the size', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    const dims = await handlers.get(PLAYER_CHANNELS.getVideoDimensions)!(event)
-
-    expect(controller.getVideoDimensions).toHaveBeenCalledTimes(1)
-    expect(dims).toEqual({ width: 1920, height: 1080 })
+      handlers.get(PLAYER_CHANNELS.load)!(event, 'HTTP://host/video.mp4')
+    ).rejects.toThrow('URL playback is not supported.')
+    expect(controller.loadFile).not.toHaveBeenCalled()
+    expect(history.beginLoad).not.toHaveBeenCalled()
   })
 
   it('forwards setAbLoop endpoints to controller.setAbLoop', () => {
@@ -595,7 +476,6 @@ describe('registerPlayerBridge', () => {
       undefined,
       undefined,
       undefined,
-      false,
       frames
     )
 
@@ -617,7 +497,6 @@ describe('registerPlayerBridge', () => {
       undefined,
       undefined,
       undefined,
-      false,
       frames
     )
 
@@ -878,20 +757,5 @@ describe('registerPlayerBridge', () => {
 
       expect(systemMedia.update).not.toHaveBeenCalled()
     })
-  })
-
-  it('forwards valid yt-dlp quality policies and rejects all invalid payloads', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    await handlers.get(PLAYER_CHANNELS.setYtdlpQuality)!(event, '1080')
-    expect(calls.setYtdlpQuality).toEqual(['1080'])
-    for (const value of [undefined, {}, 720, 'best[height<=1080]']) {
-      await expect(handlers.get(PLAYER_CHANNELS.setYtdlpQuality)!(event, value)).rejects.toThrow(
-        'Invalid yt-dlp quality.'
-      )
-    }
-    expect(controller.setYtdlpQuality).toHaveBeenCalledTimes(1)
   })
 })

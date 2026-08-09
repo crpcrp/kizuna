@@ -13,7 +13,6 @@ import {
   normalizeKeyBinding,
   normalizeLevelColors,
   normalizeMpvExtraArgs,
-  normalizePreferredUrlSubtitleLanguage,
   normalizePopupSettings,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
@@ -300,29 +299,6 @@ describe('normalizeAudioDevice', () => {
     expect(normalizeAudioDevice(undefined)).toBe('auto')
     expect(normalizeAudioDevice(null)).toBe('auto')
     expect(normalizeAudioDevice(42)).toBe('auto')
-  })
-})
-
-describe('normalizePreferredUrlSubtitleLanguage', () => {
-  it('accepts a bare language code and codes with subtags', () => {
-    expect(normalizePreferredUrlSubtitleLanguage('ja')).toBe('ja')
-    expect(normalizePreferredUrlSubtitleLanguage('pt-BR')).toBe('pt-BR')
-    expect(normalizePreferredUrlSubtitleLanguage('zh-Hans')).toBe('zh-Hans')
-  })
-
-  it('rejects an empty string, non-strings, and junk that is not a language code', () => {
-    expect(normalizePreferredUrlSubtitleLanguage('')).toBe('')
-    expect(normalizePreferredUrlSubtitleLanguage(123)).toBe('')
-    expect(normalizePreferredUrlSubtitleLanguage(undefined)).toBe('')
-    expect(normalizePreferredUrlSubtitleLanguage(null)).toBe('')
-    expect(normalizePreferredUrlSubtitleLanguage('<script>')).toBe('')
-    expect(normalizePreferredUrlSubtitleLanguage('a'.repeat(300))).toBe('')
-  })
-
-  it('rejects an over-long value even when every subtag is individually well-formed', () => {
-    const longButPatternValid = 'ab-' + Array(10).fill('cdefghij').join('-')
-    expect(longButPatternValid.length).toBeGreaterThan(35)
-    expect(normalizePreferredUrlSubtitleLanguage(longButPatternValid)).toBe('')
   })
 })
 

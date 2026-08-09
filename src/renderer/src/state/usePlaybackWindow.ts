@@ -18,7 +18,6 @@ import type { PlaybackTabProps } from '../components/options/PlaybackTab'
 import { toggleSidebar } from './appChrome'
 import { useAudioDevices } from './audioDevices'
 import type { BulkMiningPresentation } from './bulkMiningPresentation'
-import { shouldProbe } from './mediaSession'
 import { INACTIVE_MINI_PLAYER, type MiniPlayerState } from './miniPlayer'
 import { applyOffsetToFolder, nextAudioDelays, nextSubtitleOffsets } from './perFileOffsets'
 import { applyVideoAdjustments, frameStepAction, type FrameStepGuard } from './playbackCommands'
@@ -564,7 +563,6 @@ export function usePlaybackWindow({
       setAlwaysOnTop,
       applyMiniPlayerEffect
     },
-    thumbnailsEnabled:
-      videoDimensions !== undefined && state.filePath !== undefined && shouldProbe(state.filePath)
+    thumbnailsEnabled: videoDimensions !== undefined && state.filePath !== undefined
   }
 }

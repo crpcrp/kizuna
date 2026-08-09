@@ -15,11 +15,7 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function setup(
-  filePath = '/one.mkv',
-  playerGetVideoDimensions: () => Promise<{ width: number; height: number } | undefined> = () =>
-    new Promise(() => {})
-) {
+function setup(filePath = '/one.mkv') {
   const dimensions = deferred<{ width: number; height: number } | undefined>()
   const chapters = deferred<never[]>()
   const dispatch = vi.fn()
@@ -29,8 +25,7 @@ function setup(
       setAudioDelay: vi.fn().mockResolvedValue(undefined),
       setLoudnessNorm: vi.fn().mockResolvedValue(undefined),
       setAbLoop: vi.fn().mockResolvedValue(undefined),
-      setVideoAdjustments: vi.fn().mockResolvedValue(undefined),
-      getVideoDimensions: vi.fn(playerGetVideoDimensions)
+      setVideoAdjustments: vi.fn().mockResolvedValue(undefined)
     },
     media: {
       getVideoDimensions: vi
@@ -80,63 +75,15 @@ describe('usePerFileRestore', () => {
   it('reads dimensions from ffprobe (media), never mpv, for a local path', () => {
     const result = setup()
     expect(result.bridge.media.getVideoDimensions).toHaveBeenCalledWith('/one.mkv')
-    expect(result.bridge.player.getVideoDimensions).not.toHaveBeenCalled()
   })
 
-  it('reads dimensions from mpv (player), never ffprobe, for a remote URL', () => {
-    const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-    const result = setup(url, () => Promise.resolve({ width: 1280, height: 720 }))
-    expect(result.bridge.player.getVideoDimensions).toHaveBeenCalledTimes(1)
+  it('does not send URL state to mpv or local-media probes', () => {
+    const result = setup('https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+    expect(result.bridge.player.setSpeed).not.toHaveBeenCalled()
+    expect(result.bridge.player.setAudioDelay).not.toHaveBeenCalled()
+    expect(result.bridge.player.setAbLoop).not.toHaveBeenCalled()
     expect(result.bridge.media.getVideoDimensions).not.toHaveBeenCalled()
-  })
-
-  it('retries the mpv read on the URL path until one resolves a value', async () => {
-    vi.useFakeTimers()
-    try {
-      const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-      const player = vi
-        .fn()
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValueOnce(undefined)
-        .mockResolvedValue({ width: 640, height: 360 })
-      const result = setup(url, player)
-      // First read (mount) resolved undefined; drain it, then advance the timer.
-      await vi.advanceTimersByTimeAsync(0)
-      expect(player).toHaveBeenCalledTimes(1)
-      expect(result.input.setVideoDimensions).not.toHaveBeenCalledWith({ width: 640, height: 360 })
-      await vi.advanceTimersByTimeAsync(400)
-      expect(player).toHaveBeenCalledTimes(2)
-      await vi.advanceTimersByTimeAsync(400)
-      expect(player).toHaveBeenCalledTimes(3)
-      expect(result.input.setVideoDimensions).toHaveBeenCalledWith({ width: 640, height: 360 })
-      // Stops as soon as a value arrives — no further polling.
-      await vi.advanceTimersByTimeAsync(400)
-      expect(player).toHaveBeenCalledTimes(3)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('discards an in-flight URL read after the file switches mid-poll', async () => {
-    vi.useFakeTimers()
-    try {
-      const url = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-      const late = deferred<{ width: number; height: number } | undefined>()
-      const player = vi.fn().mockReturnValueOnce(late.promise)
-      const result = setup(url, player)
-      // Switch to a different file before the first read resolves.
-      result.input.filePath = '/local.mkv'
-      result.input.loadGeneration = 2
-      result.hook.rerender({ value: result.input })
-      late.resolve({ width: 1920, height: 1080 })
-      await vi.advanceTimersByTimeAsync(0)
-      expect(result.input.setVideoDimensions).not.toHaveBeenCalledWith({
-        width: 1920,
-        height: 1080
-      })
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(result.bridge.media.getChapters).not.toHaveBeenCalled()
   })
 
   it('ignores stale dimension and chapter completions after a later file wins', async () => {

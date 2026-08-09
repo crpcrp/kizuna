@@ -11,7 +11,6 @@ import {
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePopupSettings,
-  normalizePreferredUrlSubtitleLanguage,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
   subtitleOffsetKey,
@@ -148,10 +147,7 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
     loudnessNormalization:
       typeof obj.loudnessNormalization === 'boolean'
         ? obj.loudnessNormalization
-        : DEFAULT_PLAYER_SETTINGS.loudnessNormalization,
-    preferredUrlSubtitleLanguage: normalizePreferredUrlSubtitleLanguage(
-      obj.preferredUrlSubtitleLanguage
-    )
+        : DEFAULT_PLAYER_SETTINGS.loudnessNormalization
   }
 }
 

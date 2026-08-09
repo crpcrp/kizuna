@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react'
 import { APP_NAME } from '../../../../shared/appInfo'
 import { audioDeviceMenuList, type AudioDevice } from '../../../../shared/audioDevice'
-import {
-  MPV_EXTRA_ARG_MAX_LENGTH,
-  normalizePreferredUrlSubtitleLanguage
-} from '../../../../shared/playerSettings'
+import { MPV_EXTRA_ARG_MAX_LENGTH } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
@@ -14,7 +11,6 @@ export interface PlaybackTabProps {
   skipSeconds: number
   rightClickTogglePause: boolean
   autoPlayNext: boolean
-  preferredUrlSubtitleLanguage: string
   audioDevices: AudioDevice[]
   selectedAudioDevice: string
   onSelectAudioDevice: (name: string) => void
@@ -27,7 +23,6 @@ export interface PlaybackTabProps {
   onChangeSkipSeconds: (value: number) => void
   onChangeRightClickTogglePause: (value: boolean) => void
   onChangeAutoPlayNext: (value: boolean) => void
-  onChangePreferredUrlSubtitleLanguage: (value: string) => void
   onChangeScreenshotFolder: (value: string | null) => void
   onChangeMpvUserConfig: (value: boolean) => void
   onChangeMpvExtraArgs: (value: string[]) => void
@@ -56,13 +51,6 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
     category: 'playback',
     keywords: ['playlist', 'continue', 'autoplay'],
     targetId: 'auto-play-next-checkbox'
-  },
-  {
-    id: 'preferred-url-subtitle-language',
-    label: 'Preferred online subtitle language',
-    category: 'playback',
-    keywords: ['yt-dlp', 'url', 'youtube', 'language'],
-    targetId: 'preferred-url-subtitle-language-input'
   },
   {
     id: 'right-click-toggle-pause',
@@ -122,7 +110,6 @@ export default function PlaybackTab({
   skipSeconds,
   rightClickTogglePause,
   autoPlayNext,
-  preferredUrlSubtitleLanguage,
   audioDevices,
   selectedAudioDevice,
   onSelectAudioDevice,
@@ -135,7 +122,6 @@ export default function PlaybackTab({
   onChangeSkipSeconds,
   onChangeRightClickTogglePause,
   onChangeAutoPlayNext,
-  onChangePreferredUrlSubtitleLanguage,
   onChangeScreenshotFolder,
   onChangeMpvUserConfig,
   onChangeMpvExtraArgs,
@@ -143,9 +129,6 @@ export default function PlaybackTab({
   onAudioDevicesRequest
 }: PlaybackTabProps): React.JSX.Element {
   const [screenshotFolderDraft, setScreenshotFolderDraft] = useState<string | null>(null)
-  const [preferredUrlSubtitleLanguageDraft, setPreferredUrlSubtitleLanguageDraft] = useState<
-    string | null
-  >(null)
   const [mpvExtraArgsDraft, setMpvExtraArgsDraft] = useState<string | null>(null)
 
   useEffect(() => {
@@ -157,14 +140,6 @@ export default function PlaybackTab({
     const trimmed = screenshotFolderDraft.trim()
     onChangeScreenshotFolder(trimmed === '' ? null : trimmed)
     setScreenshotFolderDraft(null)
-  }
-
-  const commitPreferredUrlSubtitleLanguage = (): void => {
-    if (preferredUrlSubtitleLanguageDraft === null) return
-    onChangePreferredUrlSubtitleLanguage(
-      normalizePreferredUrlSubtitleLanguage(preferredUrlSubtitleLanguageDraft)
-    )
-    setPreferredUrlSubtitleLanguageDraft(null)
   }
 
   const commitMpvExtraArgs = (): void => {
@@ -203,26 +178,6 @@ export default function PlaybackTab({
           checked={autoPlayNext}
           onChange={onChangeAutoPlayNext}
         />
-        <div className="options-row">
-          <label htmlFor="preferred-url-subtitle-language-input" className="options-row-label">
-            Preferred online subtitle language
-            <span className="options-row-description">
-              Matching online (yt-dlp) caption tracks sort first. Blank means no preference.
-            </span>
-          </label>
-          <input
-            type="text"
-            id="preferred-url-subtitle-language-input"
-            placeholder="e.g. ja"
-            value={preferredUrlSubtitleLanguageDraft ?? preferredUrlSubtitleLanguage}
-            onChange={(e) => setPreferredUrlSubtitleLanguageDraft(e.target.value)}
-            onBlur={commitPreferredUrlSubtitleLanguage}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.currentTarget.blur()
-              else if (e.key === 'Escape') setPreferredUrlSubtitleLanguageDraft(null)
-            }}
-          />
-        </div>
         <OptionsToggleRow
           id="right-click-toggle-pause-checkbox"
           title="Right-click toggles play/pause"

@@ -1,14 +1,12 @@
 // Contracts shared by the renderer's media orchestration: the slice of the
 // preload bridge these actions need, the reducer dispatch alias, the request
 // token that invalidates superseded async work, and the open-session bundle the
-// load/open paths thread through. Also holds the two predicates every one of
-// them consults (`errorMessage`, `shouldProbe`).
+// load/open paths thread through, plus the error-message helper they use.
 //
 // Every module in this group takes an injected `bridge` and `dispatch`, so it is
 // unit-testable with a fake bridge — no Electron, no window, no mpv.
 
 import { type Cue } from '../../../shared/cue'
-import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import {
   type MediaPlaybackHistory,
   type StoredSubtitleSelection,
@@ -32,11 +30,6 @@ export interface PlayerBridge {
     load(path: string): Promise<unknown>
     setAudioTrack(aid: number): Promise<unknown>
     seek(seconds: number, absolute?: boolean): Promise<unknown>
-    /**
-     * Reads mpv's `track-list`. Only needed on the URL path, where ffprobe
-     * never runs — optional so the many local-file fakes need not provide it.
-     */
-    getTrackList?(): Promise<Track[]>
   }
   mediaHistory: {
     getPlaybackHistory(path: string): Promise<MediaPlaybackHistory | undefined>
@@ -157,15 +150,4 @@ export interface OpenSession {
    * that pick replaces the queue with — a playlist's expanded entries, or the
    * single picked media file — before the pipeline loads entries[0]. */
   onPlaylistPicked?: (paths: string[]) => void
-}
-
-/**
- * Whether `path` should be probed with the filesystem-oriented tooling
- * (ffprobe track enumeration, video-dimension and chapter reads). Remote URLs
- * return false: ffprobe can't read them, so their stream info comes
- * from mpv's `track-list` instead and their video-dimension/chapter probes are
- * skipped. Every renderer call site that probes branches on this.
- */
-export function shouldProbe(path: string): boolean {
-  return !isRemoteUrl(path)
 }

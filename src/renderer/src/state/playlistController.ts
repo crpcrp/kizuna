@@ -20,6 +20,7 @@ import {
   type RepeatMode,
   type Rng
 } from './playlist'
+import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { type OpenMediaResult } from './mediaSession'
 export interface PlaylistControllerState {
   playlist: PlaylistState
@@ -173,14 +174,16 @@ export function createPlaylistController(rng: Rng = Math.random): PlaylistContro
     },
 
     addPaths(paths) {
-      if (paths.length === 0) return
-      setPlaylist(addEntries(state.playlist, paths, rng))
+      const localPaths = paths.filter((path) => !isRemoteUrl(path))
+      if (localPaths.length === 0) return
+      setPlaylist(addEntries(state.playlist, localPaths, rng))
     },
 
     async addPathsAndMaybePlay(paths, isPlaying, deps) {
-      if (paths.length === 0) return false
+      const localPaths = paths.filter((path) => !isRemoteUrl(path))
+      if (localPaths.length === 0) return false
       const wasEmpty = state.playlist.entries.length === 0
-      setPlaylist(addEntries(state.playlist, paths, rng))
+      setPlaylist(addEntries(state.playlist, localPaths, rng))
       if (!wasEmpty || isPlaying) return false
       // Honour shuffle: the queue's own first playback position, not index 0.
       const start = state.playlist.order[0] ?? 0

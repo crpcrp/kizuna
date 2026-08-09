@@ -6,12 +6,11 @@ import {
   externalSubtitleTrack,
   loadExternalSubtitle,
   loadSubtitleFromPicker,
-  onlineSubtitleTrack,
   selectAudio,
   selectSubtitle
 } from '@src/renderer/src/state/trackSelection'
 import { type Cue } from '@src/shared/cue'
-import { EXTERNAL_SUBTITLE_TRACK_ID, type Track, URL_SUBTITLE_TRACK_ID } from '@src/shared/track'
+import { EXTERNAL_SUBTITLE_TRACK_ID, type Track } from '@src/shared/track'
 import {
   audioTrack,
   cues,
@@ -326,24 +325,6 @@ describe('externalSubtitleTrack', () => {
       { start: 0, end: 1, text: 'Good morning!' }
     ])
 
-    expect(track.language).toBeUndefined()
-  })
-})
-
-describe('onlineSubtitleTrack', () => {
-  it('builds the synthetic online track, marking Japanese cues jpn, with no file path/encoding', () => {
-    const track = onlineSubtitleTrack([{ start: 0, end: 1, text: '日本語' }])
-    expect(track).toEqual({
-      id: URL_SUBTITLE_TRACK_ID,
-      kind: 'subtitle',
-      codec: 'online',
-      title: 'Online subtitle',
-      language: 'jpn'
-    })
-  })
-
-  it('leaves language undefined for a non-Japanese track, so MeCab coloring stays off', () => {
-    const track = onlineSubtitleTrack([{ start: 0, end: 1, text: 'Good morning!' }])
     expect(track.language).toBeUndefined()
   })
 })

@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import type { Track } from '@src/shared/track'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
 import { EPISODE, appTeardown, openRecent, recent } from '../harness/appIntegration'
@@ -22,7 +21,6 @@ const SUB_EN: Track = { id: 4, kind: 'subtitle', codec: 'srt', title: 'Signs', l
 interface Fakes {
   load: FakeKizunaApi['player']['load']
   getPlaybackHistory: FakeKizunaApi['mediaHistory']['getPlaybackHistory']
-  setYtdlpQuality: FakeKizunaApi['player']['setYtdlpQuality']
   frameStep: FakeKizunaApi['player']['frameStep']
   frameBackStep: FakeKizunaApi['player']['frameBackStep']
   setLoudnessNorm: FakeKizunaApi['player']['setLoudnessNorm']
@@ -37,7 +35,6 @@ function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fake
   const api = installFakeKizunaApi({
     player: {
       load: vi.fn(async () => undefined),
-      setYtdlpQuality: vi.fn(async () => undefined),
       setAudioTrack: vi.fn(async () => undefined),
       frameStep: vi.fn(async () => undefined),
       frameBackStep: vi.fn(async () => undefined),
@@ -65,7 +62,6 @@ function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fake
   return {
     load: api.player.load,
     getPlaybackHistory: api.mediaHistory.getPlaybackHistory,
-    setYtdlpQuality: api.player.setYtdlpQuality,
     frameStep: api.player.frameStep,
     frameBackStep: api.player.frameBackStep,
     setLoudnessNorm: api.player.setLoudnessNorm,
@@ -210,63 +206,5 @@ describe('MenuBar subtitle selection reaches the loader', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: '[EN] Signs' }))
 
     await waitFor(() => expect(fakes.loadSubtitle).toHaveBeenCalledWith(EPISODE, SUB_EN.id))
-  })
-})
-
-describe('MenuBar yt-dlp quality wiring', () => {
-  it('shows quality only for YouTube, reloads 720p at the current position, and checks it', async () => {
-    const fakes = installBridge()
-    const youtube = 'https://www.youtube.com/watch?v=abc'
-    const initialState = { ...initialPlayerState, filePath: youtube, timePos: 42, paused: true }
-    render(<App initialState={initialState} />)
-
-    openMenu('Video')
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '720p or lower' }))
-
-    await waitFor(() => expect(fakes.setYtdlpQuality).toHaveBeenCalledWith('720'))
-    expect(fakes.load).toHaveBeenCalledWith(youtube)
-    expect(window.kizuna.player.seek).toHaveBeenCalledWith(42, true)
-    expect(window.kizuna.player.setPause).toHaveBeenCalledWith(true)
-    openMenu('Video')
-    await waitFor(() =>
-      expect(
-        screen.getByRole('menuitemradio', { name: '720p or lower' }).getAttribute('aria-checked')
-      ).toBe('true')
-    )
-
-    cleanup()
-    render(<App initialState={{ ...initialPlayerState, filePath: 'C:\\Media\\Episode05.mkv' }} />)
-    openMenu('Video')
-    expect(screen.queryByText('Quality')).toBeNull()
-    cleanup()
-    render(
-      <App
-        initialState={{ ...initialPlayerState, filePath: 'https://cdn.example.com/video.mp4' }}
-      />
-    )
-    openMenu('Video')
-    expect(screen.queryByText('Quality')).toBeNull()
-  })
-
-  it('keeps the previous quality selected when the existing URL-open pipeline fails', async () => {
-    const fakes = installBridge()
-    const youtube = 'https://www.youtube.com/watch?v=abc'
-    fakes.getPlaybackHistory.mockRejectedValueOnce(new Error('sanitized URL load failure'))
-    render(<App initialState={{ ...initialPlayerState, filePath: youtube }} />)
-
-    openMenu('Video')
-    fireEvent.click(screen.getByRole('menuitemradio', { name: '720p or lower' }))
-
-    await waitFor(() => expect(fakes.setYtdlpQuality).toHaveBeenCalledWith('720'))
-    await waitFor(() => expect(fakes.getPlaybackHistory).toHaveBeenCalledWith(youtube))
-    openMenu('Video')
-    await waitFor(() =>
-      expect(
-        screen.getByRole('menuitemradio', { name: 'Best available' }).getAttribute('aria-checked')
-      ).toBe('true')
-    )
-    expect(fakes.load).not.toHaveBeenCalled()
-    expect(window.kizuna.player.seek).not.toHaveBeenCalled()
-    expect(window.kizuna.player.setPause).not.toHaveBeenCalled()
   })
 })

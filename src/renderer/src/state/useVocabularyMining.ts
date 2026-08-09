@@ -117,7 +117,7 @@ export function useVocabularyMining({
   targetDeckName
 }: UseVocabularyMiningInput): UseVocabularyMiningResult {
   // Where a mined line's audio could be clipped from. `mineMediaContext`
-  // rejects a remote URL, a missing audio selection, and unusable cue timing,
+  // rejects an unsupported source, a missing audio selection, and unusable cue timing,
   // so this can be passed unconditionally. Stable identity, since both the
   // popup's mine and bulk mining's onStart hold on to it.
   const mineMediaSource = useLatestCallback((): MineMediaSource => ({

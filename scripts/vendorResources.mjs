@@ -552,8 +552,8 @@ export function verificationError(result, commit) {
 }
 
 /**
- * Remove only files managed by a non-selected platform. Optional resources
- * such as a hand-installed yt-dlp file and first-party icons are untouched.
+ * Remove only files managed by a non-selected platform. First-party icons are
+ * untouched.
  *
  * @param {{ lock: LockFile, platformKey: string, resourcesDir: string }} options
  * @returns {Promise<string[]>}
@@ -696,10 +696,6 @@ export async function stagedResourceProblems({ lock, platformKey, resourcesDir }
     }
   }
 
-  const wrongYtdlpPath = platformKey === 'linux-x64' ? 'yt-dlp/yt-dlp.exe' : 'yt-dlp/yt-dlp'
-  if (await exists(safePath(resourcesDir, wrongYtdlpPath, 'optional yt-dlp path'))) {
-    problems.push('non-selected optional yt-dlp resource remains: ' + wrongYtdlpPath)
-  }
   return problems
 }
 

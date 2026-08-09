@@ -185,25 +185,6 @@
       }
     },
     {
-      "id": "yt-dlp",
-      "name": "yt-dlp",
-      "version": "manual drop-in, not pinned by resources.lock.json",
-      "license": "Unlicense",
-      "copyright": "Released into the public domain by the yt-dlp contributors.",
-      "bundled": "optional",
-      "resourceRoot": "yt-dlp",
-      "licenseFiles": ["licenses/yt-dlp/LICENSE"],
-      "notes": [
-        "Optional. `npm run resources` never installs it; a maintainer drops a Windows build into resources/yt-dlp/ by hand, and electron-builder ships whatever is there.",
-        "Because the build is not pinned, the version shipped in a given installer is whatever the packaging machine had. Record it in the release checklist."
-      ],
-      "copyleft": false,
-      "source": {
-        "binaryArchive": "https://github.com/yt-dlp/yt-dlp/releases",
-        "code": "https://github.com/yt-dlp/yt-dlp"
-      }
-    },
-    {
       "id": "electron",
       "name": "Electron",
       "license": "MIT",

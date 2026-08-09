@@ -11,7 +11,7 @@ are listed in [the codebase map](codebase-map.md).
 - A narrow typed preload API connects the renderer to validated handlers in the
   main process.
 - The main process owns local storage, network requests, and child processes.
-- mpv, FFmpeg/ffprobe, MeCab, and optional yt-dlp run as separate executables.
+- mpv, FFmpeg/ffprobe, and MeCab run as separate executables.
 
 Electron runs with context isolation enabled and Node integration disabled.
 IPC channels are declared centrally in `src/shared/ipcChannels.ts`, and the
@@ -67,8 +67,8 @@ databases. Settings and media history are also local. WaniKani tokens use
 Electron safe storage when available; the UI warns when the operating system
 cannot provide encrypted storage.
 
-Network access is limited to user-initiated features such as remote media,
-online subtitles, subtitle translation, WaniKani sync, and AnkiConnect.
+Network access is limited to user-initiated features such as subtitle
+translation, WaniKani sync, and AnkiConnect.
 Translation uses Google's unofficial endpoint and is explicitly opt-in.
 
 ## Packaging

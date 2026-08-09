@@ -18,8 +18,7 @@ describe('resolveBinaryPaths', () => {
       ffmpegPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'ffmpeg', 'ffmpeg.exe'),
       mecabPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'mecab.exe'),
       ipadicDir: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'ipadic'),
-      unidicDir: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'unidic'),
-      ytdlpPath: win32.join('C:\\Program Files\\Kizuna\\resources', 'yt-dlp', 'yt-dlp.exe')
+      unidicDir: win32.join('C:\\Program Files\\Kizuna\\resources', 'mecab', 'unidic')
     })
   })
 
@@ -37,8 +36,7 @@ describe('resolveBinaryPaths', () => {
       ffmpegPath: posix.join('/opt/kizuna/resources', 'ffmpeg', 'ffmpeg'),
       mecabPath: posix.join('/opt/kizuna/resources', 'mecab', 'bin', 'mecab'),
       ipadicDir: posix.join('/opt/kizuna/resources', 'mecab', 'ipadic'),
-      unidicDir: posix.join('/opt/kizuna/resources', 'mecab', 'unidic'),
-      ytdlpPath: posix.join('/opt/kizuna/resources', 'yt-dlp', 'yt-dlp')
+      unidicDir: posix.join('/opt/kizuna/resources', 'mecab', 'unidic')
     })
   })
 
@@ -56,8 +54,7 @@ describe('resolveBinaryPaths', () => {
       ffmpegPath: '/usr/bin/ffmpeg',
       mecabPath: '/usr/bin/mecab',
       ipadicDir: '/var/lib/mecab/dic/debian',
-      unidicDir: '/usr/share/mecab/dic/unidic',
-      ytdlpPath: '/usr/bin/yt-dlp'
+      unidicDir: '/usr/share/mecab/dic/unidic'
     })
   })
 })

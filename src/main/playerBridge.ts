@@ -10,9 +10,7 @@ import {
   type VideoEqProperty
 } from '../shared/playerSettings'
 import type { AudioDevice } from '../shared/audioDevice'
-import type { Track, VideoDimensions } from '../shared/track'
-import { isExtractorBackedUrl, isYtdlpQuality, type YtdlpQuality } from '../shared/ytdlpQuality'
-import { MpvLoadError, URL_LOAD_TIMEOUT_MS, type LoadFileOptions } from './mpv/controller'
+import { MpvLoadError } from './mpv/controller'
 import type { PowerSaveController } from './services/powerSave'
 import type { SystemMediaController } from './services/systemMedia'
 import {
@@ -21,17 +19,7 @@ import {
   type ScreenshotService
 } from './services/screenshots'
 
-const YTDLP_MISSING_MESSAGE = 'This URL requires yt-dlp, but the yt-dlp binary is missing.'
-const REMOTE_LOAD_FAILURE_MESSAGE = 'Could not load the URL.'
-
-export { isExtractorBackedUrl }
-
-function sanitizeRemoteLoadError(path: string, err: unknown, ytdlpAvailable: boolean): Error {
-  if (!ytdlpAvailable && err instanceof MpvLoadError && isExtractorBackedUrl(path)) {
-    return new Error(YTDLP_MISSING_MESSAGE)
-  }
-  return new Error(REMOTE_LOAD_FAILURE_MESSAGE)
-}
+const REMOTE_PLAYBACK_MESSAGE = 'URL playback is not supported.'
 
 /** Narrow history dependency kept separate from the mpv controller boundary. */
 export interface PlayerHistoryObserver {
@@ -45,8 +33,7 @@ export interface PlayerHistoryObserver {
 
 /** The slice of MpvController this bridge needs (fakeable in tests). */
 export interface PlayerControllerLike {
-  loadFile(path: string, opts?: LoadFileOptions): Promise<unknown>
-  cancelLoad(): void
+  loadFile(path: string): Promise<unknown>
   setPause(paused: boolean): Promise<unknown>
   seek(seconds: number, absolute?: boolean): Promise<unknown>
   setVolume(volume: number): Promise<unknown>
@@ -54,12 +41,9 @@ export interface PlayerControllerLike {
   setMuted(muted: boolean): Promise<unknown>
   setAudioDelay(delayMs: number): Promise<unknown>
   setAudioTrack(aid: number): Promise<unknown>
-  getTrackList(): Promise<Track[]>
-  getVideoDimensions(): Promise<VideoDimensions | undefined>
   getAudioDevices(): Promise<AudioDevice[]>
   setAudioDevice(name: string): Promise<unknown>
   setLoudnessNormalization(on: boolean): Promise<unknown>
-  setYtdlpQuality(quality: YtdlpQuality): Promise<unknown>
   setAbLoop(a: number | null, b: number | null): Promise<unknown>
   setVideoMargins(top: number, bottom: number, right?: number, left?: number): Promise<unknown>
   setVideoAdjustment(name: VideoEqProperty, value: number): Promise<unknown>
@@ -91,7 +75,6 @@ export function registerPlayerBridge<E>(
   powerSave?: Pick<PowerSaveController, 'update'>,
   screenshots?: ScreenshotService,
   systemMedia?: Pick<SystemMediaController, 'update'>,
-  ytdlpAvailable = false,
   frames?: FrameCaptureService
 ): void {
   let fileLoaded = false
@@ -105,17 +88,13 @@ export function registerPlayerBridge<E>(
   const syncSystemMedia = (): void => systemMedia?.update({ fileLoaded, paused, timePos, duration })
 
   ipc.handle(PLAYER_CHANNELS.load, async (_e, path) => {
+    if (isRemoteUrl(path)) throw new Error(REMOTE_PLAYBACK_MESSAGE)
     // Lock in the outgoing file's last position and suspend attribution
     // before the new load can produce any early position/duration events —
     // otherwise they'd land on the file being navigated away from.
     history?.beginLoad()
     try {
-      // URL opens can hang without ever failing (server accepts the connection
-      // then goes silent), so bound them; local files keep the no-timeout path.
-      const opts: LoadFileOptions | undefined = isRemoteUrl(path)
-        ? { timeoutMs: URL_LOAD_TIMEOUT_MS }
-        : undefined
-      const result = await controller.loadFile(path, opts)
+      const result = await controller.loadFile(path)
       fileLoaded = true
       syncPowerSave()
       syncSystemMedia()
@@ -135,12 +114,9 @@ export function registerPlayerBridge<E>(
         // The previously active file is still playing — resume tracking it.
         history?.abortLoad()
       }
-      throw isRemoteUrl(path) ? sanitizeRemoteLoadError(path, err, ytdlpAvailable) : err
+      throw err
     }
   })
-  ipc.handle(PLAYER_CHANNELS.cancelLoad, () => controller.cancelLoad())
-  ipc.handle(PLAYER_CHANNELS.getTrackList, () => controller.getTrackList())
-  ipc.handle(PLAYER_CHANNELS.getVideoDimensions, () => controller.getVideoDimensions())
   ipc.handle(PLAYER_CHANNELS.setPause, (_e, paused) => controller.setPause(paused))
   ipc.handle(PLAYER_CHANNELS.seek, (_e, seconds, absolute) => controller.seek(seconds, absolute))
   ipc.handle(PLAYER_CHANNELS.setVolume, (_e, volume) => controller.setVolume(volume))
@@ -151,10 +127,6 @@ export function registerPlayerBridge<E>(
   ipc.handle(PLAYER_CHANNELS.getAudioDevices, () => controller.getAudioDevices())
   ipc.handle(PLAYER_CHANNELS.setAudioDevice, (_e, name) => controller.setAudioDevice(name))
   ipc.handle(PLAYER_CHANNELS.setLoudnessNorm, (_e, on) => controller.setLoudnessNormalization(on))
-  ipc.handle(PLAYER_CHANNELS.setYtdlpQuality, async (_e, quality: unknown) => {
-    if (!isYtdlpQuality(quality)) throw new Error('Invalid yt-dlp quality.')
-    return controller.setYtdlpQuality(quality)
-  })
   ipc.handle(PLAYER_CHANNELS.setAbLoop, (_e, a, b) => controller.setAbLoop(a, b))
   ipc.handle(PLAYER_CHANNELS.setVideoMargins, (_e, top, bottom, right, left) =>
     controller.setVideoMargins(top, bottom, right, left)

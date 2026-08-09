@@ -3,10 +3,10 @@
 // load, and the three entry points that reach it — the file picker, a playlist
 // pick, and a recent-files entry.
 
-import { classifyMediaFileName } from '../../../shared/mediaFileTypes'
+import { classifyMediaFileName, isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { type MediaPlaybackHistory, getResumePosition } from '../../../shared/mediaHistory'
 import { type FileAvailability } from '../../../shared/preloadApi'
-import { type Track, soleUrlAudioTrack } from '../../../shared/track'
+import { type Track } from '../../../shared/track'
 import { errorMessage } from '../util/errorMessage'
 import { defaultSubtitleId } from './playerState'
 import {
@@ -14,10 +14,11 @@ import {
   type OpenSession,
   type RecentMediaBridge,
   matchStoredTrack,
-  noWarningSink,
-  shouldProbe
+  noWarningSink
 } from './mediaSession'
 import { externalSubtitleTrack } from './trackSelection'
+
+const LOCAL_MEDIA_ONLY_MESSAGE = 'URL playback is not supported.'
 
 /**
  * Enumerates `filePath`'s tracks, loads it into the player, and auto-loads
@@ -28,9 +29,6 @@ import { externalSubtitleTrack } from './trackSelection'
  * tracks are extracted on their first manual selection and then retained in
  * `cueCache` by `selectSubtitle`.
  *
- * Remote URLs skip ffprobe entirely: their audio streams are read from mpv's
- * `track-list` after the load, and embedded-subtitle extraction is skipped
- * (URL subtitles are out of scope — the subtitle sidebar stays empty).
  */
 export async function loadPath(
   session: OpenSession,
@@ -48,14 +46,14 @@ async function runLoadPath(
   const { bridge, dispatch, cueCache, fileToken } = session
   const onWarning = session.onWarning ?? noWarningSink
   const loadId = requestedLoadId ?? ++fileToken.current
-  const probe = shouldProbe(filePath)
+  if (isRemoteUrl(filePath)) {
+    return { status: 'failed', filePath, message: LOCAL_MEDIA_ONLY_MESSAGE }
+  }
   let tracks: Track[]
   let history: MediaPlaybackHistory | undefined
   try {
     ;[tracks, history] = await Promise.all([
-      // ffprobe is filesystem-oriented; a URL's streams come from mpv below.
-      // History is URL-safe, so resume/track restore stays.
-      probe ? bridge.media.enumerateTracks(filePath) : Promise.resolve<Track[]>([]),
+      bridge.media.enumerateTracks(filePath),
       bridge.mediaHistory.getPlaybackHistory(filePath)
     ])
   } catch (err) {
@@ -68,29 +66,9 @@ async function runLoadPath(
     await bridge.player.load(filePath)
   } catch (err) {
     if (fileToken.current !== loadId) return { status: 'stale' }
-    // A URL load that rejects went through the controller's stop-and-reject
-    // path (timeout or user Cancel), leaving mpv idle — or the stream simply
-    // failed. Either way nothing is playing, so clear the previous file's
-    // identity rather than leaving its tracks/cues on screen. Local failures
-    // keep today's behavior (mpv may still hold the prior frame).
-    if (!probe) dispatch({ type: 'mediaClosed' })
     return { status: 'failed', filePath, message: errorMessage(err) }
   }
   if (fileToken.current !== loadId) return { status: 'stale' }
-
-  // URL path: mpv is now the only source of stream info. Read its track-list
-  // and expose only the single audio stream mpv actually selected — yt-dlp
-  // already paired it with the chosen video quality, so mpv's other audio
-  // entries would offer switches that no-op or break the stream.
-  // A malformed or absent list degrades to no tracks rather than throwing.
-  if (!probe) {
-    try {
-      tracks = soleUrlAudioTrack((await bridge.player.getTrackList?.()) ?? [])
-    } catch {
-      tracks = []
-    }
-    if (fileToken.current !== loadId) return { status: 'stale' }
-  }
 
   cueCache.clear()
   dispatch({ type: 'fileLoaded', filePath, tracks })
@@ -102,13 +80,10 @@ async function runLoadPath(
   // tokens, so it is safe to finish independently in the background — its
   // warning reaches the caller through `onWarning` rather than `warnings`,
   // and the file token is re-checked at delivery so a warning from a
-  // superseded open never reaches the file the user now has open. Skipped for
-  // URLs, whose embedded subtitles ffmpeg cannot extract.
-  if (probe) {
-    void restoreSubtitle(session, filePath, { tracks, history }, loadId).then((warning) => {
-      if (warning !== undefined && fileToken.current === loadId) onWarning(warning)
-    })
-  }
+  // superseded open never reaches the file the user now has open.
+  void restoreSubtitle(session, filePath, { tracks, history }, loadId).then((warning) => {
+    if (warning !== undefined && fileToken.current === loadId) onWarning(warning)
+  })
   const results = await Promise.all([
     restoreAudio(session, tracks, history, loadId),
     restoreResume(session, history, loadId)
@@ -285,7 +260,9 @@ async function runOpenAndLoad(session: OpenSession): Promise<OpenMediaResult> {
  * omit it), which this treats the same as an empty playlist.
  */
 async function openPlaylistPick(session: OpenSession, filePath: string): Promise<OpenMediaResult> {
-  const entries = (await session.bridge.media.readPlaylist?.(filePath)) ?? []
+  const entries = ((await session.bridge.media.readPlaylist?.(filePath)) ?? []).filter(
+    (entry) => !isRemoteUrl(entry)
+  )
   if (entries.length === 0) {
     return { status: 'failed', filePath, message: 'Playlist is empty or unreadable.' }
   }
@@ -310,6 +287,9 @@ async function runOpenRecentFile(
 ): Promise<OpenMediaResult> {
   const { bridge, fileToken } = session
   const loadId = ++fileToken.current
+  if (isRemoteUrl(filePath)) {
+    return { status: 'failed', filePath, message: LOCAL_MEDIA_ONLY_MESSAGE }
+  }
   let availability: FileAvailability
   try {
     availability = await bridge.mediaHistory.checkFileAvailability(filePath)

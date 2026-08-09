@@ -291,10 +291,6 @@ export interface PlayerSettings {
   /** When true mpv runs the dynaudnorm loudness-normalization filter; re-applied
    * after mpv start — see `MpvController.setLoudnessNormalization`. */
   loudnessNormalization: boolean
-  /** Preferred language code for online (yt-dlp URL) subtitles, e.g. 'ja'.
-   * Empty string means no preference. Matched case-insensitively against a
-   * track's `lang`, exactly first, then by primary subtag. */
-  preferredUrlSubtitleLanguage: string
 }
 
 export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
@@ -318,8 +314,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   mpvExtraArgs: [],
   videoAdjustments: DEFAULT_VIDEO_ADJUSTMENTS,
   audioDevice: AUTO_AUDIO_DEVICE,
-  loudnessNormalization: false,
-  preferredUrlSubtitleLanguage: ''
+  loudnessNormalization: false
 }
 
 /** Max length of a stored `audioDevice` name; a longer value is untrusted junk. */
@@ -358,25 +353,6 @@ export function normalizeMpvExtraArgs(raw: unknown): string[] {
     if (trimmed !== '' && trimmed.length <= MPV_EXTRA_ARG_MAX_LENGTH) result.push(trimmed)
   }
   return result
-}
-
-/** Max length of a stored `preferredUrlSubtitleLanguage`; real BCP-47 tags
- * (even with region/script/variant subtags) stay well under this. The regex
- * below allows unboundedly many subtags, so length must be capped separately
- * to reject pathologically long stored junk. */
-export const PREFERRED_URL_SUBTITLE_LANGUAGE_MAX_LENGTH = 35
-
-/**
- * Validates a stored `preferredUrlSubtitleLanguage`: the trimmed string when
- * it matches a BCP-47-ish language code pattern, otherwise ''. Empty string
- * means no preference — never trust stored JSON.
- */
-export function normalizePreferredUrlSubtitleLanguage(raw: unknown): string {
-  if (typeof raw !== 'string') return ''
-  const trimmed = raw.trim()
-  if (trimmed.length > PREFERRED_URL_SUBTITLE_LANGUAGE_MAX_LENGTH) return ''
-  if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(trimmed)) return ''
-  return trimmed
 }
 
 /** True when `path` looks like a Windows path (drive letter, UNC, or backslashes). */

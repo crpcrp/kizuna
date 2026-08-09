@@ -27,8 +27,6 @@ export interface BinaryPaths {
   ipadicDir: string
   /** Optional - only present if bundled; UniDic may also be user-configured. */
   unidicDir: string
-  /** Optional yt-dlp path. The caller checks whether the file exists. */
-  ytdlpPath: string
 }
 
 export interface ResolveBinaryPathsOptions {
@@ -138,8 +136,7 @@ export function resolveBinaryPaths({
       ffmpegPath: '/usr/bin/ffmpeg',
       mecabPath: '/usr/bin/mecab',
       ipadicDir: '/var/lib/mecab/dic/debian',
-      unidicDir: '/usr/share/mecab/dic/unidic',
-      ytdlpPath: '/usr/bin/yt-dlp'
+      unidicDir: '/usr/share/mecab/dic/unidic'
     }
   }
   if (platform !== 'win32' && platform !== 'linux') {
@@ -151,7 +148,6 @@ export function resolveBinaryPaths({
   const executable = platform === 'win32' ? 'mpv.exe' : 'mpv'
   const ffprobe = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
   const ffmpeg = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
-  const ytdlp = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
   // See the header note: Linux runs the payload's relative-loader wrapper from
   // its own `bin/`, Windows the flat executable.
   const mecabPath =
@@ -164,7 +160,6 @@ export function resolveBinaryPaths({
     ffmpegPath: pathApi.join(base, 'ffmpeg', ffmpeg),
     mecabPath,
     ipadicDir: pathApi.join(base, 'mecab', 'ipadic'),
-    unidicDir: pathApi.join(base, 'mecab', 'unidic'),
-    ytdlpPath: pathApi.join(base, 'yt-dlp', ytdlp)
+    unidicDir: pathApi.join(base, 'mecab', 'unidic')
   }
 }

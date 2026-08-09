@@ -162,12 +162,6 @@ export function buildSetupRows({
       note: 'Reads a file’s audio/subtitle tracks, chapters and resolution.'
     },
     {
-      id: 'ytdlp',
-      name: 'yt-dlp',
-      state: binaryState(setup?.binaries.ytdlp),
-      note: 'Plays online URLs and fetches their caption tracks.'
-    },
-    {
       id: 'mecab-ipadic',
       name: 'MeCab · IPADIC',
       state: mecabDictRow(mecabDicts, 'ipadic'),
@@ -228,7 +222,6 @@ export const SETUP_SETTING_ENTRIES: SettingEntry[] = [
     keywords: [
       'ffmpeg',
       'ffprobe',
-      'yt-dlp',
       'mpv',
       'mecab',
       'unidic',
@@ -264,8 +257,8 @@ export default function SetupTab({
           computer. Kizuna sends no telemetry or crash reports.
         </p>
         <p className="options-hint" id="network-access-summary">
-          Optional integrations connect only when you open a URL or configure and use their
-          features. Their own privacy policies apply.
+          Optional integrations connect only when you configure and use their features. Their own
+          privacy policies apply.
         </p>
         {rows.map((row) => {
           // Read out of the row before the JSX: inside the click closure below,

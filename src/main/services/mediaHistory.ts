@@ -13,7 +13,6 @@ import {
   type StoredSubtitleSelection,
   type StoredTrackSelection
 } from '../../shared/mediaHistory'
-import { isRemoteUrl } from '../../shared/mediaFileTypes'
 import type { FileAvailability } from '../../shared/preloadApi'
 import { stat as statFile } from 'node:fs/promises'
 import type { SettingsStore } from './settings'
@@ -170,10 +169,6 @@ export function createMediaHistoryService(
     async checkFileAvailability(path: string): Promise<FileAvailability> {
       const normalized = normalizeMediaPath(path, pathOptions)
       if (!normalized) return { status: 'missing' }
-      // A network URL has no filesystem entry to stat; treat it as available so
-      // recent-file rows for streams never show as missing. Reachability is
-      // mpv's job at load time, not the history layer's.
-      if (isRemoteUrl(normalized)) return { status: 'available' }
       try {
         return (await stat(normalized)).isFile() ? { status: 'available' } : { status: 'missing' }
       } catch (error) {
@@ -197,12 +192,12 @@ export function createMediaHistoryService(
     },
 
     recordOpened(path: string): void {
-      flush()
       const normalized = normalizeMediaPath(path, pathOptions)
       const key = mediaPathKey(path, pathOptions)
       if (!normalized || !key) {
         return
       }
+      flush()
 
       generation += 1
       activeKey = key
