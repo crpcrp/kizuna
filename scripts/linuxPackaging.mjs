@@ -32,42 +32,6 @@ export function expectedArtifactNames(name, version, arch = 'x86_64') {
 }
 
 /**
- * Runtime paths every packaged Linux artifact must contain, relative to the
- * installation root. Deliberately overlaps `requiredPackagedResources` in
- * `src/main/resourcePaths.ts`: that one is checked from inside the running app,
- * this one from outside, against the archive listing, before anything runs.
- */
-export const REQUIRED_ARCHIVE_PATHS = Object.freeze([
-  'resources/app.asar',
-  'resources/mpv/mpv',
-  'resources/ffmpeg/ffmpeg',
-  'resources/ffmpeg/ffprobe',
-  // MeCab keeps the vendor payload's bin/lib/etc tree, because its wrapper
-  // resolves the library and config relative to itself. See
-  // `src/main/resourcePaths.ts`.
-  'resources/mecab/bin/mecab',
-  'resources/mecab/bin/mecab.bin',
-  'resources/mecab/lib/libmecab.so.2',
-  'resources/mecab/lib/libmecab.so.2.0.0',
-  'resources/mecab/etc/mecabrc',
-  'resources/mecab/ipadic/sys.dic',
-  'resources/notices'
-])
-
-/**
- * Staged files that must keep the executable bit through packaging. A `.deb`
- * or AppImage that drops these installs cleanly and then fails at first play
- * with a bare EACCES, so it is checked at package level.
- */
-export const REQUIRED_EXECUTABLE_PATHS = Object.freeze([
-  'resources/mpv/mpv',
-  'resources/ffmpeg/ffmpeg',
-  'resources/ffmpeg/ffprobe',
-  'resources/mecab/bin/mecab',
-  'resources/mecab/bin/mecab.bin'
-])
-
-/**
  * Bundled tools the smoke test actually executes, with an argument that makes
  * each one print its version and exit.
  *
@@ -268,13 +232,14 @@ export function parseDesktopEntry(text) {
  * types, and a WM class that ties running windows back to this entry.
  *
  * @param {Record<string, string>} entry
- * @param {{ productName: string, executableName: string, wmClass: string,
+ * @param {{ productName: string, commandName: string, iconName: string, wmClass: string,
  *           requiredMimeTypes: readonly string[], requiredCategories: readonly string[] }} expected
  * @returns {string[]} problems, empty when the entry matched
  */
 export function verifyDesktopEntry(entry, expected) {
   const problems = []
-  const { productName, executableName, wmClass, requiredMimeTypes, requiredCategories } = expected
+  const { productName, commandName, iconName, wmClass, requiredMimeTypes, requiredCategories } =
+    expected
 
   if (entry.Name !== productName) {
     problems.push(`Name is "${entry.Name ?? ''}", expected "${productName}"`)
@@ -282,16 +247,18 @@ export function verifyDesktopEntry(entry, expected) {
   if (entry.Type !== 'Application') {
     problems.push(`Type is "${entry.Type ?? ''}", expected "Application"`)
   }
-  if (!(entry.Exec ?? '').includes(executableName)) {
-    problems.push(`Exec "${entry.Exec ?? ''}" does not launch "${executableName}"`)
+  const commandMatch = /^(?:"([^"]+)"|(\S+))/.exec(entry.Exec ?? '')
+  const command = (commandMatch?.[1] ?? commandMatch?.[2] ?? '').replace(/\\/g, '/')
+  if (command.split('/').at(-1) !== commandName) {
+    problems.push(`Exec "${entry.Exec ?? ''}" does not launch "${commandName}"`)
   }
   // Without a %U/%F placeholder the file associations register but a
   // double-clicked video never reaches the app.
   if (!/%[uUfF]/.test(entry.Exec ?? '')) {
     problems.push(`Exec "${entry.Exec ?? ''}" accepts no file or URL argument`)
   }
-  if ((entry.Icon ?? '') === '') {
-    problems.push('Icon is not set')
+  if (entry.Icon !== iconName) {
+    problems.push(`Icon is "${entry.Icon ?? ''}", expected "${iconName}"`)
   }
   if (entry.StartupWMClass !== wmClass) {
     problems.push(`StartupWMClass is "${entry.StartupWMClass ?? ''}", expected "${wmClass}"`)
@@ -318,18 +285,15 @@ export function verifyDesktopEntry(entry, expected) {
  * Windows binaries.
  *
  * @param {readonly string[]} paths installation-root-relative paths
+ * @param {readonly string[]} requiredPaths paths derived from the resource lock and first-party assets
  * @returns {string[]} problems, empty when the listing matched
  */
-export function verifyArchivePaths(paths) {
+export function verifyArchivePaths(paths, requiredPaths) {
   const problems = []
   const normalized = new Set(paths.map((path) => path.replace(/^\.?\//, '')))
 
-  for (const required of REQUIRED_ARCHIVE_PATHS) {
-    // `resources/notices` is a directory in the listing, so match a prefix.
-    const present = [...normalized].some(
-      (path) => path === required || path.startsWith(required + '/')
-    )
-    if (!present) problems.push(`missing required path "${required}"`)
+  for (const required of requiredPaths) {
+    if (!normalized.has(required)) problems.push(`missing required path "${required}"`)
   }
 
   for (const path of normalized) {
@@ -344,11 +308,12 @@ export function verifyArchivePaths(paths) {
  * Check the staged tools kept their executable bit.
  *
  * @param {Record<string, number>} modes installation-root-relative path -> st_mode
+ * @param {readonly string[]} requiredPaths executable paths from the resource lock
  * @returns {string[]} problems, empty when every required file is executable
  */
-export function verifyExecutableModes(modes) {
+export function verifyExecutableModes(modes, requiredPaths) {
   const problems = []
-  for (const path of REQUIRED_EXECUTABLE_PATHS) {
+  for (const path of requiredPaths) {
     const mode = modes[path]
     if (mode === undefined) {
       problems.push(`missing executable "${path}"`)
@@ -376,13 +341,15 @@ export const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
  */
 export function readStartupProbeOutcome(stdout) {
   const milestones = []
-  let ready = false
+  let readyLine = false
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()
     if (!line.startsWith(STARTUP_PROBE_PREFIX)) continue
     const detail = line.slice(STARTUP_PROBE_PREFIX.length).replace(/^:\s*/, '')
-    if (detail === 'ready') ready = true
+    if (detail === 'ready') readyLine = true
     else if (detail.startsWith('reached ')) milestones.push(detail.slice('reached '.length))
   }
+  const ready =
+    readyLine && ['window', 'mpv', 'renderer'].every((name) => milestones.includes(name))
   return { ready, milestones }
 }

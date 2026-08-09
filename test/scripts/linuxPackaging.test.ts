@@ -7,8 +7,6 @@ import {
   parseDesktopEntry,
   permissionsFromSymbolicMode,
   readStartupProbeOutcome,
-  REQUIRED_EXECUTABLE_PATHS,
-  REQUIRED_ARCHIVE_PATHS,
   verifyArchivePaths,
   verifyDebControl,
   verifyDesktopEntry,
@@ -157,23 +155,31 @@ describe('parseDebContents', () => {
 })
 
 describe('verifyArchivePaths', () => {
-  // `resources/notices` is a directory, so the listing carries its children.
-  const listing = [
-    ...REQUIRED_ARCHIVE_PATHS.filter((path) => path !== 'resources/notices'),
-    'resources/notices/THIRD_PARTY_NOTICES.md',
-    'resources/mecab/ipadic/matrix.bin'
+  const required = [
+    'resources/app.asar',
+    'resources/mpv/mpv',
+    'resources/notices/THIRD_PARTY_NOTICES.md'
   ]
+  const listing = [...required]
 
-  it('accepts a complete Linux tree', () => {
-    expect(verifyArchivePaths(listing)).toEqual([])
+  it('accepts a listing containing every requested path', () => {
+    expect(verifyArchivePaths(listing, required)).toEqual([])
   })
 
   it('accepts leading ./ from an archive listing', () => {
-    expect(verifyArchivePaths(listing.map((path) => `./${path}`))).toEqual([])
+    expect(
+      verifyArchivePaths(
+        listing.map((path) => `./${path}`),
+        required
+      )
+    ).toEqual([])
   })
 
   it('reports a missing runtime resource', () => {
-    const problems = verifyArchivePaths(listing.filter((path) => path !== 'resources/mpv/mpv'))
+    const problems = verifyArchivePaths(
+      listing.filter((path) => path !== 'resources/mpv/mpv'),
+      required
+    )
     expect(problems).toEqual([expect.stringContaining('resources/mpv/mpv')])
   })
 
@@ -182,28 +188,29 @@ describe('verifyArchivePaths', () => {
   it.each(['resources/mpv/mpv.exe', 'resources/mecab/libmecab.dll'])(
     'reports the Windows binary %s',
     (foreign) => {
-      const problems = verifyArchivePaths([...listing, foreign])
+      const problems = verifyArchivePaths([...listing, foreign], required)
       expect(problems).toEqual([expect.stringContaining(foreign)])
     }
   )
 })
 
 describe('verifyExecutableModes', () => {
-  const executable = Object.fromEntries(REQUIRED_EXECUTABLE_PATHS.map((path) => [path, 0o755]))
+  const required = ['resources/mpv/mpv', 'resources/mecab/bin/mecab.bin']
+  const executable = Object.fromEntries(required.map((path) => [path, 0o755]))
 
   it('accepts tools that kept the executable bit', () => {
-    expect(verifyExecutableModes(executable)).toEqual([])
+    expect(verifyExecutableModes(executable, required)).toEqual([])
   })
 
   it('reports a tool that lost the executable bit in packaging', () => {
-    const problems = verifyExecutableModes({ ...executable, 'resources/mpv/mpv': 0o644 })
+    const problems = verifyExecutableModes({ ...executable, 'resources/mpv/mpv': 0o644 }, required)
     expect(problems).toEqual([expect.stringContaining('resources/mpv/mpv')])
   })
 
   it('reports a tool missing from the package', () => {
     const modes = { ...executable }
     delete modes['resources/mecab/bin/mecab.bin']
-    expect(verifyExecutableModes(modes)).toEqual([
+    expect(verifyExecutableModes(modes, required)).toEqual([
       expect.stringContaining('resources/mecab/bin/mecab.bin')
     ])
   })
@@ -234,7 +241,8 @@ describe('parseDesktopEntry', () => {
 describe('verifyDesktopEntry', () => {
   const expected = {
     productName: 'Kizuna',
-    executableName: 'kizuna',
+    commandName: 'kizuna',
+    iconName: 'kizuna',
     wmClass: 'kizuna',
     requiredMimeTypes: ['video/x-matroska', 'video/mp4'],
     requiredCategories: ['AudioVideo', 'Video', 'Player']
@@ -260,6 +268,11 @@ describe('verifyDesktopEntry', () => {
     expect(problems).toEqual([expect.stringContaining('accepts no file or URL argument')])
   })
 
+  it('rejects a different executable whose name merely contains kizuna', () => {
+    const problems = verifyDesktopEntry({ ...good, Exec: '/opt/Kizuna/not-kizuna %U' }, expected)
+    expect(problems).toEqual([expect.stringContaining('does not launch')])
+  })
+
   // A mismatched WM class is the classic "generic icon in the dash" bug.
   it('rejects a StartupWMClass that does not match the desktop name', () => {
     const problems = verifyDesktopEntry({ ...good, StartupWMClass: 'Kizuna' }, expected)
@@ -274,9 +287,9 @@ describe('verifyDesktopEntry', () => {
     expect(problems).toHaveLength(2)
   })
 
-  it('rejects an entry with no icon', () => {
-    const problems = verifyDesktopEntry({ ...good, Icon: '' }, expected)
-    expect(problems).toEqual([expect.stringContaining('Icon')])
+  it('rejects an entry linked to a different icon', () => {
+    const problems = verifyDesktopEntry({ ...good, Icon: 'other-app' }, expected)
+    expect(problems).toEqual([expect.stringContaining('expected "kizuna"')])
   })
 })
 
@@ -308,6 +321,14 @@ describe('readStartupProbeOutcome', () => {
 
     expect(outcome.ready).toBe(false)
     expect(outcome.milestones).toEqual(['window'])
+  })
+
+  it('does not accept a ready line without every milestone', () => {
+    expect(
+      readStartupProbeOutcome(
+        ['kizuna-startup-probe: reached window', 'kizuna-startup-probe: ready'].join('\n')
+      ).ready
+    ).toBe(false)
   })
 
   it('ignores unrelated Chromium and mpv output around the probe lines', () => {

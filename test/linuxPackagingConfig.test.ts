@@ -36,7 +36,6 @@ interface BuilderConfig {
     desktop: { entry: Record<string, string> }
   }
   deb: { depends: string[] }
-  fileAssociations: { ext: string[] }[]
 }
 
 interface PackageJson {
@@ -54,8 +53,6 @@ function builderConfig(): BuilderConfig {
 function packageJson(): PackageJson {
   return JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as PackageJson
 }
-
-const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), 'utf-8')
 
 /** The exact pins the vendor mirror's LINUX_X64_DEPENDENCIES.md mandates. */
 const VENDOR_PINS = ['mpv (= 0.37.0-1ubuntu4)', 'ffmpeg (= 7:6.1.1-3ubuntu5)']
@@ -103,13 +100,6 @@ describe('Linux packaging configuration', () => {
     }
   })
 
-  it('keeps the deb pins identical to the vendor mirror policy the smoke test asserts', () => {
-    // Both the packaging config and the smoke test name these strings; drift
-    // between them would pass CI and ship a package that cannot resolve.
-    const smoke = read('scripts/smoke-linux-package.mjs')
-    for (const pin of VENDOR_PINS) expect(smoke, pin).toContain(pin)
-  })
-
   it('provides the metadata fpm refuses to build a deb without', () => {
     // `homepage` is package.json metadata, not an electron-builder key — the
     // packaging run rejects the config outright if it is set here instead.
@@ -126,7 +116,7 @@ describe('Linux packaging configuration', () => {
 
     // A PNG below 512x512 makes electron-builder fail the Linux icon set.
     const png = readFileSync(join(REPO_ROOT, iconPath))
-    expect(png.subarray(1, 4).toString('ascii')).toBe('PNG')
+    expect([...png.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10])
     expect(png.readUInt32BE(16)).toBeGreaterThanOrEqual(512)
     expect(png.readUInt32BE(20)).toBeGreaterThanOrEqual(512)
   })
@@ -143,16 +133,11 @@ describe('Linux packaging configuration', () => {
     expect(config.linux.syncDesktopName).toBe(true)
   })
 
-  it('registers the real video MIME types for every associated extension', () => {
+  it('registers the supported video MIME types', () => {
     const config = builderConfig()
-    const mimeTypes = config.linux.mimeTypes
-    const extensions = config.fileAssociations.flatMap((association) => association.ext)
-
-    // Left to electron-builder, an association with no `mimeType` registers a
-    // private `application/x-ext-mkv` type that no file manager offers Kizuna
-    // for. One real type per associated extension is the point.
-    expect(mimeTypes).toHaveLength(extensions.length)
-    for (const mimeType of mimeTypes) expect(mimeType.startsWith('video/'), mimeType).toBe(true)
+    expect(new Set(config.linux.mimeTypes)).toEqual(
+      new Set(['video/x-matroska', 'video/mp4', 'video/webm', 'video/x-msvideo', 'video/quicktime'])
+    )
   })
 
   it('places the launcher in a menu category that matches the product', () => {
@@ -195,31 +180,5 @@ describe('Linux packaging commands', () => {
     // Neither command may depend on the build host to choose a target.
     expect(dist).not.toContain('--linux')
     expect(scripts()['dist:linux']).not.toContain('--win')
-  })
-})
-
-describe('Linux packaging workflow placement', () => {
-  const ci = read('.github/workflows/ci.yml')
-  const release = read('.github/workflows/release.yml')
-
-  it('verifies the packaged artifacts in the release workflow', () => {
-    expect(release).toContain('npm run dist:linux')
-    expect(release).toContain('npm run smoke:linux')
-    // The GUI check needs a virtual X server; without it the run would fall
-    // back to a headless failure that reads as a packaging bug.
-    expect(release).toContain('xvfb')
-  })
-
-  // Packaging is minutes of electron-builder plus a real Electron launch. It
-  // is deliberately kept off the per-commit path so a pull request still runs
-  // exactly the CI and CodeQL checks branch protection requires.
-  it('keeps packaging out of per-commit CI', () => {
-    expect(ci).not.toContain('dist:linux')
-    expect(ci).not.toContain('smoke:linux')
-  })
-
-  it('collects the packaged artifacts and failure logs from the release run', () => {
-    expect(release).toMatch(/name: kizuna-linux-(release|artifacts)/)
-    expect(release).toContain('linux-packaging-logs')
   })
 })

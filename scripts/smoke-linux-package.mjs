@@ -53,6 +53,23 @@ import {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf-8'))
 const identity = JSON.parse(readFileSync(join(repoRoot, 'src/shared/appIdentity.json'), 'utf-8'))
+const resourceLock = JSON.parse(readFileSync(join(repoRoot, 'resources.lock.json'), 'utf-8'))
+const linuxResources = resourceLock.platforms?.['linux-x64']
+if (!linuxResources) throw new Error('resources.lock.json has no linux-x64 payload')
+
+// The lock is the source of truth for vendor files. The remaining entries are
+// first-party or generated files that electron-builder adds separately.
+const REQUIRED_ARCHIVE_PATHS = Object.freeze([
+  'resources/app.asar',
+  ...linuxResources.files.map((file) => `resources/${file.to}`),
+  ...['prev', 'play', 'pause', 'next'].map((name) => `resources/icons/${name}.png`),
+  'resources/notices/LICENSE.txt',
+  'resources/notices/THIRD_PARTY_NOTICES.md',
+  'resources/notices/CORRESPONDING_SOURCE.md'
+])
+const REQUIRED_EXECUTABLE_PATHS = Object.freeze(
+  linuxResources.requiredExecutables.map((path) => `resources/${path}`)
+)
 
 /** Where a `.deb` installs the application tree. */
 const INSTALL_ROOT = `/opt/${identity.productName}`
@@ -366,7 +383,7 @@ function checkAppImage(distDir, artifactName) {
     .split('\n')
     .filter((line) => line !== '')
     .map((line) => line.slice(extracted.length + 1))
-  const pathProblems = verifyArchivePaths(relativePaths)
+  const pathProblems = verifyArchivePaths(relativePaths, REQUIRED_ARCHIVE_PATHS)
   if (pathProblems.length > 0) reportFailure(`${step}: contents`, pathProblems)
   else log(`  ok  ${step}: required resources present, no Windows binaries`)
 
@@ -378,7 +395,7 @@ function checkAppImage(distDir, artifactName) {
       // A broken symlink in the listing is not what this check is about.
     }
   }
-  const modeProblems = verifyExecutableModes(modes)
+  const modeProblems = verifyExecutableModes(modes, REQUIRED_EXECUTABLE_PATHS)
   if (modeProblems.length > 0) reportFailure(`${step}: executable modes`, modeProblems)
   else log(`  ok  ${step}: bundled tools kept their executable bit`)
 
@@ -387,10 +404,10 @@ function checkAppImage(distDir, artifactName) {
   if (!desktopPath) {
     reportFailure(`${step}: desktop entry`, ['no .desktop file at the AppImage root'])
   } else {
-    const problems = verifyDesktopEntry(
-      parseDesktopEntry(readFileSync(desktopPath, 'utf-8')),
-      desktopExpectations()
-    )
+    const entry = parseDesktopEntry(readFileSync(desktopPath, 'utf-8'))
+    const problems = verifyDesktopEntry(entry, desktopExpectations('AppRun'))
+    const iconPath = join(extracted, `${entry.Icon ?? identity.executableName}.png`)
+    if (!existsSync(iconPath)) problems.push(`desktop icon is missing: ${iconPath}`)
     if (problems.length > 0) reportFailure(`${step}: desktop entry`, problems)
     else log(`  ok  ${step}: desktop entry`)
   }
@@ -413,10 +430,11 @@ function checkAppImage(distDir, artifactName) {
 
 /** --------------------------------------------------------------------- deb */
 
-function desktopExpectations() {
+function desktopExpectations(commandName = identity.executableName) {
   return {
     productName: identity.productName,
-    executableName: identity.executableName,
+    commandName,
+    iconName: identity.executableName,
     // electron-builder derives StartupWMClass from `desktopName` minus the
     // suffix, which is what Electron uses as its X11 app_id.
     wmClass: pkg.desktopName.replace(/\.desktop$/, ''),
@@ -446,11 +464,11 @@ function checkDebMetadata(debPath) {
   const contents = runOrThrow('dpkg-deb', ['--contents', debPath]).stdout
   const { appPaths, appModes, otherPaths } = parseDebContents(contents, INSTALL_ROOT)
 
-  const pathProblems = verifyArchivePaths(appPaths)
+  const pathProblems = verifyArchivePaths(appPaths, REQUIRED_ARCHIVE_PATHS)
   if (pathProblems.length > 0) reportFailure(`${step}: contents`, pathProblems)
   else log(`  ok  ${step}: required resources present, no Windows binaries`)
 
-  const modeProblems = verifyExecutableModes(appModes)
+  const modeProblems = verifyExecutableModes(appModes, REQUIRED_EXECUTABLE_PATHS)
   if (modeProblems.length > 0) reportFailure(`${step}: executable modes`, modeProblems)
   else log(`  ok  ${step}: bundled tools kept their executable bit`)
 
@@ -459,8 +477,14 @@ function checkDebMetadata(debPath) {
       `the package does not install ${DESKTOP_FILE} (installed outside ${INSTALL_ROOT}: ` +
         `${otherPaths.filter((path) => path.includes('/share/')).join(', ') || 'nothing'})`
     ])
-  } else if (!otherPaths.some((path) => /\/icons\/hicolor\/.+\/apps\/.+\.png$/.test(path))) {
-    reportFailure(`${step}: desktop integration`, ['the package installs no hicolor app icon'])
+  } else if (
+    !otherPaths.some((path) =>
+      new RegExp(`/icons/hicolor/.+/apps/${identity.executableName}\\.png$`).test(path)
+    )
+  ) {
+    reportFailure(`${step}: desktop integration`, [
+      `the package installs no hicolor icon for ${identity.executableName}`
+    ])
   } else {
     log(`  ok  ${step}: installs a desktop entry and hicolor icons`)
   }
