@@ -28,6 +28,13 @@ export function parsePositionPercent(rawValue: string): number | null {
 
 export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
   {
+    id: 'subtitle-background-enabled',
+    label: 'Show subtitle background',
+    category: 'subtitles',
+    keywords: ['transparent', 'box', 'appearance'],
+    targetId: 'subtitle-background-enabled'
+  },
+  {
     id: 'subtitle-font-scale',
     label: 'Subtitle font size',
     category: 'subtitles',
@@ -86,6 +93,12 @@ export default function SubtitlesTab({
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       <div className="options-section">
         <h3>Subtitle appearance</h3>
+        <OptionsToggleRow
+          id="subtitle-background-enabled"
+          title="Show subtitle background"
+          checked={subtitleStyle.backgroundEnabled}
+          onChange={(backgroundEnabled) => onChangeSubtitleStyle({ backgroundEnabled })}
+        />
         <div className="options-row">
           <label htmlFor="subtitle-font-scale-input" className="options-row-label">
             Font size (%)

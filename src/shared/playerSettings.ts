@@ -152,12 +152,14 @@ export interface SubtitleStyleSettings {
   fontScale: number
   xPct: number
   yPct: number
+  backgroundEnabled: boolean
 }
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyleSettings = {
   fontScale: 1,
   xPct: 50,
-  yPct: 82
+  yPct: 82,
+  backgroundEnabled: true
 }
 
 /** mpv equalizer properties, each an integer −100…100 (0 = neutral). */
@@ -439,6 +441,10 @@ export function normalizeSubtitleStyle(
   return {
     fontScale: inRange(parsed.fontScale, 0.5, 3) ? parsed.fontScale : defaults.fontScale,
     xPct: inRange(parsed.xPct, 0, 100) ? parsed.xPct : defaults.xPct,
-    yPct: inRange(parsed.yPct, 0, 100) ? parsed.yPct : defaults.yPct
+    yPct: inRange(parsed.yPct, 0, 100) ? parsed.yPct : defaults.yPct,
+    backgroundEnabled:
+      typeof parsed.backgroundEnabled === 'boolean'
+        ? parsed.backgroundEnabled
+        : defaults.backgroundEnabled
   }
 }

@@ -364,14 +364,19 @@ describe('OptionsMenu Subtitles tab', () => {
   }
 
   it('renders font-size and position inputs with the current values', () => {
-    const html = renderWithSubtitleStyle({ fontScale: 1.5, xPct: 30, yPct: 70 })
+    const html = renderWithSubtitleStyle({
+      fontScale: 1.5,
+      xPct: 30,
+      yPct: 70,
+      backgroundEnabled: false
+    })
     expect(html).toMatch(/id="subtitle-font-scale-input"[^>]*value="150"/)
     expect(html).toMatch(/id="subtitle-x-input"[^>]*value="30"/)
     expect(html).toMatch(/id="subtitle-y-input"[^>]*value="70"/)
   })
 
   it('shows a hover help icon next to the font-size label explaining the valid range', () => {
-    const html = renderWithSubtitleStyle({ fontScale: 1, xPct: 50, yPct: 82 })
+    const html = renderWithSubtitleStyle(DEFAULT_SUBTITLE_STYLE)
     expect(html).toMatch(
       /Font size \(%\)[\s\S]*?class="options-help-icon" title="[^"]*50%[^"]*300%[^"]*"/
     )
@@ -381,6 +386,13 @@ describe('OptionsMenu Subtitles tab', () => {
     const html = renderWithSubtitleStyle()
     expect(html).toContain('id="subtitle-style-reset"')
     expect(html).toContain('Reset to default')
+  })
+
+  it('renders the subtitle background toggle with the current value', () => {
+    expect(renderWithSubtitleStyle()).toMatch(/id="subtitle-background-enabled"[^>]*checked=""/)
+    expect(
+      renderWithSubtitleStyle({ ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false })
+    ).toMatch(/id="subtitle-background-enabled"(?![^>]*checked)/)
   })
 
   it('renders the subtitle drag toggle enabled by default and accepts the disabled value', () => {
