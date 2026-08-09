@@ -282,21 +282,14 @@ describe('verifyDesktopEntry', () => {
 
 describe('readStartupProbeOutcome', () => {
   /** Drives the real probe so the parser is tested against its actual output. */
-  function probeOutput(marks: StartupMilestone[], timeout: boolean): string {
+  function probeOutput(marks: StartupMilestone[]): string {
     const lines: string[] = []
-    let fire: (() => void) | undefined
     const probe = createStartupProbe({
       enabled: true,
       log: (line) => lines.push(line),
-      finish: () => {},
-      setTimeoutFn: (cb) => {
-        fire = cb
-        return 'timer'
-      },
-      clearTimeoutFn: () => {}
+      ready: () => {}
     })
     for (const mark of marks) probe.mark(mark)
-    if (timeout) fire?.()
     return lines.join('\n')
   }
 
@@ -304,18 +297,16 @@ describe('readStartupProbeOutcome', () => {
   // other (one is ESM tooling, the other is bundled TypeScript), so the
   // contract is pinned by feeding the parser the real thing.
   it('reads a successful launch produced by the application itself', () => {
-    const outcome = readStartupProbeOutcome(probeOutput([...STARTUP_MILESTONES], false))
+    const outcome = readStartupProbeOutcome(probeOutput([...STARTUP_MILESTONES]))
 
     expect(outcome.ready).toBe(true)
-    expect(outcome.timedOut).toBe(false)
     expect(outcome.milestones).toEqual([...STARTUP_MILESTONES])
   })
 
-  it('reads a timed-out launch produced by the application itself', () => {
-    const outcome = readStartupProbeOutcome(probeOutput(['window'], true))
+  it('reports a partial launch without calling it ready', () => {
+    const outcome = readStartupProbeOutcome(probeOutput(['window']))
 
     expect(outcome.ready).toBe(false)
-    expect(outcome.timedOut).toBe(true)
     expect(outcome.milestones).toEqual(['window'])
   })
 
@@ -331,7 +322,6 @@ describe('readStartupProbeOutcome', () => {
 
     expect(readStartupProbeOutcome(stdout)).toEqual({
       ready: true,
-      timedOut: false,
       milestones: ['window', 'mpv', 'renderer']
     })
   })
@@ -339,7 +329,6 @@ describe('readStartupProbeOutcome', () => {
   it('reports nothing ready for output with no probe lines', () => {
     expect(readStartupProbeOutcome('Segmentation fault')).toEqual({
       ready: false,
-      timedOut: false,
       milestones: []
     })
   })

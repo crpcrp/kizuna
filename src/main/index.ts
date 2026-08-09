@@ -74,7 +74,7 @@ import { createMediaHistoryService, type MediaHistoryService } from './services/
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
-import { createStartupProbe, startupProbeTimeoutFromEnv, STARTUP_PROBE_ENV } from './startupProbe'
+import { createStartupProbe, STARTUP_PROBE_ENV } from './startupProbe'
 import {
   createAppWindowSet,
   loadRendererWindow,
@@ -103,10 +103,9 @@ if (process.platform === 'win32') app.disableHardwareAcceleration()
 // launch rather than on a timer.
 const startupProbe = createStartupProbe({
   enabled: process.env[STARTUP_PROBE_ENV] === '1',
-  timeoutMs: startupProbeTimeoutFromEnv(process.env),
   log: (line) => console.log(line),
-  finish: (ready) => {
-    process.exitCode = ready ? 0 : 1
+  ready: () => {
+    process.exitCode = 0
     app.quit()
   }
 })

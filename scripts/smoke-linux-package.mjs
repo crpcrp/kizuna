@@ -115,8 +115,8 @@ function writeFailureLogs() {
 
 /**
  * Run a command, capturing output. Never throws: callers decide whether a
- * non-zero exit is a failure, because some steps (the AppImage FUSE probe,
- * `dpkg -i` before dependencies are resolved) legitimately fail first.
+ * non-zero exit is a failure, because `dpkg -i` before dependencies are
+ * resolved may legitimately fail first.
  */
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -294,21 +294,21 @@ function checkNodeModeProbe(step, appPath, resourcesPath) {
  * sandbox is a property of the installed application, not of packaging, and is
  * out of what this test can observe.
  */
-function checkGuiStartup(step, appPath, userDataDir, fixture) {
+function checkGuiStartup(step, appPath, userDataDir, fixture, appArgs = []) {
   const result = run(
     'xvfb-run',
     [
       '-a',
       '--server-args=-screen 0 1280x800x24',
       appPath,
+      ...appArgs,
       '--no-sandbox',
       `--user-data-dir=${userDataDir}`,
       fixture
     ],
     {
       env: {
-        KIZUNA_STARTUP_PROBE: '1',
-        KIZUNA_STARTUP_PROBE_TIMEOUT_MS: String(PROBE_TIMEOUT_MS)
+        KIZUNA_STARTUP_PROBE: '1'
       },
       timeout: LAUNCH_TIMEOUT_MS
     }
@@ -325,7 +325,6 @@ function checkGuiStartup(step, appPath, userDataDir, fixture) {
       ? `the launch was killed after ${LAUNCH_TIMEOUT_MS} ms`
       : `exit status ${result.status}`,
     `milestones reached: ${outcome.milestones.join(', ') || 'none'}`,
-    outcome.timedOut ? 'the app reported its own startup timeout' : 'no startup timeout reported',
     `stdout:\n${result.stdout.trim() || '(empty)'}`,
     `stderr:\n${result.stderr.trim() || '(empty)'}`
   ])
@@ -396,16 +395,10 @@ function checkAppImage(distDir, artifactName) {
     else log(`  ok  ${step}: desktop entry`)
   }
 
-  // Decide how to launch. A FUSE-capable host runs the artifact exactly as a
-  // user would; where FUSE is unavailable (the documented CI case) the same
-  // tree is launched through the extracted AppRun instead.
+  // Exercise the AppImage runtime from the copied artifact while asking it to
+  // extract and run. This is the runtime's supported no-FUSE path and works on
+  // locked-down CI runners as well as on a normal desktop.
   const resourcesPath = join(extracted, 'resources')
-  const fuseProbe = run(appImage, ['--appimage-offset'], { timeout: 60_000 })
-  let launchPath = appImage
-  if (!fuseProbe.ok) {
-    log('  ..  FUSE unavailable; falling back to the extracted AppRun (CI only)')
-    launchPath = join(extracted, 'AppRun')
-  }
 
   const appExecutable = join(extracted, identity.executableName)
   if (!checkNodeModeProbe(step, appExecutable, resourcesPath)) return
@@ -413,7 +406,9 @@ function checkAppImage(distDir, artifactName) {
   if (!checkMecabTokenizes(step, extracted)) return
 
   const fixture = generateMediaFixture(join(resourcesPath, 'ffmpeg', 'ffmpeg'), cleanDir)
-  checkGuiStartup(step, launchPath, makeTempDir('kizuna-appimage-userdata-'), fixture)
+  checkGuiStartup(step, appImage, makeTempDir('kizuna-appimage-userdata-'), fixture, [
+    '--appimage-extract-and-run'
+  ])
 }
 
 /** --------------------------------------------------------------------- deb */

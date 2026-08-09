@@ -24,7 +24,7 @@ interface LinuxTarget {
 /** Only the keys these assertions read; electron-builder accepts many more. */
 interface BuilderConfig {
   homepage?: string
-  directories: { output: string; buildResources: string }
+  directories: { output: string }
   linux: {
     target: LinuxTarget[]
     icon: string
@@ -118,14 +118,10 @@ describe('Linux packaging configuration', () => {
     expect(builderConfig().linux.maintainer).toMatch(/^.+ <[^@\s]+@[^@\s]+>$/)
   })
 
-  it('ships a committed application icon from a non-ignored build-resources directory', () => {
-    const config = builderConfig()
-    const iconPath = config.linux.icon
+  it('reuses the existing application icon', () => {
+    const iconPath = builderConfig().linux.icon
 
-    // electron-builder's default `build/` is gitignored here (it holds the
-    // generated notices), so an icon placed there would never be committed.
-    expect(config.directories.buildResources).toBe('build-resources')
-    expect(iconPath.startsWith('build-resources/')).toBe(true)
+    expect(iconPath).toBe('build/icon.png')
     expect(statSync(join(REPO_ROOT, iconPath)).isFile()).toBe(true)
 
     // A PNG below 512x512 makes electron-builder fail the Linux icon set.

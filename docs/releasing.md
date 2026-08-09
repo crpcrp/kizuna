@@ -49,8 +49,8 @@ release run. `npm run dist:linux` produces a versioned AppImage and `.deb`, and
 - every bundled tool starts, and MeCab tokenizes with the bundled IPADIC;
 - the `.deb` declares the pinned `mpv` and `ffmpeg` dependencies, installs,
   reinstalls, and uninstalls cleanly with its desktop entry and icons;
-- the AppImage runs from a clean directory, falling back to
-  `--appimage-extract` where the runner has no FUSE;
+- the AppImage runs from a clean directory through its supported
+  `--appimage-extract-and-run` path, which does not require FUSE;
 - the real application starts under `xvfb-run` with an isolated user-data
   directory and reports its window, mpv IPC, and renderer milestones.
 

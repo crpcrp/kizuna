@@ -372,19 +372,17 @@ export const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
  * feeds this the real module's own output.
  *
  * @param {string} stdout
- * @returns {{ ready: boolean, milestones: string[], timedOut: boolean }}
+ * @returns {{ ready: boolean, milestones: string[] }}
  */
 export function readStartupProbeOutcome(stdout) {
   const milestones = []
   let ready = false
-  let timedOut = false
   for (const raw of stdout.split('\n')) {
     const line = raw.trim()
     if (!line.startsWith(STARTUP_PROBE_PREFIX)) continue
     const detail = line.slice(STARTUP_PROBE_PREFIX.length).replace(/^:\s*/, '')
     if (detail === 'ready') ready = true
-    else if (detail.startsWith('timed out')) timedOut = true
     else if (detail.startsWith('reached ')) milestones.push(detail.slice('reached '.length))
   }
-  return { ready, milestones, timedOut }
+  return { ready, milestones }
 }

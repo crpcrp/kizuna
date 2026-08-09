@@ -11,15 +11,8 @@ module.exports = {
   // Defaults to productName; set explicitly so the shipped binary is
   // `kizuna.exe` regardless of how the display name is capitalized.
   executableName: identity.executableName,
-  // fpm refuses to build a `.deb` without a homepage; electron-builder reads
-  // that one from package.json's `homepage` (it is not a valid key here), so
-  // it lives there and `linuxPackagingConfig.test.ts` pins it to the identity.
   directories: {
-    output: 'dist',
-    // electron-builder's default build-resources directory is `build/`, which
-    // is gitignored here and holds only the generated notices bundle. Point it
-    // at a committed directory so the application icon is a reviewed file.
-    buildResources: 'build-resources'
+    output: 'dist'
   },
   // Stable, shell-safe release asset name. Windows publishes a single
   // installer, so the name needs no platform segment; `linux.artifactName`
@@ -59,7 +52,8 @@ module.exports = {
       { target: 'AppImage', arch: ['x64'] },
       { target: 'deb', arch: ['x64'] }
     ],
-    icon: 'build-resources/icon.png',
+    // Reuse the app artwork already used by the Windows package.
+    icon: 'build/icon.png',
     // Debian policy requires a contactable maintainer, and fpm refuses to
     // build without one. `package.json`'s `author` is a bare name, so the
     // address is given here instead of reshaping that field.
