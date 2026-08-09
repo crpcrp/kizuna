@@ -349,8 +349,12 @@ describe('renderThirdPartyNotices', () => {
     notices: noticesWith({ ...MPV, notes: ['This build links GPLv3 components.'] }),
     packages: [{ name: 'react', version: '19.2.7', license: 'MIT', path: 'node_modules/react' }],
     packageLicenseNames: { 'node_modules/react': ['LICENSE'] },
-    productName: 'Kizuna',
-    appVersion: '0.0.1'
+    productName: 'Kizuna'
+  })
+
+  it('does not couple the document heading to the application version', () => {
+    expect(markdown).toContain('# Third-party notices for Kizuna')
+    expect(markdown).not.toContain('# Third-party notices for Kizuna 0.0.1')
   })
 
   it('names the exact build, its licence, and the bundled licence text', () => {
@@ -471,8 +475,7 @@ describe('generateNotices', () => {
       repoRoot,
       resourcesDir: join(repoRoot, 'resources'),
       outDir: join(repoRoot, 'build', 'notices'),
-      productName: 'Kizuna',
-      appVersion: '0.0.1'
+      productName: 'Kizuna'
     })
 
   it('writes both documents, the app licence, and every named licence text', async () => {
@@ -533,7 +536,6 @@ describe('generateNotices', () => {
         resourcesDir: join(repoRoot, 'resources'),
         outDir: join(repoRoot, 'build', 'notices'),
         productName: 'Kizuna',
-        appVersion: '0.0.1',
         platformKey: 'win32-x64'
       })
     ).rejects.toThrow('non-selected platform resource remains: mpv/mpv')

@@ -63,11 +63,10 @@ export function parsePlatformArg(argv) {
 const readJson = async (name) => JSON.parse(await readFile(join(repoRoot, name), 'utf-8'))
 
 async function main() {
-  const [notices, lock, packageLock, pkg, identity] = await Promise.all([
+  const [notices, lock, packageLock, identity] = await Promise.all([
     readJson('third-party.json'),
     readJson('resources.lock.json'),
     readJson('package-lock.json'),
-    readJson('package.json'),
     readJson(join('src', 'shared', 'appIdentity.json'))
   ])
 
@@ -83,7 +82,6 @@ async function main() {
     resourcesDir: join(repoRoot, 'resources'),
     outDir,
     productName: identity.productName,
-    appVersion: pkg.version,
     platformKey,
     log: (message) => console.log(message)
   })

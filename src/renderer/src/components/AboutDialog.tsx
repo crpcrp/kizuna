@@ -183,10 +183,6 @@ export default function AboutDialog({
                 </button>
               </dd>
             </div>
-            <div>
-              <dt>Copyright</dt>
-              <dd>{info.copyright}</dd>
-            </div>
           </dl>
 
           <UpdateSection

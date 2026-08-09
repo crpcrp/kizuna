@@ -104,7 +104,7 @@ export default function MenuBar({
         onToggle={() => toggle('settings')}
       >
         <CommandItem
-          label="Optionsâ€¦"
+          label="Options…"
           ariaLabel="Options"
           id="open-options"
           onClick={run(onOpenOptions)}
