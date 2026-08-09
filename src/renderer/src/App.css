@@ -22,6 +22,11 @@ body {
   flex-direction: column;
 }
 
+#app.fullscreen.cursor-hidden,
+#app.fullscreen.cursor-hidden * {
+  cursor: none !important;
+}
+
 /* ---- Top controls: custom title bar + application menu bar ----
    position+z-index (not just flex order) is required here: #content right
    below it is `position: relative` (so #subtitle can anchor to it), which

@@ -38,6 +38,7 @@ import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
 import { useFullscreenReveal } from './state/useFullscreenReveal'
+import { useFullscreenCursor } from './state/useFullscreenCursor'
 import { useLinuxWindowShape } from './state/useLinuxWindowShape'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestRef } from './state/useLatestRef'
@@ -87,6 +88,7 @@ export default function App({
   const playerAdapter = useMemo(() => buildPlayerAdapter(dispatch), [dispatch])
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
+  const cursorHidden = useFullscreenCursor(state.fullscreen)
   // The per-cue loop is stored together with the cue list it was picked from,
   // so a new list (file or subtitle-track switch) drops it by derivation
   // instead of through a reset effect.
@@ -335,7 +337,8 @@ export default function App({
         state.fullscreen,
         reveal.top || menuBarOpen,
         reveal.bottom,
-        miniPlayerActive
+        miniPlayerActive,
+        cursorHidden
       )}
     >
       <div id="top-controls" ref={topBarRef}>
