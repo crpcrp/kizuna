@@ -52,17 +52,26 @@ describe('normalizeSubtitleStyle', () => {
       DEFAULT_SUBTITLE_STYLE
     )
     expect(
-      normalizeSubtitleStyle({ fontScale: 10, xPct: -5, yPct: 'bottom' }, DEFAULT_SUBTITLE_STYLE)
+      normalizeSubtitleStyle(
+        { fontScale: 10, xPct: -5, yPct: 'bottom', backgroundEnabled: 'yes' },
+        DEFAULT_SUBTITLE_STYLE
+      )
     ).toEqual(DEFAULT_SUBTITLE_STYLE)
   })
 
   it('accepts valid settings at the boundaries', () => {
     expect(
-      normalizeSubtitleStyle({ fontScale: 0.5, xPct: 0, yPct: 100 }, DEFAULT_SUBTITLE_STYLE)
-    ).toEqual({ fontScale: 0.5, xPct: 0, yPct: 100 })
+      normalizeSubtitleStyle(
+        { fontScale: 0.5, xPct: 0, yPct: 100, backgroundEnabled: false },
+        DEFAULT_SUBTITLE_STYLE
+      )
+    ).toEqual({ fontScale: 0.5, xPct: 0, yPct: 100, backgroundEnabled: false })
     expect(
-      normalizeSubtitleStyle({ fontScale: 3, xPct: 100, yPct: 0 }, DEFAULT_SUBTITLE_STYLE)
-    ).toEqual({ fontScale: 3, xPct: 100, yPct: 0 })
+      normalizeSubtitleStyle(
+        { fontScale: 3, xPct: 100, yPct: 0, backgroundEnabled: true },
+        DEFAULT_SUBTITLE_STYLE
+      )
+    ).toEqual({ fontScale: 3, xPct: 100, yPct: 0, backgroundEnabled: true })
   })
 })
 

@@ -155,6 +155,7 @@ export default function SubtitleOverlay({
     return (
       <div
         id="subtitle"
+        data-background-enabled={style.backgroundEnabled ? undefined : 'false'}
         className={dragEnabled ? undefined : 'subtitle-selectable'}
         style={subtitleBoxStyle(style)}
         onMouseDown={handleMouseDown}
@@ -174,6 +175,7 @@ export default function SubtitleOverlay({
   return (
     <div
       id="subtitle"
+      data-background-enabled={style.backgroundEnabled ? undefined : 'false'}
       className={dragEnabled ? undefined : 'subtitle-selectable'}
       style={subtitleBoxStyle(style)}
       onMouseDown={handleMouseDown}

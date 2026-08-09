@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import OptionsMenu, { type OptionsMenuProps } from '@src/renderer/src/components/OptionsMenu'
 import { baseOptionsMenuProps } from './optionsMenuProps'
-import { MPV_EXTRA_ARG_MAX_LENGTH } from '@src/shared/playerSettings'
+import { DEFAULT_SUBTITLE_STYLE, MPV_EXTRA_ARG_MAX_LENGTH } from '@src/shared/playerSettings'
 import { APP_NAME } from '@src/shared/appInfo'
 
 const noop = (): void => undefined
@@ -212,6 +212,33 @@ describe('OptionsMenu experimental translation', () => {
   })
 })
 
+describe('OptionsMenu subtitle background', () => {
+  it('reports toggle and reset changes through the subtitle style callback', () => {
+    const onChangeSubtitleStyle = vi.fn()
+    const base = baseOptionsMenuProps()
+    render(
+      <OptionsMenu
+        {...base}
+        subtitles={{
+          ...base.subtitles,
+          subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false },
+          onChangeSubtitleStyle
+        }}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
+    const checkbox = screen.getByRole('checkbox', { name: 'Show subtitle background' })
+    expect((checkbox as HTMLInputElement).checked).toBe(false)
+
+    fireEvent.click(checkbox)
+    expect(onChangeSubtitleStyle).toHaveBeenCalledWith({ backgroundEnabled: true })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(onChangeSubtitleStyle).toHaveBeenLastCalledWith(DEFAULT_SUBTITLE_STYLE)
+  })
+})
+
 // OptionsToggleRow's own test covers what a switch-only row does; this is the
 // one that says every boolean setting in the dialog actually uses it, so the
 // pattern can't come undone one setting at a time.
@@ -223,6 +250,7 @@ describe('OptionsMenu boolean rows', () => {
     'right-click-toggle-pause-checkbox',
     'loudness-normalization-checkbox',
     'mpv-user-config-checkbox',
+    'subtitle-background-enabled',
     'subtitle-drag-enabled',
     'translation-enabled',
     'anki-include-audio-checkbox',

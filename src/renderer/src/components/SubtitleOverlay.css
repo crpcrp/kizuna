@@ -25,6 +25,9 @@
     0 1px 0 var(--subtitle-outline),
     1px 1px 0 var(--subtitle-outline);
 }
+#subtitle[data-background-enabled='false'] {
+  background: transparent;
+}
 #subtitle:active {
   cursor: grabbing;
 }

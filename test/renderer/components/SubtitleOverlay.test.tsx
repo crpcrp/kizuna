@@ -60,6 +60,20 @@ describe('SubtitleOverlay.css glyph outline (issue #132)', () => {
   })
 })
 
+describe('SubtitleOverlay.css background option', () => {
+  const css = readFileSync(
+    join(REPO_ROOT, 'src', 'renderer', 'src', 'components', 'SubtitleOverlay.css'),
+    'utf-8'
+  )
+
+  it('makes only the subtitle box background transparent when disabled', () => {
+    expect(css).toContain("#subtitle[data-background-enabled='false']")
+    expect(css).toMatch(
+      /#subtitle\[data-background-enabled='false'\]\s*\{\s*background:\s*transparent;\s*\}/
+    )
+  })
+})
+
 describe('theme.css --subtitle-outline (issue #132)', () => {
   const themeCss = readFileSync(join(REPO_ROOT, 'src', 'renderer', 'src', 'theme.css'), 'utf-8')
 
@@ -117,11 +131,35 @@ describe('SubtitleOverlay markup', () => {
 
   it('applies a custom style prop to left/top/font-size', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={cues} timePos={1} style={{ fontScale: 2, xPct: 25, yPct: 60 }} />
+      <SubtitleOverlay
+        cues={cues}
+        timePos={1}
+        style={{ fontScale: 2, xPct: 25, yPct: 60, backgroundEnabled: true }}
+      />
     )
     expect(html).toContain('left:25%')
     expect(html).toContain('top:60%')
     expect(html).toContain('font-size:2.2rem')
+  })
+
+  it.each([
+    ['plain text', undefined],
+    ['tokenized text', [makeToken({ surface: 'hello' })]]
+  ])('marks the background as disabled for %s rendering', (_label, tokens) => {
+    const html = renderToStaticMarkup(
+      <SubtitleOverlay
+        cues={cues}
+        timePos={1}
+        tokens={tokens}
+        style={{ ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false }}
+      />
+    )
+    expect(html).toContain('data-background-enabled="false"')
+  })
+
+  it('does not add disabled-background markup when the background is enabled', () => {
+    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={1} />)
+    expect(html).not.toContain('data-background-enabled')
   })
 })
 
@@ -138,7 +176,9 @@ describe('subtitleBoxStyle (pure)', () => {
   })
 
   it('scales font size by fontScale', () => {
-    expect(subtitleBoxStyle({ fontScale: 1.5, xPct: 10, yPct: 20 }).fontSize).toBe('1.65rem')
+    expect(
+      subtitleBoxStyle({ fontScale: 1.5, xPct: 10, yPct: 20, backgroundEnabled: true }).fontSize
+    ).toBe('1.65rem')
   })
 
   it('uses a Japanese-capable font stack for halfwidth ideographic punctuation', () => {

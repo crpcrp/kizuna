@@ -346,7 +346,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
         maxEntries: 6,
         maxMeanings: 2
       },
-      subtitleStyle: { fontScale: 1.2, xPct: 40, yPct: 75 },
+      subtitleStyle: { fontScale: 1.2, xPct: 40, yPct: 75, backgroundEnabled: false },
       subtitleDragEnabled: false,
       rightClickTogglePause: false,
       autoPlayNext: true,
