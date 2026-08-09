@@ -113,7 +113,13 @@ export function createAnkiClient(deps: {
   return {
     invoke,
     async multi<T>(actions: Array<{ action: string; params?: unknown }>): Promise<T[]> {
-      const responses = await invoke<unknown>('multi', { actions })
+      // AnkiConnect implements `multi` by passing every nested action through
+      // the same authenticated request handler as the outer action. Therefore
+      // a configured key must be present on each child as well as on `multi`.
+      const authenticatedActions = apiKey
+        ? actions.map((action) => ({ ...action, key: apiKey }))
+        : actions
+      const responses = await invoke<unknown>('multi', { actions: authenticatedActions })
       if (!Array.isArray(responses)) {
         throw new AnkiConnectError('AnkiConnect: malformed multi response')
       }
