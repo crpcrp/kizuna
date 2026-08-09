@@ -260,6 +260,12 @@
   color: var(--text-muted);
   margin: 4px 0 10px;
 }
+/* Japanese Windows fonts traditionally draw U+005C as a yen sign. Paths use
+   a Latin monospace face so Windows separators remain visibly backslashes. */
+.filesystem-path {
+  font-family: Consolas, 'Courier New', monospace;
+  overflow-wrap: anywhere;
+}
 .options-error {
   font-size: 0.8rem;
   color: var(--danger-text);

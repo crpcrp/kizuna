@@ -30,6 +30,8 @@ export interface SetupRow {
   state: SetupState
   /** One short sentence of context under the name. */
   note: string
+  /** Filesystem path displayed after the note in a glyph-safe monospace font. */
+  path?: string
   /** Tab that actually configures this, when there is one. Informational rows
    * (bundled binaries the user cannot configure from Options) have none. */
   goTo?: OptionsCategory
@@ -179,7 +181,10 @@ export function buildSetupRows({
       note:
         unidicState === 'ready'
           ? 'Optional parser dictionary — installed.'
-          : `Optional separate download; install it at ${unidicInstallPath ?? 'the configured UniDic directory'}.`,
+          : unidicInstallPath
+            ? 'Optional separate download; install it at'
+            : 'Optional separate download; install it at the configured UniDic directory.',
+      path: unidicState === 'ready' ? undefined : unidicInstallPath,
       goTo: 'dictionaries'
     },
     {
@@ -271,7 +276,15 @@ export default function SetupTab({
               <span className="options-row-label">
                 <span className={`status-dot ${row.state}`} aria-hidden="true" />
                 {row.name}
-                <span className="options-row-description">{row.note}</span>
+                <span className="options-row-description">
+                  {row.note}
+                  {row.path && (
+                    <>
+                      {' '}
+                      <code className="filesystem-path">{row.path}</code>.
+                    </>
+                  )}
+                </span>
               </span>
               {goTo && (
                 <button
