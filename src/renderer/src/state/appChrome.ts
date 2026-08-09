@@ -4,13 +4,15 @@ export function appClassName(
   fullscreen: boolean,
   revealTop: boolean,
   revealBottom: boolean,
-  miniPlayer = false
+  miniPlayer = false,
+  cursorHidden = false
 ): string {
   return [
     fullscreen ? 'fullscreen' : '',
     revealTop ? 'reveal-top' : '',
     revealBottom ? 'reveal-bottom' : '',
-    miniPlayer ? 'mini-player' : ''
+    miniPlayer ? 'mini-player' : '',
+    cursorHidden ? 'cursor-hidden' : ''
   ]
     .filter(Boolean)
     .join(' ')

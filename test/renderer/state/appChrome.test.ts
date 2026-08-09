@@ -11,6 +11,7 @@ describe('appChrome', () => {
     expect(appClassName(false, false, false)).toBe('')
     expect(appClassName(true, true, true)).toBe('fullscreen reveal-top reveal-bottom')
     expect(appClassName(false, false, false, true)).toBe('mini-player')
+    expect(appClassName(true, false, false, false, true)).toBe('fullscreen cursor-hidden')
   })
 
   it('toggles playback from right-click only when enabled', () => {
