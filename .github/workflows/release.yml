@@ -165,6 +165,90 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Linux x64 packaging and its packaged smoke test. Deliberately part of the
+  # release workflow rather than per-commit CI: it is minutes of electron-builder
+  # plus a real Electron launch under a virtual X server, and a pull request
+  # should still run exactly the CI and CodeQL checks branch protection
+  # requires. `test/linuxPackagingConfig.test.ts` runs in ordinary CI and
+  # catches configuration drift long before this job does.
+  #
+  # The artifacts are verified and uploaded but not attached to the draft
+  # release: Linux publishing is enabled separately (see docs/releasing.md).
+  build-linux:
+    name: Package and smoke-test Linux x64
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          lfs: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      # The documented Linux build toolchain, plus what the packaged smoke test
+      # itself needs. `xvfb` provides the virtual X server mpv's `--wid`
+      # embedding requires; `fakeroot` is fpm's unprivileged packaging helper.
+      #
+      # mpv and ffmpeg are installed at the exact versions the deb depends on:
+      # the bundled executables are unmodified files from those Ubuntu packages
+      # and load their shared libraries from them (see the vendor mirror's
+      # LINUX_X64_DEPENDENCIES.md). Installing them here is also what lets the
+      # AppImage run at all, since it bundles no such libraries.
+      - name: Install packaging and smoke-test dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential python3 pkg-config fakeroot xvfb \
+            'mpv=0.37.0-1ubuntu4' 'ffmpeg=7:6.1.1-3ubuntu5'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch pinned runtime binaries
+        run: npm run resources
+
+      - name: Package AppImage and deb
+        run: npm run dist:linux
+
+      # Installs and uninstalls the deb, runs the AppImage from a clean
+      # directory, and starts the real application under Xvfb with an isolated
+      # user-data directory. No network, no accounts, and the only media is a
+      # fixture the script generates with the freshly packaged ffmpeg.
+      - name: Verify packaged artifacts
+        run: npm run smoke:linux
+
+      - name: Record artifact checksums
+        run: |
+          cd dist
+          sha256sum ./*.AppImage ./*.deb > SHA256SUMS-linux.txt
+          cat SHA256SUMS-linux.txt
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kizuna-linux-artifacts
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/SHA256SUMS-linux.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      # The smoke test writes one file per failed check, each carrying the
+      # app's and mpv's stderr and the milestones the launch did reach — enough
+      # to tell an Electron, mpv, dependency, sandbox, or display failure apart.
+      - name: Upload packaging failure logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-packaging-logs
+          path: dist/smoke-logs
+          if-no-files-found: ignore
+          retention-days: 7
+
   publish:
     name: Create draft pre-release
     needs: build

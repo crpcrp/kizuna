@@ -38,6 +38,42 @@ git push origin v1.2.3
 
 The tag must match the package version and point to a commit in `main`.
 
+## Linux packaging
+
+The release workflow also builds and verifies Linux x64 artifacts on every
+release run. `npm run dist:linux` produces a versioned AppImage and `.deb`, and
+`npm run smoke:linux` verifies them on a clean Ubuntu 24.04 runner:
+
+- both artifacts contain the Linux runtime resources, notices, and icons, with
+  no Windows binaries and with executable bits intact;
+- every bundled tool starts, and MeCab tokenizes with the bundled IPADIC;
+- the `.deb` declares the pinned `mpv` and `ffmpeg` dependencies, installs,
+  reinstalls, and uninstalls cleanly with its desktop entry and icons;
+- the AppImage runs from a clean directory through its supported
+  `--appimage-extract-and-run` path, which does not require FUSE;
+- the real application starts under `xvfb-run` with an isolated user-data
+  directory and reports its window, mpv IPC, and renderer milestones.
+
+Failures upload one log file per failed check as the `linux-packaging-logs`
+artifact; the built artifacts upload as `kizuna-linux-artifacts`.
+
+Packaging is deliberately not part of per-commit CI, which stays at the
+`CI / Windows x64`, `CI / Linux x64`, and `CodeQL` checks. Configuration drift
+is caught there instead by `test/linuxPackagingConfig.test.ts`.
+
+These artifacts are **not** attached to the draft release: Linux publishing is
+enabled separately, and the draft remains a Windows-only pre-release. The
+Linux job therefore does not gate the `publish` job — a Linux packaging failure
+turns the workflow run red without blocking a Windows release.
+
+To run the same checks locally on Ubuntu 24.04:
+
+```bash
+sudo apt-get install --yes xvfb 'mpv=0.37.0-1ubuntu4' 'ffmpeg=7:6.1.1-3ubuntu5'
+npm run dist:linux
+npm run smoke:linux
+```
+
 ## Release contents
 
 The draft contains the unsigned installer, `SHA256SUMS.txt`, the third-party

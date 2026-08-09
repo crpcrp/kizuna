@@ -35,7 +35,7 @@ describe('resolveBinaryPaths', () => {
       mpvPath: posix.join('/opt/kizuna/resources', 'mpv', 'mpv'),
       ffprobePath: posix.join('/opt/kizuna/resources', 'ffmpeg', 'ffprobe'),
       ffmpegPath: posix.join('/opt/kizuna/resources', 'ffmpeg', 'ffmpeg'),
-      mecabPath: posix.join('/opt/kizuna/resources', 'mecab', 'mecab'),
+      mecabPath: posix.join('/opt/kizuna/resources', 'mecab', 'bin', 'mecab'),
       ipadicDir: posix.join('/opt/kizuna/resources', 'mecab', 'ipadic'),
       unidicDir: posix.join('/opt/kizuna/resources', 'mecab', 'unidic'),
       ytdlpPath: posix.join('/opt/kizuna/resources', 'yt-dlp', 'yt-dlp')
@@ -138,10 +138,10 @@ describe('requiredPackagedResources', () => {
       { label: 'mpv', path: '/opt/kizuna/resources/mpv/mpv', kind: 'file' },
       { label: 'ffmpeg', path: '/opt/kizuna/resources/ffmpeg/ffmpeg', kind: 'file' },
       { label: 'ffprobe', path: '/opt/kizuna/resources/ffmpeg/ffprobe', kind: 'file' },
-      { label: 'MeCab', path: '/opt/kizuna/resources/mecab/mecab', kind: 'file' },
+      { label: 'MeCab', path: '/opt/kizuna/resources/mecab/bin/mecab', kind: 'file' },
       {
         label: 'MeCab executable',
-        path: '/opt/kizuna/resources/mecab/mecab.bin',
+        path: '/opt/kizuna/resources/mecab/bin/mecab.bin',
         kind: 'file'
       },
       {
@@ -156,7 +156,7 @@ describe('requiredPackagedResources', () => {
       },
       {
         label: 'MeCab configuration',
-        path: '/opt/kizuna/resources/mecab/mecabrc',
+        path: '/opt/kizuna/resources/mecab/etc/mecabrc',
         kind: 'file'
       },
       {

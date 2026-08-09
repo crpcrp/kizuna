@@ -40,11 +40,11 @@ describe('resources.lock.json', () => {
       expect.arrayContaining(['mpv/mpv.exe', 'ffmpeg/ffprobe.exe', 'mecab/mecab.exe'])
     )
     expect(lock.platforms['linux-x64'].requiredExecutables).toEqual(
-      expect.arrayContaining(['mpv/mpv', 'ffmpeg/ffprobe', 'mecab/mecab.bin'])
+      expect.arrayContaining(['mpv/mpv', 'ffmpeg/ffprobe', 'mecab/bin/mecab.bin'])
     )
     expect(lock.platforms['linux-x64'].files).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ from: 'linux-x64/mecab/bin/mecab', to: 'mecab/mecab' }),
+        expect.objectContaining({ from: 'linux-x64/mecab/bin/mecab', to: 'mecab/bin/mecab' }),
         expect.objectContaining({ from: 'linux-x64/mecab/lib/libmecab.so.2', executable: false })
       ])
     )

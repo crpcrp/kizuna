@@ -14,7 +14,9 @@ module.exports = {
   directories: {
     output: 'dist'
   },
-  // Stable, shell-safe release asset name.
+  // Stable, shell-safe release asset name. Windows publishes a single
+  // installer, so the name needs no platform segment; `linux.artifactName`
+  // below overrides this because Linux emits two artifacts per architecture.
   artifactName: '${name}-${version}-setup.${ext}',
   files: ['out/**/*'],
   extraResources: [
@@ -42,6 +44,77 @@ module.exports = {
   nsis: {
     oneClick: false,
     allowToChangeInstallationDirectory: true
+  },
+  linux: {
+    // Both targets are x64-only: resources.lock.json pins one Linux payload
+    // and it is x86-64 (see the vendor mirror's LINUX_X64_DEPENDENCIES.md).
+    target: [
+      { target: 'AppImage', arch: ['x64'] },
+      { target: 'deb', arch: ['x64'] }
+    ],
+    // Reuse the app artwork already used by the Windows package.
+    icon: 'build/icon.png',
+    // Debian policy requires a contactable maintainer, and fpm refuses to
+    // build without one. `package.json`'s `author` is a bare name, so the
+    // address is given here instead of reshaping that field.
+    maintainer: 'Adam Kocsis <kocsisadam1991@gmail.com>',
+    // Both artifacts carry platform and architecture, so a Linux download is
+    // never confusable with the Windows installer in a release listing.
+    artifactName: '${name}-${version}-linux-${arch}.${ext}',
+    category: 'AudioVideo',
+    synopsis: 'Video player for Japanese language learning',
+    description:
+      'Kizuna plays local and streamed video with mpv, tokenizes Japanese subtitles with MeCab, ' +
+      'looks words up in Yomitan dictionaries, and mines vocabulary into Anki.',
+    // Declared explicitly rather than derived from `fileAssociations`, which
+    // carries no `mimeType` and would otherwise register private
+    // `application/x-ext-mkv` types instead of the real video ones.
+    mimeTypes: [
+      'video/x-matroska',
+      'video/mp4',
+      'video/webm',
+      'video/x-msvideo',
+      'video/quicktime'
+    ],
+    // Electron derives its X11 `app_id`/WM_CLASS from `desktopName` in
+    // package.json. Installing the entry under the matching filename is what
+    // lets a desktop environment tie the running window to this launcher
+    // (icon in the dash, window grouping) instead of showing a generic one.
+    syncDesktopName: true,
+    desktop: {
+      entry: {
+        GenericName: 'Video Player',
+        Keywords: 'video;player;japanese;subtitles;mpv;anki;language;',
+        // AudioVideo is the required main category; the rest are the
+        // registered additional categories that place Kizuna sensibly in a
+        // menu without claiming an unrelated section.
+        Categories: 'AudioVideo;Video;Player;Education;'
+      }
+    }
+  },
+  deb: {
+    // Replaces electron-builder's default list rather than extending it, so
+    // Electron's own runtime dependencies are repeated here verbatim.
+    depends: [
+      'libgtk-3-0',
+      'libnotify4',
+      'libnss3',
+      'libxss1',
+      'libxtst6',
+      'xdg-utils',
+      'libatspi2.0-0',
+      'libuuid1',
+      'libsecret-1-0',
+      // The bundled mpv, ffmpeg, and ffprobe are unmodified executables taken
+      // from these exact Ubuntu 24.04 packages, and they load their non-
+      // baseline shared libraries from them. The pins are the vendor mirror's
+      // documented loader policy (LINUX_X64_DEPENDENCIES.md); relaxing them to
+      // a version range would let a partial upgrade break playback at runtime
+      // instead of at install time. MeCab needs only the glibc/libstdc++
+      // baseline and is loaded through its own relative wrapper.
+      'mpv (= 0.37.0-1ubuntu4)',
+      'ffmpeg (= 7:6.1.1-3ubuntu5)'
+    ]
   },
   fileAssociations: [
     {

@@ -3,7 +3,15 @@
 // The logical resources layout is shared by Windows and Linux:
 //   resources/mpv/{mpv.exe|mpv}
 //   resources/ffmpeg/{ffmpeg.exe|ffmpeg,ffprobe.exe|ffprobe}
-//   resources/mecab/{mecab.exe|mecab,ipadic,...}
+//   resources/mecab/...
+//
+// MeCab is the one component whose internal layout differs. Windows is flat
+// (`mecab/mecab.exe` beside `mecab/libmecab.dll`). The Linux payload ships a
+// POSIX wrapper that resolves its shared library as `../lib` and its config as
+// `../etc/mecabrc`, both relative to the wrapper's own directory, so the
+// vendor's `bin/`, `lib/`, `etc/` tree is staged verbatim
+// (`mecab/bin/mecab`). Flattening it silently breaks tokenization: the wrapper
+// still starts, then `mecab.bin` fails to load `libmecab.so.2`.
 //
 // Unpackaged Linux development continues to use distribution tools. Packaged
 // Linux resolves the staged vendor payload so it never depends on a host tool
@@ -58,7 +66,12 @@ export function requiredPackagedResources(
     { label: 'MeCab', path: paths.mecabPath, kind: 'file' }
   ]
   const pathApi = platform === 'linux' ? posix : win32
-  const mecabRoot = pathApi.dirname(paths.mecabPath)
+  // The component root: `<resources>/mecab` on both platforms. Linux's
+  // executable sits one level deeper, in the payload's own `bin/`.
+  const mecabRoot =
+    platform === 'linux'
+      ? pathApi.dirname(pathApi.dirname(paths.mecabPath))
+      : pathApi.dirname(paths.mecabPath)
   const ipadic = (name: string): RequiredPackagedResource => ({
     label: `MeCab IPADIC ${name}`,
     path: pathApi.join(paths.ipadicDir, name),
@@ -66,7 +79,13 @@ export function requiredPackagedResources(
   })
   if (platform === 'linux') {
     required.push(
-      { label: 'MeCab executable', path: posix.join(mecabRoot, 'mecab.bin'), kind: 'file' },
+      {
+        label: 'MeCab executable',
+        path: posix.join(mecabRoot, 'bin', 'mecab.bin'),
+        kind: 'file'
+      },
+      // Resolved by the wrapper through LD_LIBRARY_PATH, not by the dynamic
+      // loader's default search path, so both names must be present.
       {
         label: 'MeCab shared library',
         path: posix.join(mecabRoot, 'lib', 'libmecab.so.2'),
@@ -77,7 +96,11 @@ export function requiredPackagedResources(
         path: posix.join(mecabRoot, 'lib', 'libmecab.so.2.0.0'),
         kind: 'file'
       },
-      { label: 'MeCab configuration', path: posix.join(mecabRoot, 'mecabrc'), kind: 'file' },
+      {
+        label: 'MeCab configuration',
+        path: posix.join(mecabRoot, 'etc', 'mecabrc'),
+        kind: 'file'
+      },
       ipadic('char.bin'),
       ipadic('dicrc'),
       ipadic('matrix.bin'),
@@ -128,13 +151,18 @@ export function resolveBinaryPaths({
   const executable = platform === 'win32' ? 'mpv.exe' : 'mpv'
   const ffprobe = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
   const ffmpeg = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
-  const mecab = platform === 'win32' ? 'mecab.exe' : 'mecab'
   const ytdlp = platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
+  // See the header note: Linux runs the payload's relative-loader wrapper from
+  // its own `bin/`, Windows the flat executable.
+  const mecabPath =
+    platform === 'win32'
+      ? pathApi.join(base, 'mecab', 'mecab.exe')
+      : pathApi.join(base, 'mecab', 'bin', 'mecab')
   return {
     mpvPath: pathApi.join(base, 'mpv', executable),
     ffprobePath: pathApi.join(base, 'ffmpeg', ffprobe),
     ffmpegPath: pathApi.join(base, 'ffmpeg', ffmpeg),
-    mecabPath: pathApi.join(base, 'mecab', mecab),
+    mecabPath,
     ipadicDir: pathApi.join(base, 'mecab', 'ipadic'),
     unidicDir: pathApi.join(base, 'mecab', 'unidic'),
     ytdlpPath: pathApi.join(base, 'yt-dlp', ytdlp)

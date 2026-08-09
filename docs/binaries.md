@@ -49,7 +49,15 @@ The `KIZUNA_VENDOR_DIR` environment variable provides the same override.
 | Linux x64 | mpv | `resources/mpv/mpv` | Video playback |
 | Linux x64 | FFmpeg | `resources/ffmpeg/ffmpeg` | Subtitle extraction and sentence-audio clips |
 | Linux x64 | ffprobe | `resources/ffmpeg/ffprobe` | Media, track, and chapter inspection |
-| Linux x64 | MeCab | `resources/mecab/mecab` | Japanese tokenization via the relative-loader wrapper |
+| Linux x64 | MeCab | `resources/mecab/bin/mecab` | Japanese tokenization via the relative-loader wrapper |
+
+The Linux MeCab payload keeps the mirror's own `bin/`, `lib/`, and `etc/`
+layout rather than being flattened like the other components. Its wrapper
+resolves `../lib` for `libmecab.so.2` and `../etc/mecabrc` for its
+configuration, both relative to the wrapper's own directory, and `mecabrc`
+in turn resolves `$(rcpath)/../ipadic`. Moving the wrapper next to those
+directories instead of above them leaves every file present and executable
+while `mecab.bin` fails to load its shared library at runtime.
 
 MeCab includes a UTF-8 IPADIC dictionary under `resources/mecab/ipadic/`.
 An optional UniDic dictionary can be placed under
@@ -102,9 +110,15 @@ mirror. Verify the Linux files and modes on Linux:
 resources/mpv/mpv --version
 resources/ffmpeg/ffmpeg -version
 resources/ffmpeg/ffprobe -version
-resources/mecab/mecab -v
-test -x resources/mecab/mecab.bin
+resources/mecab/bin/mecab -v
+test -x resources/mecab/bin/mecab.bin
+echo 日本語 | resources/mecab/bin/mecab -d resources/mecab/ipadic
 ```
+
+Run the MeCab commands rather than only checking the files exist: a wrapper
+that cannot find its shared library is indistinguishable from a working one
+until it is executed. `npm run smoke:linux` makes the same check against a
+packaged artifact.
 
 CI uses the same resource command on the host platform. Tests use fakes and
 fixtures instead of invoking these binaries or live services.

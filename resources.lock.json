@@ -362,11 +362,11 @@
         "mpv/mpv",
         "ffmpeg/ffmpeg",
         "ffmpeg/ffprobe",
-        "mecab/mecab",
-        "mecab/mecab.bin",
+        "mecab/bin/mecab",
+        "mecab/bin/mecab.bin",
         "mecab/lib/libmecab.so.2",
         "mecab/lib/libmecab.so.2.0.0",
-        "mecab/mecabrc",
+        "mecab/etc/mecabrc",
         "mecab/ipadic/char.bin",
         "mecab/ipadic/dicrc",
         "mecab/ipadic/matrix.bin",
@@ -377,8 +377,8 @@
         "mpv/mpv",
         "ffmpeg/ffmpeg",
         "ffmpeg/ffprobe",
-        "mecab/mecab",
-        "mecab/mecab.bin"
+        "mecab/bin/mecab",
+        "mecab/bin/mecab.bin"
       ],
       "files": [
         {
@@ -425,19 +425,19 @@
         },
         {
           "from": "linux-x64/mecab/bin/mecab",
-          "to": "mecab/mecab",
+          "to": "mecab/bin/mecab",
           "sha256": "b2743427db757884c6ee2aa4b4577e7321bd473e7c2a75c86a41d8c9c39f2456",
           "executable": true
         },
         {
           "from": "linux-x64/mecab/bin/mecab.bin",
-          "to": "mecab/mecab.bin",
+          "to": "mecab/bin/mecab.bin",
           "sha256": "820b0268efd6cbf06c3f5e15e4405e794498852c54e18a7eded58ea05f49156f",
           "executable": true
         },
         {
           "from": "linux-x64/mecab/etc/mecabrc",
-          "to": "mecab/mecabrc",
+          "to": "mecab/etc/mecabrc",
           "sha256": "0128c3291b5437a3a3f78c94b979ba57dabcd899307bf32865fdf857aa922d79",
           "executable": false
         },
