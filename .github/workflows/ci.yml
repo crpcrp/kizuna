@@ -1,8 +1,9 @@
 name: CI
 
 # Run the same deterministic resource and application checks on both supported
-# host targets. Release packaging remains Windows-only until Linux publishing
-# is enabled separately.
+# host targets. Both legs are independent and equally required: Linux is a
+# first-class validation target, not an advisory extra. Release packaging
+# remains Windows-only until Linux publishing is enabled separately.
 # Release tags are handled by release.yml.
 on:
   push:
@@ -24,14 +25,32 @@ permissions:
 # a compromised or retagged release cannot silently enter this workflow. The
 # trailing comment records the human-readable version each SHA resolves to.
 jobs:
-  build:
+  checks:
+    # `CI / Windows x64` and `CI / Linux x64`. These names are what branch
+    # protection requires for `main`, so they must stay stable even when the
+    # runner image label changes.
+    name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-24.04]
+        include:
+          - name: Windows x64
+            os: windows-latest
+            id: windows-x64
+          - name: Linux x64
+            os: ubuntu-24.04
+            id: linux-x64
 
     steps:
+      # Keep every npm invocation's debug log in one collectable place, outside
+      # the workspace so it cannot reach lint, formatting, or the build. Set
+      # through the environment file because the `runner` context is not
+      # available in a job-level `env` block.
+      - name: Route npm debug logs to a collectable directory
+        shell: bash
+        run: echo "npm_config_logs_dir=$RUNNER_TEMP/npm-logs" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The mirror carries the LFS payloads; this repository has none, and
@@ -43,16 +62,31 @@ jobs:
           node-version: 24
           cache: npm
 
+      # Only the documented Linux build toolchain from README.md's source setup.
+      # The runtime binaries (mpv, FFmpeg, MeCab) are staged from the pinned
+      # mirror below instead of installed from apt, and tests use fakes, so no
+      # media or display packages belong here.
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential python3 pkg-config
+
       # setup-node caches npm's downloaded packages. Cache the installed tree
       # too, because it contains Electron's ABI-specific better-sqlite3 rebuild
-      # and is the slow portion of a clean install. Any OS, Node, or lock-file
-      # change gets a distinct cache entry.
+      # and is the slow portion of a clean install.
+      #
+      # The key carries the OS/architecture leg, the Node major, and the lock
+      # file hash, so a Windows tree can never be restored on Linux and an
+      # Electron bump (a lock-file change, and therefore an ABI change) always
+      # misses. There is no `restore-keys` fallback: a partial match would
+      # reintroduce exactly the mismatch the key prevents.
       - name: Restore installed dependencies
         id: node_modules
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: node_modules
-          key: node-modules-v1-${{ runner.os }}-node-24-${{ hashFiles('package-lock.json') }}
+          key: node-modules-v2-${{ matrix.id }}-node-24-${{ hashFiles('package-lock.json') }}
 
       # `postinstall` runs electron-rebuild for better-sqlite3, which the suite
       # needs: scripts/run-tests.mjs executes vitest under Electron's Node ABI.
@@ -67,24 +101,27 @@ jobs:
           path: node_modules
           key: ${{ steps.node_modules.outputs.cache-primary-key }}
 
-      # Keyed on the lock file, so a mirror bump is a cache miss and nothing
-      # else is. On a hit, `npm run resources` re-verifies every hash locally
+      # Keyed on the leg and the lock file, so a mirror bump is a cache miss and
+      # nothing else is, and a checkout produced on one host is never reused on
+      # the other. On a hit, `npm run resources` re-verifies every hash locally
       # and the git steps become no-ops — Git LFS bandwidth is only spent when
       # resources.lock.json actually changes. The mirror is public, so this
       # needs no credential and works the same on a fork.
       #
-      # The `v2` prefix exists to invalidate caches saved before the fetch
-      # pinned core.autocrlf=false: those hold a checkout whose text files were
-      # rewritten to CRLF, and re-running against them would keep failing
-      # verification since the git steps no-op on an up-to-date checkout. Bump
-      # it again if the fetch ever changes how the working tree is produced.
+      # The `v3` prefix invalidates caches saved before the key became
+      # leg-specific; the `v2` generation before it invalidated checkouts made
+      # before the fetch pinned core.autocrlf=false, whose text files had been
+      # rewritten to CRLF. Bump it again if the fetch ever changes how the
+      # working tree is produced.
       - name: Restore pinned binary mirror
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .vendor-cache
-          key: vendor-v2-${{ hashFiles('resources.lock.json') }}
+          key: vendor-v3-${{ matrix.id }}-${{ hashFiles('resources.lock.json') }}
 
-      - name: Fetch runtime binaries from the pinned mirror
+      # Selects this host's payload from resources.lock.json, verifies every
+      # staged file by SHA-256, and fails closed on a foreign-platform file.
+      - name: Fetch and verify runtime binaries from the pinned mirror
         run: npm run resources
 
       - name: Typecheck
@@ -97,18 +134,20 @@ jobs:
         run: npm run format:check
 
       # scripts/run-tests.mjs writes failing test names to test-results.log and
-      # exits non-zero. It runs the full Vitest suite; the following step
-      # uploads the log only when the test step fails.
+      # exits non-zero. It runs the full Vitest suite on both legs — no reduced
+      # or allow-failure subset — and the following step uploads the log only
+      # when the test step fails.
       - name: Test
         run: npm test
 
       # Kept only long enough to diagnose the run that produced it; a failing
-      # PR is fixed in days, not months.
+      # PR is fixed in days, not months. The name carries the leg so the two
+      # matrix jobs never collide on one artifact.
       - name: Upload failing test names
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: test-results
+          name: test-results-${{ matrix.id }}
           path: test-results.log
           if-no-files-found: ignore
           retention-days: 7
@@ -116,3 +155,20 @@ jobs:
       # Keep notice generation covered by regular CI.
       - name: Generate third-party notices
         run: npm run notices
+
+      # A production renderer/main bundle, so a build-only break (bundler
+      # config, native import, asset path) fails here rather than at release.
+      - name: Build production bundles
+        run: npm run build
+
+      # Install, resource staging, notices, and the build all fail before or
+      # outside the test log, so collect npm's own debug logs for them. `npm
+      # test` failures are diagnosed from the artifact above instead.
+      - name: Upload npm debug logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: npm-logs-${{ matrix.id }}
+          path: ${{ runner.temp }}/npm-logs
+          if-no-files-found: ignore
+          retention-days: 7
