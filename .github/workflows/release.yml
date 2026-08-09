@@ -157,13 +157,22 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $installerName = "kizuna-$env:VERSION-setup.exe"
+          $blockmapName = "$installerName.blockmap"
           $noticesName = "kizuna-$env:VERSION-windows-x64-notices.zip"
           if (-not (Test-Path "dist\$installerName" -PathType Leaf)) {
             throw "Expected installer is missing: $installerName"
           }
+          if (-not (Test-Path "dist\$blockmapName" -PathType Leaf)) {
+            throw "Expected NSIS blockmap is missing: $blockmapName"
+          }
+          if (-not (Test-Path 'dist\latest.yml' -PathType Leaf)) {
+            throw 'Expected updater metadata is missing: latest.yml'
+          }
+
+          node scripts/validate-update-metadata.mjs dist/latest.yml $installerName
 
           Compress-Archive -Path build\notices\* -DestinationPath "dist\$noticesName"
-          $assetNames = @($installerName, $noticesName)
+          $assetNames = @($installerName, $blockmapName, 'latest.yml', $noticesName)
           $lines = foreach ($name in $assetNames) {
             $asset = Join-Path dist $name
             "$((Get-FileHash $asset -Algorithm SHA256).Hash.ToLower())  $name"
@@ -180,6 +189,8 @@ jobs:
           name: kizuna-windows-x64-release
           path: |
             dist/kizuna-${{ needs.validate.outputs.version }}-setup.exe
+            dist/kizuna-${{ needs.validate.outputs.version }}-setup.exe.blockmap
+            dist/latest.yml
             dist/kizuna-${{ needs.validate.outputs.version }}-windows-x64-notices.zip
             dist/SHA256SUMS-windows.txt
           if-no-files-found: error
@@ -242,10 +253,12 @@ jobs:
 
           [[ -f "dist/$appimage" ]] || { echo "Missing $appimage" >&2; exit 1; }
           [[ -f "dist/$deb" ]] || { echo "Missing $deb" >&2; exit 1; }
+          [[ -f dist/latest-linux.yml ]] || { echo "Missing latest-linux.yml" >&2; exit 1; }
+          node scripts/validate-update-metadata.mjs dist/latest-linux.yml "$appimage" "$deb"
           tar -czf "dist/$notices" -C build/notices .
           (
             cd dist
-            sha256sum "$appimage" "$deb" "$notices" > SHA256SUMS-linux.txt
+            sha256sum "$appimage" "$deb" latest-linux.yml "$notices" > SHA256SUMS-linux.txt
             sha256sum --check --strict SHA256SUMS-linux.txt
           )
 
@@ -256,6 +269,7 @@ jobs:
           path: |
             dist/kizuna-${{ needs.validate.outputs.version }}-linux-x86_64.AppImage
             dist/kizuna-${{ needs.validate.outputs.version }}-linux-amd64.deb
+            dist/latest-linux.yml
             dist/kizuna-${{ needs.validate.outputs.version }}-linux-x64-notices.tar.gz
             dist/SHA256SUMS-linux.txt
           if-no-files-found: error
@@ -300,11 +314,14 @@ jobs:
           set -euo pipefail
           windows_assets=(
             "kizuna-$VERSION-setup.exe"
+            "kizuna-$VERSION-setup.exe.blockmap"
+            "latest.yml"
             "kizuna-$VERSION-windows-x64-notices.zip"
           )
           linux_assets=(
             "kizuna-$VERSION-linux-x86_64.AppImage"
             "kizuna-$VERSION-linux-amd64.deb"
+            "latest-linux.yml"
             "kizuna-$VERSION-linux-x64-notices.tar.gz"
           )
 
@@ -394,8 +411,10 @@ jobs:
           fi
           gh "${args[@]}" \
             dist/*.exe \
+            dist/*.blockmap \
             dist/*.AppImage \
             dist/*.deb \
+            dist/*.yml \
             dist/*-notices.zip \
             dist/*-notices.tar.gz \
             dist/SHA256SUMS.txt
