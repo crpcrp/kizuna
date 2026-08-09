@@ -4,8 +4,10 @@
   "description": "Windows-first desktop video player for Japanese language learning.",
   "author": "Adam Kocsis",
   "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/crpcrp/kizuna",
   "private": true,
   "main": "./out/main/index.js",
+  "desktopName": "kizuna.desktop",
   "engines": {
     "node": ">=24"
   },
@@ -24,7 +26,9 @@
     "test": "node scripts/run-tests.mjs",
     "test:watch": "vitest",
     "postinstall": "install-electron && electron-rebuild -f -w better-sqlite3",
-    "dist": "npm run notices && electron-vite build && electron-builder --win nsis --publish never"
+    "dist": "npm run notices && electron-vite build && electron-builder --win nsis --publish never",
+    "dist:linux": "npm run notices && electron-vite build && electron-builder --linux AppImage deb --x64 --publish never",
+    "smoke:linux": "node scripts/smoke-linux-package.mjs"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",

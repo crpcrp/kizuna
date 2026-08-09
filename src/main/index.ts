@@ -74,6 +74,7 @@ import { createMediaHistoryService, type MediaHistoryService } from './services/
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
+import { createStartupProbe, startupProbeTimeoutFromEnv, STARTUP_PROBE_ENV } from './startupProbe'
 import {
   createAppWindowSet,
   loadRendererWindow,
@@ -95,6 +96,20 @@ if (process.platform === 'linux') app.commandLine.appendSwitch('ozone-platform',
 // acceleration there. Linux needs Chromium's accelerated X11 compositor to
 // display the transparent Electron surface, so leave it enabled.
 if (process.platform === 'win32') app.disableHardwareAcceleration()
+
+// Off unless `KIZUNA_STARTUP_PROBE=1`, which the packaged Linux smoke test
+// sets. When on, the app reports its startup milestones on stdout and quits
+// itself as soon as all three land — so the smoke test asserts on a real
+// launch rather than on a timer.
+const startupProbe = createStartupProbe({
+  enabled: process.env[STARTUP_PROBE_ENV] === '1',
+  timeoutMs: startupProbeTimeoutFromEnv(process.env),
+  log: (line) => console.log(line),
+  finish: (ready) => {
+    process.exitCode = ready ? 0 : 1
+    app.quit()
+  }
+})
 
 // One controller for the app's lifetime; started/stopped alongside the
 // (currently single) main window.
@@ -163,6 +178,7 @@ function createWindow(
     // Linux keeps the transparent overlay hidden until the renderer has
     // finished its first document load. Windows retains eager presentation.
     presentAppWindowSet(windows)
+    startupProbe.mark('window')
     loadRendererWindow(uiOverlay, {
       devUrl,
       packagedHtmlPath: join(__dirname, '../renderer/index.html')
@@ -293,6 +309,9 @@ async function startPlayer(
       frames
     )
     launchPathBuffer.markPlayerReady()
+    // Reached only after `controller.start()` resolved, which means mpv is
+    // running and its IPC socket accepted a connection.
+    startupProbe.mark('mpv')
   } catch (err) {
     console.warn('[kizuna] mpv not started:', err)
     // A file double-clicked to launch the app can never play now; surface a
@@ -518,7 +537,10 @@ if (!gotSingleInstanceLock) {
     if (launchPath) launchPathBuffer.setPath(launchPath)
   })
 
-  ipcMain.on(LAUNCH_CHANNELS.rendererReady, () => launchPathBuffer.markReady())
+  ipcMain.on(LAUNCH_CHANNELS.rendererReady, () => {
+    launchPathBuffer.markReady()
+    startupProbe.mark('renderer')
+  })
 
   app.whenReady().then(() => {
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(

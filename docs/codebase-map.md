@@ -14,7 +14,7 @@ find the owner of a change; use code search for the exact function or test.
 | `test/` | Unit and integration tests |
 | `test/harness/` | Fakes for external processes and services |
 | `test/fixtures/` | Committed test data |
-| `scripts/` | Resource fetching, notice generation, and test tooling |
+| `scripts/` | Resource fetching, notice generation, Linux packaging verification, and test tooling |
 | `docs/` | Architecture, binaries, licensing, and release documentation |
 
 The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
@@ -37,7 +37,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Network media and subtitles | `state/useMediaSession.ts`, `components/OpenUrlDialog.tsx`, `state/urlSubtitleController.ts`, `state/ytdlpQualityReload.ts`, `shared/urlSubtitles.ts` | `urlSubtitleBridge.ts`, `services/urlSubtitles.ts`, mpv URL handling |
 | Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
-| Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `electron-builder.cjs` |
+| Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `startupProbe.ts`, `electron-builder.cjs`, `scripts/linuxPackaging.mjs`, `scripts/smoke-linux-package.mjs` |
 
 Renderer paths in the table are relative to `src/renderer/src/`; shared and
 main paths are relative to `src/`.
@@ -120,3 +120,14 @@ Keep third-party GitHub Actions pinned to commit SHAs. CI configuration is in
 `.github/workflows/ci.yml`; release packaging and verification are in
 `.github/workflows/release.yml`. See [Releasing](releasing.md) for the release
 procedure and current signing status.
+
+Windows and Linux packaging both live in `electron-builder.cjs`, driven by
+`npm run dist` and `npm run dist:linux`. Linux artifacts are verified by
+`npm run smoke:linux` (`scripts/smoke-linux-package.mjs`, with its pure
+assertions in `scripts/linuxPackaging.mjs`), which runs only in the release
+workflow. Anything assertable without a real build belongs in
+`test/linuxPackagingConfig.test.ts` so it fails in ordinary CI instead.
+
+The packaged GUI check waits on `src/main/startupProbe.ts`, which reports
+startup milestones on stdout when `KIZUNA_STARTUP_PROBE=1`. Adding a startup
+step worth waiting for means marking a new milestone there.
