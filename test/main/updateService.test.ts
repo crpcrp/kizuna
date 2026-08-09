@@ -124,6 +124,16 @@ describe('createUpdateService', () => {
     expect(fixture.updater.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 
+  it('never contacts the updater for an automatic check in automated verification', async () => {
+    const fixture = serviceFixture({ allowAutomaticChecks: false })
+
+    await fixture.service.check('automatic')
+    expect(fixture.updater.checkForUpdates).not.toHaveBeenCalled()
+
+    await fixture.service.check('manual')
+    expect(fixture.updater.checkForUpdates).toHaveBeenCalledOnce()
+  })
+
   it('downloads only after consent, coalesces calls, throttles progress, and waits for verification', async () => {
     const fixture = serviceFixture()
     await fixture.service.check('manual')

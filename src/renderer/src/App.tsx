@@ -6,6 +6,7 @@ import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
 import AboutDialog from './components/AboutDialog'
+import UpdateDialog from './components/UpdateDialog'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -36,6 +37,7 @@ import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
 import { useAppearance } from './state/useAppearance'
 import { useOptionsDialog } from './state/useOptionsDialog'
 import { useAboutDialog } from './state/useAboutDialog'
+import { useUpdates } from './state/useUpdates'
 import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
@@ -148,6 +150,7 @@ export default function App({
     bridge: kizuna,
     reportError: mediaSession.banner.reportError
   })
+  const updates = useUpdates(kizuna)
   // Applies the appearance settings ('system'|'light'|'dark' theme, underline
   // color overrides) to <html> — see state/useAppearance.ts.
   useAppearance({ appearance: state.appearance, levelColors: state.levelColors })
@@ -324,7 +327,12 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: options.open || about.open || mediaSession.openUrl.open || vocabulary.modalOpen
+    suspended:
+      options.open ||
+      about.open ||
+      updates.modal !== null ||
+      mediaSession.openUrl.open ||
+      vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -347,7 +355,11 @@ export default function App({
     onClose: options.closeDialog,
     onCategoryOpen: options.onCategoryOpen,
     playback: playbackWindow.optionsPlayback,
-    knowledge: vocabulary.knowledgeOptions
+    knowledge: vocabulary.knowledgeOptions,
+    updates: {
+      settings: updates.settings,
+      onChangeCheckAutomatically: updates.setCheckAutomatically
+    }
   })
 
   return (
@@ -409,6 +421,22 @@ export default function App({
           <button type="button" aria-label="Dismiss" onClick={mediaSession.banner.dismiss}>
             ×
           </button>
+        </div>
+      )}
+
+      {updates.statusText && (
+        <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
+          <span>{updates.statusText}</span>
+          {updates.snapshot.status === 'error' && (
+            <button type="button" onClick={updates.retry}>
+              Retry
+            </button>
+          )}
+          {updates.snapshot.status === 'downloaded' && (
+            <button type="button" onClick={updates.install}>
+              Install and restart
+            </button>
+          )}
         </div>
       )}
 
@@ -533,6 +561,19 @@ export default function App({
         onClose={about.closeDialog}
         onOpenLink={about.openLink}
         onOpenNotices={about.openNotices}
+        updateState={updates.snapshot}
+        onCheckForUpdates={() => {
+          about.closeDialog()
+          updates.checkManually()
+        }}
+      />
+
+      <UpdateDialog
+        modal={updates.modal}
+        onDismissAvailable={updates.dismissAvailable}
+        onDownload={updates.download}
+        onDeferInstall={updates.deferInstall}
+        onInstall={updates.install}
       />
 
       <WordPopup

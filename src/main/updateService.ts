@@ -55,6 +55,7 @@ export interface CreateUpdateServiceDeps {
   updater?: UpdaterAdapter
   prepareInstall: (install: () => void) => Promise<void>
   now?: () => number
+  allowAutomaticChecks?: boolean
 }
 
 const PROGRESS_INTERVAL_MS = 200
@@ -76,11 +77,16 @@ function releaseNotes(info: UpdaterInfo): string | undefined {
   return plainText(value) || undefined
 }
 
-function releaseFrom(info: UpdaterInfo, currentVersion: string): UpdateRelease {
+function releaseFrom(
+  info: UpdaterInfo,
+  currentVersion: string,
+  packageType: UpdateRelease['packageType']
+): UpdateRelease {
   const name = info.releaseName ? plainText(info.releaseName) : undefined
   return {
     currentVersion,
     version: info.version,
+    packageType,
     ...(name ? { releaseName: name } : {}),
     ...(info.releaseDate ? { releaseDate: info.releaseDate.slice(0, 64) } : {}),
     ...(releaseNotes(info) ? { releaseNotes: releaseNotes(info) } : {})
@@ -120,6 +126,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
     : { status: 'unsupported', reason: deps.support.reason }
   const subscribers = new Set<(state: UpdateState) => void>()
   const now = deps.now ?? Date.now
+  const packageType = deps.support.supported ? deps.support.packageType : 'nsis'
   let release: UpdateRelease | undefined
   let checkPromise: Promise<UpdateState> | undefined
   let downloadPromise: Promise<UpdateState> | undefined
@@ -145,7 +152,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
   }
   const onDownloaded = (info: UpdaterInfo): void => {
     if (disposed || state.status !== 'downloading') return
-    release = releaseFrom(info, deps.currentVersion)
+    release = releaseFrom(info, deps.currentVersion, packageType)
     publish({ status: 'downloaded', ...release })
   }
   const onError = (error: unknown): void => {
@@ -180,6 +187,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
     check(origin) {
       if (!deps.support.supported || disposed || shuttingDown) return Promise.resolve(state)
       if (origin === 'automatic') {
+        if (deps.allowAutomaticChecks === false) return Promise.resolve(state)
         if (automaticCheckStarted) return Promise.resolve(state)
         automaticCheckStarted = true
       }
@@ -192,7 +200,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
         .then((result) => {
           if (disposed || shuttingDown || state.status !== 'checking') return state
           if (result?.isUpdateAvailable) {
-            release = releaseFrom(result.updateInfo, deps.currentVersion)
+            release = releaseFrom(result.updateInfo, deps.currentVersion, packageType)
             return publish({ status: 'available', ...release })
           }
           return publish({
@@ -230,7 +238,9 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
       return downloadPromise
     },
     install() {
-      if (!deps.support.supported || disposed || shuttingDown || state.status !== 'downloaded')
+      const installable =
+        state.status === 'downloaded' || (state.status === 'error' && state.stage === 'install')
+      if (!deps.support.supported || disposed || shuttingDown || !installable || !release)
         return Promise.resolve()
       if (installPromise) return installPromise
       installPromise = deps

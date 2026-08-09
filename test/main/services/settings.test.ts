@@ -848,3 +848,20 @@ describe('mergeSettings anki media mappings', () => {
     expect(merged.anki.fieldMap.picture).toBe('Screenshot')
   })
 })
+
+describe('update settings', () => {
+  it('defaults missing and malformed automatic checks to on', () => {
+    expect(mergeSettings(undefined).updates).toEqual({ checkAutomatically: true })
+    expect(mergeSettings({ updates: { checkAutomatically: 'no' } }).updates).toEqual({
+      checkAutomatically: true
+    })
+  })
+
+  it('persists an explicit off value across reopening', () => {
+    const io = fakeIo(undefined)
+    const store = createSettingsStore(io)
+    store.set({ updates: { checkAutomatically: false } })
+
+    expect(createSettingsStore(io).get().updates).toEqual({ checkAutomatically: false })
+  })
+})

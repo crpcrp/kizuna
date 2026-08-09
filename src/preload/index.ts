@@ -62,7 +62,7 @@ import type {
 } from '../shared/knowledge'
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
-import type { UpdateCheckOrigin, UpdateState } from '../shared/update'
+import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -325,6 +325,9 @@ const api = {
   },
   updates: {
     getState: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
+    getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke(UPDATE_CHANNELS.getSettings),
+    setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
+      ipcRenderer.invoke(UPDATE_CHANNELS.setSettings, patch),
     check: (origin: UpdateCheckOrigin): Promise<UpdateState> =>
       ipcRenderer.invoke(UPDATE_CHANNELS.check, origin),
     download: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.download),

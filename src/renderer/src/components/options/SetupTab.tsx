@@ -4,6 +4,7 @@ import type { SyncStatus } from '../../../../shared/knowledge'
 import type { SetupData } from '../../state/optionsData'
 import type { OptionsCategory, SettingEntry } from './types'
 import { formatLastSynced } from './KnowledgeTab'
+import OptionsToggleRow from './OptionsToggleRow'
 
 /** How a capability reads at a glance.
  *
@@ -213,14 +214,22 @@ export function buildSetupRows({
 
 export interface SetupTabProps extends SetupRowsInput {
   active?: boolean
-  /** Switches the dialog to another tab. The only action on this page; every
-   * row is otherwise read-only. */
+  checkAutomatically: boolean
+  onChangeCheckAutomatically: (value: boolean) => void
+  /** Switches the dialog to another tab from an informational setup row. */
   onGoToCategory: (category: OptionsCategory) => void
   /** Label for a category id, for the "Go to …" buttons. */
   categoryLabel: (category: OptionsCategory) => string
 }
 
 export const SETUP_SETTING_ENTRIES: SettingEntry[] = [
+  {
+    id: 'automatic-update-checks',
+    targetId: 'automatic-update-checks',
+    label: 'Automatically check for Kizuna updates',
+    category: 'setup',
+    keywords: ['updates', 'automatic', 'startup', 'maintenance', 'github']
+  },
   {
     id: 'setup-status',
     label: 'Setup & integrations status',
@@ -243,12 +252,12 @@ export const SETUP_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** "Setup & integrations" options tab: a read-only inventory of every bundled
- * binary and optional integration with a Ready / Missing / Not-configured
- * indicator. It reports; it never configures — the real controls stay on the
- * tabs each row links to. */
+/** "Setup & integrations" options tab: application maintenance plus an
+ * inventory of bundled binaries and optional integrations. */
 export default function SetupTab({
   active = true,
+  checkAutomatically,
+  onChangeCheckAutomatically,
   onGoToCategory,
   categoryLabel,
   ...input
@@ -267,6 +276,13 @@ export default function SetupTab({
           Optional integrations connect only when you open a URL or configure and use their
           features. Their own privacy policies apply.
         </p>
+        <OptionsToggleRow
+          id="automatic-update-checks"
+          title="Automatically check for Kizuna updates"
+          description="Check GitHub for a newer Kizuna release when the app starts."
+          checked={checkAutomatically}
+          onChange={onChangeCheckAutomatically}
+        />
         {rows.map((row) => {
           // Read out of the row before the JSX: inside the click closure below,
           // TypeScript can no longer see that `row.goTo` is the defined branch.

@@ -24,6 +24,8 @@ function renderAbout(overrides: Partial<React.ComponentProps<typeof AboutDialog>
     onClose: vi.fn(),
     onOpenLink: vi.fn(),
     onOpenNotices: vi.fn(),
+    updateState: { status: 'idle' },
+    onCheckForUpdates: vi.fn(),
     ...overrides
   }
   return { ...render(<AboutDialog {...props} />), props }
@@ -41,6 +43,7 @@ describe('AboutDialog', () => {
     expect(screen.getByText(info.copyright)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Third-party notices' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Report an issue' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Check for updates' })).toBeTruthy()
   })
 
   it('routes links and notices through callbacks', () => {

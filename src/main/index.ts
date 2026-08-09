@@ -538,7 +538,7 @@ function startAppInfo(): void {
 }
 
 /** Starts the single main-process updater and its renderer-owning IPC bridge. */
-function startUpdates(lifecycle: AppLifecycleCoordinator): UpdateService {
+function startUpdates(lifecycle: AppLifecycleCoordinator, settings: SettingsStore): UpdateService {
   let packageType: string | undefined
   try {
     packageType = fs.readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
@@ -555,13 +555,11 @@ function startUpdates(lifecycle: AppLifecycleCoordinator): UpdateService {
     }),
     currentVersion: app.getVersion(),
     updater: createElectronUpdaterAdapter(autoUpdater),
-    prepareInstall: (install) => lifecycle.prepareForInstall(install)
+    prepareInstall: (install) => lifecycle.prepareForInstall(install),
+    allowAutomaticChecks: process.env[STARTUP_PROBE_ENV] !== '1'
   })
-  registerUpdateBridge(ipcMain, service, (sender) => sender === mainWindow?.webContents)
+  registerUpdateBridge(ipcMain, service, settings, (sender) => sender === mainWindow?.webContents)
   service.subscribe((state) => sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state))
-  // One startup check only. The service rejects any later automatic attempt;
-  // manual checks remain available to explicit UI actions.
-  void service.check('automatic')
   return service
 }
 
@@ -604,10 +602,6 @@ if (!gotSingleInstanceLock) {
   })
 
   app.whenReady().then(() => {
-    // Register once for the application lifetime. Linux's host/overlay pair
-    // still has only one renderer and one updater service.
-    updates = startUpdates(lifecycle)
-
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
       (event) => {
@@ -629,6 +623,9 @@ if (!gotSingleInstanceLock) {
     const ytdlpPath = fs.existsSync(binaryPaths.ytdlpPath) ? binaryPaths.ytdlpPath : undefined
 
     const settings = createAppSettingsStore()
+    // Register once for the application lifetime. The overlay renderer starts
+    // the optional startup check only after it has subscribed to state pushes.
+    updates = startUpdates(lifecycle, settings)
     mpvConfig = createMpvConfigManager({
       userDataDir: app.getPath('userData'),
       fs,
