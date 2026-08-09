@@ -23,6 +23,7 @@ export type PlayerKeyAction =
   | 'nextChapter'
   | 'screenshot'
   | 'miniPlayer'
+  | 'subtitleFontScale'
 
 /**
  * Left-side modifier keys a binding may be prefixed with. Only the left-hand
@@ -40,12 +41,16 @@ export function isKeyModifier(code: string): code is KeyModifier {
 }
 
 /**
- * A key a player action is bound to: a `KeyboardEvent.code`, optionally
- * prefixed with one modifier code — `Space`, `ControlLeft+ArrowUp`,
- * `ShiftLeft+KeyR`. Matching is exact, so a bare `ArrowLeft` binding does *not*
- * fire on Ctrl+ArrowLeft (which is what lets the two be bound separately).
+ * An input code a player action is bound to, optionally prefixed with one
+ * modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
+ * `MouseWheel` pseudo-code is used for the subtitle-size wheel binding.
+ * Matching is exact, so a bare `ArrowLeft` binding does *not* fire on
+ * Ctrl+ArrowLeft (which is what lets the two be bound separately).
  */
 export type KeyBinding = string
+
+/** Pseudo-code used by the editable mouse-wheel binding. */
+export const MOUSE_WHEEL_BINDING_CODE = 'MouseWheel'
 
 /** The binding each action is triggered by. */
 export type KeyBindings = Record<PlayerKeyAction, KeyBinding>
@@ -71,7 +76,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   prevChapter: 'ControlLeft+ArrowLeft',
   nextChapter: 'ControlLeft+ArrowRight',
   screenshot: 'KeyS',
-  miniPlayer: 'ControlLeft+KeyM'
+  miniPlayer: 'ControlLeft+KeyM',
+  subtitleFontScale: 'ShiftLeft+MouseWheel'
 }
 
 /**
@@ -154,6 +160,11 @@ export interface SubtitleStyleSettings {
   yPct: number
   backgroundEnabled: boolean
 }
+
+/** Shared bounds and UI step for the persisted subtitle font scale. */
+export const SUBTITLE_FONT_SCALE_MIN = 0.5
+export const SUBTITLE_FONT_SCALE_MAX = 3
+export const SUBTITLE_FONT_SCALE_STEP = 0.1
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyleSettings = {
   fontScale: 1,
@@ -439,7 +450,9 @@ export function normalizeSubtitleStyle(
   const inRange = (value: unknown, min: number, max: number): value is number =>
     typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max
   return {
-    fontScale: inRange(parsed.fontScale, 0.5, 3) ? parsed.fontScale : defaults.fontScale,
+    fontScale: inRange(parsed.fontScale, SUBTITLE_FONT_SCALE_MIN, SUBTITLE_FONT_SCALE_MAX)
+      ? parsed.fontScale
+      : defaults.fontScale,
     xPct: inRange(parsed.xPct, 0, 100) ? parsed.xPct : defaults.xPct,
     yPct: inRange(parsed.yPct, 0, 100) ? parsed.yPct : defaults.yPct,
     backgroundEnabled:
