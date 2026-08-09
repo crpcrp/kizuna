@@ -424,7 +424,7 @@ export default function App({
         </div>
       )}
 
-      {updates.statusText && (
+      {updates.statusText && !about.open && (
         <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
           <span>{updates.statusText}</span>
           {updates.snapshot.status === 'error' && (
@@ -562,14 +562,14 @@ export default function App({
         onOpenLink={about.openLink}
         onOpenNotices={about.openNotices}
         updateState={updates.snapshot}
-        onCheckForUpdates={() => {
-          about.closeDialog()
-          updates.checkManually()
-        }}
+        onCheckForUpdates={updates.checkManually}
+        onDownloadUpdate={updates.download}
+        onInstallUpdate={updates.install}
+        onRetryUpdate={updates.retry}
       />
 
       <UpdateDialog
-        modal={updates.modal}
+        modal={about.open ? null : updates.modal}
         onDismissAvailable={updates.dismissAvailable}
         onDownload={updates.download}
         onDeferInstall={updates.deferInstall}

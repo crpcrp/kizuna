@@ -31,6 +31,22 @@ describe('useUpdates', () => {
     expect(api.updates.check).not.toHaveBeenCalled()
   })
 
+  it('allows a manual check without changing the disabled automatic setting', async () => {
+    const api = createFakeKizunaApi({
+      updates: { getSettings: vi.fn(async () => ({ checkAutomatically: false })) }
+    })
+    const { result } = renderHook(() => useUpdates(api))
+
+    await act(async () => {
+      result.current.checkManually()
+      await Promise.resolve()
+    })
+
+    expect(api.updates.check).toHaveBeenCalledOnce()
+    expect(api.updates.check).toHaveBeenCalledWith('manual')
+    expect(api.updates.setSettings).not.toHaveBeenCalled()
+  })
+
   it('hydrates an already downloaded update into the install prompt', async () => {
     const api = createFakeKizunaApi({
       updates: {
@@ -46,5 +62,16 @@ describe('useUpdates', () => {
 
     await waitFor(() => expect(result.current.modal?.kind).toBe('downloaded'))
     expect(api.updates.check).not.toHaveBeenCalled()
+  })
+
+  it('cleans up its updater subscription on unmount', () => {
+    const unsubscribe = vi.fn()
+    const api = createFakeKizunaApi({
+      updates: { onStateChange: vi.fn(() => unsubscribe) }
+    })
+    const { unmount } = renderHook(() => useUpdates(api))
+
+    unmount()
+    expect(unsubscribe).toHaveBeenCalledOnce()
   })
 })

@@ -13,6 +13,103 @@ export interface AboutDialogProps {
   onOpenNotices: () => void
   updateState: UpdateState
   onCheckForUpdates: () => void
+  onDownloadUpdate: () => void
+  onInstallUpdate: () => void
+  onRetryUpdate: () => void
+}
+
+function unsupportedMessage(
+  reason: Extract<UpdateState, { status: 'unsupported' }>['reason']
+): string {
+  if (reason === 'unpackaged') return 'Updates are unavailable in development builds.'
+  if (reason === 'unsupportedPlatform') return 'Updates are unavailable on this platform.'
+  if (reason === 'unsupportedPackage') return 'Updates are unavailable for this package type.'
+  return 'Updates are unavailable because the update source is not configured.'
+}
+
+function UpdateSection({
+  state,
+  onCheck,
+  onDownload,
+  onInstall,
+  onRetry
+}: {
+  state: UpdateState
+  onCheck: () => void
+  onDownload: () => void
+  onInstall: () => void
+  onRetry: () => void
+}): React.JSX.Element {
+  const busy = state.status === 'checking' || state.status === 'downloading'
+
+  return (
+    <section className="about-update" aria-label="Kizuna updates" aria-busy={busy}>
+      <h3>Updates</h3>
+      {state.status === 'idle' && (
+        <button type="button" className="about-button" onClick={onCheck}>
+          Check for updates
+        </button>
+      )}
+      {state.status === 'checking' && (
+        <>
+          <p role="status">Checking for updates&hellip;</p>
+          <button type="button" className="about-button" disabled>
+            Checking&hellip;
+          </button>
+        </>
+      )}
+      {state.status === 'upToDate' && (
+        <>
+          <p role="status">Kizuna is up to date (v{state.currentVersion}).</p>
+          <button type="button" className="about-button" onClick={onCheck}>
+            Check again
+          </button>
+        </>
+      )}
+      {state.status === 'available' && (
+        <>
+          <p role="status">
+            Kizuna {state.version} is available. You are using Kizuna {state.currentVersion}.
+          </p>
+          {(state.releaseName || state.releaseDate) && (
+            <p className="about-update-meta">
+              {[state.releaseName, state.releaseDate].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {state.releaseNotes && <pre className="about-update-notes">{state.releaseNotes}</pre>}
+          <button type="button" className="about-button" onClick={onDownload}>
+            Download update
+          </button>
+        </>
+      )}
+      {state.status === 'downloading' && (
+        <p role="status">
+          Downloading Kizuna {state.version}&hellip; {Math.round(state.progress.percent)}%
+        </p>
+      )}
+      {state.status === 'downloaded' && (
+        <>
+          <p role="status">Kizuna {state.version} is ready to install.</p>
+          <p>Installing closes and restarts Kizuna.</p>
+          {state.packageType === 'deb' && <p>Ubuntu authentication may be requested.</p>}
+          <button type="button" className="about-button" onClick={onInstall}>
+            Install and restart
+          </button>
+        </>
+      )}
+      {state.status === 'error' && (
+        <>
+          <p role="alert">{state.message}</p>
+          {state.retryable && (
+            <button type="button" className="about-button" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+        </>
+      )}
+      {state.status === 'unsupported' && <p role="status">{unsupportedMessage(state.reason)}</p>}
+    </section>
+  )
 }
 
 /** Product information and approved project-resource actions. */
@@ -24,7 +121,10 @@ export default function AboutDialog({
   onOpenLink,
   onOpenNotices,
   updateState,
-  onCheckForUpdates
+  onCheckForUpdates,
+  onDownloadUpdate,
+  onInstallUpdate,
+  onRetryUpdate
 }: AboutDialogProps): React.JSX.Element {
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -89,19 +189,15 @@ export default function AboutDialog({
             </div>
           </dl>
 
+          <UpdateSection
+            state={updateState}
+            onCheck={onCheckForUpdates}
+            onDownload={onDownloadUpdate}
+            onInstall={onInstallUpdate}
+            onRetry={onRetryUpdate}
+          />
+
           <div className="about-actions">
-            <button
-              type="button"
-              className="about-button"
-              disabled={
-                updateState.status === 'checking' ||
-                updateState.status === 'downloading' ||
-                updateState.status === 'downloaded'
-              }
-              onClick={onCheckForUpdates}
-            >
-              {updateState.status === 'checking' ? 'Checking for updates…' : 'Check for updates'}
-            </button>
             <button type="button" className="about-button" onClick={onOpenNotices}>
               Third-party notices
             </button>
@@ -109,15 +205,6 @@ export default function AboutDialog({
               Report an issue
             </button>
           </div>
-
-          {updateState.status === 'upToDate' && (
-            <p className="about-notice-message" role="status">
-              Kizuna is up to date.
-            </p>
-          )}
-          {updateState.status === 'unsupported' && (
-            <p className="about-notice-message">Updates are unavailable in this build.</p>
-          )}
 
           {noticeMessage !== null && (
             <p className="about-notice-message" role="status">
