@@ -110,8 +110,12 @@ than adding isolated color literals.
 
 ### Update runtime binaries
 
-Update `resources.lock.json` and `third-party.json` together, then run
-`npm run resources`, `npm run notices`, and `npm test`. See
+Platform selection and lock validation are in `scripts/vendorResources.mjs`;
+`scripts/fetch-resources.mjs` is the command-line entry point and stages the
+selected lock into `resources/`. Runtime lookup then lives in
+`src/main/resourcePaths.ts`. Update `resources.lock.json` and
+`third-party.json` together, then run the explicit platform staging commands,
+`npm run notices`, and `npm test`. See
 [Runtime binaries](binaries.md) and [Licensing](licensing.md).
 
 ### Change CI or releases
@@ -131,3 +135,13 @@ workflow. Anything assertable without a real build belongs in
 The packaged GUI check waits on `src/main/startupProbe.ts`, which reports
 startup milestones on stdout when `KIZUNA_STARTUP_PROBE=1`. Adding a startup
 step worth waiting for means marking a new milestone there.
+
+Use these owners when release behavior changes:
+
+| Concern | Source of truth | Regression coverage |
+|---|---|---|
+| CI host matrix and required commands | `.github/workflows/ci.yml` | `test/repoConfig.test.ts` |
+| Artifact targets, names, deb dependencies, desktop entry | `electron-builder.cjs` | `test/linuxPackagingConfig.test.ts` |
+| Linux archive/install/startup smoke | `scripts/smoke-linux-package.mjs` and `scripts/linuxPackaging.mjs` | `test/scripts/linuxPackaging.test.ts` |
+| Release job ordering, assets, checksums, provenance | `.github/workflows/release.yml` | `test/releaseWorkflow.test.ts` |
+| Cross-platform path expectations | `test/harness/platformPaths.ts` | owning main/shared tests |

@@ -11,7 +11,7 @@ Use GitHub's private vulnerability reporting:
 If private reporting is unavailable, open an issue without technical details and
 ask the maintainer to establish a private channel.
 
-Include the affected version or commit, impact, Windows version tested, and a
+Include the affected version or commit, impact, operating system tested, and a
 minimal reproduction. Do not include credentials, personal data, copyrighted
 media, or private dictionary files.
 
@@ -23,8 +23,8 @@ mpv, FFmpeg, MeCab, yt-dlp, Electron, Chromium, or external services should
 normally be reported upstream unless Kizuna uses the component unsafely.
 
 Kizuna does not attempt to protect data from an attacker who already controls
-the user's Windows account. Scanner output without a demonstrated impact may
-not be actionable.
+the user's operating-system account. Scanner output without a demonstrated
+impact may not be actionable.
 
 ## Supported versions
 

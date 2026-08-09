@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Kizuna is a Windows-first video player for Japanese learning, maintained
+        Kizuna is a Windows and Linux video player for Japanese learning, maintained
         by one person. Proposals that fit that scope get further than ones that
         turn it into a general media player. Opening a request is not a
         commitment that it will be built — the maintainer decides what is in
