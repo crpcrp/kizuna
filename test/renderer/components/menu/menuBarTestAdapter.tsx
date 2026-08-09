@@ -13,6 +13,7 @@ export type FlatMenuBarTestProps = MediaMenuProps &
   PlaybackMenuProps &
   VocabularyMenuProps & {
     onOpenOptions: () => void
+    onOpenAbout?: () => void
     onOpenChange?: (open: boolean) => void
   }
 
@@ -25,6 +26,7 @@ export function groupedMenuBarProps(props: FlatMenuBarTestProps): MenuBarProps {
     playback: props,
     vocabulary: props,
     onOpenOptions: props.onOpenOptions,
+    onOpenAbout: props.onOpenAbout,
     onOpenChange: props.onOpenChange
   }
 }

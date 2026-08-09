@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
-import { requiredPackagedResources, resolveBinaryPaths } from '@src/main/resourcePaths'
+import {
+  requiredPackagedResources,
+  resolveBinaryPaths,
+  resolveThirdPartyNoticesPath
+} from '@src/main/resourcePaths'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 
 describe('resolveBinaryPaths', () => {
   it('uses Windows resource paths for packaged and development targets', () => {
@@ -196,5 +201,31 @@ describe('requiredPackagedResources', () => {
         platform: 'darwin'
       })
     ).toThrow('Unsupported platform for resource paths: darwin')
+  })
+})
+
+describe.each(PATH_PLATFORMS)('resolveThirdPartyNoticesPath on $label', ({ platform, path }) => {
+  it('uses the generated development bundle', () => {
+    const appRoot = platform === 'win32' ? 'E:\\src\\kizuna' : '/home/me/kizuna'
+    expect(
+      resolveThirdPartyNoticesPath({
+        isPackaged: false,
+        resourcesPath: 'ignored',
+        appRoot,
+        platform
+      })
+    ).toBe(path.join(appRoot, 'build', 'notices', 'THIRD_PARTY_NOTICES.md'))
+  })
+
+  it('uses the packaged resources bundle', () => {
+    const resourcesPath = platform === 'win32' ? 'C:\\Kizuna\\resources' : '/opt/kizuna/resources'
+    expect(
+      resolveThirdPartyNoticesPath({
+        isPackaged: true,
+        resourcesPath,
+        appRoot: 'ignored',
+        platform
+      })
+    ).toBe(path.join(resourcesPath, 'notices', 'THIRD_PARTY_NOTICES.md'))
   })
 })

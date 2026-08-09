@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import * as fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
+import packageMetadata from '../../package.json'
 import {
   applyNavigationGuards,
   applyReloadGuard,
@@ -24,6 +25,7 @@ import {
   sendToWindow
 } from './windowOptions'
 import { LAUNCH_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
+import { COPYRIGHT } from '../shared/appIdentity'
 import { createQuitCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
 import { registerPlayerBridge } from './playerBridge'
@@ -35,7 +37,8 @@ import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
-import { resolveBinaryPaths, type BinaryPaths } from './resourcePaths'
+import { resolveBinaryPaths, resolveThirdPartyNoticesPath, type BinaryPaths } from './resourcePaths'
+import { createAppInfoService, registerAppInfoBridge } from './appInfoBridge'
 import { registerMecabBridge, createMecabService } from './mecabBridge'
 import {
   registerDictBridge,
@@ -504,6 +507,30 @@ function startIntegrationStatus(paths: BinaryPaths): void {
   )
 }
 
+/** Registers the About-dialog bridge with runtime version and packaged notices. */
+function startAppInfo(): void {
+  const noticesPath = resolveThirdPartyNoticesPath({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appRoot: app.getAppPath()
+  })
+  registerAppInfoBridge(
+    ipcMain,
+    createAppInfoService({
+      getVersion: () => app.getVersion(),
+      metadata: {
+        description: packageMetadata.description,
+        license: packageMetadata.license,
+        copyright: COPYRIGHT
+      },
+      noticesPath,
+      exists: (path) => fs.existsSync(path),
+      openExternal: (url) => shell.openExternal(url),
+      openPath: (path) => shell.openPath(path)
+    })
+  )
+}
+
 if (!gotSingleInstanceLock) {
   app.quit()
 } else {
@@ -579,6 +606,7 @@ if (!gotSingleInstanceLock) {
     startKnowledge(settings)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
+    startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
     registerTranslateBridge(ipcMain, createGoogleTranslator(httpFetch))
     startUrlSubtitles(ytdlpPath)

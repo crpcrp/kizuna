@@ -134,6 +134,7 @@ describe('App settings hydration', () => {
     setSettings.mockRejectedValueOnce(new Error('settings path leaked'))
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
     fireEvent.change(screen.getByRole('spinbutton', { name: /Skip back\/ahead seconds/ }), {
       target: { value: '6' }
@@ -176,6 +177,7 @@ describe('App settings hydration', () => {
     await screen.findByLabelText('All subtitles')
     expect(window.kizuna.translate.translate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
     const checkbox = screen.getByRole('checkbox', {
       name: 'Enable experimental subtitle translation'
@@ -190,6 +192,7 @@ describe('App settings hydration', () => {
     render(<App />)
     await screen.findByLabelText('All subtitles')
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
     expect(
       (
@@ -208,6 +211,7 @@ describe('App settings hydration', () => {
 
     await screen.findByLabelText('All subtitles')
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
     const input = screen.getByLabelText(/^Preferred online subtitle language/) as HTMLInputElement
     expect(input.value).toBe('')

@@ -117,12 +117,12 @@ describe('MenuBar markup', () => {
     expect(html).toContain('aria-checked="true"')
   })
 
-  it('renders Settings as a bare title button with no dropdown panel or Options item', () => {
-    expect(html).toContain('<button type="button" class="menu-title" id="menu-settings">Settings')
-    // No panel behind it: the Settings entry is the last thing in the bar.
-    expect(html.slice(html.indexOf('id="menu-settings"'))).not.toContain('role="menu"')
-    expect(html).not.toContain('aria-label="Options"')
-    expect(html).not.toContain('Options…')
+  it('renders Settings as a menu with Options and About Kizuna items', () => {
+    expect(html).toContain('id="menu-settings"')
+    expect(html).toContain('id="open-options"')
+    expect(html).toContain('aria-label="Options"')
+    expect(html).toContain('id="open-about-kizuna"')
+    expect(html).toContain('About Kizuna')
     expect(html).not.toContain('fullscreen')
   })
 

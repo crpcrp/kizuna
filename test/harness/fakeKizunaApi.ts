@@ -143,6 +143,19 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     integration: {
       binaryStatus: vi.fn(async () => ({ ffmpeg: false, ffprobe: false, ytdlp: false }))
     },
+    appInfo: {
+      get: vi.fn(async () => ({
+        name: 'Kizuna',
+        version: '0.2.0',
+        description: 'Windows and Linux desktop video player for Japanese language learning.',
+        license: 'GPL-3.0-or-later',
+        repositoryUrl: 'https://github.com/crpcrp/kizuna',
+        issuesUrl: 'https://github.com/crpcrp/kizuna/issues',
+        copyright: 'Copyright © 2026 Adam Kocsis'
+      })),
+      openLink: vi.fn(async () => undefined),
+      openNotices: vi.fn(async () => ({ status: 'opened' as const }))
+    },
     clipboard: {
       writeText: vi.fn(async () => undefined)
     },
@@ -175,6 +188,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
   Object.assign(api.knowledge, overrides.knowledge)
   Object.assign(api.playerSettings, overrides.playerSettings)
   Object.assign(api.integration, overrides.integration)
+  Object.assign(api.appInfo, overrides.appInfo)
   Object.assign(api.clipboard, overrides.clipboard)
   Object.assign(api.translate, overrides.translate)
   Object.assign(api.urlSubtitles, overrides.urlSubtitles)

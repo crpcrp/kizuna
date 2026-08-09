@@ -5,6 +5,7 @@ import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
+import AboutDialog from './components/AboutDialog'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -34,6 +35,7 @@ import { usePlayerEvents } from './state/usePlayerEvents'
 import { usePerFileValues, usePlaybackWindow } from './state/usePlaybackWindow'
 import { useAppearance } from './state/useAppearance'
 import { useOptionsDialog } from './state/useOptionsDialog'
+import { useAboutDialog } from './state/useAboutDialog'
 import { buildOptionsMenuProps } from './state/optionsMenuProps'
 import { createModifierTracker } from './state/keyBindings'
 import { useSubtitleDrag } from './state/useSubtitleDrag'
@@ -135,6 +137,10 @@ export default function App({
   const options = useOptionsDialog({
     bridge: kizuna,
     settingsPersistenceRef,
+    reportError: mediaSession.banner.reportError
+  })
+  const about = useAboutDialog({
+    bridge: kizuna,
     reportError: mediaSession.banner.reportError
   })
   // Applies the appearance settings ('system'|'light'|'dark' theme, underline
@@ -304,7 +310,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: options.open || mediaSession.openUrl.open || vocabulary.modalOpen
+    suspended: options.open || about.open || mediaSession.openUrl.open || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -377,6 +383,7 @@ export default function App({
             }}
             vocabulary={vocabulary.vocabularyMenu}
             onOpenOptions={options.openDialog}
+            onOpenAbout={about.openDialog}
             onOpenChange={setMenuBarOpen}
           />
         )}
@@ -490,6 +497,15 @@ export default function App({
       />
 
       <OptionsMenu {...optionsMenu} />
+
+      <AboutDialog
+        open={about.open}
+        info={about.info}
+        noticeMessage={about.noticeMessage}
+        onClose={about.closeDialog}
+        onOpenLink={about.openLink}
+        onOpenNotices={about.openNotices}
+      />
 
       <WordPopup
         {...vocabulary.wordPopup}

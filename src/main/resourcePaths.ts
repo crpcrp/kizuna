@@ -18,6 +18,7 @@
 // path.
 
 import { posix, win32 } from 'node:path'
+import { pathApiFor } from './platformPath'
 
 export interface BinaryPaths {
   mpvPath: string
@@ -46,6 +47,28 @@ export interface RequiredPackagedResource {
   label: string
   path: string
   kind: 'file' | 'directory'
+}
+
+export interface ResolveThirdPartyNoticesPathOptions {
+  /** Electron's app.isPackaged. */
+  isPackaged: boolean
+  /** Electron's process.resourcesPath. */
+  resourcesPath: string
+  /** Project root in development. */
+  appRoot: string
+  platform?: NodeJS.Platform
+}
+
+/** Resolves the notices file generated for development or copied into a build. */
+export function resolveThirdPartyNoticesPath({
+  isPackaged,
+  resourcesPath,
+  appRoot,
+  platform = process.platform
+}: ResolveThirdPartyNoticesPathOptions): string {
+  const pathApi = pathApiFor(platform)
+  const base = isPackaged ? resourcesPath : pathApi.join(appRoot, 'build')
+  return pathApi.join(base, 'notices', 'THIRD_PARTY_NOTICES.md')
 }
 
 /** Pure. Lists the runtime files required by a packaged platform target. */

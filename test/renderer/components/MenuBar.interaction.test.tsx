@@ -152,21 +152,27 @@ describe('MenuBar interactions', () => {
     expect(onSelectSubtitle).not.toHaveBeenCalled()
   })
 
-  it('opens Options straight from the Settings entry, with no dropdown of its own', () => {
+  it('opens Settings and routes Options and About Kizuna separately', () => {
     const onOpenOptions = vi.fn()
-    renderMenu({ onOpenOptions })
+    const onOpenAbout = vi.fn()
+    renderMenu({ onOpenOptions, onOpenAbout })
 
-    // Another panel is open: clicking Settings must also close it.
+    // Another panel is open: opening Settings closes it.
     fireEvent.click(screen.getByRole('button', { name: 'Subtitle' }))
     const settings = screen.getByRole('button', { name: 'Settings' })
-    expect(settings.getAttribute('aria-haspopup')).toBeNull()
+    expect(settings.getAttribute('aria-haspopup')).toBe('true')
 
     fireEvent.click(settings)
+    expect(settings.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     expect(onOpenOptions).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Subtitle' }).getAttribute('aria-expanded')).toBe(
       'false'
     )
-    expect(screen.queryByRole('menuitem', { name: 'Options' })).toBeNull()
+
+    fireEvent.click(settings)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'About Kizuna' }))
+    expect(onOpenAbout).toHaveBeenCalledOnce()
   })
 
   it('runs the Playback items and closes the Playback menu', () => {

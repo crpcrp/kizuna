@@ -3,6 +3,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   ANKI_CHANNELS,
+  APP_INFO_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   INTEGRATION_CHANNELS,
@@ -31,6 +32,7 @@ import type {
 } from '../shared/dictionary'
 import type { PlayerSettings, VideoAdjustments } from '../shared/playerSettings'
 import type { BundledBinaryStatus } from '../shared/integrationStatus'
+import type { AppInfo, AppInfoLink, NoticeOpenResult } from '../shared/appInfo'
 import type { AudioDevice } from '../shared/audioDevice'
 import type { YtdlpQuality } from '../shared/ytdlpQuality'
 import type {
@@ -312,6 +314,12 @@ const api = {
   integration: {
     binaryStatus: (): Promise<BundledBinaryStatus> =>
       ipcRenderer.invoke(INTEGRATION_CHANNELS.binaryStatus)
+  },
+  appInfo: {
+    get: (): Promise<AppInfo> => ipcRenderer.invoke(APP_INFO_CHANNELS.get),
+    openLink: (link: AppInfoLink): Promise<void> =>
+      ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link),
+    openNotices: (): Promise<NoticeOpenResult> => ipcRenderer.invoke(APP_INFO_CHANNELS.openNotices)
   },
   clipboard: {
     writeText: (text: string): Promise<void> =>

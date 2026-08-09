@@ -25,6 +25,8 @@ export interface AppIdentity {
   appId: string
   /** Directory name under `%APPDATA%` holding settings and databases. */
   userDataDirName: string
+  /** Copyright line shown in product information. */
+  copyright: string
   /** Canonical public source repository. */
   repositoryUrl: string
   /** Repository mirroring the pinned runtime binaries (see resources.lock.json). */
@@ -37,6 +39,7 @@ export const PRODUCT_NAME = APP_IDENTITY.productName
 export const EXECUTABLE_NAME = APP_IDENTITY.executableName
 export const APP_ID = APP_IDENTITY.appId
 export const USER_DATA_DIR_NAME = APP_IDENTITY.userDataDirName
+export const COPYRIGHT = APP_IDENTITY.copyright
 export const REPOSITORY_URL = APP_IDENTITY.repositoryUrl
 export const VENDOR_REPOSITORY_URL = APP_IDENTITY.vendorRepositoryUrl
 

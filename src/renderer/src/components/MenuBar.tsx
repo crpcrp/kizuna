@@ -6,6 +6,7 @@ import { PlaybackMenu, type PlaybackMenuProps } from './menu/PlaybackMenu'
 import { SubtitleMenu, type SubtitleMenuProps } from './menu/SubtitleMenu'
 import { VideoMenu, type VideoMenuProps } from './menu/VideoMenu'
 import { VocabularyMenu, type VocabularyMenuProps } from './menu/VocabularyMenu'
+import { CommandItem, Menu } from './menu/primitives'
 
 export interface MenuBarProps {
   media: MediaMenuProps
@@ -15,6 +16,7 @@ export interface MenuBarProps {
   playback: PlaybackMenuProps
   vocabulary: VocabularyMenuProps
   onOpenOptions: () => void
+  onOpenAbout?: () => void
   onOpenChange?: (open: boolean) => void
 }
 
@@ -30,6 +32,7 @@ export default function MenuBar({
   playback,
   vocabulary,
   onOpenOptions,
+  onOpenAbout = () => {},
   onOpenChange
 }: MenuBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
@@ -94,16 +97,25 @@ export default function MenuBar({
         onToggle={() => toggle('vocabulary')}
         run={run}
       />
-      <div className="menu">
-        <button
-          type="button"
-          className="menu-title"
-          id="menu-settings"
+      <Menu
+        id="settings"
+        label="Settings"
+        open={openMenu === 'settings'}
+        onToggle={() => toggle('settings')}
+      >
+        <CommandItem
+          label="Optionsâ€¦"
+          ariaLabel="Options"
+          id="open-options"
           onClick={run(onOpenOptions)}
-        >
-          Settings
-        </button>
-      </div>
+        />
+        <CommandItem
+          label="About Kizuna"
+          ariaLabel="About Kizuna"
+          id="open-about-kizuna"
+          onClick={run(onOpenAbout)}
+        />
+      </Menu>
     </nav>
   )
 }

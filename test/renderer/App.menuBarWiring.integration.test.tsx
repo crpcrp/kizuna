@@ -31,6 +31,8 @@ interface Fakes {
   getAudioDevices: FakeKizunaApi['player']['getAudioDevices']
   setPlayerSettings: FakeKizunaApi['playerSettings']['setSettings']
   loadSubtitle: FakeKizunaApi['media']['loadSubtitle']
+  getAppInfo: FakeKizunaApi['appInfo']['get']
+  setPause: FakeKizunaApi['player']['setPause']
 }
 
 function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fakes {
@@ -73,7 +75,9 @@ function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fake
     setAudioDevice: api.player.setAudioDevice,
     getAudioDevices: api.player.getAudioDevices,
     setPlayerSettings: api.playerSettings.setSettings,
-    loadSubtitle: api.media.loadSubtitle
+    loadSubtitle: api.media.loadSubtitle,
+    getAppInfo: api.appInfo.get,
+    setPause: api.player.setPause
   }
 }
 
@@ -83,6 +87,27 @@ function openMenu(label: string): void {
 }
 
 afterEach(appTeardown)
+
+describe('About Kizuna wiring', () => {
+  it('opens from Settings and suspends playback shortcuts while visible', async () => {
+    const fakes = installBridge()
+    render(<App />)
+    await openRecent(fakes.load)
+
+    const setPause = fakes.setPause
+    const pauseCallsBeforeAbout = setPause.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'About Kizuna' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Third-party notices' })).toBeTruthy()
+    )
+    expect(fakes.getAppInfo).toHaveBeenCalledOnce()
+
+    fireEvent.keyDown(window, { code: 'Space' })
+    expect(setPause.mock.calls.length).toBe(pauseCallsBeforeAbout)
+  })
+})
 
 describe('MenuBar frame stepping reaches the matching mpv call', () => {
   it('"Step forward one frame" steps forward, never back', async () => {
@@ -116,6 +141,7 @@ describe('Options audio-output items reach their bridge calls', () => {
   /** Opens Settings > Options and shows the Playback tab. */
   function openPlaybackOptions(): void {
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
   }
 

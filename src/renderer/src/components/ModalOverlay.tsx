@@ -66,12 +66,13 @@ export default function ModalOverlay({
       className={open ? 'modal-overlay open' : 'modal-overlay'}
       role="dialog"
       aria-label={label}
+      aria-modal="true"
       aria-hidden={!open}
       onClick={() => onClose('backdrop')}
     >
       <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <span>{title ?? label}</span>
+          <h2 className="modal-title">{title ?? label}</h2>
           {headerActions ?? (
             <button
               type="button"

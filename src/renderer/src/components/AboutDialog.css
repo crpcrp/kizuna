@@ -1,0 +1,98 @@
+/* About Kizuna dialog. The shared modal chrome lives in ModalOverlay.css. */
+
+.about-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.about-name {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.about-description,
+.about-loading {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.about-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+}
+
+.about-details > div {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.25fr) 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.about-details dt {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.about-details dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.about-link {
+  max-width: 100%;
+  padding: 0;
+  border: none;
+  color: var(--link-text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-link:focus-visible,
+.about-button:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.about-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.about-button {
+  padding: 7px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  background: var(--control-bg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.about-button:hover {
+  background: var(--control-hover-bg);
+}
+
+.about-notice-message {
+  margin: 0;
+  color: var(--warning-text);
+}
+
+@media (max-width: 420px) {
+  .about-details > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
