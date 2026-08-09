@@ -8,7 +8,7 @@ import WindowChrome, {
   chromeTitle,
   type WindowControls
 } from '@src/renderer/src/components/WindowChrome'
-import { APP_NAME, appTitle } from '@src/shared/appInfo'
+import { APP_NAME } from '@src/shared/appInfo'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy.
 // Click behavior is covered by testing the exported handlers directly with a
@@ -34,10 +34,11 @@ describe('WindowChrome markup', () => {
   const html = renderToStaticMarkup(<WindowChrome controls={fakeControls()} />)
 
   it('shows the app title', () => {
-    expect(html).toContain(appTitle('0.0.1'))
+    expect(html).toContain(`<span id="chrome-title">${APP_NAME}</span>`)
+    expect(html).not.toContain('0.0.1')
   })
 
-  it('shows the loaded video basename instead of the version', () => {
+  it('shows the loaded video basename without a version', () => {
     const loadedHtml = renderToStaticMarkup(
       <WindowChrome
         controls={fakeControls()}
@@ -46,7 +47,7 @@ describe('WindowChrome markup', () => {
     )
 
     expect(loadedHtml).toContain(`${APP_NAME} - \u30a8\u30d4\u30bd\u30fc\u30c96.mkv`)
-    expect(loadedHtml).not.toContain(appTitle('0.0.1'))
+    expect(loadedHtml).not.toContain('0.0.1')
   })
 
   it('makes the bar a drag region', () => {
@@ -68,8 +69,8 @@ describe('WindowChrome markup', () => {
 })
 
 describe('chromeTitle', () => {
-  it('uses the versioned title for no loaded file and accepts either path separator', () => {
-    expect(chromeTitle()).toBe(appTitle('0.0.1'))
+  it('uses the unversioned app name for no loaded file and accepts either path separator', () => {
+    expect(chromeTitle()).toBe(APP_NAME)
     expect(chromeTitle('/videos/episode-6.mkv')).toBe(`${APP_NAME} - episode-6.mkv`)
     expect(chromeTitle('C:\\Videos\\episode-6.mkv')).toBe(`${APP_NAME} - episode-6.mkv`)
   })

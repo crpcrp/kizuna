@@ -30,7 +30,13 @@ const BOTH_DICTS: McDict[] = [
  * flagged missing so the row renders as a non-selectable "Missing" entry. */
 const UNIDIC_MISSING: McDict[] = [
   { id: 'ipadic', label: 'IPADIC', dicdir: '/dicts/ipadic', flavor: 'ipadic', installed: true },
-  { id: 'unidic', label: 'UniDic', dicdir: '', flavor: 'unidic', installed: false }
+  {
+    id: 'unidic',
+    label: 'UniDic',
+    dicdir: '/opt/Kizuna/resources/mecab/unidic',
+    flavor: 'unidic',
+    installed: false
+  }
 ]
 
 const NO_YOMITAN_DICTS: DictInfo[] = []
@@ -121,7 +127,10 @@ describe('DictionariesTab markup', () => {
   })
 
   it('explains how to install UniDic', () => {
-    expect(renderTab({ mecabDicts: UNIDIC_MISSING })).toContain('UniDic is a separate download.')
+    const html = renderTab({ mecabDicts: UNIDIC_MISSING })
+    expect(html).toContain('UniDic is a separate download.')
+    expect(html).toContain('/opt/Kizuna/resources/mecab/unidic')
+    expect(html).not.toContain('<code>resources/mecab/unidic</code>')
   })
 
   it('renders one row per yomitan dict with title/revision and enabled state', () => {
