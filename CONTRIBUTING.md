@@ -29,8 +29,21 @@ npm run format:check
 npm test
 ```
 
-CI runs these checks on pull requests. A green build does not guarantee that a
-change will merge; the maintainer also decides whether it fits the project.
+A green build does not guarantee that a change will merge; the maintainer also
+decides whether it fits the project.
+
+## Continuous integration
+
+Every pull request and every push to `main` runs two independent jobs:
+
+| Check | Host | Runs |
+|---|---|---|
+| `CI / Windows x64` | `windows-latest` | Resource staging, typecheck, lint, format check, full test suite, notices, production build |
+| `CI / Linux x64` | `ubuntu-24.04` | The same steps against the Linux runtime payload |
+
+Neither job is advisory: Linux runs the complete suite, and both must pass.
+Both check names are configured as required status checks for `main` in the
+repository's branch protection settings.
 
 ## Licensing
 

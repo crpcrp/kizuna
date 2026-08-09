@@ -77,7 +77,9 @@ installer includes the selected runtime binaries and generated third-party
 notices.
 `better-sqlite3` is rebuilt for Electron's ABI.
 
-GitHub Actions validates both Windows and Linux resource staging. The release
+GitHub Actions runs independent, equally required Windows x64 and Linux x64
+jobs that stage each host's runtime payload and run every quality check plus a
+production build. The release
 workflow still builds unsigned Windows x64 NSIS installers and verifies the
 package, generates checksums, notices, and provenance, and prepares a draft
 pre-release. Code signing is planned after the project is accepted by an
