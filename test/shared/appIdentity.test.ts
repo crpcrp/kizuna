@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   APP_ID,
   APP_IDENTITY,
+  COPYRIGHT,
   EXECUTABLE_NAME,
   isValidAppId,
   PRODUCT_NAME,
@@ -39,6 +40,7 @@ describe('APP_IDENTITY', () => {
     expect(EXECUTABLE_NAME).toBe(APP_IDENTITY.executableName)
     expect(APP_ID).toBe(APP_IDENTITY.appId)
     expect(USER_DATA_DIR_NAME).toBe(APP_IDENTITY.userDataDirName)
+    expect(COPYRIGHT).toBe(APP_IDENTITY.copyright)
     expect(REPOSITORY_URL).toBe(APP_IDENTITY.repositoryUrl)
     expect(VENDOR_REPOSITORY_URL).toBe(APP_IDENTITY.vendorRepositoryUrl)
   })

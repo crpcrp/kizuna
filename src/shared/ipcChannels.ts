@@ -255,6 +255,13 @@ export const INTEGRATION_CHANNELS = {
   binaryStatus: 'integration:binaryStatus'
 } as const
 
+/** Product-information bridge: read identity data and open approved destinations. */
+export const APP_INFO_CHANNELS = {
+  get: 'appInfo:get',
+  openLink: 'appInfo:openLink',
+  openNotices: 'appInfo:openNotices'
+} as const
+
 /** Clipboard bridge: renderer-to-main writes through Electron's clipboard
  * implementation rather than browser clipboard permissions. */
 export const CLIPBOARD_CHANNELS = {

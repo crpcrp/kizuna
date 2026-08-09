@@ -17,6 +17,7 @@ import type {
 } from './dictionary'
 import type { PlayerSettings, VideoAdjustments } from './playerSettings'
 import type { BundledBinaryStatus } from './integrationStatus'
+import type { AppInfo, AppInfoLink, NoticeOpenResult } from './appInfo'
 import type { AudioDevice } from './audioDevice'
 import type { MediaKeyCommand } from './mediaKey'
 import type { YtdlpQuality } from './ytdlpQuality'
@@ -217,6 +218,11 @@ export interface KizunaApi {
     /** Read-only diagnostics for the "Setup & integrations" tab: which optional
      * bundled binaries are present on disk. Never mutates anything. */
     binaryStatus(): Promise<BundledBinaryStatus>
+  }
+  appInfo: {
+    get(): Promise<AppInfo>
+    openLink(link: AppInfoLink): Promise<void>
+    openNotices(): Promise<NoticeOpenResult>
   }
   clipboard: {
     writeText(text: string): Promise<void>

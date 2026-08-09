@@ -4,6 +4,7 @@ import type { LookupResult, DictInfo } from '@src/shared/dictionary'
 import type { AnkiMembershipMatches, AnkiSettings } from '@src/shared/anki'
 import type { KnowledgeDetails, PublicKnowledgeSettings } from '@src/shared/knowledge'
 import type { PlayerSettings } from '@src/shared/playerSettings'
+import type { AppInfoLink, NoticeOpenResult } from '@src/shared/appInfo'
 import type {
   MediaPlaybackHistory,
   RecentMediaFile,
@@ -109,5 +110,15 @@ describe('KizunaApi', () => {
   it('clipboard exposes only an asynchronous text writer', () => {
     expectTypeOf<KizunaApi['clipboard']['writeText']>().parameters.toEqualTypeOf<[string]>()
     expectTypeOf<KizunaApi['clipboard']['writeText']>().returns.toEqualTypeOf<Promise<void>>()
+  })
+
+  it('appInfo exposes only approved link names and serializable results', () => {
+    expectTypeOf<KizunaApi['appInfo']['get']>().returns.toEqualTypeOf<
+      Promise<import('@src/shared/appInfo').AppInfo>
+    >()
+    expectTypeOf<KizunaApi['appInfo']['openLink']>().parameters.toEqualTypeOf<[AppInfoLink]>()
+    expectTypeOf<KizunaApi['appInfo']['openNotices']>().returns.toEqualTypeOf<
+      Promise<NoticeOpenResult>
+    >()
   })
 })
