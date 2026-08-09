@@ -1,7 +1,7 @@
 # Kizuna (絆)
 
-Kizuna is a Windows and Linux video player for Japanese learners, with built-in
-vocabulary knowledge tracking and bulk Anki card extraction from subtitles.
+Kizuna is a video player for Japanese learners, with built-in vocabulary
+knowledge tracking and bulk Anki card extraction from subtitles.
 
 Watch a video, see which words you already know, look up unfamiliar vocabulary,
 and turn useful lines into study cards without leaving the player.
@@ -25,9 +25,8 @@ Download links for published builds are available on the
 ## Install a release
 
 Kizuna publishes unsigned x64 builds for Windows 10 or newer and Ubuntu 24.04
-(glibc 2.39). macOS, ARM systems, older Windows releases, and other Linux
-distributions are not currently supported. Download the package and
-`SHA256SUMS.txt` from the same entry on the [Releases page](../../releases).
+(glibc 2.39). Download the package and `SHA256SUMS.txt` from the same entry on
+the [Releases page](../../releases).
 
 On Windows, run `kizuna-<version>-setup.exe` and follow the installer. The
 installer is unsigned, so Windows may show an unknown-publisher or Microsoft
@@ -40,7 +39,7 @@ sha256sum --ignore-missing --check SHA256SUMS.txt
 ```
 
 For desktop integration and automatic dependency installation, install the
-Debian package:
+deb package:
 
 ```bash
 sudo apt install ./kizuna-<version>-linux-amd64.deb
