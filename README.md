@@ -9,6 +9,23 @@ and turn useful lines into study cards without leaving the player.
 Download links for published builds are available on the
 [Releases page](../../releases).
 
+## See Kizuna in action
+
+### Watch and explore
+
+![Kizuna player with interactive subtitles and a vocabulary lookup](build/player.jpg)
+
+Look up words, check the full subtitle track, and create Anki cards without
+leaving the video.
+
+### Prepare with bulk Anki mining
+
+![Bulk Anki mining for unknown words in an episode](build/bulk_mining.jpg)
+
+Bulk mining lets you turn every unknown word in an episode into Anki cards in
+one pass. Review them before you watch so the vocabulary is already familiar
+when it appears.
+
 ## Features
 
 - Play local video with embedded or external subtitles.
