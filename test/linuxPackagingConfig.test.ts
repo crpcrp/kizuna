@@ -142,14 +142,14 @@ describe('Linux packaging configuration', () => {
 
   it('places the launcher in a menu category that matches the product', () => {
     const config = builderConfig()
-    const categories = config.linux.desktop.entry.Categories.split(';').filter(
-      (value) => value !== ''
-    )
+    const categories = config.linux.category.split(';').filter((value) => value !== '')
 
-    // AudioVideo is the freedesktop main category; `linux.category` is what
-    // electron-builder uses when a target needs a single value.
-    expect(config.linux.category).toBe('AudioVideo')
+    // electron-builder overwrites desktop.entry.Categories with
+    // linux.category while generating the file, so this is the effective
+    // source of truth. AudioVideo is the required freedesktop main category.
+    expect(config.linux.desktop.entry.Categories).toBeUndefined()
     expect(categories).toContain('AudioVideo')
+    expect(categories).toContain('Video')
     expect(categories).toContain('Player')
   })
 })
