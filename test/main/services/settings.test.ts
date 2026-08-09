@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   defaultSettings,
   defaultKnowledgeSettings,
@@ -44,38 +44,31 @@ describe('mergeSettings', () => {
 })
 
 describe('mergeSettings — media history', () => {
-  // These cases assert Windows-style path normalization (separator folding and
-  // drive-letter lowercasing), which `normalizeMediaHistory` applies per the
-  // *runtime* platform (mergeSettings passes no explicit platform option). Pin
-  // it to win32 so the expectations hold on any host, not just a Windows one —
-  // this is a Windows-first app (see docs/architecture-plan.md).
-  const originalPlatform = process.platform
-  beforeAll(() => {
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-  })
-  afterAll(() => {
-    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
-  })
-
+  // Path normalization is the platform-shaped part of settings, so the platform
+  // is passed explicitly instead of stubbing `process.platform`: both variants
+  // then run on either host, and neither depends on a mutated global.
   it('adds empty history to pre-feature settings without changing other values', () => {
-    const merged = mergeSettings({ mecabDictId: 'unidic', dictOrder: [3] })
+    const merged = mergeSettings({ mecabDictId: 'unidic', dictOrder: [3] }, { platform: 'win32' })
 
     expect(merged.mediaHistory).toEqual({ recentFiles: [], playbackByPath: {} })
     expect(merged.mecabDictId).toBe('unidic')
     expect(merged.dictOrder).toEqual([3])
   })
 
-  it('normalizes media history independently while preserving valid entries', () => {
-    const merged = mergeSettings({
-      mediaHistory: {
-        lastOpenFolder: 'C:/Media',
-        recentFiles: [{ path: 'C:/Media/episode.mkv', openedAt: 12 }],
-        playbackByPath: {
-          'C:/Media/episode.mkv': { positionSeconds: 42, updatedAt: 13 },
-          bad: { positionSeconds: 14, updatedAt: -1 }
+  it('folds separators and lowercases drive letters for a Windows history', () => {
+    const merged = mergeSettings(
+      {
+        mediaHistory: {
+          lastOpenFolder: 'C:/Media',
+          recentFiles: [{ path: 'C:/Media/episode.mkv', openedAt: 12 }],
+          playbackByPath: {
+            'C:/Media/episode.mkv': { positionSeconds: 42, updatedAt: 13 },
+            bad: { positionSeconds: 14, updatedAt: -1 }
+          }
         }
-      }
-    })
+      },
+      { platform: 'win32' }
+    )
 
     expect(merged.mediaHistory.recentFiles).toEqual([
       { path: 'C:\\Media\\episode.mkv', openedAt: 12 }
@@ -83,6 +76,30 @@ describe('mergeSettings — media history', () => {
     expect(merged.mediaHistory.lastOpenFolder).toBe('C:\\Media')
     expect(merged.mediaHistory.playbackByPath).toEqual({
       'c:\\media\\episode.mkv': { positionSeconds: 42, updatedAt: 13 }
+    })
+  })
+
+  it('keeps a POSIX history case-sensitive and unfolded', () => {
+    const merged = mergeSettings(
+      {
+        mediaHistory: {
+          lastOpenFolder: '/srv/Media',
+          recentFiles: [{ path: '/srv/Media/Episode.mkv', openedAt: 12 }],
+          playbackByPath: {
+            '/srv/Media/Episode.mkv': { positionSeconds: 42, updatedAt: 13 },
+            bad: { positionSeconds: 14, updatedAt: -1 }
+          }
+        }
+      },
+      { platform: 'posix' }
+    )
+
+    expect(merged.mediaHistory.recentFiles).toEqual([
+      { path: '/srv/Media/Episode.mkv', openedAt: 12 }
+    ])
+    expect(merged.mediaHistory.lastOpenFolder).toBe('/srv/Media')
+    expect(merged.mediaHistory.playbackByPath).toEqual({
+      '/srv/Media/Episode.mkv': { positionSeconds: 42, updatedAt: 13 }
     })
   })
 })

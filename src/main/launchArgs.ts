@@ -1,22 +1,25 @@
-import { basename, resolve } from 'node:path'
 import { classifyMediaFileName } from '../shared/mediaFileTypes'
+import { pathApiFor } from './platformPath'
 
 /** First argv entry that names a video file: skips the executable and every
  *  `-`-prefixed flag, requires a video extension (shared list), resolves
- *  relative paths against `cwd`. Undefined when none qualifies. */
-function isWindowsAbsolutePath(path: string): boolean {
-  return /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('\\\\')
-}
-
-function resolveLaunchPath(cwd: string, entry: string): string {
-  return isWindowsAbsolutePath(entry) ? entry : resolve(cwd, entry)
-}
-
-export function videoPathFromArgv(argv: string[], cwd: string): string | undefined {
+ *  relative paths against `cwd`. Undefined when none qualifies.
+ *
+ *  Resolution goes through the *platform's* path implementation rather than
+ *  the host's: a drive-qualified (`E:\anime\a.mkv`) or UNC (`\\nas\share\…`)
+ *  argument is already absolute to `win32.resolve` and passes through
+ *  unchanged, while the POSIX implementation would treat it as a relative
+ *  name and glue it onto `cwd`. */
+export function videoPathFromArgv(
+  argv: string[],
+  cwd: string,
+  platform: NodeJS.Platform = process.platform
+): string | undefined {
+  const path = pathApiFor(platform)
   for (const entry of argv.slice(1)) {
     if (entry.startsWith('-')) continue
-    if (classifyMediaFileName(basename(entry)) !== 'video') continue
-    return resolveLaunchPath(cwd, entry)
+    if (classifyMediaFileName(path.basename(entry)) !== 'video') continue
+    return path.resolve(cwd, entry)
   }
   return undefined
 }

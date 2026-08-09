@@ -29,10 +29,12 @@ export interface MediaMetadataDeps {
   ffprobePath: string
   execFfprobe: FfprobeExec
   readDir: ReadDir
+  /** Path semantics for folder navigation; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 export function createMediaMetadataService(deps: MediaMetadataDeps): MediaMetadataService {
-  const folderNavigation = createFolderNavigation(deps.readDir)
+  const folderNavigation = createFolderNavigation(deps.readDir, deps.platform)
 
   return {
     enumerateTracks(filePath: string): Promise<Track[]> {

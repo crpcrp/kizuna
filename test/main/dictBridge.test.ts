@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { join } from 'node:path'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   registerDictBridge,
   resolveImportWorkerPath,
@@ -60,13 +60,18 @@ function fakeService(onProgressToEmit?: Array<[number, number]>) {
   return { service, calls }
 }
 
-describe('resolveImportWorkerPath', () => {
-  it('joins the given main-process dirname with the compiled worker filename', () => {
-    expect(resolveImportWorkerPath('E:\\app\\out\\main')).toBe(
-      join('E:\\app\\out\\main', 'importWorker.js')
-    )
-  })
-})
+// The worker path is resolved off the main process's own `__dirname`, which is
+// platform-shaped; both variants are asserted on either host.
+describe.each(PATH_PLATFORMS)(
+  'resolveImportWorkerPath on $label',
+  ({ platform, path, mediaDir }) => {
+    it('joins the given main-process dirname with the compiled worker filename', () => {
+      const outMain = path.join(mediaDir, 'app', 'out', 'main')
+
+      expect(resolveImportWorkerPath(outMain, platform)).toBe(path.join(outMain, 'importWorker.js'))
+    })
+  }
+)
 
 describe('registerDictBridge', () => {
   const event: FakeEvent = { senderId: 1 }

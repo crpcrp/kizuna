@@ -76,6 +76,8 @@ export interface MediaServiceConfig {
   thumbnailServiceImpl?: ThumbnailService
   /** base64 reader for a generated thumbnail file (tests inject a fake). */
   readThumbnailBase64Impl?: ReadThumbnailBase64
+  /** Path semantics for every composed owner; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 /**
@@ -88,7 +90,8 @@ export function createMediaService(config: MediaServiceConfig): MediaServiceLike
   const metadata = createMediaMetadataService({
     ffprobePath: config.ffprobePath,
     execFfprobe: config.execFfprobeImpl ?? execFfprobe,
-    readDir: config.readDirImpl ?? readdir
+    readDir: config.readDirImpl ?? readdir,
+    platform: config.platform
   })
 
   const picker = createMediaPicker({
@@ -97,7 +100,8 @@ export function createMediaService(config: MediaServiceConfig): MediaServiceLike
     readPlaylistText: config.readPlaylistTextImpl ?? readPlaylistText,
     writePlaylistText: config.writePlaylistTextImpl ?? writePlaylistText,
     listVideosIn: (folder) => metadata.videosIn(folder),
-    mediaHistory: config.mediaHistory
+    mediaHistory: config.mediaHistory,
+    platform: config.platform
   })
 
   const subtitles = createSubtitleService({
@@ -106,7 +110,8 @@ export function createMediaService(config: MediaServiceConfig): MediaServiceLike
     execFfmpeg: execFfmpegFn,
     readText: config.readFileImpl ?? readTextFile,
     readBinary: config.readExternalFileImpl ?? readBinaryFile,
-    removeFile: config.removeFileImpl ?? removeFile
+    removeFile: config.removeFileImpl ?? removeFile,
+    platform: config.platform
   })
 
   const thumbnails = createThumbnailPreview({
@@ -116,7 +121,8 @@ export function createMediaService(config: MediaServiceConfig): MediaServiceLike
         ? createCachedThumbnailService({
             cacheDir: config.thumbnailCacheDir,
             ffmpegPath: config.ffmpegPath,
-            execFfmpeg: execFfmpegFn
+            execFfmpeg: execFfmpegFn,
+            platform: config.platform
           })
         : undefined),
     readBase64: config.readThumbnailBase64Impl ?? readThumbnailBase64

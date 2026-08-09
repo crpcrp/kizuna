@@ -4,16 +4,22 @@
 // `fs`/`shell` boundaries so tests use fakes — no real disk or Electron
 // `shell` in a unit test.
 
-import { join } from 'node:path'
+import { pathApiFor } from '../platformPath'
 
 /** The mpv config dir mpv reads from when the user enables it. */
-export function mpvConfigDir(userDataDir: string): string {
-  return join(userDataDir, 'mpv')
+export function mpvConfigDir(
+  userDataDir: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return pathApiFor(platform).join(userDataDir, 'mpv')
 }
 
 /** The `scripts/` subfolder created on first enable so users have a drop target. */
-export function mpvScriptsDir(userDataDir: string): string {
-  return join(mpvConfigDir(userDataDir), 'scripts')
+export function mpvScriptsDir(
+  userDataDir: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return pathApiFor(platform).join(mpvConfigDir(userDataDir, platform), 'scripts')
 }
 
 /** The slice of `fs` this manager needs (fakeable in tests). */
@@ -30,6 +36,8 @@ export interface MpvConfigManagerDeps {
   userDataDir: string
   fs: MpvConfigFsLike
   shell: MpvConfigShellLike
+  /** Path semantics for the config dir; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 export interface MpvConfigManager {
@@ -46,8 +54,8 @@ export interface MpvConfigManager {
 
 /** Composes the injected `fs`/`shell` into an `MpvConfigManager`. */
 export function createMpvConfigManager(deps: MpvConfigManagerDeps): MpvConfigManager {
-  const configDir = mpvConfigDir(deps.userDataDir)
-  const scriptsDir = mpvScriptsDir(deps.userDataDir)
+  const configDir = mpvConfigDir(deps.userDataDir, deps.platform)
+  const scriptsDir = mpvScriptsDir(deps.userDataDir, deps.platform)
   const ensureDir = (): void => {
     deps.fs.mkdirSync(scriptsDir, { recursive: true })
   }

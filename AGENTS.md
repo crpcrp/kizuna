@@ -13,6 +13,11 @@ Kizuna is a Windows-first Electron and TypeScript application. Use
 - Use fakes or fixtures for mpv, FFmpeg, MeCab, AnkiConnect, WaniKani, SQLite,
   and other external boundaries. Automated tests must not require live accounts,
   network services, or bundled binaries.
+- Keep tests independent of the host OS. Pass an explicit platform to code that
+  derives filesystem paths and assert both variants (see "Derive a filesystem
+  path" in `docs/codebase-map.md`). Skipping a case for the running platform is
+  a last resort, and each skip must name the technical reason and its
+  counterpart coverage.
 - Update documentation only when setup, user-visible behavior, architecture, or
   a public interface changes.
 - Report what you changed, what you verified, and anything you could not verify.

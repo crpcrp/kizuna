@@ -1,5 +1,5 @@
-import { dirname, join, basename } from 'node:path'
 import { classifyMediaFileName } from '../../shared/mediaFileTypes'
+import { pathApiFor } from '../platformPath'
 
 export type ReadDir = (folder: string) => Promise<string[]>
 
@@ -33,18 +33,29 @@ export function videoNeighbors(
  * The same filter/sort `videoNeighbors` uses, but the whole listing — for
  * "Add folder to playlist".
  */
-export function sortedVideoPaths(folder: string, fileNames: string[]): string[] {
+export function sortedVideoPaths(
+  folder: string,
+  fileNames: string[],
+  platform: NodeJS.Platform = process.platform
+): string[] {
+  const { join } = pathApiFor(platform)
   return fileNames
     .filter((name) => classifyMediaFileName(name) === 'video')
     .sort(naturalCompare)
     .map((name) => join(folder, name))
 }
 
-/** Builds a fakeable folder-navigation service around an injected readdir. */
-export function createFolderNavigation(readDir: ReadDir): {
+/** Builds a fakeable folder-navigation service around an injected readdir.
+ *  `platform` selects the path semantics used to split and rejoin the folder;
+ *  it defaults to the host, so production callers need not pass it. */
+export function createFolderNavigation(
+  readDir: ReadDir,
+  platform: NodeJS.Platform = process.platform
+): {
   neighborsOf(filePath: string): Promise<{ prev?: string; next?: string }>
   videosIn(folder: string): Promise<string[]>
 } {
+  const { basename, dirname, join } = pathApiFor(platform)
   return {
     async neighborsOf(filePath: string): Promise<{ prev?: string; next?: string }> {
       const folder = dirname(filePath)
@@ -68,7 +79,7 @@ export function createFolderNavigation(readDir: ReadDir): {
       } catch {
         return []
       }
-      return sortedVideoPaths(folder, entries)
+      return sortedVideoPaths(folder, entries, platform)
     }
   }
 }

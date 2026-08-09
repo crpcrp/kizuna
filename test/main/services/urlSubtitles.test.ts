@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   buildAcquireArgs,
   buildInventoryArgs,
@@ -22,7 +21,9 @@ async function flushUntil(pred: () => boolean): Promise<void> {
 
 const URL = 'https://www.youtube.com/watch?v=abc123'
 const OTHER_URL = 'https://youtu.be/zzz999'
-const CACHE = join('/userData', 'url-subtitles')
+// Path semantics are pinned so the cache-layout fixtures are literal rather
+// than host-derived; `buildAcquireArgs` asserts the Windows shape separately.
+const CACHE = '/userData/url-subtitles'
 const PROVIDED_JSON = readFileSync(fixture('ytdlp-subs-provided-only.json'), 'utf-8')
 
 interface RecordingFs extends UrlSubtitleFs {
@@ -60,6 +61,7 @@ function makeService(
     fs,
     parse: vi.fn((content, format) => [{ start: 0, end: 1, text: `${format}:${content}` }]),
     randomToken: () => 'TOKEN',
+    platform: 'linux',
     ...overrides
   })
 }
@@ -111,7 +113,7 @@ describe('buildAcquireArgs', () => {
   }
 
   it('writes only inside outDir and passes the url as a single trailing arg', () => {
-    const args = buildAcquireArgs(URL, track, join(CACHE, 'TOKEN'))
+    const args = buildAcquireArgs(URL, track, `${CACHE}/TOKEN`, 'linux')
     expect(args).toEqual([
       '--no-playlist',
       '--skip-download',
@@ -124,7 +126,7 @@ describe('buildAcquireArgs', () => {
       '--no-warnings',
       '--no-part',
       '-o',
-      join(CACHE, 'TOKEN', 'sub.%(ext)s'),
+      `${CACHE}/TOKEN/sub.%(ext)s`,
       '--',
       URL
     ])
@@ -135,12 +137,12 @@ describe('buildAcquireArgs', () => {
   })
 
   it('isolates provided and auto subtitle kinds', () => {
-    const providedArgs = buildAcquireArgs(URL, track, '/d')
+    const providedArgs = buildAcquireArgs(URL, track, '/d', 'linux')
     expect(providedArgs).toContain('--write-subs')
     expect(providedArgs).toContain('--no-write-auto-subs')
 
     const auto = { ...track, kind: 'auto' as const, selectionId: 'auto:en' }
-    const autoArgs = buildAcquireArgs(URL, auto, '/d')
+    const autoArgs = buildAcquireArgs(URL, auto, '/d', 'linux')
     expect(autoArgs).toContain('--write-auto-subs')
     expect(autoArgs).toContain('--no-write-subs')
   })
@@ -257,16 +259,16 @@ describe('createUrlSubtitleService.acquire', () => {
       selectionId: 'provided:en'
     }
     expect(yt.calls[1].args).toEqual(
-      buildAcquireArgs(URL, track as UrlSubtitleTrack, join(CACHE, 'TOKEN'))
+      buildAcquireArgs(URL, track as UrlSubtitleTrack, `${CACHE}/TOKEN`, 'linux')
     )
     expect(asset).toEqual({
       selectionId: 'provided:en',
       format: 'srt',
       cues: [{ start: 0, end: 1, text: 'srt:SRT BODY' }]
     })
-    expect(fs.made).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.made).toEqual([`${CACHE}/TOKEN`])
     // The transient download is removed even on success — cues live in memory.
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`])
   })
 
   it('serves a repeat selection from the session cache without re-spawning', async () => {
@@ -322,7 +324,7 @@ describe('createUrlSubtitleService.acquire', () => {
     await expect(service.acquire({ url: URL, selectionId: 'provided:en' })).rejects.toThrow(
       'yt-dlp could not fetch this subtitle.'
     )
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`])
   })
 
   it('rejects and cleans up when no parseable file was downloaded', async () => {
@@ -333,7 +335,7 @@ describe('createUrlSubtitleService.acquire', () => {
     await expect(service.acquire({ url: URL, selectionId: 'provided:en' })).rejects.toThrow(
       'This subtitle is not available in a supported format.'
     )
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`])
   })
 
   it('rejects empty parsed subtitles without caching them', async () => {
@@ -369,7 +371,7 @@ describe('createUrlSubtitleService.acquire', () => {
     // Fire the acquire's timeout timer → aborts the hanging exec.
     timers[timers.length - 1]()
     await expect(pending).rejects.toBeInstanceOf(UrlSubtitleError)
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`])
   })
 
   it('cancel() aborts an in-flight acquisition and cleans up', async () => {
@@ -381,7 +383,7 @@ describe('createUrlSubtitleService.acquire', () => {
     await flushUntil(() => yt.calls.length === 2) // acquire is now in flight
     service.cancel()
     await expect(pending).rejects.toBeInstanceOf(UrlSubtitleError)
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`])
   })
 
   it('does not cache a result that completes after cancel()', async () => {
@@ -430,7 +432,7 @@ describe('createUrlSubtitleService.acquire', () => {
     yt.pending[3].resolve('current B subtitle')
     await expect(currentAcquire).resolves.toMatchObject({ selectionId: 'provided:en' })
     expect(yt.calls.filter((call) => call.args.includes('--write-subs'))).toHaveLength(2)
-    expect(fs.removed).toEqual([join(CACHE, 'TOKEN'), join(CACHE, 'TOKEN')])
+    expect(fs.removed).toEqual([`${CACHE}/TOKEN`, `${CACHE}/TOKEN`])
   })
 })
 
@@ -493,5 +495,21 @@ describe('createUrlSubtitleService session/shutdown lifecycle', () => {
     acquireYt.pending[1].resolve('late subtitle')
     await expect(pendingAcquisition).rejects.toThrow('Subtitle selection is no longer valid.')
     expect(acquireFs.removed.filter((path) => path === CACHE)).toHaveLength(1)
+  })
+})
+
+// The one path-shaped part of this service: the `-o` output template. Its
+// Windows form is asserted here so a POSIX runner still covers it.
+describe('buildAcquireArgs on Windows', () => {
+  it('writes the output template under a backslash-joined cache directory', () => {
+    const outDir = 'C:\\Users\\me\\AppData\\Roaming\\Kizuna\\url-subtitles\\TOKEN'
+    const args = buildAcquireArgs(
+      URL,
+      { kind: 'provided', lang: 'en', label: 'en', formats: ['srt'], selectionId: 'provided:en' },
+      outDir,
+      'win32'
+    )
+
+    expect(args[args.indexOf('-o') + 1]).toBe(`${outDir}\\sub.%(ext)s`)
   })
 })

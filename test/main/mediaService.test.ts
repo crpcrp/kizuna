@@ -5,7 +5,7 @@
 // dependency and its arguments.
 
 import { describe, it, expect, vi } from 'vitest'
-import { dirname, join } from 'node:path'
+import { posix } from 'node:path'
 import { createMediaService, type MediaServiceConfig } from '@src/main/mediaService'
 import type { FfmpegExec } from '@src/main/media/ffmpeg'
 import type { FfprobeExec } from '@src/main/media/ffprobe'
@@ -21,21 +21,25 @@ function service(overrides: Partial<MediaServiceConfig> = {}) {
     ffprobePath: 'ffprobe-bin',
     ffmpegPath: 'ffmpeg-bin',
     tmpDir: '/tmp',
+    // Wiring, not path shape, is what this composition root proves; each owner
+    // asserts both platform variants in its own test. Pinning the platform
+    // keeps these fixtures literal instead of host-derived.
+    platform: 'linux',
     ...overrides
   })
 }
 
 describe('createMediaService picker delegation', () => {
-  const selected = join('/media', 'series', 'episode.mkv')
+  const selected = '/media/series/episode.mkv'
   const showOpenDialog = vi.fn(async () => ({ canceled: false, filePaths: [selected] }))
 
   it('routes openFile through the picker, including the history store', async () => {
     const mediaHistory = {
-      getLastOpenFolder: vi.fn(() => join('/media', 'series')),
+      getLastOpenFolder: vi.fn(() => '/media/series'),
       setLastOpenFolder: vi.fn()
     }
     await expect(service({ showOpenDialog, mediaHistory }).openFile()).resolves.toBe(selected)
-    expect(mediaHistory.setLastOpenFolder).toHaveBeenCalledWith(dirname(selected))
+    expect(mediaHistory.setLastOpenFolder).toHaveBeenCalledWith(posix.dirname(selected))
   })
 
   it('routes openFiles and openSubtitleFile through the picker', async () => {
@@ -50,8 +54,8 @@ describe('createMediaService picker delegation', () => {
       readDirImpl: vi.fn(async () => ['ep10.mkv', 'ep2.mkv', 'cover.jpg'])
     })
     await expect(svc.openFolder()).resolves.toEqual([
-      join('/media/season1', 'ep2.mkv'),
-      join('/media/season1', 'ep10.mkv')
+      '/media/season1/ep2.mkv',
+      '/media/season1/ep10.mkv'
     ])
   })
 
@@ -63,7 +67,7 @@ describe('createMediaService picker delegation', () => {
       showSaveDialog: vi.fn(async () => ({ canceled: false, filePath: '/out/list.m3u' }))
     })
 
-    await expect(svc.readPlaylist('/media/list.m3u')).resolves.toEqual([join('/media', 'a.mkv')])
+    await expect(svc.readPlaylist('/media/list.m3u')).resolves.toEqual(['/media/a.mkv'])
     await expect(svc.savePlaylist(['/media/a.mkv'])).resolves.toBe('/out/list.m3u')
     expect(writePlaylistTextImpl).toHaveBeenCalledWith('/out/list.m3u', '#EXTM3U\n/media/a.mkv\n')
   })
@@ -89,8 +93,8 @@ describe('createMediaService metadata delegation', () => {
 
   it('routes folderNeighbors through the injected directory reader', async () => {
     const svc = service({ readDirImpl: vi.fn(async () => ['ep1.mkv', 'ep2.mkv']) })
-    await expect(svc.folderNeighbors(join('/media', 'ep1.mkv'))).resolves.toEqual({
-      next: join('/media', 'ep2.mkv')
+    await expect(svc.folderNeighbors('/media/ep1.mkv')).resolves.toEqual({
+      next: '/media/ep2.mkv'
     })
   })
 })

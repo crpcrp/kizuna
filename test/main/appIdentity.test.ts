@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { join } from 'node:path'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   applyAppIdentity,
   screenshotsDir,
@@ -33,46 +33,46 @@ function fakeApp(paths: Record<string, string>): AppIdentityTarget & {
   }
 }
 
-describe('userDataDir', () => {
-  it('places the data directory under the roaming profile, not the install folder', () => {
-    expect(userDataDir('C:\\Users\\me\\AppData\\Roaming')).toBe(
-      join('C:\\Users\\me\\AppData\\Roaming', USER_DATA_DIR_NAME)
-    )
-  })
-
-  it('names the directory from the identity configuration', () => {
-    expect(userDataDir('/root')).toBe(join('/root', USER_DATA_DIR_NAME))
-  })
-})
-
-describe('screenshotsDir', () => {
-  it('defaults to <Pictures>/<product name>', () => {
-    expect(screenshotsDir('C:\\Users\\me\\Pictures')).toBe(
-      join('C:\\Users\\me\\Pictures', PRODUCT_NAME)
-    )
-  })
-})
-
-describe('applyAppIdentity', () => {
-  it('sets the app name, AppUserModelID, and user-data path', () => {
-    const app = fakeApp({ appData: 'C:\\Users\\me\\AppData\\Roaming' })
-
-    const resolved = applyAppIdentity(app)
-
-    expect(app.name).toBe(PRODUCT_NAME)
-    expect(app.appUserModelId).toBe(APP_ID)
-    expect(resolved).toBe(join('C:\\Users\\me\\AppData\\Roaming', USER_DATA_DIR_NAME))
-    expect(app.paths.userData).toBe(resolved)
-  })
-
-  it('overrides the package-name-derived default Electron would have used', () => {
-    const app = fakeApp({
-      appData: 'C:\\Users\\me\\AppData\\Roaming',
-      userData: 'C:\\Users\\me\\AppData\\Roaming\\kizuna-electron-default'
+// Both platform variants are asserted on either host: each case builds its
+// expectation with its own path API, so a Linux runner still proves that a
+// Windows appData root produces a backslash-joined user-data directory.
+describe.each(PATH_PLATFORMS)(
+  'app identity paths on $label',
+  ({ platform, path, appDataDir: appData, picturesDir: pictures }) => {
+    it('places the data directory under the per-user profile, not the install folder', () => {
+      expect(userDataDir(appData, platform)).toBe(path.join(appData, USER_DATA_DIR_NAME))
     })
 
-    applyAppIdentity(app)
+    it('defaults screenshots to <Pictures>/<product name>', () => {
+      expect(screenshotsDir(pictures, platform)).toBe(path.join(pictures, PRODUCT_NAME))
+    })
 
-    expect(app.paths.userData).toBe(join('C:\\Users\\me\\AppData\\Roaming', USER_DATA_DIR_NAME))
+    it('sets the app name, AppUserModelID, and user-data path', () => {
+      const app = fakeApp({ appData })
+
+      const resolved = applyAppIdentity(app, platform)
+
+      expect(app.name).toBe(PRODUCT_NAME)
+      expect(app.appUserModelId).toBe(APP_ID)
+      expect(resolved).toBe(path.join(appData, USER_DATA_DIR_NAME))
+      expect(app.paths.userData).toBe(resolved)
+    })
+
+    it('overrides the package-name-derived default Electron would have used', () => {
+      const app = fakeApp({
+        appData,
+        userData: path.join(appData, 'kizuna-electron-default')
+      })
+
+      applyAppIdentity(app, platform)
+
+      expect(app.paths.userData).toBe(path.join(appData, USER_DATA_DIR_NAME))
+    })
+  }
+)
+
+describe('userDataDir', () => {
+  it('names the directory from the identity configuration', () => {
+    expect(userDataDir('/root', 'linux')).toBe(`/root/${USER_DATA_DIR_NAME}`)
   })
 })

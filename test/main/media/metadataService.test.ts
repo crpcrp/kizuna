@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest'
-import { join } from 'node:path'
 import { createMediaMetadataService } from '@src/main/media/metadataService'
 import type { FfprobeExec } from '@src/main/media/ffprobe'
 
@@ -12,7 +11,10 @@ function createService(
   return createMediaMetadataService({
     ffprobePath: 'ffprobe-bin',
     execFfprobe: overrides.execFfprobe ?? vi.fn<FfprobeExec>().mockResolvedValue('{}'),
-    readDir: overrides.readDir ?? (async () => [])
+    readDir: overrides.readDir ?? (async () => []),
+    // Folder navigation asserts both platform variants in its own test; here the
+    // platform is pinned so these fixtures stay literal instead of host-derived.
+    platform: 'linux'
   })
 }
 
@@ -56,14 +58,14 @@ describe('createMediaMetadataService folder navigation', () => {
 
   it('lists a folder’s videos as naturally sorted absolute paths', async () => {
     await expect(createService({ readDir }).videosIn('/media/season1')).resolves.toEqual([
-      join('/media/season1', 'ep2.mkv'),
-      join('/media/season1', 'ep10.mkv')
+      '/media/season1/ep2.mkv',
+      '/media/season1/ep10.mkv'
     ])
   })
 
   it('resolves the natural-order neighbors of a file in its own folder', async () => {
     await expect(
-      createService({ readDir }).folderNeighbors(join('/media/season1', 'ep2.mkv'))
-    ).resolves.toEqual({ next: join('/media/season1', 'ep10.mkv') })
+      createService({ readDir }).folderNeighbors('/media/season1/ep2.mkv')
+    ).resolves.toEqual({ next: '/media/season1/ep10.mkv' })
   })
 })

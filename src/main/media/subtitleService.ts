@@ -4,13 +4,13 @@
 // subtitleEncoding.ts; this module owns the temp-file lifecycle and the
 // file-type gate around them.
 
-import { basename, join } from 'node:path'
 import { readFile, unlink } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { loadSubtitleCues, pickParser, type ReadTextFile } from './subtitleLoader'
 import { decodeSubtitleBytes } from './subtitleEncoding'
 import type { FfmpegExec } from './ffmpeg'
 import { classifyMediaFileName } from '../../shared/mediaFileTypes'
+import { pathApiFor } from '../platformPath'
 import type { Cue } from '../../shared/cue'
 import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 
@@ -28,14 +28,21 @@ import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
  * 72-bit random value but is injectable so callers/tests can pin it. Pure and
  * side-effect free apart from drawing that randomness — does not touch the
  * filesystem.
+ *
+ * `platform` selects the path semantics: the media basename must be taken with
+ * the same separators the input path actually uses, or a Windows path handed to
+ * the POSIX implementation would embed the whole `C:\videos\ep.mkv` — drive
+ * letter, backslashes and all — into the temp filename.
  */
 export function subtitleTempPath(
   tmpDir: string,
   inputPath: string,
   streamIndex: number,
   container: 'ass' | 'srt',
-  token: string = randomBytes(9).toString('hex')
+  token: string = randomBytes(9).toString('hex'),
+  platform: NodeJS.Platform = process.platform
 ): string {
+  const { basename, join } = pathApiFor(platform)
   const stem = basename(inputPath)
   return join(tmpDir, `kizuna-sub-${stem}-${streamIndex}-${token}.${container}`)
 }
@@ -68,6 +75,8 @@ export interface SubtitleServiceDeps {
   /** Byte reader for standalone external subtitle files. */
   readBinary: ReadBinaryFile
   removeFile: RemoveFile
+  /** Path semantics for the extraction temp file; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }
 
 /**
@@ -80,7 +89,14 @@ export interface SubtitleServiceDeps {
 export function createSubtitleService(deps: SubtitleServiceDeps): SubtitleService {
   return {
     async loadSubtitle(filePath: string, streamIndex: number): Promise<Cue[]> {
-      const outputPath = subtitleTempPath(deps.tmpDir, filePath, streamIndex, 'ass')
+      const outputPath = subtitleTempPath(
+        deps.tmpDir,
+        filePath,
+        streamIndex,
+        'ass',
+        undefined,
+        deps.platform
+      )
       try {
         return await loadSubtitleCues(
           { ffmpegPath: deps.ffmpegPath, inputPath: filePath, streamIndex, outputPath },

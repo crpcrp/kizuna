@@ -8,7 +8,7 @@
 // module only asks the injected scheduler to sweep after it writes a file.
 
 import { createHash } from 'node:crypto'
-import { join, dirname } from 'node:path'
+import { pathApiFor } from '../../platformPath'
 import { subtitleOffsetKey } from '../../../shared/playerSettings'
 import type { FfmpegExec } from '../../media/ffmpeg'
 import type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
@@ -59,11 +59,12 @@ export function thumbnailCachePath(
   mediaPath: string,
   size: number,
   mtimeMs: number,
-  bucket: number
+  bucket: number,
+  platform: NodeJS.Platform = process.platform
 ): string {
   const canonical = subtitleOffsetKey(mediaPath)
   const hash = createHash('sha1').update(`${canonical}|${size}|${mtimeMs}`).digest('hex')
-  return join(cacheDir, hash, `${bucket}.jpg`)
+  return pathApiFor(platform).join(cacheDir, hash, `${bucket}.jpg`)
 }
 
 /**
@@ -133,7 +134,10 @@ export function createThumbnailService(deps: {
   cacheDir: string
   ffmpegPath: string
   evictionScheduler?: ThumbnailEvictionScheduler
+  /** Path semantics for the cache layout; defaults to the host platform. */
+  platform?: NodeJS.Platform
 }): ThumbnailService {
+  const { dirname } = pathApiFor(deps.platform)
   let statPath: string | undefined
   let statInfo: ThumbnailStat | undefined
   let inFlight = new Map<string, Promise<string | null>>()
@@ -166,7 +170,8 @@ export function createThumbnailService(deps: {
         path,
         statInfo.size,
         statInfo.mtimeMs,
-        bucket
+        bucket,
+        deps.platform
       )
 
       if (deps.fs.exists(cachePath)) return cachePath

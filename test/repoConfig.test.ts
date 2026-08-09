@@ -27,6 +27,28 @@ describe('GitHub Actions workflows', () => {
       expect(workflow.contents, workflow.name).not.toMatch(/^\s*pull_request_target:/m)
     }
   })
+
+  // The suite is expected to pass on both supported targets (see
+  // test/harness/platformPaths.ts), which only holds if CI actually runs it on
+  // both. Asserted as a matrix over the two host families rather than as exact
+  // runner labels, so a runner-image bump does not fail this test.
+  it('runs the application checks on a Windows and a Linux host', () => {
+    const ci = workflows.find((workflow) => workflow.name === 'ci.yml')
+    expect(ci, 'ci.yml is missing').toBeDefined()
+
+    const matrix = ci!.contents.match(/^\s*os:\s*\[(.+)\]$/m)?.[1] ?? ''
+    const targets = matrix.split(',').map((entry) => entry.trim())
+
+    expect(
+      targets.some((target) => target.startsWith('windows-')),
+      matrix
+    ).toBe(true)
+    expect(
+      targets.some((target) => target.startsWith('ubuntu-')),
+      matrix
+    ).toBe(true)
+    expect(ci!.contents).toMatch(/^\s*-\s*name: Test\n\s*run: npm test$/m)
+  })
 })
 
 describe('repository configuration', () => {

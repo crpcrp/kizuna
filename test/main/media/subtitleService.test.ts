@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { join } from 'node:path'
+import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   createSubtitleService,
   subtitleTempPath,
@@ -10,60 +10,73 @@ import {
 import type { FfmpegExec } from '@src/main/media/ffmpeg'
 import type { ReadTextFile } from '@src/main/media/subtitleLoader'
 
-// Expected paths are built with node:path's `join` (not hardcoded literals)
-// since `subtitleTempPath` uses the platform-native separator internally
-// (backslash on Windows, forward slash elsewhere).
+// Both platform variants run on either host: the media basename must be taken
+// with the separators the input path actually uses, so a Windows media path is
+// asserted against Windows rules even on a POSIX runner (and vice versa).
+describe.each(PATH_PLATFORMS)(
+  'subtitleTempPath on $label',
+  ({ platform, path, mediaDir, tempDir }) => {
+    const media = path.join(mediaDir, 'episode01.mkv')
+    const tempFile = (name: string): string => path.join(tempDir, name)
 
-describe('subtitleTempPath', () => {
-  // A pinned token keeps these assertions deterministic; production omits it so
-  // the suffix is crypto-random (see the non-guessable-component test below).
-  it('builds a .ass path including the stream index and token', () => {
-    const result = subtitleTempPath('/tmp', '/videos/episode01.mkv', 2, 'ass', 'deadbeef')
-    expect(result).toBe(join('/tmp', 'kizuna-sub-episode01.mkv-2-deadbeef.ass'))
-  })
+    // A pinned token keeps these assertions deterministic; production omits it so
+    // the suffix is crypto-random (see the non-guessable-component test below).
+    it('builds a .ass path including the stream index and token', () => {
+      expect(subtitleTempPath(tempDir, media, 2, 'ass', 'deadbeef', platform)).toBe(
+        tempFile('kizuna-sub-episode01.mkv-2-deadbeef.ass')
+      )
+    })
 
-  it('builds a .srt path including the stream index and token', () => {
-    const result = subtitleTempPath('/tmp', '/videos/episode01.mkv', 5, 'srt', 'deadbeef')
-    expect(result).toBe(join('/tmp', 'kizuna-sub-episode01.mkv-5-deadbeef.srt'))
-  })
+    it('builds a .srt path including the stream index and token', () => {
+      expect(subtitleTempPath(tempDir, media, 5, 'srt', 'deadbeef', platform)).toBe(
+        tempFile('kizuna-sub-episode01.mkv-5-deadbeef.srt')
+      )
+    })
 
-  it('is deterministic when the token is pinned', () => {
-    const a = subtitleTempPath('/tmp', '/videos/episode01.mkv', 3, 'ass', 'deadbeef')
-    const b = subtitleTempPath('/tmp', '/videos/episode01.mkv', 3, 'ass', 'deadbeef')
-    expect(a).toBe(b)
-  })
+    it('is deterministic when the token is pinned', () => {
+      expect(subtitleTempPath(tempDir, media, 3, 'ass', 'deadbeef', platform)).toBe(
+        subtitleTempPath(tempDir, media, 3, 'ass', 'deadbeef', platform)
+      )
+    })
 
-  it('differs by stream index for the same input file', () => {
-    const a = subtitleTempPath('/tmp', '/videos/episode01.mkv', 1, 'ass', 'deadbeef')
-    const b = subtitleTempPath('/tmp', '/videos/episode01.mkv', 2, 'ass', 'deadbeef')
-    expect(a).not.toBe(b)
-  })
+    it('differs by stream index for the same input file', () => {
+      expect(subtitleTempPath(tempDir, media, 1, 'ass', 'deadbeef', platform)).not.toBe(
+        subtitleTempPath(tempDir, media, 2, 'ass', 'deadbeef', platform)
+      )
+    })
 
-  it('uses the basename of the input path, not the full path', () => {
-    const result = subtitleTempPath('/tmp', '/some/deep/path/episode01.mkv', 0, 'srt', 'deadbeef')
-    expect(result).toBe(join('/tmp', 'kizuna-sub-episode01.mkv-0-deadbeef.srt'))
-  })
+    it('uses the basename of the input path, not the full path', () => {
+      const deep = path.join(mediaDir, 'some', 'deep', 'path', 'episode01.mkv')
 
-  it('appends an unguessable random component when no token is given', () => {
-    const a = subtitleTempPath('/tmp', '/videos/episode01.mkv', 2, 'ass')
-    const b = subtitleTempPath('/tmp', '/videos/episode01.mkv', 2, 'ass')
-    // Same inputs, different paths: the suffix is random, not derived from the
-    // media filename, so it cannot be predicted for a pre-created symlink.
-    expect(a).not.toBe(b)
-    expect(a).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
-    expect(b).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
-  })
-})
+      expect(subtitleTempPath(tempDir, deep, 0, 'srt', 'deadbeef', platform)).toBe(
+        tempFile('kizuna-sub-episode01.mkv-0-deadbeef.srt')
+      )
+    })
+
+    it('appends an unguessable random component when no token is given', () => {
+      const a = subtitleTempPath(tempDir, media, 2, 'ass', undefined, platform)
+      const b = subtitleTempPath(tempDir, media, 2, 'ass', undefined, platform)
+      // Same inputs, different paths: the suffix is random, not derived from the
+      // media filename, so it cannot be predicted for a pre-created symlink.
+      expect(a).not.toBe(b)
+      expect(a).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
+      expect(b).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
+    })
+  }
+)
 
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n'
 const ASS =
   '[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
   'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,こんばんは\n'
 
+// Extraction/parse behavior does not depend on path semantics, so these pin one
+// target; `subtitleTempPath` above covers both path shapes.
 function createService(overrides: Partial<SubtitleServiceDeps> = {}) {
   return createSubtitleService({
     ffmpegPath: 'ffmpeg',
     tmpDir: '/tmp',
+    platform: 'linux',
     execFfmpeg: vi.fn<FfmpegExec>().mockResolvedValue(undefined),
     readText: vi.fn<ReadTextFile>().mockResolvedValue(ASS),
     readBinary: vi.fn<ReadBinaryFile>().mockResolvedValue(new Uint8Array()),
