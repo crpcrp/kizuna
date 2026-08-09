@@ -29,7 +29,7 @@ function mecabDict(id: 'ipadic' | 'unidic', installed: boolean): McDict {
   return {
     id,
     label: id === 'ipadic' ? 'IPADIC' : 'UniDic',
-    dicdir: installed ? `C:\\res\\mecab\\${id}` : '',
+    dicdir: `C:\\Program Files\\Kizuna\\resources\\mecab\\${id}`,
     flavor: id,
     installed
   }
@@ -188,14 +188,14 @@ describe('buildSetupRows', () => {
   it('tells UniDic’s installed and missing cases apart in the note', () => {
     const missing = row(buildSetupRows(input()), 'mecab-unidic')
     expect(missing.state).toBe('missing')
-    expect(missing.note).toContain('resources/mecab/unidic')
+    expect(missing.note).toContain('C:\\Program Files\\Kizuna\\resources\\mecab\\unidic')
 
     const installed = row(
       buildSetupRows(input({ mecabDicts: [mecabDict('ipadic', true), mecabDict('unidic', true)] })),
       'mecab-unidic'
     )
     expect(installed.state).toBe('ready')
-    expect(installed.note).not.toContain('resources/mecab/unidic')
+    expect(installed.note).not.toContain('C:\\Program Files\\Kizuna\\resources\\mecab\\unidic')
   })
 
   it('points each configurable row at a real Options category', () => {

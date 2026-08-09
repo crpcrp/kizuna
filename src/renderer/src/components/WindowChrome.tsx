@@ -1,5 +1,5 @@
 import './WindowChrome.css'
-import { APP_NAME, appTitle } from '../../../shared/appInfo'
+import { APP_NAME } from '../../../shared/appInfo'
 
 // Custom title bar for the frameless window. The bar itself is a drag region;
 // the buttons opt out so clicks reach them instead of dragging the window.
@@ -15,15 +15,15 @@ export interface WindowChromeProps {
   controls?: WindowControls
   /** Whether the window is currently fullscreen; shows the "Window" restore button when true. */
   fullscreen?: boolean
-  /** Loaded media path; its basename replaces the versioned title when present. */
+  /** Loaded media path; its basename is appended to the app name when present. */
   filePath?: string
 }
 
-/** Formats the chrome title for the loaded media, or the versioned app title before a file loads. */
+/** Formats the chrome title for the loaded media, or the app name before a file loads. */
 export function chromeTitle(filePath?: string): string {
-  if (!filePath) return appTitle('0.0.1')
+  if (!filePath) return APP_NAME
   const basename = filePath.split(/[\\/]/).pop()
-  return basename ? `${APP_NAME} - ${basename}` : appTitle('0.0.1')
+  return basename ? `${APP_NAME} - ${basename}` : APP_NAME
 }
 
 /**

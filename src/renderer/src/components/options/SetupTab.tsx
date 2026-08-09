@@ -136,6 +136,7 @@ export function buildSetupRows({
   const anki = describeAnki(setup?.anki)
   const wanikani = describeWanikani(wanikaniConfigured, syncStatus, nowMs)
   const unidicState = mecabDictRow(mecabDicts, 'unidic')
+  const unidicInstallPath = mecabDicts.find((dict) => dict.id === 'unidic')?.dicdir
 
   return [
     {
@@ -178,7 +179,7 @@ export function buildSetupRows({
       note:
         unidicState === 'ready'
           ? 'Optional parser dictionary — installed.'
-          : 'Optional separate download; install it at resources/mecab/unidic.',
+          : `Optional separate download; install it at ${unidicInstallPath ?? 'the configured UniDic directory'}.`,
       goTo: 'dictionaries'
     },
     {

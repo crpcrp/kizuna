@@ -219,6 +219,7 @@ export function buildMpvArgs({
     '--idle=yes', // start with no file; wait for loadfile commands
     '--force-window=yes', // paint into the wid even while idle
     '--keep-open=yes', // playback end must not kill the embedded window
+    '--terminal=no', // embedded IPC owns control; never write status/log lines to the parent terminal
     '--no-osc', // Kizuna's DOM draws all controls
     '--no-input-default-bindings', // Kizuna owns keyboard input
     '--sid=no', // subtitles render in the DOM, never by mpv
@@ -305,12 +306,7 @@ export class MpvController {
     this.spawnFn =
       deps.spawnFn ??
       ((cmd, args) => {
-        const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] })
-        child.stderr?.on('data', (chunk) => {
-          const message = String(chunk).trimEnd()
-          if (message) console.warn(`[kizuna] mpv: ${message}`)
-        })
-        return child
+        return spawn(cmd, args, { stdio: 'ignore' })
       })
     this.client = deps.client ?? new MpvIpcClient()
     this.setTimeoutFn = deps.setTimeoutFn ?? ((cb, ms) => setTimeout(cb, ms))

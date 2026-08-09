@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import App from '@src/renderer/src/App'
-import { appTitle } from '@src/shared/appInfo'
+import { APP_NAME } from '@src/shared/appInfo'
 
 describe('App SSR smoke', () => {
   it('renders the app title', () => {
-    expect(renderToStaticMarkup(<App />)).toContain(appTitle('0.0.1'))
+    const html = renderToStaticMarkup(<App />)
+    expect(html).toContain(`<span id="chrome-title">${APP_NAME}</span>`)
+    expect(html).not.toContain('0.0.1')
   })
 
   it('renders the player shell without touching window', () => {

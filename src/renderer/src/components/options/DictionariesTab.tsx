@@ -135,6 +135,7 @@ export default function DictionariesTab({
   onRemoveYomitanDict,
   onChangePopupSettings
 }: DictionariesTabProps): React.JSX.Element {
+  const unidicInstallPath = mecabDicts.find((dict) => dict.id === 'unidic')?.dicdir
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null)
 
   // Imports one or more selected files in sequence, updating the "please
@@ -225,7 +226,8 @@ export default function DictionariesTab({
         ))}
         <p className="options-hint">
           UniDic is a separate download. Install a compatible MeCab UniDic folder at{' '}
-          <code>resources/mecab/unidic</code>, then restart Kizuna.
+          <code>{unidicInstallPath ?? 'the configured UniDic directory'}</code>, then restart
+          Kizuna.
         </p>
       </div>
 
