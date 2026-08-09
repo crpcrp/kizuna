@@ -129,7 +129,9 @@ describe('DictionariesTab markup', () => {
   it('explains how to install UniDic', () => {
     const html = renderTab({ mecabDicts: UNIDIC_MISSING })
     expect(html).toContain('UniDic is a separate download.')
-    expect(html).toContain('/opt/Kizuna/resources/mecab/unidic')
+    expect(html).toContain(
+      '<code class="filesystem-path">/opt/Kizuna/resources/mecab/unidic</code>'
+    )
     expect(html).not.toContain('<code>resources/mecab/unidic</code>')
   })
 

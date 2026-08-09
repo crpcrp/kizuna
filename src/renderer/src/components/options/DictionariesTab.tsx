@@ -226,8 +226,10 @@ export default function DictionariesTab({
         ))}
         <p className="options-hint">
           UniDic is a separate download. Install a compatible MeCab UniDic folder at{' '}
-          <code>{unidicInstallPath ?? 'the configured UniDic directory'}</code>, then restart
-          Kizuna.
+          <code className="filesystem-path">
+            {unidicInstallPath ?? 'the configured UniDic directory'}
+          </code>
+          , then restart Kizuna.
         </p>
       </div>
 
