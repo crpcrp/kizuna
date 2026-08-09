@@ -425,18 +425,11 @@ function npmLicenseSource(repoRoot, pkg, name) {
  * @param {NpmPackage[]} options.packages
  * @param {Record<string, string[]>} options.packageLicenseNames Licence filenames, keyed by package path.
  * @param {string} options.productName
- * @param {string} options.appVersion
  * @returns {string}
  */
-export function renderThirdPartyNotices({
-  notices,
-  packages,
-  packageLicenseNames,
-  productName,
-  appVersion
-}) {
+export function renderThirdPartyNotices({ notices, packages, packageLicenseNames, productName }) {
   const lines = [
-    `# Third-party notices for ${productName} ${appVersion}`,
+    `# Third-party notices for ${productName}`,
     '',
     `${productName} redistributes the components below. Each keeps its own licence;`,
     "none of them are licensed under the terms in this bundle's `LICENSE.txt`, which",
@@ -658,7 +651,6 @@ export async function writeNoticeBundle({ outDir, plan, documents }) {
  * @param {string} options.resourcesDir
  * @param {string} options.outDir
  * @param {string} options.productName
- * @param {string} options.appVersion
  * @param {string} [options.platformKey]
  * @param {(message: string) => void} [options.log]
  * @returns {Promise<string[]>} Bundle-relative paths written.
@@ -671,7 +663,6 @@ export async function generateNotices({
   resourcesDir,
   outDir,
   productName,
-  appVersion,
   platformKey,
   log = () => {}
 }) {
@@ -749,8 +740,7 @@ export async function generateNotices({
       notices,
       packages,
       packageLicenseNames,
-      productName,
-      appVersion
+      productName
     }),
     [SOURCE_FILE]: renderCorrespondingSource({ notices, productName }),
     'LICENSE.txt': await readFile(join(repoRoot, 'LICENSE'), 'utf-8')

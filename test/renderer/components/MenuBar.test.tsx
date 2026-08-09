@@ -112,6 +112,7 @@ describe('MenuBar markup', () => {
     expect(html).toContain('id="menu-settings"')
     expect(html).toContain('id="open-options"')
     expect(html).toContain('aria-label="Options"')
+    expect(html).toContain('Options…')
     expect(html).toContain('id="open-about-kizuna"')
     expect(html).toContain('About Kizuna')
     expect(html).not.toContain('fullscreen')
