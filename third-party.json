@@ -1,6 +1,9 @@
 {
   "schemaVersion": 1,
   "vendorCommit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+  "npmLicenseFallbacks": {
+    "lazy-val": "licenses/lazy-val/LICENSE"
+  },
   "components": [
     {
       "id": "mpv",

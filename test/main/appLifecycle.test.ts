@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  createAppLifecycleCoordinator,
   createQuitCoordinator,
   SHUTDOWN_TIMEOUT_MS,
   type PreventableQuitEvent,
@@ -201,5 +202,32 @@ describe('createQuitCoordinator', () => {
     } finally {
       process.off('unhandledRejection', unhandled)
     }
+  })
+})
+
+describe('createAppLifecycleCoordinator', () => {
+  it('finishes the normal cleanup before invoking an explicit installer', async () => {
+    const calls: string[] = []
+    const lifecycle = createAppLifecycleCoordinator({
+      defaultSession: { flushStorageData: () => calls.push('flush') },
+      controller: {
+        quit: async () => {
+          calls.push('mpv')
+        },
+        dispose: vi.fn()
+      },
+      cleanupUrlSubtitles: async () => {
+        calls.push('urlSubs')
+      },
+      flushHistory: () => calls.push('history'),
+      appQuit: vi.fn()
+    })
+
+    await lifecycle.prepareForInstall(() => calls.push('install'))
+
+    expect(calls).toEqual(['urlSubs', 'history', 'flush', 'mpv', 'install'])
+    const reentrantEvent = quitEvent()
+    lifecycle.handleBeforeQuit(reentrantEvent)
+    expect(reentrantEvent.preventDefault).not.toHaveBeenCalled()
   })
 })

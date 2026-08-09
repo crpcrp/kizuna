@@ -262,6 +262,15 @@ export const APP_INFO_CHANNELS = {
   openNotices: 'appInfo:openNotices'
 } as const
 
+/** Main-owned application updater commands and state push. */
+export const UPDATE_CHANNELS = {
+  getState: 'update:getState',
+  check: 'update:check',
+  download: 'update:download',
+  install: 'update:install',
+  stateChanged: 'update:stateChanged'
+} as const
+
 /** Clipboard bridge: renderer-to-main writes through Electron's clipboard
  * implementation rather than browser clipboard permissions. */
 export const CLIPBOARD_CHANNELS = {
