@@ -22,40 +22,33 @@ npm run format:check
 npm test
 ```
 
-Open and merge the version-bump PR. `package.json` and `package-lock.json` must
-contain the same version before any release run.
+Open the version-bump PR. Merging that PR is the only manual release
+touchpoint: a `package.json` version change on `main` automatically runs the
+release workflow. `package.json` and `package-lock.json` must contain the same
+version.
 
 ## Rehearse without publishing
 
 Open **Actions** → **Release** → **Run workflow**, select the branch to test,
-leave **Create the version tag and a draft pre-release** disabled, and run it.
+and run it manually.
 The validation, Windows x64, and Linux x64 jobs execute normally, including
 both package smoke tests, but no tag, draft, or release asset is published.
 Use this mode before merging a packaging or release-workflow change.
 
-## Create a release from GitHub
+## Automatic release after merge
 
-1. Confirm the version bump and any release changes are merged into `main`.
-2. Open **Actions** → **Release** → **Run workflow**.
-3. Select `main`, enable **Create the version tag and a draft pre-release**, and
-   run the workflow.
-4. Wait for **Validate release ref**, **Build and smoke-test Windows x64**,
+1. Merge the version-bump PR into `main`.
+2. The **Release** workflow starts automatically. Wait for **Validate release
+   ref**, **Build and smoke-test Windows x64**,
    **Build and smoke-test Linux x64**, and **Create draft pre-release** to pass.
-   The workflow creates `v<version>` only after both platform jobs succeed.
-5. Inspect the draft and complete the verification and manual QA below.
-6. Keep the release marked as a pre-release and publish the draft.
+   Only after both platform jobs succeed does the workflow create `v<version>`
+   on the merge commit and create the draft pre-release.
+3. Inspect the draft and complete the verification and manual QA below.
+4. Keep the release marked as a pre-release and publish the draft.
 
-Maintainers may instead create a tag after merging the matching version bump:
-
-```bash
-git switch main
-git pull --ff-only
-git tag -a v1.2.3 -m "Kizuna 1.2.3"
-git push origin v1.2.3
-```
-
-The tag must match the package version and point to a commit in `main`. A tag
-push runs the same platform and publish jobs.
+Matching `v<version>` tag pushes remain supported as a recovery path. Do not
+create one during the normal flow: the workflow creates it after the automatic
+build succeeds.
 
 ## Automated package coverage
 

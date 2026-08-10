@@ -22,9 +22,11 @@ describe('release workflow', () => {
   it('validates the release ref once before either platform builds', () => {
     expect(validate).toContain('does not match package.json version')
     expect(validate).toContain('git merge-base --is-ancestor HEAD origin/main')
-    expect(validate).toContain('Manual runs that create a release must run from main')
+    expect(validate).toContain('package.json and package-lock.json versions do not match')
     expect(windows).toMatch(/^    needs: validate$/m)
     expect(linux).toMatch(/^    needs: validate$/m)
+    expect(windows).toContain("if: needs.validate.outputs.build == 'true'")
+    expect(linux).toContain("if: needs.validate.outputs.build == 'true'")
   })
 
   it('keeps read-only defaults and grants release permissions only to publishing', () => {
@@ -98,6 +100,16 @@ describe('release workflow', () => {
     expect(publish).toContain('success() &&')
     expect(publish).toContain('name: kizuna-windows-x64-release')
     expect(publish).toContain('name: kizuna-linux-x64-release')
+  })
+
+  it('turns a version bump merged to main into a tag and draft automatically', () => {
+    expect(workflow).toContain('branches: [main]')
+    expect(workflow).toContain('paths: [package.json]')
+    expect(validate).toContain('previous_version=$(git show "$EVENT_BEFORE:package.json"')
+    expect(validate).toContain('package.json changed without a version change')
+    expect(validate).toContain('echo "publish=$publish" >> "$GITHUB_OUTPUT"')
+    expect(publish).toContain("needs.validate.outputs.publish == 'true'")
+    expect(publish).toContain('release create "$TAG"')
   })
 
   it('rejects an inexact asset set and produces one canonical checksum manifest', () => {
