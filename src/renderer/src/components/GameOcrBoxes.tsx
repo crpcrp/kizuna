@@ -62,8 +62,11 @@ export default function GameOcrBoxes({
   const onActiveRegionChangeRef = useRef(onActiveRegionChange)
   const hasMountedRef = useRef(false)
   const activeRegionId =
-    controlledActiveRegionId ??
-    (uncontrolledActive.resetKey === resetKey ? uncontrolledActive.regionId : null)
+    controlledActiveRegionId !== undefined
+      ? controlledActiveRegionId
+      : uncontrolledActive.resetKey === resetKey
+        ? uncontrolledActive.regionId
+        : null
 
   useEffect(() => {
     onActiveRegionChangeRef.current = onActiveRegionChange
