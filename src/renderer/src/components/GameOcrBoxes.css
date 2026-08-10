@@ -73,4 +73,3 @@
 .game-ocr-box [data-token][data-level='wellKnown'] {
   border-bottom: 2px solid var(--level-well-known-underline);
 }
-
