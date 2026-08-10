@@ -710,7 +710,7 @@ function validateRequest(
   request: PaddleOcrRequest,
   maxImageBase64Bytes: number
 ): PaddleOcrWorkerError | undefined {
-  if (!request || !isRequestId(request.sessionId) || !isRequestId(request.captureId)) {
+  if (!request || !isOcrIdentifier(request.sessionId) || !isOcrIdentifier(request.captureId)) {
     return new PaddleOcrWorkerError('invalid-input')
   }
   const { width, height } = request.imageSize ?? ({} as OcrImageSize)
@@ -809,6 +809,15 @@ function isRequestId(value: unknown): value is number {
     typeof value === 'number' &&
     Number.isSafeInteger(value) &&
     value > 0 &&
+    value <= MAX_OCR_IDENTIFIER
+  )
+}
+
+function isOcrIdentifier(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
     value <= MAX_OCR_IDENTIFIER
   )
 }
