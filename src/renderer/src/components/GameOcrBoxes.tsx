@@ -37,6 +37,7 @@ export interface GameOcrBoxesProps {
   /** Popup highlight returned by the controller, scoped to one OCR region. */
   popupHighlightedRegionId?: string | null
   popupHighlightedTokens?: Token[]
+  onContextMenu?: React.MouseEventHandler<HTMLDivElement>
   onWordHover?: InteractiveTextProps['onWordHover']
   onWordClick?: InteractiveTextProps['onWordClick']
   onWordLeave?: InteractiveTextProps['onWordLeave']
@@ -54,6 +55,7 @@ export default function GameOcrBoxes({
   onActiveRegionChange,
   popupHighlightedRegionId,
   popupHighlightedTokens,
+  onContextMenu: onContextMenuProp,
   onWordHover,
   onWordClick,
   onWordLeave
@@ -120,7 +122,10 @@ export default function GameOcrBoxes({
             onPointerUp={stopPropagation}
             onMouseUp={stopPropagation}
             onSelect={stopPropagation}
-            onContextMenu={stopPropagation}
+            onContextMenu={(event) => {
+              event.stopPropagation()
+              onContextMenuProp?.(event)
+            }}
             onClick={(event) => {
               event.stopPropagation()
               activate(region.id)
