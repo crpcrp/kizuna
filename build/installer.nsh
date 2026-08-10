@@ -23,7 +23,7 @@
 
   StrCpy $R7 "$R9.migration-tmp"
   RMDir /r "$R7"
-  CreateDirectory "$R8\${PRODUCT_FILENAME}\mecab"
+  CreateDirectory "$R8\${PRODUCT_NAME}\mecab"
   CreateDirectory "$R7"
   ClearErrors
   CopyFiles /SILENT "$INSTDIR\resources\mecab\unidic\*.*" "$R7"
