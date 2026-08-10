@@ -4,17 +4,21 @@ export interface UpdateWorkflowState {
   snapshot: UpdateState
   dismissedAvailable: string[]
   deferredDownloaded: string[]
+  /** Hides the global error banner only; About keeps showing the underlying error. */
+  dismissedError: boolean
 }
 
 export type UpdateWorkflowAction =
   | { type: 'snapshot'; snapshot: UpdateState }
   | { type: 'dismissAvailable'; version: string }
   | { type: 'deferDownloaded'; version: string }
+  | { type: 'dismissError' }
 
 export const initialUpdateWorkflowState: UpdateWorkflowState = {
   snapshot: { status: 'idle' },
   dismissedAvailable: [],
-  deferredDownloaded: []
+  deferredDownloaded: [],
+  dismissedError: false
 }
 
 export function updateWorkflowReducer(
@@ -23,7 +27,9 @@ export function updateWorkflowReducer(
 ): UpdateWorkflowState {
   switch (action.type) {
     case 'snapshot':
-      return { ...state, snapshot: action.snapshot }
+      // Every published snapshot is a new operation or state transition, so a
+      // stale dismissal must not hide it.
+      return { ...state, snapshot: action.snapshot, dismissedError: false }
     case 'dismissAvailable':
       return state.dismissedAvailable.includes(action.version)
         ? state
@@ -32,6 +38,10 @@ export function updateWorkflowReducer(
       return state.deferredDownloaded.includes(action.version)
         ? state
         : { ...state, deferredDownloaded: [...state.deferredDownloaded, action.version] }
+    case 'dismissError':
+      return state.snapshot.status === 'error' && !state.dismissedError
+        ? { ...state, dismissedError: true }
+        : state
   }
 }
 
@@ -57,6 +67,6 @@ export function updateStatusText(state: UpdateWorkflowState): string | null {
     return `Downloading Kizuna ${snapshot.version}… ${Math.round(snapshot.progress.percent)}%`
   }
   if (snapshot.status === 'downloaded') return `Kizuna ${snapshot.version} is ready to install.`
-  if (snapshot.status === 'error') return snapshot.message
+  if (snapshot.status === 'error') return state.dismissedError ? null : snapshot.message
   return null
 }

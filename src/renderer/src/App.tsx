@@ -416,9 +416,21 @@ export default function App({
         <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
           <span>{updates.statusText}</span>
           {updates.snapshot.status === 'error' && (
-            <button type="button" onClick={updates.retry}>
-              Retry
-            </button>
+            <>
+              {updates.snapshot.retryable && (
+                <button type="button" onClick={updates.retry}>
+                  Retry
+                </button>
+              )}
+              <button
+                type="button"
+                className="update-status-dismiss"
+                aria-label="Dismiss update error"
+                onClick={updates.dismissError}
+              >
+                ×
+              </button>
+            </>
           )}
           {updates.snapshot.status === 'downloaded' && (
             <button type="button" onClick={updates.install}>
