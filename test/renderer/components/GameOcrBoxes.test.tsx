@@ -31,7 +31,9 @@ function region(
 describe('GameOcrBoxes', () => {
   it('renders one selectable plain-text box per region in deterministic source order', () => {
     const { container } = render(
-      <GameOcrBoxes regions={[region('later', '\u5f8c', 20, 20), region('first', '\u524d\n\u884c', 10, 10)]} />
+      <GameOcrBoxes
+        regions={[region('later', '\u5f8c', 20, 20), region('first', '\u524d\n\u884c', 10, 10)]}
+      />
     )
 
     expect(
@@ -55,7 +57,7 @@ describe('GameOcrBoxes', () => {
           region('compound', '\u795e\u69d8\u3068', 0, 0, {
             tokens,
             highlightedTokens: tokens.slice(0, 2),
-            levels: { \u795e: 'unknown', \u69d8: 'unknown', \u3068: 'unknown' },
+            levels: { '\u795e': 'unknown', '\u69d8': 'unknown', '\u3068': 'unknown' },
             vocabularySpans: [
               {
                 cueKey: 'compound',
@@ -104,7 +106,9 @@ describe('GameOcrBoxes', () => {
     const onClose = vi.fn()
     const { container } = render(
       <GameOcrFrame onClose={onClose}>
-        <GameOcrBoxes regions={[region('one', '\u9078\u629e\u3067\u304d\u308b\u6587\u5b57', 0, 0)]} />
+        <GameOcrBoxes
+          regions={[region('one', '\u9078\u629e\u3067\u304d\u308b\u6587\u5b57', 0, 0)]}
+        />
       </GameOcrFrame>
     )
     const box = container.querySelector('[data-region-id="one"]') as HTMLElement
