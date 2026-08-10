@@ -64,6 +64,10 @@ describe('normalizeAnkiField', () => {
     expect(normalizeAnkiField('<ruby>食<rt>た</rt></ruby>べる')).toBe('食べる')
   })
 
+  it('repeats tag removal until nested tags are gone', () => {
+    expect(normalizeAnkiField('<<script>alert(1)</script>')).toBe('alert(1)')
+  })
+
   it('strips div/br wrappers', () => {
     expect(normalizeAnkiField('<div>猫</div><br>')).toBe('猫')
   })

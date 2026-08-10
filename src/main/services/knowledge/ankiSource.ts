@@ -35,17 +35,23 @@ function deckSearchTerm(deckName: string): string {
  * than trying to whitelist every input shape.
  */
 export function normalizeAnkiField(html: string): string {
-  return html
-    .replace(/<rt>[^<]*<\/rt>/gi, '')
-    .replace(/<rp>[^<]*<\/rp>/gi, '')
-    .replace(/<\/?ruby>/gi, '')
-    .replace(/ ?([^ >]+?)\[(.+?)\]/g, '$1') // Anki's kanji filter: drops the separator space
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/<br\s*\/?>/gi, '')
-    .replace(/<\/?div[^>]*>/gi, '')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/gi, '')
-    .trim()
+  let normalized = html
+  let previous: string
+  // Removing an outer tag can expose another tag, so repeat until stable.
+  do {
+    previous = normalized
+    normalized = normalized
+      .replace(/<rt>[^<]*<\/rt>/gi, '')
+      .replace(/<rp>[^<]*<\/rp>/gi, '')
+      .replace(/<\/?ruby>/gi, '')
+      .replace(/ ?([^ >]+?)\[(.+?)\]/g, '$1') // Anki's kanji filter: drops the separator space
+      .replace(/\[[^\]]*\]/g, '')
+      .replace(/<br\s*\/?>/gi, '')
+      .replace(/<\/?div[^>]*>/gi, '')
+      .replace(/<[^>]+>/g, '')
+  } while (normalized !== previous)
+
+  return normalized.replace(/&nbsp;/gi, '').trim()
 }
 
 /**
