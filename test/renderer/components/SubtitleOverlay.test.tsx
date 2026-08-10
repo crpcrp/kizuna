@@ -7,6 +7,9 @@ import SubtitleOverlay, {
   subtitleBoxStyle,
   type TokenSpanItem
 } from '@src/renderer/src/components/SubtitleOverlay'
+import InteractiveText, {
+  type InteractiveTextProps
+} from '@src/renderer/src/components/InteractiveText'
 import { DEFAULT_SUBTITLE_STYLE } from '@src/shared/playerSettings'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
@@ -303,8 +306,12 @@ describe('SubtitleOverlay optional event parameters', () => {
       onWordHover,
       onWordLeave
     })
-    // <div id="subtitle">{spans}</div> -> spans[0] is the single token span.
-    const spans = (element.props.children as React.ReactElement<TokenSpanProps>[]).filter(Boolean)
+    // <div id="subtitle"><InteractiveText>{spans}</InteractiveText></div>.
+    const interactiveElement = element.props.children as React.ReactElement<InteractiveTextProps>
+    const interactiveText = InteractiveText(interactiveElement.props)
+    const spans = (interactiveText.props.children as React.ReactElement<TokenSpanProps>[]).filter(
+      Boolean
+    )
     return spans[0].props
   }
 
