@@ -197,4 +197,3 @@ describe('GameOcrBoxes', () => {
     expect(css).not.toMatch(/#[0-9a-f]{3,8}/i)
   })
 })
-
