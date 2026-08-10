@@ -8,6 +8,7 @@ import { makeToken } from '@test/harness/tokenFixtures'
 
 const IPADIC_DIR = 'C:\\resources\\mecab\\ipadic'
 const UNIDIC_DIR = 'C:\\resources\\mecab\\unidic'
+const USER_UNIDIC_DIR = 'C:\\Users\\me\\AppData\\Roaming\\Kizuna\\mecab\\unidic'
 
 /** Fake settings IO (mirrors settings.test.ts's fakeIo). */
 const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
@@ -92,6 +93,30 @@ describe('createMecabService', () => {
     await service.tokenize('text')
 
     expect(calls[0].cfg).toEqual({ mecabPath: 'mecab.exe', dicdir: UNIDIC_DIR, flavor: 'unidic' })
+  })
+
+  it('tokenize prefers the persistent user UniDic over the bundled copy', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ mecabDictId: 'unidic' })))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: {
+        ipadicDir: IPADIC_DIR,
+        unidicDir: UNIDIC_DIR,
+        userUnidicDir: USER_UNIDIC_DIR
+      },
+      exists: (path) => path === IPADIC_DIR || path === UNIDIC_DIR || path === USER_UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    await service.tokenize('text')
+
+    expect(calls[0].cfg).toEqual({
+      mecabPath: 'mecab.exe',
+      dicdir: USER_UNIDIC_DIR,
+      flavor: 'unidic'
+    })
   })
 
   it('listDicts lists both dicts, flagging the absent unidic as not installed', () => {
@@ -198,5 +223,32 @@ describe('createMecabService', () => {
     })
 
     expect(service.currentDict()).toBe('ipadic')
+  })
+
+  it('keeps a selected persistent UniDic after reopening the settings store', async () => {
+    const io = fakeIo(JSON.stringify({ mecabDictId: 'unidic' }))
+    const settings = createSettingsStore(io)
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      exists: (path) => path === IPADIC_DIR || path === USER_UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(service.currentDict()).toBe('unidic')
+    const reopened = createSettingsStore(io)
+    const reopenedService = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      exists: (path) => path === IPADIC_DIR || path === USER_UNIDIC_DIR,
+      settings: reopened,
+      tokenizeFn
+    })
+
+    expect(reopenedService.currentDict()).toBe('unidic')
+    await reopenedService.tokenize('text')
+    expect(calls.at(-1)?.cfg.dicdir).toBe(USER_UNIDIC_DIR)
   })
 })

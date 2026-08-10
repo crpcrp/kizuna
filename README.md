@@ -95,6 +95,21 @@ replacing the AppImage.
 
 Neither service is required for video playback or local subtitle study.
 
+### Optional MeCab UniDic
+
+UniDic is an optional parser dictionary. Install a compatible MeCab UniDic
+folder under Kizuna's persistent user-data directory, then restart Kizuna:
+
+- Windows: `%APPDATA%\Kizuna\mecab\unidic`
+- Linux: `~/.config/Kizuna/mecab/unidic`
+
+Options > Parser & Dictionaries > Open UniDic folder creates and opens the
+folder for you. Keep the dictionary there rather than under the application
+installation directory so it survives Kizuna updates. Legacy copies from the
+old resource location are migrated during an installer upgrade or the first
+startup that can still see them; Linux development installs continue using the
+system dictionary.
+
 ## Privacy and network access
 
 Playback, subtitle processing, dictionaries, settings, history, and vocabulary

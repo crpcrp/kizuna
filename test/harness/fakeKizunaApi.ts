@@ -95,7 +95,8 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       tokenizeBatch: vi.fn(async () => []),
       listDicts: vi.fn(async () => []),
       selectDict: vi.fn(async () => 'ipadic' as const),
-      currentDict: vi.fn(async () => 'ipadic' as const)
+      currentDict: vi.fn(async () => 'ipadic' as const),
+      openUserUnidicDir: vi.fn(async () => '')
     },
     dict: {
       importDict: vi.fn(async () => ({ dictId: 1, termCount: 0, metaCount: 0 })),

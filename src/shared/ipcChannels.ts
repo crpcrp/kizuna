@@ -153,7 +153,9 @@ export const MECAB_CHANNELS = {
   tokenizeBatch: 'mecab:tokenizeBatch',
   listDicts: 'mecab:listDicts',
   selectDict: 'mecab:selectDict',
-  currentDict: 'mecab:currentDict'
+  currentDict: 'mecab:currentDict',
+  /** Creates/reveals the persistent user-UniDic folder. */
+  openUserUnidicDir: 'mecab:openUserUnidicDir'
 } as const
 
 /**

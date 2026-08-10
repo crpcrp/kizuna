@@ -129,6 +129,21 @@ describe('repository configuration', () => {
     expect(config.fileAssociations?.[0]?.ext).toEqual([...VIDEO_EXTENSIONS])
   })
 
+  it('preserves legacy UniDic before NSIS removes an old installation', () => {
+    const config = createRequire(import.meta.url)(join(REPO_ROOT, 'electron-builder.cjs')) as {
+      nsis?: { include?: string }
+    }
+    expect(config.nsis?.include).toBe('build/installer.nsh')
+
+    const installer = read('build/installer.nsh')
+    expect(installer).toContain('customInit')
+    expect(installer).toContain('resources\\mecab\\unidic')
+    expect(installer).toContain('${PRODUCT_NAME}\\mecab\\unidic')
+    expect(installer).toContain('CopyFiles')
+    expect(installer).toContain('Rename')
+    expect(installer).toContain('mecab\\unidic')
+  })
+
   it('keeps release documentation discoverable without delegating CI validation', () => {
     expect(read('docs/architecture-plan.md')).toContain('[Releasing](releasing.md)')
     expect(read('docs/codebase-map.md')).toContain('[Releasing](releasing.md)')

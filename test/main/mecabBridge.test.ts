@@ -53,7 +53,8 @@ describe('registerMecabBridge', () => {
         MECAB_CHANNELS.tokenizeBatch,
         MECAB_CHANNELS.listDicts,
         MECAB_CHANNELS.selectDict,
-        MECAB_CHANNELS.currentDict
+        MECAB_CHANNELS.currentDict,
+        MECAB_CHANNELS.openUserUnidicDir
       ].sort()
     )
   })
@@ -116,5 +117,15 @@ describe('registerMecabBridge', () => {
     expect(service.currentDict).toHaveBeenCalled()
     expect(calls.currentDict).toEqual([])
     expect(result).toBe('ipadic')
+  })
+
+  it('forwards openUserUnidicDir to the injected folder opener', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+    const openUserUnidicDir = vi.fn(async () => 'open-error')
+    registerMecabBridge(ipc, service, { openUserUnidicDir })
+
+    await expect(handlers.get(MECAB_CHANNELS.openUserUnidicDir)!(event)).resolves.toBe('open-error')
+    expect(openUserUnidicDir).toHaveBeenCalledTimes(1)
   })
 })

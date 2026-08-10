@@ -30,7 +30,7 @@ import type { SettingsPersistence } from './settingsPersistence'
 /** The bridge slice the dialog's own actions use. Everything the *data*
  * controller reads goes through `optionsDataBridge` instead (see
  * state/optionsData.ts), which reaches `window.kizuna` lazily. */
-export type OptionsDialogBridge = Pick<KizunaApi, 'anki' | 'dict' | 'playerSettings'>
+export type OptionsDialogBridge = Pick<KizunaApi, 'anki' | 'dict' | 'mecab' | 'playerSettings'>
 
 export interface UseOptionsDialogInput {
   bridge: OptionsDialogBridge
@@ -70,6 +70,7 @@ export interface OptionsDialogActions {
   ankiPing(): Promise<AnkiPing>
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
   onOpenMpvConfigDir(): void
+  onOpenUserUnidicDir(): void
   /** Schedules a debounced settings write for a row the settings lifecycle
    *  does not persist on its own. */
   persist(patch: Partial<PlayerSettings>): void
@@ -151,6 +152,18 @@ export function useOptionsDialog({
     )
   }, [bridge, reportError])
 
+  // Reveals the persistent UniDic folder in the OS file manager. The main
+  // process creates it on demand and returns Electron's shell.openPath error
+  // string when the OS refuses to open it.
+  const onOpenUserUnidicDir = useCallback((): void => {
+    void bridge.mecab.openUserUnidicDir().then(
+      (error) => {
+        if (error) reportError(`Could not open the UniDic folder: ${error}`)
+      },
+      () => reportError('Could not open the UniDic folder.')
+    )
+  }, [bridge, reportError])
+
   const actions = useMemo<OptionsDialogActions>(
     () => ({
       onImportYomitanDict: (bytes) => importYomitanDict(bridge.dict, controller, bytes),
@@ -164,9 +177,10 @@ export function useOptionsDialog({
       ankiPing: () => bridge.anki.ping(),
       onChangeAnkiSettings: (patch) => changeAnkiSettings(bridge.anki, controller, patch),
       onOpenMpvConfigDir,
+      onOpenUserUnidicDir,
       persist: (patch) => settingsPersistenceRef.current.schedule(patch)
     }),
-    [bridge, controller, onOpenMpvConfigDir, settingsPersistenceRef]
+    [bridge, controller, onOpenMpvConfigDir, onOpenUserUnidicDir, settingsPersistenceRef]
   )
 
   return {

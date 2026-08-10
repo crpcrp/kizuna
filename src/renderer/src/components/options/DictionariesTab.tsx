@@ -59,6 +59,7 @@ export interface DictionariesTabProps {
   /** User-facing error from the last dictionaries-domain load. Undefined when there is none. */
   loadError?: string
   onSelectMecabDict: (id: 'ipadic' | 'unidic') => void
+  onOpenUserUnidicDir: () => void
   onImportYomitanDict: (bytes: Uint8Array) => Promise<void>
   /** Subscribes to advisory term-row progress for the in-flight import;
    * returns an unsubscribe function. Optional — omitting it just leaves the
@@ -127,6 +128,7 @@ export default function DictionariesTab({
   popupSettings,
   loadError,
   onSelectMecabDict,
+  onOpenUserUnidicDir,
   onImportYomitanDict,
   subscribeImportProgress,
   onSetYomitanEnabled,
@@ -225,12 +227,21 @@ export default function DictionariesTab({
           </div>
         ))}
         <p className="options-hint">
-          UniDic is a separate download. Install a compatible MeCab UniDic folder at{' '}
+          UniDic is a separate download. Install a compatible MeCab UniDic folder in Kizuna&rsquo;s
+          persistent user-data directory at{' '}
           <code className="filesystem-path">
             {unidicInstallPath ?? 'the configured UniDic directory'}
           </code>
-          , then restart Kizuna.
+          . This folder survives application updates.
         </p>
+        <button
+          type="button"
+          id="mecab-open-unidic-folder"
+          className="options-button"
+          onClick={onOpenUserUnidicDir}
+        >
+          Open UniDic folder
+        </button>
       </div>
 
       <div className="options-section">

@@ -212,7 +212,8 @@ const api = {
     listDicts: (): Promise<McDict[]> => ipcRenderer.invoke(MECAB_CHANNELS.listDicts),
     selectDict: (id: string): Promise<'ipadic' | 'unidic'> =>
       ipcRenderer.invoke(MECAB_CHANNELS.selectDict, id),
-    currentDict: (): Promise<'ipadic' | 'unidic'> => ipcRenderer.invoke(MECAB_CHANNELS.currentDict)
+    currentDict: (): Promise<'ipadic' | 'unidic'> => ipcRenderer.invoke(MECAB_CHANNELS.currentDict),
+    openUserUnidicDir: (): Promise<string> => ipcRenderer.invoke(MECAB_CHANNELS.openUserUnidicDir)
   },
   // Yomitan dictionary bridge: import a dictionary zip (already read into
   // bytes by the renderer's file picker), look up a term, and manage the

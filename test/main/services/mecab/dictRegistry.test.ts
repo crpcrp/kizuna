@@ -26,6 +26,21 @@ describe('availableMecabDicts', () => {
     ])
   })
 
+  it('points missing UniDic at the persistent folder rather than package resources', () => {
+    const dicts = availableMecabDicts(
+      { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      (path) => path === IPADIC_DIR
+    )
+
+    expect(dicts[1]).toEqual({
+      id: 'unidic',
+      label: 'UniDic',
+      dicdir: USER_UNIDIC_DIR,
+      flavor: 'unidic',
+      installed: false
+    })
+  })
+
   it('lists unidic with an empty dicdir when no unidic path was configured at all', () => {
     const dicts = availableMecabDicts({ ipadicDir: IPADIC_DIR }, () => true)
     expect(dicts[1]).toEqual({
@@ -49,11 +64,22 @@ describe('availableMecabDicts', () => {
     ])
   })
 
-  it('prefers the bundled unidic dir over the user one when both exist', () => {
+  it('prefers the persistent user unidic dir over the bundled one when both exist', () => {
     const dicts = availableMecabDicts(
       { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
       () => true
     )
+    expect(dicts[1].dicdir).toBe(USER_UNIDIC_DIR)
+    expect(dicts[1].installed).toBe(true)
+  })
+
+  it('ignores an invalid persistent copy when a valid bundled copy exists', () => {
+    const dicts = availableMecabDicts(
+      { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      () => true,
+      (path) => path !== USER_UNIDIC_DIR
+    )
+
     expect(dicts[1].dicdir).toBe(UNIDIC_DIR)
     expect(dicts[1].installed).toBe(true)
   })

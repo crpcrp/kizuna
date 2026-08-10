@@ -4,7 +4,8 @@ import { posix, win32 } from 'node:path'
 import {
   requiredPackagedResources,
   resolveBinaryPaths,
-  resolveThirdPartyNoticesPath
+  resolveThirdPartyNoticesPath,
+  resolveUserUnidicDir
 } from '@src/main/resourcePaths'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 
@@ -63,6 +64,17 @@ describe('resolveBinaryPaths', () => {
     })
   })
 })
+
+describe.each(PATH_PLATFORMS)(
+  'resolveUserUnidicDir on $label',
+  ({ platform, path, userDataDir }) => {
+    it('keeps mutable UniDic below Electron userData', () => {
+      expect(resolveUserUnidicDir(userDataDir, platform)).toBe(
+        path.join(userDataDir, 'mecab', 'unidic')
+      )
+    })
+  }
+)
 
 describe('requiredPackagedResources', () => {
   it('keeps every smoke-check path aligned with the platform lock', () => {

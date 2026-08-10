@@ -57,6 +57,14 @@ export interface ResolveThirdPartyNoticesPathOptions {
   platform?: NodeJS.Platform
 }
 
+/** Resolves the mutable UniDic folder owned by the user's app-data directory. */
+export function resolveUserUnidicDir(
+  userDataPath: string,
+  platform: NodeJS.Platform = process.platform
+): string {
+  return pathApiFor(platform).join(userDataPath, 'mecab', 'unidic')
+}
+
 /** Resolves the notices file generated for development or copied into a build. */
 export function resolveThirdPartyNoticesPath({
   isPackaged,
