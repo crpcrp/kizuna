@@ -306,6 +306,51 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     )
   })
 
+  it('splits the legacy subtitleFontScale wheel binding into directional actions', () => {
+    const merged = mergeSettings({
+      player: { keyBindings: { subtitleFontScale: 'ShiftLeft+MouseWheel' } }
+    })
+    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('ShiftLeft+MouseWheelUp')
+    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('ShiftLeft+MouseWheelDown')
+    expect(merged.player.keyBindings).not.toHaveProperty('subtitleFontScale')
+
+    const ctrl = mergeSettings({
+      player: { keyBindings: { subtitleFontScale: 'ControlLeft+MouseWheel' } }
+    })
+    expect(ctrl.player.keyBindings.subtitleFontScaleUp).toBe('ControlLeft+MouseWheelUp')
+    expect(ctrl.player.keyBindings.subtitleFontScaleDown).toBe('ControlLeft+MouseWheelDown')
+  })
+
+  it('keeps a legacy custom key as the increase binding without duplicating it', () => {
+    const merged = mergeSettings({ player: { keyBindings: { subtitleFontScale: 'KeyZ' } } })
+    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('KeyZ')
+    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe(
+      DEFAULT_PLAYER_SETTINGS.keyBindings.subtitleFontScaleDown
+    )
+  })
+
+  it('ignores a legacy subtitleFontScale once the new bindings are stored', () => {
+    const merged = mergeSettings({
+      player: {
+        keyBindings: {
+          subtitleFontScale: 'KeyZ',
+          subtitleFontScaleUp: 'KeyI',
+          subtitleFontScaleDown: 'KeyO'
+        }
+      }
+    })
+    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('KeyI')
+    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('KeyO')
+  })
+
+  it('falls back to the directional defaults for malformed legacy data', () => {
+    for (const subtitleFontScale of [123, '', 'ShiftLeft', 'a+b+c', null]) {
+      const merged = mergeSettings({ player: { keyBindings: { subtitleFontScale } } })
+      expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('ShiftLeft+MouseWheelUp')
+      expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('ShiftLeft+MouseWheelDown')
+    }
+  })
+
   it('falls back to default skipSeconds when the stored value is not a positive finite number', () => {
     expect(mergeSettings({ player: { skipSeconds: 'ten' } }).player.skipSeconds).toBe(
       DEFAULT_PLAYER_SETTINGS.skipSeconds

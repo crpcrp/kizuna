@@ -23,7 +23,8 @@ export type PlayerKeyAction =
   | 'nextChapter'
   | 'screenshot'
   | 'miniPlayer'
-  | 'subtitleFontScale'
+  | 'subtitleFontScaleUp'
+  | 'subtitleFontScaleDown'
 
 /**
  * Left-side modifier keys a binding may be prefixed with. Only the left-hand
@@ -43,14 +44,20 @@ export function isKeyModifier(code: string): code is KeyModifier {
 /**
  * An input code a player action is bound to, optionally prefixed with one
  * modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
- * `MouseWheel` pseudo-code is used for the subtitle-size wheel binding.
- * Matching is exact, so a bare `ArrowLeft` binding does *not* fire on
- * Ctrl+ArrowLeft (which is what lets the two be bound separately).
+ * `MouseWheelUp`/`MouseWheelDown` pseudo-codes are used for the subtitle-size
+ * wheel bindings. Matching is exact, so a bare `ArrowLeft` binding does *not*
+ * fire on Ctrl+ArrowLeft (which is what lets the two be bound separately).
  */
 export type KeyBinding = string
 
-/** Pseudo-code used by the editable mouse-wheel binding. */
-export const MOUSE_WHEEL_BINDING_CODE = 'MouseWheel'
+/** Pseudo-codes used by the editable, direction-aware mouse-wheel bindings. */
+export const MOUSE_WHEEL_UP_BINDING_CODE = 'MouseWheelUp'
+export const MOUSE_WHEEL_DOWN_BINDING_CODE = 'MouseWheelDown'
+
+/** Directionless wheel pseudo-code written by releases before the subtitle-size
+ * shortcut was split into separate increase/decrease actions. Only read by
+ * `normalizeKeyBindings` when migrating a stored `subtitleFontScale` value. */
+export const LEGACY_MOUSE_WHEEL_BINDING_CODE = 'MouseWheel'
 
 /** The binding each action is triggered by. */
 export type KeyBindings = Record<PlayerKeyAction, KeyBinding>
@@ -77,7 +84,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   nextChapter: 'ControlLeft+ArrowRight',
   screenshot: 'KeyS',
   miniPlayer: 'ControlLeft+KeyM',
-  subtitleFontScale: 'ShiftLeft+MouseWheel'
+  subtitleFontScaleUp: 'ShiftLeft+MouseWheelUp',
+  subtitleFontScaleDown: 'ShiftLeft+MouseWheelDown'
 }
 
 /**
@@ -94,6 +102,50 @@ export function normalizeKeyBinding(raw: unknown): KeyBinding | null {
   if (code === '' || isKeyModifier(code)) return null
   if (parts.length === 2 && !isKeyModifier(parts[0])) return null
   return raw
+}
+
+/** Splits a legacy directionless wheel binding into its up/down counterparts,
+ * or returns null when `binding` is not a wheel binding at all. */
+function splitLegacyWheelBinding(binding: KeyBinding): [KeyBinding, KeyBinding] | null {
+  const parts = binding.split('+')
+  if (parts[parts.length - 1] !== LEGACY_MOUSE_WHEEL_BINDING_CODE) return null
+  const modifiers = parts.slice(0, -1)
+  return [
+    [...modifiers, MOUSE_WHEEL_UP_BINDING_CODE].join('+'),
+    [...modifiers, MOUSE_WHEEL_DOWN_BINDING_CODE].join('+')
+  ]
+}
+
+/**
+ * Validates a stored `keyBindings` object against the current action list,
+ * falling back to `DEFAULT_KEY_BINDINGS` per action. Unknown keys — including
+ * the legacy `subtitleFontScale` field — are dropped from the result so they
+ * can never affect routing again.
+ *
+ * A stored `subtitleFontScale` is migrated when neither directional action was
+ * stored: a wheel chord splits into the same chord's up/down variants (so the
+ * old `ShiftLeft+MouseWheel` default becomes the two new defaults), while an
+ * ordinary key is kept as the increase binding and decrease keeps its default
+ * wheel-down binding rather than duplicating that key on both actions.
+ */
+export function normalizeKeyBindings(raw: unknown): KeyBindings {
+  const stored = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const bindings = { ...DEFAULT_KEY_BINDINGS }
+  for (const action of Object.keys(bindings) as PlayerKeyAction[]) {
+    const binding = normalizeKeyBinding(stored[action])
+    if (binding) bindings[action] = binding
+  }
+
+  const migrated = normalizeKeyBinding(stored.subtitleFontScale)
+  if (migrated && !normalizeKeyBinding(stored.subtitleFontScaleUp)) {
+    const split = splitLegacyWheelBinding(migrated)
+    bindings.subtitleFontScaleUp = split ? split[0] : migrated
+    if (split && !normalizeKeyBinding(stored.subtitleFontScaleDown)) {
+      bindings.subtitleFontScaleDown = split[1]
+    }
+  }
+
+  return bindings
 }
 
 /** UI color-scheme preference; 'system' follows the OS via prefers-color-scheme. */

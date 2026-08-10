@@ -26,8 +26,15 @@ export const ACTION_ROWS: { action: PlayerKeyAction; label: string }[] = [
   { action: 'nextChapter', label: 'Next chapter' },
   { action: 'screenshot', label: 'Save screenshot' },
   { action: 'miniPlayer', label: 'Mini player' },
-  { action: 'subtitleFontScale', label: 'Subtitle size ±10%' }
+  { action: 'subtitleFontScaleUp', label: 'Increase subtitle size by 10%' },
+  { action: 'subtitleFontScaleDown', label: 'Decrease subtitle size by 10%' }
 ]
+
+/** Actions whose row also accepts a directional mouse-wheel gesture. */
+const WHEEL_BINDABLE_ACTIONS: ReadonlySet<PlayerKeyAction> = new Set([
+  'subtitleFontScaleUp',
+  'subtitleFontScaleDown'
+])
 
 export const KEYBINDINGS_SETTING_ENTRIES: SettingEntry[] = ACTION_ROWS.map(
   ({ action, label }): SettingEntry => ({
@@ -61,31 +68,32 @@ export default function KeybindingsTab({
 
   useEffect(() => {
     if (!open || !listeningFor) return
+    const wheelBindable = WHEEL_BINDABLE_ACTIONS.has(listeningFor)
     const captureKey = (e: KeyboardEvent): void => {
       e.preventDefault()
       e.stopPropagation()
-      if (listeningFor === 'subtitleFontScale') {
-        if (e.code === 'Escape') {
-          setListeningFor(null)
-          return
-        }
+      if (wheelBindable && e.code === 'Escape') {
+        setListeningFor(null)
+        return
       }
       const binding = eventKeyBinding(e, heldModifiers)
       if (!binding) return
       onChangeKeyBinding(listeningFor, binding)
       setListeningFor(null)
     }
+    // Only a gesture that actually rebinds is consumed, so an ignored wheel
+    // event still scrolls the Options panel as usual.
     const captureWheel = (e: WheelEvent): void => {
-      e.preventDefault()
-      e.stopPropagation()
       const binding = wheelEventKeyBinding(e, heldModifiers)
       if (!binding) return
+      e.preventDefault()
+      e.stopPropagation()
       onChangeKeyBinding(listeningFor, binding)
       setListeningFor(null)
     }
     window.addEventListener('keydown', captureKey, true)
-    if (listeningFor === 'subtitleFontScale') {
-      window.addEventListener('wheel', captureWheel, true)
+    if (wheelBindable) {
+      window.addEventListener('wheel', captureWheel, { capture: true, passive: false })
     }
     return () => {
       window.removeEventListener('keydown', captureKey, true)
@@ -114,7 +122,7 @@ export default function KeybindingsTab({
                 onClick={() => setListeningFor(action)}
               >
                 {listeningFor === action
-                  ? action === 'subtitleFontScale'
+                  ? WHEEL_BINDABLE_ACTIONS.has(action)
                     ? 'Press a key or scroll…'
                     : 'Press a key…'
                   : describeKeyBinding(keyBindings[action])}

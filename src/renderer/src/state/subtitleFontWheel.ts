@@ -3,11 +3,9 @@ import {
   SUBTITLE_FONT_SCALE_MAX,
   SUBTITLE_FONT_SCALE_MIN,
   SUBTITLE_FONT_SCALE_STEP,
-  type KeyBinding
+  type KeyBindings
 } from '../../../shared/playerSettings'
 import { wheelEventKeyBinding } from './keyBindings'
-
-export type SubtitleFontWheelDirection = -1 | 0 | 1
 
 export interface SubtitleFontWheelEventLike {
   deltaX: number
@@ -20,29 +18,17 @@ export interface SubtitleFontWheelEventLike {
   currentTarget: unknown
 }
 
-/** Maps a wheel gesture to one vertical direction, regardless of axis. */
-export function subtitleFontWheelDirection(
-  deltaY: number,
-  deltaX: number
-): SubtitleFontWheelDirection {
-  const axis = Number.isFinite(deltaY) && deltaY !== 0 ? deltaY : deltaX
-  if (!Number.isFinite(axis) || axis === 0) return 0
-  return axis < 0 ? -1 : 1
-}
+/** One subtitle-size step: `1` grows the text, `-1` shrinks it. */
+export type SubtitleFontScaleStep = -1 | 1
 
-/** Returns the next persisted font scale using one whole UI step per gesture.
- * A negative wheel direction is wheel-up, which increases the font size. */
-export function adjustSubtitleFontScale(
-  fontScale: number,
-  direction: Exclude<SubtitleFontWheelDirection, 0>
-): number {
+/** Returns the next persisted font scale, one whole UI step in `step`'s
+ * direction, clamped to the persisted bounds. Percent arithmetic keeps the
+ * result free of floating-point drift. */
+export function adjustSubtitleFontScale(fontScale: number, step: SubtitleFontScaleStep): number {
   const currentPercent = Math.round(fontScale * 100)
   const nextPercent = Math.min(
     SUBTITLE_FONT_SCALE_MAX * 100,
-    Math.max(
-      SUBTITLE_FONT_SCALE_MIN * 100,
-      currentPercent - direction * SUBTITLE_FONT_SCALE_STEP * 100
-    )
+    Math.max(SUBTITLE_FONT_SCALE_MIN * 100, currentPercent + step * SUBTITLE_FONT_SCALE_STEP * 100)
   )
   return nextPercent / 100
 }
@@ -61,15 +47,21 @@ function isTargetInsideCurrentTarget(target: unknown, currentTarget: unknown): b
 
 const NO_HELD_MODIFIERS: ReadonlySet<string> = new Set()
 
-/** Guards the configured shortcut before the App prevents the browser's wheel default. */
-export function isSubtitleFontWheelShortcut(
+/**
+ * The subtitle-size step a wheel gesture over the playback surface should
+ * apply, or null when the gesture matches neither configured binding (wrong
+ * chord, wrong direction, zero delta, or outside the surface). The App uses a
+ * non-null result as its cue to prevent the browser's wheel default.
+ */
+export function subtitleFontWheelStep(
   event: SubtitleFontWheelEventLike,
-  binding: KeyBinding = DEFAULT_KEY_BINDINGS.subtitleFontScale,
+  bindings: KeyBindings = DEFAULT_KEY_BINDINGS,
   held: ReadonlySet<string> = NO_HELD_MODIFIERS
-): boolean {
-  return (
-    wheelEventKeyBinding(event, held) === binding &&
-    subtitleFontWheelDirection(event.deltaY, event.deltaX) !== 0 &&
-    isTargetInsideCurrentTarget(event.target, event.currentTarget)
-  )
+): SubtitleFontScaleStep | null {
+  if (!isTargetInsideCurrentTarget(event.target, event.currentTarget)) return null
+  const binding = wheelEventKeyBinding(event, held)
+  if (!binding) return null
+  if (binding === bindings.subtitleFontScaleUp) return 1
+  if (binding === bindings.subtitleFontScaleDown) return -1
+  return null
 }

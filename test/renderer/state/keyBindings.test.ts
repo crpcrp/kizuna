@@ -6,12 +6,14 @@ import {
   eventKeyBinding,
   isEditableTarget,
   keyToAction,
+  wheelDirection,
   wheelEventKeyBinding,
   type KeyChord
 } from '@src/renderer/src/state/keyBindings'
 import {
   DEFAULT_KEY_BINDINGS,
-  MOUSE_WHEEL_BINDING_CODE,
+  MOUSE_WHEEL_DOWN_BINDING_CODE,
+  MOUSE_WHEEL_UP_BINDING_CODE,
   type KeyBindings
 } from '@src/shared/playerSettings'
 
@@ -35,6 +37,13 @@ describe('keyToAction', () => {
     expect(keyToAction('Space', custom)).toBeNull()
     expect(keyToAction('ControlLeft+ArrowUp', custom)).toBe('toggleFullscreen')
     expect(keyToAction('ArrowUp', custom)).toBeNull()
+  })
+
+  it('has no duplicate default bindings, so no action is picked by iteration order', () => {
+    const bindings = Object.values(DEFAULT_KEY_BINDINGS)
+    expect(new Set(bindings).size).toBe(bindings.length)
+    expect(keyToAction('ShiftLeft+MouseWheelUp')).toBe('subtitleFontScaleUp')
+    expect(keyToAction('ShiftLeft+MouseWheelDown')).toBe('subtitleFontScaleDown')
   })
 })
 
@@ -71,43 +80,67 @@ describe('eventKeyBinding', () => {
   })
 })
 
+describe('wheelDirection', () => {
+  it('maps vertical and Shift-translated horizontal axes to up/down', () => {
+    expect(wheelDirection(-40, 0)).toBe(-1)
+    expect(wheelDirection(40, 0)).toBe(1)
+    expect(wheelDirection(0, -40)).toBe(-1)
+    expect(wheelDirection(0, 40)).toBe(1)
+    expect(wheelDirection(0, 0)).toBe(0)
+    expect(wheelDirection(Number.NaN, 0)).toBe(0)
+  })
+})
+
 describe('wheelEventKeyBinding', () => {
   const noModifiers: ReadonlySet<string> = new Set()
 
-  it('returns a wheel code or a tracked modifier chord', () => {
-    expect(
-      wheelEventKeyBinding(
-        { ctrlKey: false, shiftKey: false, altKey: false, metaKey: false },
-        noModifiers
-      )
-    ).toBe(MOUSE_WHEEL_BINDING_CODE)
-    expect(
-      wheelEventKeyBinding(
-        { ctrlKey: false, shiftKey: true, altKey: false, metaKey: false },
-        new Set(['ShiftLeft'])
-      )
-    ).toBe('ShiftLeft+MouseWheel')
+  function chord(overrides: Partial<Parameters<typeof wheelEventKeyBinding>[0]> = {}) {
+    return {
+      deltaX: 0,
+      deltaY: -1,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      metaKey: false,
+      ...overrides
+    }
+  }
+
+  it('returns a directional wheel code or a tracked modifier chord', () => {
+    expect(wheelEventKeyBinding(chord(), noModifiers)).toBe(MOUSE_WHEEL_UP_BINDING_CODE)
+    expect(wheelEventKeyBinding(chord({ deltaY: 1 }), noModifiers)).toBe(
+      MOUSE_WHEEL_DOWN_BINDING_CODE
+    )
+    expect(wheelEventKeyBinding(chord({ shiftKey: true }), new Set(['ShiftLeft']))).toBe(
+      'ShiftLeft+MouseWheelUp'
+    )
+    expect(wheelEventKeyBinding(chord({ shiftKey: true, deltaY: 1 }), new Set(['ShiftLeft']))).toBe(
+      'ShiftLeft+MouseWheelDown'
+    )
   })
 
-  it('rejects unsupported modifiers and right-side tracked modifiers', () => {
+  it('reads the direction off deltaX when Shift translates the wheel axis', () => {
     expect(
       wheelEventKeyBinding(
-        { ctrlKey: true, shiftKey: true, altKey: false, metaKey: false },
+        chord({ shiftKey: true, deltaY: 0, deltaX: -40 }),
+        new Set(['ShiftLeft'])
+      )
+    ).toBe('ShiftLeft+MouseWheelUp')
+    expect(
+      wheelEventKeyBinding(chord({ shiftKey: true, deltaY: 0, deltaX: 40 }), new Set(['ShiftLeft']))
+    ).toBe('ShiftLeft+MouseWheelDown')
+  })
+
+  it('rejects zero-delta, unsupported modifiers, and right-side tracked modifiers', () => {
+    expect(wheelEventKeyBinding(chord({ deltaY: 0, deltaX: 0 }), noModifiers)).toBeNull()
+    expect(
+      wheelEventKeyBinding(
+        chord({ ctrlKey: true, shiftKey: true }),
         new Set(['ControlLeft', 'ShiftLeft'])
       )
     ).toBeNull()
-    expect(
-      wheelEventKeyBinding(
-        { ctrlKey: false, shiftKey: true, altKey: false, metaKey: false },
-        new Set(['ShiftRight'])
-      )
-    ).toBeNull()
-    expect(
-      wheelEventKeyBinding(
-        { ctrlKey: false, shiftKey: false, altKey: true, metaKey: false },
-        noModifiers
-      )
-    ).toBeNull()
+    expect(wheelEventKeyBinding(chord({ shiftKey: true }), new Set(['ShiftRight']))).toBeNull()
+    expect(wheelEventKeyBinding(chord({ altKey: true }), noModifiers)).toBeNull()
   })
 })
 
@@ -155,12 +188,15 @@ describe('key binding labels', () => {
     expect(describeKeyCode('KeyF')).toBe('F')
     expect(describeKeyCode('Digit5')).toBe('5')
     expect(describeKeyCode('F11')).toBe('F11')
-    expect(describeKeyCode(MOUSE_WHEEL_BINDING_CODE)).toBe('mouse wheel')
+    expect(describeKeyCode(MOUSE_WHEEL_UP_BINDING_CODE)).toBe('mouse wheel up')
+    expect(describeKeyCode(MOUSE_WHEEL_DOWN_BINDING_CODE)).toBe('mouse wheel down')
   })
 
   it('includes modifier labels in chords', () => {
     expect(describeKeyBinding('Space')).toBe('Space')
     expect(describeKeyBinding('ControlLeft+ArrowDown')).toBe('Ctrl + ↓')
     expect(describeKeyBinding('ShiftLeft+KeyR')).toBe('Shift + R')
+    expect(describeKeyBinding('ShiftLeft+MouseWheelUp')).toBe('Shift + mouse wheel up')
+    expect(describeKeyBinding('ShiftLeft+MouseWheelDown')).toBe('Shift + mouse wheel down')
   })
 })
