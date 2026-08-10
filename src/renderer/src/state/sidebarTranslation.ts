@@ -5,11 +5,16 @@ export interface SidebarTranslationPopup {
   text?: string
 }
 
+/** Surface-neutral aliases used by other translation-capable views. */
+export type TranslationPopup = SidebarTranslationPopup
+
 export interface SidebarTranslationPopupPosition {
   top: number
   left: number
   placement: 'above' | 'below'
 }
+
+export type TranslationPopupPosition = SidebarTranslationPopupPosition
 
 export interface SidebarTranslationAnchorRect {
   top: number
@@ -47,6 +52,8 @@ export function placeSidebarTranslationPopup(
   }
 }
 
+export const placeTranslationPopup = placeSidebarTranslationPopup
+
 export interface SidebarTranslationController {
   open(
     cueKey: string,
@@ -55,6 +62,8 @@ export interface SidebarTranslationController {
   ): void
   close(): void
 }
+
+export type TranslationController = SidebarTranslationController
 
 /** Owns the popup's cue-local cache and latest-request-wins guard. */
 export function createSidebarTranslationController(
@@ -118,3 +127,5 @@ export function createSidebarTranslationController(
     }
   }
 }
+
+export const createTranslationController = createSidebarTranslationController

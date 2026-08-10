@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import GameOcrFrame from '@src/renderer/src/components/GameOcrFrame'
 import GameOcrInteraction, {
@@ -9,6 +9,7 @@ import type { GameOcrBoxRegion } from '@src/renderer/src/components/GameOcrBoxes
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { deferred } from '@test/harness/deferred'
 import { makeToken } from '@test/harness/tokenFixtures'
+import { readGameOcrSelection } from '@src/renderer/src/state/gameOcrSelection'
 
 afterEach(cleanup)
 
@@ -166,5 +167,205 @@ describe('GameOcrInteraction', () => {
 
     await waitFor(() => expect(anki.addNote).toHaveBeenCalledOnce())
     expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')
+  })
+
+  it('translates only a valid trimmed selection through the typed bridge', async () => {
+    const translation = deferred<string>()
+    const translate = vi.fn(() => translation.promise)
+    const cancel = vi.fn()
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[region('one', '  選択された文字  ', 0)]}
+          bridge={bridge(vi.fn(), { translate: { translate, cancel } })}
+          translationEnabled
+          createTranslationRequestId={() => 'translation-1'}
+        />
+      </GameOcrFrame>
+    )
+    const box = container.querySelector('[data-region-id="one"]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    expect(readGameOcrSelection(selection)).not.toBeNull()
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    fireEvent(box, event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(selection.toString()).toContain('選択された文字')
+    expect(translate).toHaveBeenCalledWith('選択された文字', 'translation-1')
+    expect(screen.getByText('Translating…')).not.toBeNull()
+
+    translation.resolve('Selected text')
+    await waitFor(() => expect(screen.getByText('Selected text')).not.toBeNull())
+  })
+
+  it('shows the shared sanitized error state when translation fails', async () => {
+    const translation = deferred<string>()
+    const { container } = render(
+      <GameOcrInteraction
+        regions={[region('one', '選択された文字', 0)]}
+        bridge={bridge(vi.fn(), {
+          translate: { translate: vi.fn(() => translation.promise), cancel: vi.fn() }
+        })}
+        translationEnabled
+        createTranslationRequestId={() => 'translation-error'}
+      />
+    )
+    const box = container.querySelector('[data-region-id="one"]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    fireEvent(box, new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+
+    translation.reject(new Error('network details must not reach the UI'))
+    await waitFor(() => expect(screen.getByText('Translation failed.')).not.toBeNull())
+    expect(screen.queryByText('network details must not reach the UI')).toBeNull()
+  })
+
+  it('makes no request for a disabled translation setting and leaves selection intact', () => {
+    const translate = vi.fn()
+    const { container } = render(
+      <GameOcrInteraction
+        regions={[region('one', '選択された文字', 0)]}
+        bridge={bridge(vi.fn(), {
+          translate: { translate, cancel: vi.fn() }
+        })}
+      />
+    )
+    const box = container.querySelector('[data-region-id="one"]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    expect(readGameOcrSelection(selection)).not.toBeNull()
+
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    fireEvent(box, event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(translate).not.toHaveBeenCalled()
+    expect(selection.toString()).toContain('選択された文字')
+  })
+
+  it('cancels replaced and late translations without showing stale results', async () => {
+    const first = deferred<string>()
+    const second = deferred<string>()
+    const translate = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const cancel = vi.fn()
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[region('one', '一つ目', 0), region('two', '二つ目', 120)]}
+          bridge={bridge(vi.fn(), { translate: { translate, cancel } })}
+          translationEnabled
+          createTranslationRequestId={vi
+            .fn()
+            .mockReturnValueOnce('first')
+            .mockReturnValueOnce('second')}
+        />
+      </GameOcrFrame>
+    )
+    const select = (regionId: string): void => {
+      const selection = window.getSelection()!
+      const range = document.createRange()
+      range.selectNodeContents(container.querySelector(`[data-region-id="${regionId}"]`)!)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      fireEvent.contextMenu(container.querySelector(`[data-region-id="${regionId}"]`)!, {
+        bubbles: true,
+        cancelable: true
+      })
+    }
+
+    select('one')
+    select('two')
+    expect(cancel).toHaveBeenCalledWith('first')
+
+    first.resolve('stale first translation')
+    await first.promise
+    await Promise.resolve()
+    expect(screen.queryByText('stale first translation')).toBeNull()
+
+    second.resolve('current translation')
+    await waitFor(() => expect(screen.getByText('current translation')).not.toBeNull())
+  })
+
+  it('cancels an in-flight translation when the capture changes', async () => {
+    const translation = deferred<string>()
+    const cancel = vi.fn()
+    const translate = vi.fn(() => translation.promise)
+    const view = render(
+      <GameOcrInteraction
+        regions={[region('one', '選択', 0)]}
+        captureKey="capture-1"
+        bridge={bridge(vi.fn(), { translate: { translate, cancel } })}
+        translationEnabled
+        createTranslationRequestId={() => 'capture-request'}
+      />
+    )
+    const box = view.container.querySelector('[data-region-id="one"]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    fireEvent(box, new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+
+    view.rerender(
+      <GameOcrInteraction
+        regions={[region('one', '選択', 0)]}
+        captureKey="capture-2"
+        bridge={bridge(vi.fn(), { translate: { translate, cancel } })}
+        translationEnabled
+        createTranslationRequestId={() => 'capture-request-2'}
+      />
+    )
+
+    await waitFor(() => expect(cancel).toHaveBeenCalledWith('capture-request'))
+    translation.resolve('stale capture result')
+    await translation.promise
+    await Promise.resolve()
+    expect(screen.queryByText('stale capture result')).toBeNull()
+  })
+
+  it('cancels translation when the frozen frame closes', async () => {
+    const translation = deferred<string>()
+    const cancel = vi.fn()
+    const onClose = vi.fn()
+    const { container } = render(
+      <GameOcrFrame onClose={onClose}>
+        <GameOcrInteraction
+          regions={[region('one', '選択', 0)]}
+          bridge={bridge(vi.fn(), {
+            translate: { translate: vi.fn(() => translation.promise), cancel }
+          })}
+          translationEnabled
+          createTranslationRequestId={() => 'close-me'}
+        />
+      </GameOcrFrame>
+    )
+    const box = container.querySelector('[data-region-id="one"]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+    fireEvent.contextMenu(box)
+
+    fireEvent.click(screen.getByRole('main', { name: 'Frozen game frame' }))
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(cancel).toHaveBeenCalledWith('close-me')
+
+    translation.resolve('too late')
+    await translation.promise
+    await Promise.resolve()
+    expect(screen.queryByText('too late')).toBeNull()
   })
 })
