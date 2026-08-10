@@ -152,6 +152,8 @@ export interface KizunaApi {
     listDicts(): Promise<McDict[]>
     selectDict(id: string): Promise<'ipadic' | 'unidic'>
     currentDict(): Promise<'ipadic' | 'unidic'>
+    /** Creates and reveals the persistent UniDic folder in the OS file manager. */
+    openUserUnidicDir(): Promise<string>
   }
   dict: {
     importDict(zipBytes: Uint8Array): Promise<ImportResult>

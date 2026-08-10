@@ -33,7 +33,7 @@ const UNIDIC_MISSING: McDict[] = [
   {
     id: 'unidic',
     label: 'UniDic',
-    dicdir: '/opt/Kizuna/resources/mecab/unidic',
+    dicdir: '/home/me/.config/Kizuna/mecab/unidic',
     flavor: 'unidic',
     installed: false
   }
@@ -68,6 +68,7 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTa
       yomitanDicts={NO_YOMITAN_DICTS}
       popupSettings={DEFAULT_POPUP_SETTINGS}
       onSelectMecabDict={noop}
+      onOpenUserUnidicDir={noop}
       onImportYomitanDict={asyncNoop}
       onSetYomitanEnabled={noop}
       onSetYomitanFallbackOnly={noop}
@@ -130,9 +131,10 @@ describe('DictionariesTab markup', () => {
     const html = renderTab({ mecabDicts: UNIDIC_MISSING })
     expect(html).toContain('UniDic is a separate download.')
     expect(html).toContain(
-      '<code class="filesystem-path">/opt/Kizuna/resources/mecab/unidic</code>'
+      '<code class="filesystem-path">/home/me/.config/Kizuna/mecab/unidic</code>'
     )
-    expect(html).not.toContain('<code>resources/mecab/unidic</code>')
+    expect(html).toContain('Open UniDic folder')
+    expect(html).not.toContain('Install it at')
   })
 
   it('renders one row per yomitan dict with title/revision and enabled state', () => {

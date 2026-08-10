@@ -31,6 +31,7 @@ function actionsFake(): OptionsDialogActions {
     ankiPing: vi.fn(async () => ({ ok: true })),
     onChangeAnkiSettings: vi.fn(async () => {}),
     onOpenMpvConfigDir: vi.fn(),
+    onOpenUserUnidicDir: vi.fn(),
     persist: vi.fn()
   }
 }
@@ -109,6 +110,7 @@ describe('buildOptionsMenuProps', () => {
     expect(props.dictionaries.onRemoveYomitanDict).toBe(input.actions.onRemoveYomitanDict)
     expect(props.anki.onChangeAnkiSettings).toBe(input.actions.onChangeAnkiSettings)
     expect(props.playback.onOpenMpvConfigDir).toBe(input.actions.onOpenMpvConfigDir)
+    expect(props.dictionaries.onOpenUserUnidicDir).toBe(input.actions.onOpenUserUnidicDir)
     expect(props.playback.onSelectAudioDevice).toBe(playback.onSelectAudioDevice)
   })
 

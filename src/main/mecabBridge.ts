@@ -76,17 +76,27 @@ export interface MecabServiceLike {
   currentDict(): 'ipadic' | 'unidic'
 }
 
+export interface MecabBridgeOptions {
+  /** Creates and reveals the persistent UniDic folder in the OS file manager. */
+  openUserUnidicDir?: () => Promise<string>
+}
+
 /**
  * Registers the mecab command channels ('mecab:tokenize', 'mecab:listDicts',
  * 'mecab:selectDict', 'mecab:currentDict') against the ipcMain-like object,
  * forwarding each call to `service`.
  */
-export function registerMecabBridge<E>(ipc: IpcMainHandleLike<E>, service: MecabServiceLike): void {
+export function registerMecabBridge<E>(
+  ipc: IpcMainHandleLike<E>,
+  service: MecabServiceLike,
+  options: MecabBridgeOptions = {}
+): void {
   ipc.handle(MECAB_CHANNELS.tokenize, (_e, text) => service.tokenize(text))
   ipc.handle(MECAB_CHANNELS.tokenizeBatch, (_e, texts) => service.tokenizeBatch(texts))
   ipc.handle(MECAB_CHANNELS.listDicts, () => service.listDicts())
   ipc.handle(MECAB_CHANNELS.selectDict, (_e, id) => service.selectDict(id))
   ipc.handle(MECAB_CHANNELS.currentDict, () => service.currentDict())
+  ipc.handle(MECAB_CHANNELS.openUserUnidicDir, () => options.openUserUnidicDir?.() ?? '')
 }
 
 export interface CreateMecabServiceDeps {
@@ -94,6 +104,8 @@ export interface CreateMecabServiceDeps {
   dictPaths: { ipadicDir: string; unidicDir?: string; userUnidicDir?: string }
   /** Filesystem probe, injected for tests. */
   exists: (p: string) => boolean
+  /** Optional dictionary-payload validation, injected for tests. */
+  isValid?: (p: string) => boolean
   settings: SettingsStore
   /** Defaults to the real MeCab runner. */
   tokenizeFn?: (cfg: MecabConfig, text: string) => Promise<Token[]>
@@ -110,7 +122,7 @@ export function createMecabService(deps: CreateMecabServiceDeps): MecabServiceLi
     deps.tokenizeFn ?? ((cfg: MecabConfig, text: string) => runTokenize(cfg, text, deps.mecabExec))
 
   function dicts(): McDict[] {
-    return availableMecabDicts(deps.dictPaths, deps.exists)
+    return availableMecabDicts(deps.dictPaths, deps.exists, deps.isValid)
   }
 
   /** Installed dicts only — the list `dicts()` returns now includes UniDic even

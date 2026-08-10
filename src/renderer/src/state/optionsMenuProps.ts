@@ -130,6 +130,7 @@ export function buildOptionsMenuProps({
       loadError: data.dictionariesError,
       popupSettings: settings.popupSettings,
       onSelectMecabDict: knowledge.onSelectMecabDict,
+      onOpenUserUnidicDir: actions.onOpenUserUnidicDir,
       onImportYomitanDict: actions.onImportYomitanDict,
       subscribeImportProgress: actions.subscribeImportProgress,
       onSetYomitanEnabled: actions.onSetYomitanEnabled,

@@ -67,8 +67,18 @@ directories instead of above them leaves every file present and executable
 while `mecab.bin` fails to load its shared library at runtime.
 
 MeCab includes a UTF-8 IPADIC dictionary under `resources/mecab/ipadic/`.
-An optional UniDic dictionary can be placed under
-`resources/mecab/unidic/`.
+An optional UniDic dictionary belongs in Kizuna's persistent user-data folder,
+not under the package-managed resources directory:
+
+- Windows: `%APPDATA%\Kizuna\mecab\unidic`
+- Linux: `~/.config/Kizuna/mecab/unidic`
+
+Use Options > Parser & Dictionaries > Open UniDic folder to create and reveal
+the exact folder. Existing Windows installations that used the old
+`resources/mecab/unidic` location are preserved by the installer and migrated
+on startup; packaged Linux runs migrate the same legacy path when it remains
+available, while unpackaged Linux keeps using the system UniDic without copying
+it. The persistent location survives package updates.
 
 The FFmpeg build must provide `libmp3lame` for mined sentence audio. If it does
 not, card creation continues without that audio clip.

@@ -77,6 +77,7 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       yomitanDicts: [],
       popupSettings: DEFAULT_POPUP_SETTINGS,
       onSelectMecabDict: noop,
+      onOpenUserUnidicDir: noop,
       onImportYomitanDict: asyncNoop,
       onSetYomitanEnabled: noop,
       onSetYomitanFallbackOnly: noop,
