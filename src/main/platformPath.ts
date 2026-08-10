@@ -16,7 +16,7 @@
 // `resolveBinaryPaths` in `resourcePaths.ts` established this pattern; this
 // module is the reusable form of it.
 
-import { posix, win32, type PlatformPath } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type { PathPlatform } from '../shared/mediaHistory'
 
 /** The desktop targets Kizuna supports. */
@@ -28,7 +28,7 @@ export type SupportedPlatform = 'win32' | 'linux'
  * BSD) share POSIX path semantics, so they resolve the same way even though
  * the app itself is not shipped for them.
  */
-export function pathApiFor(platform: NodeJS.Platform = process.platform): PlatformPath {
+export function pathApiFor(platform: NodeJS.Platform = process.platform): typeof posix {
   return platform === 'win32' ? win32 : posix
 }
 

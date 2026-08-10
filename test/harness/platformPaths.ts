@@ -10,14 +10,14 @@
 // case's own `path` API instead, or the assertion checks a string no platform
 // ever produces.
 
-import { posix, win32, type PlatformPath } from 'node:path'
+import { posix, win32 } from 'node:path'
 
 export interface PathPlatformCase {
   /** Vitest test-name label, e.g. `describe.each(PATH_PLATFORMS)('$label', …)`. */
   label: 'Windows' | 'Linux'
   platform: NodeJS.Platform
   /** The `node:path` implementation this platform uses. */
-  path: PlatformPath
+  path: typeof posix
   /** An absolute media folder in the platform's native format. */
   mediaDir: string
   /** An absolute per-user data directory (Electron's `userData`). */
