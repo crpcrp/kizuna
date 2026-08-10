@@ -6,6 +6,7 @@ import {
   APP_INFO_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
+  GAME_OCR_CHANNELS,
   INTEGRATION_CHANNELS,
   KNOWLEDGE_CHANNELS,
   LAUNCH_CHANNELS,
@@ -56,6 +57,7 @@ import type {
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
+import type { GameOcrPresentation } from '../shared/gameOcr'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -156,6 +158,16 @@ const api = {
       subscribe(LAUNCH_CHANNELS.openPath, cb),
     onError: (cb: (message: string) => void): (() => void) => subscribe(LAUNCH_CHANNELS.error, cb),
     rendererReady: (): void => ipcRenderer.send(LAUNCH_CHANNELS.rendererReady)
+  },
+
+  gameOcr: {
+    onPresentation: (cb: (value: GameOcrPresentation) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.present, cb),
+    onDiscard: (cb: () => void): (() => void) => subscribe(GAME_OCR_CHANNELS.discard, cb),
+    onRecognitionState: (cb: (recognizing: boolean) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
+    rendererReady: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
+    close: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.close)
   },
 
   // Media bridge: file-selection, ffprobe track enumeration, and ffmpeg

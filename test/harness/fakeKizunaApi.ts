@@ -66,6 +66,13 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       onError: vi.fn(() => listenerCleanup),
       rendererReady: vi.fn()
     },
+    gameOcr: {
+      onPresentation: vi.fn(() => listenerCleanup),
+      onDiscard: vi.fn(() => listenerCleanup),
+      onRecognitionState: vi.fn(() => listenerCleanup),
+      rendererReady: vi.fn(),
+      close: vi.fn()
+    },
     media: {
       openFile: vi.fn(async () => undefined),
       openFiles: vi.fn(async () => []),
@@ -183,6 +190,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
   Object.assign(api.windowControls, overrides.windowControls)
   Object.assign(api.player, overrides.player)
   Object.assign(api.launch, overrides.launch)
+  Object.assign(api.gameOcr, overrides.gameOcr)
   Object.assign(api.media, overrides.media)
   Object.assign(api.mediaHistory, overrides.mediaHistory)
   Object.assign(api.mecab, overrides.mecab)

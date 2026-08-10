@@ -45,6 +45,7 @@ import type {
   StoredTrackSelection
 } from './mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
+import type { GameOcrPresentation } from './gameOcr'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -108,6 +109,13 @@ export interface KizunaApi {
     onOpenPath(cb: (path: string) => void): () => void
     onError(cb: (message: string) => void): () => void
     rendererReady(): void
+  }
+  gameOcr: {
+    onPresentation(cb: (value: GameOcrPresentation) => void): () => void
+    onDiscard(cb: () => void): () => void
+    onRecognitionState(cb: (recognizing: boolean) => void): () => void
+    rendererReady(): void
+    close(): void
   }
   media: {
     openFile(): Promise<string | undefined>
