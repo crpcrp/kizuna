@@ -188,8 +188,108 @@ describe('createUpdateService', () => {
     expect(fixture.service.getState()).toEqual({
       status: 'error',
       stage: 'check',
-      message: 'Could not check for updates. Check your connection and try again.',
+      reason: 'unknown',
+      message: 'Could not check for updates. Try again later.',
       retryable: true
+    })
+  })
+
+  it('reports a repository without public release metadata as no published updates', async () => {
+    const fixture = serviceFixture()
+    fixture.updater.checkForUpdates = vi.fn(async () => {
+      throw Object.assign(new Error('HttpError: 404 Not Found'), { statusCode: 404 })
+    })
+
+    await expect(fixture.service.check('manual')).resolves.toEqual({
+      status: 'noPublishedRelease',
+      currentVersion: '0.2.0',
+      checkedAt: new Date(1_000).toISOString()
+    })
+  })
+
+  it('classifies an automatic check the same way as a manual one', async () => {
+    const fixture = serviceFixture()
+    fixture.updater.checkForUpdates = vi.fn(async () => {
+      throw Object.assign(new Error('Cannot find channel file'), {
+        code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND'
+      })
+    })
+
+    const state = await fixture.service.check('automatic')
+    expect(state.status).toBe('noPublishedRelease')
+  })
+
+  it('keeps offline, rate-limit, permission, and metadata failures distinct', async () => {
+    const cases = [
+      {
+        error: Object.assign(new Error('getaddrinfo ENOTFOUND github.com'), { code: 'ENOTFOUND' }),
+        reason: 'network',
+        message: 'Could not check for updates. Check your connection and try again.',
+        retryable: true
+      },
+      {
+        error: Object.assign(new Error('API rate limit exceeded'), { statusCode: 403 }),
+        reason: 'rateLimited',
+        message: 'Update checks are rate limited right now. Try again later.',
+        retryable: true
+      },
+      {
+        error: Object.assign(new Error('HttpError: 403 Forbidden'), { statusCode: 403 }),
+        reason: 'permission',
+        message: 'Could not check for updates because the update source refused access.',
+        retryable: true
+      },
+      {
+        error: Object.assign(new Error('Invalid update info'), {
+          code: 'ERR_UPDATER_INVALID_UPDATE_INFO'
+        }),
+        reason: 'metadata',
+        message: 'The published update information could not be read. This is a release problem.',
+        retryable: false
+      }
+    ] as const
+
+    for (const expected of cases) {
+      const fixture = serviceFixture()
+      fixture.updater.checkForUpdates = vi.fn(async () => {
+        throw expected.error
+      })
+
+      await expect(fixture.service.check('manual')).resolves.toEqual({
+        status: 'error',
+        stage: 'check',
+        reason: expected.reason,
+        message: expected.message,
+        retryable: expected.retryable
+      })
+    }
+  })
+
+  it('classifies an updater error event raised during a check', async () => {
+    const fixture = serviceFixture()
+    const check = deferred<null>()
+    fixture.updater.checkForUpdates = vi.fn(() => check.promise)
+
+    const pending = fixture.service.check('manual')
+    fixture.emit('error', Object.assign(new Error('404 Not Found'), { statusCode: 404 }))
+    expect(fixture.service.getState().status).toBe('noPublishedRelease')
+
+    check.resolve(null)
+    await pending
+    expect(fixture.service.getState().status).toBe('noPublishedRelease')
+  })
+
+  it('reports up to date when the installed build is newer than the latest public release', async () => {
+    const fixture = serviceFixture()
+    fixture.updater.checkForUpdates = vi.fn(async () => ({
+      isUpdateAvailable: false,
+      updateInfo: { version: '0.1.0' }
+    }))
+
+    await expect(fixture.service.check('manual')).resolves.toEqual({
+      status: 'upToDate',
+      currentVersion: '0.2.0',
+      checkedAt: new Date(1_000).toISOString()
     })
   })
 

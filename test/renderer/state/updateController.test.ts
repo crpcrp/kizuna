@@ -63,6 +63,16 @@ describe('updateController', () => {
     expect(updateModal(downloading)).toBeNull()
   })
 
+  it('shows no global banner or modal when no published update exists', () => {
+    const state = updateWorkflowReducer(initialUpdateWorkflowState, {
+      type: 'snapshot',
+      snapshot: { status: 'noPublishedRelease', currentVersion: '0.2.0', checkedAt: '' }
+    })
+
+    expect(updateStatusText(state)).toBeNull()
+    expect(updateModal(state)).toBeNull()
+  })
+
   it('hides a dismissed error banner while keeping the snapshot intact', () => {
     const failed = updateWorkflowReducer(initialUpdateWorkflowState, {
       type: 'snapshot',

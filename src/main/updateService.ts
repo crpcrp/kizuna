@@ -1,4 +1,5 @@
 import type {
+  UpdateCheckFailureReason,
   UpdateCheckOrigin,
   UpdateErrorStage,
   UpdateProgress,
@@ -6,6 +7,7 @@ import type {
   UpdateState
 } from '../shared/update'
 import type { UpdateSupport } from './updateSupport'
+import { classifyUpdaterError } from './updaterErrors'
 
 export interface UpdaterInfo {
   version: string
@@ -93,9 +95,21 @@ function releaseFrom(
   }
 }
 
-function errorState(stage: UpdateErrorStage, cancelled = false): UpdateState {
+const CHECK_MESSAGES: Record<Exclude<UpdateCheckFailureReason, 'noPublishedRelease'>, string> = {
+  network: 'Could not check for updates. Check your connection and try again.',
+  rateLimited: 'Update checks are rate limited right now. Try again later.',
+  permission: 'Could not check for updates because the update source refused access.',
+  metadata: 'The published update information could not be read. This is a release problem.',
+  unknown: 'Could not check for updates. Try again later.'
+}
+
+function errorState(
+  stage: UpdateErrorStage,
+  cancelled = false,
+  reason: Exclude<UpdateCheckFailureReason, 'noPublishedRelease'> = 'network'
+): UpdateState {
   const messages: Record<UpdateErrorStage, string> = {
-    check: 'Could not check for updates. Check your connection and try again.',
+    check: CHECK_MESSAGES[reason],
     download: 'Could not download the update. Check your connection and try again.',
     install: cancelled
       ? 'Update installation was cancelled. You can try again.'
@@ -105,7 +119,8 @@ function errorState(stage: UpdateErrorStage, cancelled = false): UpdateState {
     status: 'error',
     stage,
     message: messages[stage],
-    retryable: true,
+    retryable: stage !== 'check' || reason !== 'metadata',
+    ...(stage === 'check' ? { reason } : {}),
     ...(cancelled ? { cancelled } : {})
   }
 }
@@ -155,6 +170,18 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
     release = releaseFrom(info, deps.currentVersion, packageType)
     publish({ status: 'downloaded', ...release })
   }
+  /** A missing public release is a truthful outcome, not a connection error. */
+  const checkFailure = (error: unknown): UpdateState => {
+    const reason = classifyUpdaterError(error)
+    if (reason === 'noPublishedRelease')
+      return {
+        status: 'noPublishedRelease',
+        currentVersion: deps.currentVersion,
+        checkedAt: new Date(now()).toISOString()
+      }
+    return errorState('check', false, reason)
+  }
+
   const onError = (error: unknown): void => {
     if (disposed) return
     const stage: UpdateErrorStage | undefined =
@@ -166,6 +193,10 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
             ? 'check'
             : undefined
     if (!stage) return
+    if (stage === 'check') {
+      publish(checkFailure(error))
+      return
+    }
     const text = error instanceof Error ? `${error.name} ${error.message}` : String(error)
     publish(errorState(stage, stage === 'install' && /cancel|canceled|cancelled/i.test(text)))
   }
@@ -209,7 +240,10 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
             checkedAt: new Date(now()).toISOString()
           })
         })
-        .catch(() => publish(errorState('check')))
+        .catch((error: unknown) => {
+          if (disposed || shuttingDown || state.status !== 'checking') return state
+          return publish(checkFailure(error))
+        })
         .finally(() => {
           checkPromise = undefined
         })
