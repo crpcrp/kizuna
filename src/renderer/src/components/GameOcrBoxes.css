@@ -1,0 +1,75 @@
+.game-ocr-boxes {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.game-ocr-box {
+  position: absolute;
+  box-sizing: border-box;
+  display: block;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--surface-subtitle);
+  color: var(--text-primary);
+  font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans JP', sans-serif;
+  line-height: 1.25;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  cursor: text;
+  pointer-events: auto;
+}
+
+.game-ocr-box:hover {
+  border-color: var(--accent-border);
+}
+
+.game-ocr-box[data-active] {
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 2px var(--accent-border);
+  z-index: 2;
+}
+
+.game-ocr-box:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+}
+
+.game-ocr-box__text {
+  display: block;
+}
+
+.game-ocr-box [data-token] {
+  cursor: text;
+  border-radius: 3px;
+  transition: background-color 0.1s ease;
+}
+
+.game-ocr-box [data-token]:hover,
+.game-ocr-box [data-token][data-highlighted] {
+  background: var(--accent-selected-bg);
+}
+
+.game-ocr-box [data-token][data-level='unknown'] {
+  border-bottom: 2px solid var(--level-unknown);
+}
+
+.game-ocr-box [data-token][data-level='inDeck'] {
+  border-bottom: 2px solid var(--level-in-deck);
+}
+
+.game-ocr-box [data-token][data-level='learning'] {
+  border-bottom: 2px solid var(--level-learning);
+}
+
+.game-ocr-box [data-token][data-level='known'] {
+  border-bottom: 2px solid var(--level-known);
+}
+
+.game-ocr-box [data-token][data-level='wellKnown'] {
+  border-bottom: 2px solid var(--level-well-known-underline);
+}
