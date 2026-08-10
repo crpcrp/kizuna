@@ -4,7 +4,7 @@ import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { cueKey } from '../state/tokenization'
-import { tokenSpans, cueTokenLevels } from './SubtitleOverlay'
+import InteractiveText from './InteractiveText'
 import {
   findMatches,
   stepMatch,
@@ -134,18 +134,6 @@ function clipSegments(
   return clipped
 }
 
-/** Pure: a cue's text split on '\n', each line paired with its start offset
- * into the raw cue text (for rebasing highlight segments per line). */
-function linesWithOffsets(text: string): Array<{ line: string; offset: number }> {
-  const lines = text.split('\n')
-  let offset = 0
-  return lines.map((line) => {
-    const entry = { line, offset }
-    offset += line.length + 1
-    return entry
-  })
-}
-
 /** Pure: renders one cue's text as line-broken plain text (tokens not yet
  * available) or as knowledge-colored token spans (tokens available), with
  * `matches`/`currentMatch` (already filtered to this cue) wrapped in
@@ -166,38 +154,24 @@ export function CueRowContent({
   currentMatch?: SearchMatch
 }): React.JSX.Element {
   const segments = highlightSegments(cue.text.length, matches, currentMatch)
-
-  if (rowTokens.length === 0) {
-    return (
-      <>
-        {linesWithOffsets(cue.text).map(({ line, offset }, i) => (
-          <span key={i}>
-            {i > 0 && <br />}
-            {renderSegments(line, clipSegments(segments, offset, line.length), `l${i}`)}
-          </span>
-        ))}
-      </>
-    )
-  }
-
-  const spans = tokenSpans(cue.text, rowTokens)
-  const levelFor = cueTokenLevels(cueKey(cue), rowTokens, levels, vocabularySpans)
   return (
-    <>
-      {spans.map((item, i) =>
-        item.type === 'break' ? (
-          <br key={i} />
-        ) : (
-          <span key={i} data-level={levelFor(item.token)}>
-            {renderSegments(
-              item.token.surface,
-              clipSegments(segments, item.token.startOffset, item.token.surface.length),
-              `t${i}`
-            )}
-          </span>
+    <InteractiveText
+      id={cueKey(cue)}
+      text={cue.text}
+      tokens={rowTokens}
+      levels={levels}
+      vocabularySpans={vocabularySpans}
+      renderLine={(line, offset, lineIndex) =>
+        renderSegments(line, clipSegments(segments, offset, line.length), `l${lineIndex}`)
+      }
+      renderTokenContent={(token, itemIndex) =>
+        renderSegments(
+          token.surface,
+          clipSegments(segments, token.startOffset, token.surface.length),
+          `t${itemIndex}`
         )
-      )}
-    </>
+      }
+    />
   )
 }
 

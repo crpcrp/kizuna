@@ -5,7 +5,12 @@ import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../shared/playerSettings'
 import { cueKey } from '../state/tokenization'
 import type { VocabularySpan } from '../state/vocabularySpans'
-import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
+import InteractiveText, { tokenLevels } from './InteractiveText'
+
+export { tokenSpans, type TokenSpanItem } from './InteractiveText'
+
+/** Backwards-compatible name for callers that used the old overlay helper. */
+export const cueTokenLevels = tokenLevels
 
 // Presentational overlay: shows whichever cue is active at the current
 // playback time. Derived from props — no internal state; dragging is
@@ -79,54 +84,6 @@ export function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSPropert
   }
 }
 
-export type TokenSpanItem = { type: 'token'; token: Token } | { type: 'break' }
-
-/**
- * Pure helper: turns a cue's raw text + its tokens into an ordered list of
- * token spans and line-break markers, so a token whose surface follows a
- * `\n` in the original cue text still produces a visual line break.
- * Assumes `tokens` is already in cue order (by `startOffset`).
- */
-export function tokenSpans(cueText: string, tokens: Token[]): TokenSpanItem[] {
-  const items: TokenSpanItem[] = []
-  let lastLine = 0
-  for (const token of tokens) {
-    const line = countNewlinesBefore(cueText, token.startOffset)
-    for (let i = lastLine; i < line; i++) items.push({ type: 'break' })
-    items.push({ type: 'token', token })
-    lastLine = line
-  }
-  return items
-}
-
-function countNewlinesBefore(text: string, offset: number): number {
-  let count = 0
-  for (let i = 0; i < offset && i < text.length; i++) {
-    if (text[i] === '\n') count++
-  }
-  return count
-}
-
-/**
- * Pure: resolves one cue's tokens to their `data-level`, shared by
- * SubtitleOverlay and SubtitleSidebar so the two never deviate. Levels come
- * from `vocabularyLevelsByToken` — the same base the word report and bulk mining
- * derive from — so a word underlined as known is exactly a word those two count
- * as known. `undefined` levels means coloring is disabled and no attribute is
- * rendered; a symbol/punctuation token is always `'wellKnown'` since there is
- * nothing to "know" about a '(' or a '?'.
- */
-export function cueTokenLevels(
-  key: string,
-  tokens: Token[],
-  levels: Record<string, KnowledgeLevel> | undefined,
-  vocabularySpans: VocabularySpan[] | undefined
-): (token: Token) => KnowledgeLevel | undefined {
-  if (!levels) return () => undefined
-  const byOffset = vocabularyLevelsByToken({ cueKey: key, tokens, spans: vocabularySpans }, levels)
-  return (token) => byOffset.get(token.startOffset) ?? 'wellKnown'
-}
-
 export default function SubtitleOverlay({
   cues,
   timePos,
@@ -142,7 +99,6 @@ export default function SubtitleOverlay({
   dragEnabled = true
 }: SubtitleOverlayProps): React.JSX.Element {
   const cue = findActiveCue(cues, timePos)
-  const highlightedOffsets = new Set(highlightedTokens?.map((t) => t.startOffset))
 
   // Only starts a drag when the mousedown lands on the box itself (not a
   // word span), so repositioning the subtitle never steals a word click/hover.
@@ -150,8 +106,13 @@ export default function SubtitleOverlay({
     if (dragEnabled && e.target === e.currentTarget) onDragStart?.(e)
   }
 
-  if (!cue || !tokens || tokens.length === 0) {
-    const lines = cue ? cue.text.split('\n') : []
+  const handleInteractiveMouseDown = (e: React.MouseEvent): void => {
+    if (!dragEnabled) return
+    const target = e.target as { closest?: (selector: string) => Element | null }
+    if (!target.closest?.('[data-token]')) onDragStart?.(e)
+  }
+
+  if (!cue) {
     return (
       <div
         id="subtitle"
@@ -159,19 +120,10 @@ export default function SubtitleOverlay({
         className={dragEnabled ? undefined : 'subtitle-selectable'}
         style={subtitleBoxStyle(style)}
         onMouseDown={handleMouseDown}
-      >
-        {lines.map((line, i) => (
-          <span key={i}>
-            {i > 0 && <br />}
-            {line}
-          </span>
-        ))}
-      </div>
+      />
     )
   }
 
-  const spans = tokenSpans(cue.text, tokens)
-  const levelFor = cueTokenLevels(cueKey(cue), tokens, levels, vocabularySpans)
   return (
     <div
       id="subtitle"
@@ -180,23 +132,18 @@ export default function SubtitleOverlay({
       style={subtitleBoxStyle(style)}
       onMouseDown={handleMouseDown}
     >
-      {spans.map((item, i) =>
-        item.type === 'break' ? (
-          <br key={i} />
-        ) : (
-          <span
-            key={i}
-            data-token=""
-            data-highlighted={highlightedOffsets.has(item.token.startOffset) ? '' : undefined}
-            data-level={levelFor(item.token)}
-            onMouseEnter={(e) => onWordHover?.(item.token, e)}
-            onMouseLeave={() => onWordLeave?.()}
-            onClick={(e) => onWordClick?.(item.token, e)}
-          >
-            {item.token.surface}
-          </span>
-        )
-      )}
+      <InteractiveText
+        id={cueKey(cue)}
+        text={cue.text}
+        tokens={tokens}
+        highlightedTokens={highlightedTokens}
+        levels={levels}
+        vocabularySpans={vocabularySpans}
+        onWordHover={onWordHover}
+        onWordClick={onWordClick}
+        onWordLeave={onWordLeave}
+        onMouseDown={handleInteractiveMouseDown}
+      />
     </div>
   )
 }

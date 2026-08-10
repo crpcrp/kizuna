@@ -64,7 +64,9 @@ describe('SubtitleSidebar row rendering', () => {
         onSelectCue={vi.fn()}
       />
     )
-    expect(html).toMatch(/class="subtitle-sidebar-row" data-active=""><span>hello/)
+    expect(html).toContain(
+      'class="subtitle-sidebar-row" data-active=""><span class="interactive-text" data-interactive-text-id="0|2|hello"><span>hello'
+    )
   })
 
   it('marks no row active when activeCueKey matches none of the cues', () => {
@@ -306,7 +308,9 @@ describe('CueRowContent search highlighting', () => {
     const html = renderToStaticMarkup(
       <CueRowContent cue={emojiCue} rowTokens={[]} matches={matches} />
     )
-    expect(html).toBe('<span>😀<mark>猫</mark></span>')
+    expect(html).toBe(
+      '<span class="interactive-text" data-interactive-text-id="0|1|😀猫"><span>😀<mark>猫</mark></span></span>'
+    )
   })
 
   it('wraps the intersecting substring inside a token span, preserving data-level', () => {
@@ -324,6 +328,6 @@ describe('CueRowContent search highlighting', () => {
         matches={matches}
       />
     )
-    expect(html).toContain('<span data-level="learning"><mark>猫</mark></span>')
+    expect(html).toContain('<span data-token="" data-level="learning"><mark>猫</mark></span>')
   })
 })
