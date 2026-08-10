@@ -6,9 +6,11 @@
   position: fixed;
   z-index: 60;
   transform: translate(-50%, calc(-100% - 14px));
+  pointer-events: none;
 }
 #word-popup.open {
   display: block;
+  pointer-events: auto;
 }
 .word-popup-panel {
   width: 440px;

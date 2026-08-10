@@ -258,6 +258,7 @@ export default function WordPopup({
       aria-label="Word lookup"
       aria-hidden={!open}
       style={position ? { left: position.x, top: position.y } : undefined}
+      onClick={(event) => event.stopPropagation()}
     >
       <div className="word-popup-panel">
         {stylesheets.map(({ dictId, css }) => {

@@ -4,6 +4,7 @@ import { type Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../shared/playerSettings'
 import { cueKey } from '../state/tokenization'
+import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import InteractiveText, { tokenLevels } from './InteractiveText'
 
@@ -50,8 +51,8 @@ export interface SubtitleOverlayProps {
   /** Font scale + box position; defaults to DEFAULT_SUBTITLE_STYLE when omitted. */
   style?: SubtitleStyleSettings
   /** The event is optional for callers that only need the token. */
-  onWordHover?: (token: Token, event?: React.MouseEvent) => void
-  onWordClick?: (token: Token, event?: React.MouseEvent) => void
+  onWordHover?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
+  onWordClick?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
   /** Fired when the pointer leaves a token span, so the caller can cancel a
    * pending hover-intent timer for a word merely swept past (see onWordHover
    * on the caller side) instead of only ever resetting it on the *next*

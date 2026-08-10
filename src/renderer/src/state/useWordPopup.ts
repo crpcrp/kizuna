@@ -15,7 +15,11 @@ import {
   type HoverDebouncer
 } from './popupController'
 import { useLatestCallback } from './useLatestRef'
-import { wordPopupPosition } from './wordLookup'
+import {
+  constrainWordPopupPosition,
+  wordPopupPosition,
+  type WordPopupTextContext
+} from './wordLookup'
 
 /** Hover-intent delay: onMouseEnter fires for every token the pointer passes
  * over, but only a token it rests on this long opens a popup. Click bypasses
@@ -49,20 +53,27 @@ export interface UseWordPopupInput {
    * withheld entirely. */
   japaneseSubtitleSelected: boolean
   /** True while a video file is loaded, so a card picture can be captured. */
-  videoLoaded: boolean
+  videoLoaded?: boolean
   /** Where a mined line's audio could be clipped from. */
-  mineMediaSource(): MineMediaSource
+  mineMediaSource?: () => MineMediaSource
+  /** Replaces the current text surface and invalidates its popup work. */
+  resetKey?: string | number
 }
 
 export interface UseWordPopupResult {
   handlers: Pick<
     SubtitleOverlayProps,
     'highlightedTokens' | 'onWordClick' | 'onWordHover' | 'onWordLeave'
-  >
+  > & {
+    /** OCR uses this to apply the popup highlight only to its owning region. */
+    highlightedTextId?: string
+  }
   props: Omit<WordPopupProps, 'maxEntries' | 'maxMeanings'>
   cardImageDialog: CardImageDialogViewModel
   /** True while the crop dialog owns keyboard input. */
   cardImageOpen: boolean
+  /** Closes the popup and invalidates pending hover/dictionary work. */
+  close(): void
 }
 
 /**
@@ -77,8 +88,9 @@ export function useWordPopup({
   activeTokens,
   activeCue,
   japaneseSubtitleSelected,
-  videoLoaded,
-  mineMediaSource
+  videoLoaded = false,
+  mineMediaSource = () => ({ subtitleOffsetMs: 0 }),
+  resetKey
 }: UseWordPopupInput): UseWordPopupResult {
   // Popup request/history/Anki-mining orchestration — see state/popupController.ts.
   const [popupController] = useState(createPopupController)
@@ -106,22 +118,35 @@ export function useWordPopup({
   // and click (pin) — hover shows it as the mouse passes over a word, click
   // re-fetches at the click position so a keyboard/touch-less pointer still gets
   // an anchored popup even if hover never fired (e.g. touch input).
-  const showWordPopup = async (token: Token, event?: React.MouseEvent): Promise<void> => {
+  const showWordPopup = async (
+    token: Token,
+    event?: React.MouseEvent,
+    textContext?: WordPopupTextContext
+  ): Promise<void> => {
     // Anchor above the whole subtitle box (not the hovered word) so the
     // popup never covers a different subtitle line than the one that was
     // hovered. Read synchronously, before the await, since the DOM node's
     // rect can change while the lookup is in flight.
-    const subtitleRect = document.getElementById('subtitle')?.getBoundingClientRect()
-    const position = wordPopupPosition(subtitleRect, event)
+    const subtitleRect = textContext
+      ? textContext.anchorRect
+      : document.getElementById('subtitle')?.getBoundingClientRect()
+    const rawPosition = wordPopupPosition(subtitleRect, event)
+    const position = textContext
+      ? constrainWordPopupPosition(rawPosition, {
+          width: window.innerWidth,
+          height: window.innerHeight
+        })
+      : rawPosition
     await popupController.open(bridge.dict, bridge.anki, bridge.knowledge, {
       token,
       position,
       frequencyDictId: popupSettings.frequencyDictId,
       sortOrder: popupSettings.sortOrder,
-      cueTokens: activeTokens,
-      sentence: activeCue?.text ?? '',
+      cueTokens: textContext?.tokens ?? activeTokens,
+      sentence: textContext?.sentence ?? activeCue?.text ?? '',
       cueStart: activeCue?.start,
-      cueEnd: activeCue?.end
+      cueEnd: activeCue?.end,
+      textContext
     })
   }
 
@@ -170,24 +195,44 @@ export function useWordPopup({
   // never recreated — still sees the latest popupSettings/state on every settle.
   const showWordPopupLatest = useLatestCallback(showWordPopup)
 
-  const [hoverDebouncer] = useState<HoverDebouncer<{ token: Token; event?: React.MouseEvent }>>(
-    () =>
-      createHoverDebouncer(HOVER_DELAY_MS, ({ token, event }) => {
-        void showWordPopupLatest(token, event)
-      })
+  const [hoverDebouncer] = useState<
+    HoverDebouncer<{ token: Token; event?: React.MouseEvent; textContext?: WordPopupTextContext }>
+  >(() =>
+    createHoverDebouncer(HOVER_DELAY_MS, ({ token, event, textContext }) => {
+      void showWordPopupLatest(token, event, textContext)
+    })
   )
-  useEffect(() => () => hoverDebouncer.cancel(), [hoverDebouncer])
+  useEffect(() => {
+    if (resetKey === undefined) return
+    hoverDebouncer.cancel()
+    popupController.close()
+  }, [hoverDebouncer, popupController, resetKey])
+  useEffect(
+    () => () => {
+      hoverDebouncer.cancel()
+      popupController.close()
+    },
+    [hoverDebouncer, popupController]
+  )
 
-  const onWordHover = (token: Token, event?: React.MouseEvent): void => {
-    hoverDebouncer.onEnter({ token, event })
+  const onWordHover = (
+    token: Token,
+    event?: React.MouseEvent,
+    textContext?: WordPopupTextContext
+  ): void => {
+    hoverDebouncer.onEnter({ token, event, textContext })
   }
   const onWordLeave = (): void => {
     hoverDebouncer.cancel()
   }
-  const onWordClick = (token: Token, event?: React.MouseEvent): void => {
+  const onWordClick = (
+    token: Token,
+    event?: React.MouseEvent,
+    textContext?: WordPopupTextContext
+  ): void => {
     hoverDebouncer.cancel()
     if (!shouldOpenWordPopup(window.getSelection())) return
-    void showWordPopup(token, event)
+    void showWordPopup(token, event, textContext)
   }
 
   // Shared by WordPopup's own close button and the outside-click effect
@@ -224,6 +269,7 @@ export function useWordPopup({
   return {
     handlers: {
       highlightedTokens: japaneseSubtitleSelected ? wordPopup?.highlightedTokens : undefined,
+      highlightedTextId: japaneseSubtitleSelected ? wordPopup?.textId : undefined,
       onWordHover: japaneseSubtitleSelected ? onWordHover : undefined,
       onWordClick: japaneseSubtitleSelected ? onWordClick : undefined,
       onWordLeave: japaneseSubtitleSelected ? onWordLeave : undefined
@@ -251,6 +297,7 @@ export function useWordPopup({
       onSubmit: handleCardImageSubmit,
       onCancel: () => setCardImageRequest(null)
     },
-    cardImageOpen: cardImageRequest !== null
+    cardImageOpen: cardImageRequest !== null,
+    close: closeWordPopup
   }
 }
