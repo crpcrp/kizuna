@@ -87,6 +87,12 @@ import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
 import { registerUpdateBridge } from './updateBridge'
 import { createUpdateService, type UpdateService } from './updateService'
 import { detectUpdateSupport } from './updateSupport'
+import { createGameOcrController } from './services/gameOcr/controller'
+import { createProductionDisplayCapture } from './services/gameOcr/displayCapture'
+import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
+import { createPaddleOcrWorkerService } from './services/ocr/paddleWorker'
+import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
+import { registerGameOcrBridge } from './gameOcrBridge'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
@@ -124,6 +130,7 @@ let powerSave: ReturnType<typeof createPowerSaveController> | undefined
 let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
+let gameOcr: GameOcrRuntimeService | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -513,6 +520,54 @@ function startPlayerSettings(settings: SettingsStore, mpv: MpvConfigManager): vo
 }
 
 /**
+ * Wires the Windows-only Game OCR runtime to the main-window bridge. The
+ * resource paths intentionally stay small and explicit; the packaging issue
+ * owns supplying the executable and model directories later.
+ */
+function startGameOcr(settings: SettingsStore): void {
+  if (process.platform !== 'win32') return
+
+  const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
+  const paddleBase = join(resourcesBase, 'paddleocr')
+  const worker = createPaddleOcrWorkerService({
+    executablePath: join(paddleBase, 'paddleocr.exe'),
+    modelPaths: {
+      detection: join(paddleBase, 'models', 'det'),
+      recognition: join(paddleBase, 'models', 'rec')
+    },
+    onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
+  })
+  const capture = createProductionDisplayCapture(process.platform)
+  const controller = createGameOcrController({
+    shortcut: globalShortcut,
+    accelerator: settings.get().gameOcr.captureShortcut,
+    capture,
+    settle: {
+      settle: () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+    },
+    createPresentation: (metadata) =>
+      createGameOcrWindow({
+        platform: process.platform,
+        preloadPath: join(__dirname, '../preload/index.js'),
+        displayBounds: metadata.displayBounds,
+        devUrl: process.env['ELECTRON_RENDERER_URL'],
+        packagedHtmlPath: join(__dirname, '../renderer/gameOcr.html'),
+        ipcMain,
+        displayEvents: screen
+      }),
+    ocr: worker,
+    onError: (message) => gameOcr?.reportError(message)
+  })
+  gameOcr = createGameOcrRuntimeService({ settings, controller, worker })
+  registerGameOcrBridge(
+    ipcMain,
+    gameOcr,
+    (channel, value) => sendToWindow(mainWindow, channel, value),
+    (sender) => sender === mainWindow?.webContents
+  )
+}
+
+/**
  * Registers the integration-status IPC bridge: the read-only
  * "which optional bundled binaries are on disk" query behind the Options
  * dialog's "Setup & integrations" tab.
@@ -588,7 +643,10 @@ if (!gotSingleInstanceLock) {
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
     disposeSystemMedia: () => systemMedia?.dispose(),
-    onShutdownStart: () => updates?.beginShutdown(),
+    onShutdownStart: () => {
+      updates?.beginShutdown()
+      void gameOcr?.stop()
+    },
     appQuit: () => {
       appWindows?.close()
       app.quit()
@@ -650,6 +708,7 @@ if (!gotSingleInstanceLock) {
     startAnki(settings, binaryPaths.ffmpegPath)
     startKnowledge(settings)
     startPlayerSettings(settings, mpvConfig)
+    startGameOcr(settings)
     startIntegrationStatus(binaryPaths)
     startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)

@@ -76,7 +76,20 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
       settings: { checkAutomatically: true },
       onChangeCheckAutomatically: vi.fn()
     },
-    ...patch
+    ...patch,
+    supportsGameOcr: patch.supportsGameOcr ?? false,
+    gameOcr: patch.gameOcr ?? {
+      settings: { captureShortcut: 'Ctrl+Shift+O' },
+      status: {
+        shortcut: 'Ctrl+Shift+O',
+        paddle: { state: 'not-started' },
+        game: { state: 'stopped' }
+      },
+      onChangeShortcut: vi.fn(),
+      onStart: vi.fn(),
+      onStop: vi.fn(),
+      onRetry: vi.fn()
+    }
   }
 }
 

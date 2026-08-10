@@ -10,6 +10,7 @@ import {
   DEFAULT_SYNC_STATUS
 } from '@src/renderer/src/state/optionsData'
 import { AUTO_AUDIO_DEVICE } from '@src/shared/audioDevice'
+import { DEFAULT_GAME_OCR_SETTINGS } from '@src/shared/gameOcrSettings'
 
 // Every required OptionsMenuProps entry at a neutral value, so a test spreads
 // this and overrides only the props it is actually about. Shared by
@@ -107,6 +108,19 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       yomitanDicts: [],
       wanikaniConfigured: false,
       syncStatus: DEFAULT_SYNC_STATUS
+    },
+    supportsGameOcr: false,
+    gameOcr: {
+      settings: DEFAULT_GAME_OCR_SETTINGS,
+      status: {
+        shortcut: DEFAULT_GAME_OCR_SETTINGS.captureShortcut,
+        paddle: { state: 'not-started' },
+        game: { state: 'stopped' }
+      },
+      onChangeShortcut: noop,
+      onStart: noop,
+      onStop: noop,
+      onRetry: noop
     }
   }
 }

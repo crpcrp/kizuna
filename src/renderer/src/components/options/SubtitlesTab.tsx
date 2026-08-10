@@ -77,9 +77,9 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
   },
   {
     id: 'translation-enabled',
-    label: 'Enable experimental subtitle translation',
+    label: 'Enable experimental translation for subtitles and OCR',
     category: 'subtitles',
-    keywords: ['translate', 'google', 'english'],
+    keywords: ['translate', 'google', 'english', 'ocr', 'selected text'],
     targetId: 'translation-enabled'
   }
 ]
@@ -192,13 +192,13 @@ export default function SubtitlesTab({
         <h3>Experimental translation</h3>
         <OptionsToggleRow
           id="translation-enabled"
-          title="Enable experimental subtitle translation"
+          title="Enable experimental translation for subtitles and OCR"
           checked={translationEnabled}
           onChange={onChangeTranslationEnabled}
         />
         <p className="options-hint">
-          Right-clicked subtitle text is sent to Google&apos;s unofficial online endpoint. Requests
-          may fail or be rate-limited; no API key is used.
+          Right-clicked subtitle text or explicitly selected OCR text is sent to Google&apos;s
+          unofficial online endpoint. Requests may fail or be rate-limited; no API key is used.
         </p>
       </div>
     </section>

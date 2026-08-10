@@ -23,6 +23,7 @@ import KnowledgeTab, {
   type KnowledgeTabProps
 } from './options/KnowledgeTab'
 import SetupTab, { SETUP_SETTING_ENTRIES, type SetupTabProps } from './options/SetupTab'
+import GameOcrTab, { GAME_OCR_SETTING_ENTRIES, type GameOcrTabProps } from './options/GameOcrTab'
 import {
   CATEGORY_ROWS,
   categoryLabel,
@@ -43,6 +44,8 @@ export interface OptionsMenuProps {
   anki: Omit<AnkiTabProps, 'active'>
   knowledge: Omit<KnowledgeTabProps, 'active'>
   setup: Omit<SetupTabProps, 'active' | 'nowMs' | 'onGoToCategory' | 'categoryLabel'>
+  supportsGameOcr: boolean
+  gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
 
 /** The complete search index is assembled here, while each entry list stays
@@ -55,7 +58,8 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   ...DICTIONARIES_SETTING_ENTRIES,
   ...ANKI_SETTING_ENTRIES,
   ...KNOWLEDGE_SETTING_ENTRIES,
-  ...SETUP_SETTING_ENTRIES
+  ...SETUP_SETTING_ENTRIES,
+  ...GAME_OCR_SETTING_ENTRIES
 ]
 
 const FLASH_MS = 1600
@@ -72,14 +76,22 @@ export default function OptionsMenu({
   dictionaries,
   anki,
   knowledge,
-  setup
+  setup,
+  supportsGameOcr,
+  gameOcr
 }: OptionsMenuProps): React.JSX.Element {
   const [activeCategory, setActiveCategory] = useState<OptionsCategory>('keybindings')
   const [query, setQuery] = useState('')
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [nowMs] = useState(() => Date.now())
   const searching = query.trim() !== ''
-  const results = searching ? matchSettings(query, SETTING_ENTRIES) : []
+  const categories = supportsGameOcr
+    ? CATEGORY_ROWS
+    : CATEGORY_ROWS.filter(({ id }) => id !== 'gameOcr')
+  const settingEntries = supportsGameOcr
+    ? SETTING_ENTRIES
+    : SETTING_ENTRIES.filter(({ category }) => category !== 'gameOcr')
+  const results = searching ? matchSettings(query, settingEntries) : []
 
   const selectResult = (entry: SettingEntry): void => {
     setActiveCategory(entry.category)
@@ -149,7 +161,7 @@ export default function OptionsMenu({
 
         <div className="options-body">
           <nav className="options-sidebar" role="tablist" aria-label="Options categories">
-            {CATEGORY_ROWS.map(({ id, label }) => (
+            {categories.map(({ id, label }) => (
               <button
                 key={id}
                 type="button"
@@ -202,6 +214,10 @@ export default function OptionsMenu({
             <PlaybackTab {...playback} open={open} active={activeCategory === 'playback'} />
             <AppearanceTab {...appearance} active={activeCategory === 'appearance'} />
             <SubtitlesTab {...subtitles} active={activeCategory === 'subtitles'} />
+
+            {supportsGameOcr && activeCategory === 'gameOcr' && (
+              <GameOcrTab {...gameOcr} open={open} active />
+            )}
 
             {activeCategory === 'dictionaries' && <DictionariesTab {...dictionaries} active />}
             {activeCategory === 'anki' && <AnkiTab {...anki} active />}

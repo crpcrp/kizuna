@@ -143,6 +143,20 @@ export const LAUNCH_CHANNELS = {
 
 /** Dedicated Windows Game OCR frozen-frame renderer channels. */
 export const GAME_OCR_CHANNELS = {
+  /** renderer→main invoke: read the persisted Game OCR settings. */
+  getSettings: 'gameOcr:getSettings',
+  /** renderer→main invoke: update the persisted Game OCR settings. */
+  setSettings: 'gameOcr:setSettings',
+  /** renderer→main invoke: read the current worker/coordinator status. */
+  getStatus: 'gameOcr:getStatus',
+  /** renderer→main invoke: initialize the worker and arm the shortcut. */
+  start: 'gameOcr:start',
+  /** renderer→main invoke: stop the worker and disarm the shortcut. */
+  stop: 'gameOcr:stop',
+  /** renderer→main invoke: retry a failed worker/coordinator start. */
+  retry: 'gameOcr:retry',
+  /** main→renderer push: current worker/coordinator status. */
+  statusChanged: 'gameOcr:statusChanged',
   /** main→renderer: replace the frozen screenshot and recognition state. */
   present: 'gameOcr:present',
   /** main→renderer: clear screenshot, boxes, selection, and indicator state. */

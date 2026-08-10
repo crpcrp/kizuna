@@ -10,6 +10,7 @@ import {
 import { createSettingsFile, type SettingsFileSystem } from '@src/main/services/settingsFile'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import { defaultAnkiSettings } from '@src/shared/anki'
+import { DEFAULT_GAME_OCR_SETTINGS, DEFAULT_GAME_OCR_SHORTCUT } from '@src/shared/gameOcrSettings'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 describe('mergeSettings', () => {
@@ -100,6 +101,24 @@ describe('mergeSettings — media history', () => {
     expect(merged.mediaHistory.lastOpenFolder).toBe('/srv/Media')
     expect(merged.mediaHistory.playbackByPath).toEqual({
       '/srv/Media/Episode.mkv': { positionSeconds: 42, updatedAt: 13 }
+    })
+  })
+})
+
+describe('mergeSettings — Game OCR settings', () => {
+  it('defaults to only the capture shortcut and ignores armed state', () => {
+    expect(mergeSettings({}).gameOcr).toEqual(DEFAULT_GAME_OCR_SETTINGS)
+    expect(mergeSettings({ gameOcr: { captureShortcut: 'Alt+O', armed: true } }).gameOcr).toEqual({
+      captureShortcut: 'Alt+O'
+    })
+  })
+
+  it('normalizes malformed shortcuts back to the default', () => {
+    expect(mergeSettings({ gameOcr: { captureShortcut: 'Ctrl+Ctrl+O' } }).gameOcr).toEqual({
+      captureShortcut: DEFAULT_GAME_OCR_SHORTCUT
+    })
+    expect(mergeSettings({ gameOcr: { captureShortcut: 'Alt+F4' } }).gameOcr).toEqual({
+      captureShortcut: 'Alt+F4'
     })
   })
 })
@@ -722,6 +741,15 @@ describe('createSettingsStore', () => {
     // see the persisted value.
     const reopened = createSettingsStore(io)
     expect(reopened.get()).toEqual({ ...defaultSettings, mecabDictId: 'unidic', dictOrder: [2, 1] })
+  })
+
+  it('round-trips the Game OCR shortcut without persisting runtime state', () => {
+    const io = fakeIo(undefined)
+    const store = createSettingsStore(io)
+    store.set({ gameOcr: { captureShortcut: 'Alt+O' } })
+
+    expect(createSettingsStore(io).get().gameOcr).toEqual({ captureShortcut: 'Alt+O' })
+    expect(io.read()).not.toContain('armed')
   })
 
   it('tolerates garbage JSON already on disk', () => {

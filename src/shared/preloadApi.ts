@@ -46,6 +46,8 @@ import type {
 } from './mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
 import type { GameOcrPresentation } from './gameOcr'
+import type { GameOcrRuntimeStatus } from './gameOcr'
+import type { GameOcrSettings } from './gameOcrSettings'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -111,6 +113,15 @@ export interface KizunaApi {
     rendererReady(): void
   }
   gameOcr: {
+    /** True only on the Windows runtime where the experimental feature exists. */
+    supported: boolean
+    getSettings(): Promise<GameOcrSettings>
+    setSettings(patch: Partial<GameOcrSettings>): Promise<GameOcrSettings>
+    getStatus(): Promise<GameOcrRuntimeStatus>
+    start(): Promise<GameOcrRuntimeStatus>
+    stop(): Promise<GameOcrRuntimeStatus>
+    retry(): Promise<GameOcrRuntimeStatus>
+    onStatusChange(cb: (status: GameOcrRuntimeStatus) => void): () => void
     onPresentation(cb: (value: GameOcrPresentation) => void): () => void
     onDiscard(cb: () => void): () => void
     onRecognitionState(cb: (recognizing: boolean) => void): () => void

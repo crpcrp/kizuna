@@ -77,14 +77,14 @@ describe('OptionsToggleRow accessible name and description', () => {
     render(
       <OptionsToggleRow
         id="translation-enabled"
-        title="Enable experimental subtitle translation"
+        title="Enable experimental translation for subtitles and OCR"
         checked={false}
         onChange={vi.fn()}
       />
     )
 
     const checkbox = screen.getByRole('checkbox', {
-      name: 'Enable experimental subtitle translation'
+      name: 'Enable experimental translation for subtitles and OCR'
     })
     expect(checkbox.hasAttribute('aria-describedby')).toBe(false)
     expect(document.querySelector('.options-row-description')).toBeNull()

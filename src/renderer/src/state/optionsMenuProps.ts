@@ -5,6 +5,7 @@ import type { PlayerAction, PlayerState } from './playerState'
 import type { OptionsDialogActions, OptionsDialogData } from './useOptionsDialog'
 import type { VocabularyKnowledgeOptions } from './useVocabularyMining'
 import type { UpdateSettings } from '../../../shared/update'
+import type { GameOcrTabProps } from '../components/options/GameOcrTab'
 
 /** The player-state fields the dialog shows. Everything else it renders comes
  * from the options-data domains or from another feature's group. */
@@ -55,6 +56,8 @@ export interface OptionsMenuPropsInput {
     settings: UpdateSettings
     onChangeCheckAutomatically: (value: boolean) => void
   }
+  supportsGameOcr: boolean
+  gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
 
 /**
@@ -75,7 +78,9 @@ export function buildOptionsMenuProps({
   onCategoryOpen,
   playback,
   knowledge,
-  updates
+  updates,
+  supportsGameOcr,
+  gameOcr
 }: OptionsMenuPropsInput): OptionsMenuProps {
   // Most rows only dispatch: the settings lifecycle already persists the
   // reducer fields it watches. The two rows that call `actions.persist` below
@@ -167,6 +172,8 @@ export function buildOptionsMenuProps({
       yomitanDicts: data.dictionaries.yomitanDicts,
       wanikaniConfigured: data.knowledgeSettings.hasWanikaniToken,
       syncStatus: data.syncStatus
-    }
+    },
+    supportsGameOcr,
+    gameOcr
   }
 }

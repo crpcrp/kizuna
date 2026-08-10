@@ -4,6 +4,8 @@ import type { KizunaApi } from '@src/shared/preloadApi'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import type { SyncStatus } from '@src/shared/knowledge'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
+import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
+import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -18,6 +20,12 @@ const DEFAULT_KNOWLEDGE_SETTINGS = makePublicKnowledgeSettings()
 const DEFAULT_SYNC_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },
   anki: { lastSyncAt: null, count: 0, configured: false }
+}
+
+const DEFAULT_GAME_OCR_STATUS: GameOcrRuntimeStatus = {
+  shortcut: DEFAULT_GAME_OCR_SETTINGS.captureShortcut,
+  paddle: { state: 'not-started' },
+  game: { state: 'stopped' }
 }
 
 function listenerCleanup(): void {}
@@ -67,6 +75,17 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       rendererReady: vi.fn()
     },
     gameOcr: {
+      supported: false,
+      getSettings: vi.fn(async (): Promise<GameOcrSettings> => ({ ...DEFAULT_GAME_OCR_SETTINGS })),
+      setSettings: vi.fn(async (patch): Promise<GameOcrSettings> => ({
+        ...DEFAULT_GAME_OCR_SETTINGS,
+        ...patch
+      })),
+      getStatus: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
+      start: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
+      stop: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
+      retry: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
+      onStatusChange: vi.fn(() => listenerCleanup),
       onPresentation: vi.fn(() => listenerCleanup),
       onDiscard: vi.fn(() => listenerCleanup),
       onRecognitionState: vi.fn(() => listenerCleanup),
