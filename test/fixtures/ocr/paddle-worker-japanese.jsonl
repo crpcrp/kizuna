@@ -1,0 +1,2 @@
+{"version":1,"type":"ready"}
+{"version":1,"type":"result","requestId":1,"regions":[{"text":"日本語","confidence":0.98,"quad":[[218,20],[320,22],[318,52],[218,50]]},{"text":"猫","confidence":0.97,"quad":[[28,20],[130,22],[128,52],[28,50]]}]}
