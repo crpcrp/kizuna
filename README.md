@@ -82,9 +82,12 @@ desktop user with Electron's sandbox available. Do not work around a sandbox
 error with `--no-sandbox`; use the deb instead.
 
 Both Linux packages are unsigned and may prompt a warning in software that
-checks package signatures. Kizuna has no automatic updater. Download new
-versions from the Releases page and verify their checksum before installing or
-replacing the AppImage.
+checks package signatures. Kizuna has an optional update check. When enabled in
+Options > Setup & integrations, it checks GitHub once at startup; it never
+downloads or installs an update without your confirmation. You can also check
+manually from About > Updates. Disable the setting for a fully manual workflow.
+When updating manually, download new versions from the Releases page and verify
+their checksum before installing or replacing the AppImage.
 
 ## Optional services
 
@@ -95,29 +98,75 @@ replacing the AppImage.
 
 Neither service is required for video playback or local subtitle study.
 
-### Optional MeCab UniDic
+## Optional dictionaries
 
-UniDic is an optional parser dictionary. Install a compatible MeCab UniDic
-folder under Kizuna's persistent user-data directory, then restart Kizuna:
+Kizuna uses two separate kinds of dictionaries:
+
+- **MeCab UniDic** is an optional tokenizer dictionary. It replaces bundled
+  IPADIC when splitting subtitles into words.
+- **Yomitan-format dictionaries** are optional lookup dictionaries. Kizuna
+  imports them into its local database for definitions. Optional frequency and
+  pitch dictionaries enrich word-popup ordering and metadata; they do not
+  replace the tokenizer.
+
+IPADIC is bundled, so Kizuna can tokenize subtitles without any optional
+dictionary download.
+
+### MeCab UniDic
+
+Download a compiled, MeCab-compatible UniDic package from the [official UniDic
+project and download page](https://clrd.ninjal.ac.jp/unidic/en/). Kizuna expects
+the extracted dictionary folder to contain `char.bin`, `dicrc`, `matrix.bin`,
+`sys.dic`, and `unk.dic` directly inside that folder. An arbitrary source
+dictionary or a parent folder without these compiled files is not supported.
+
+Install the folder in Kizuna's persistent user-data directory:
 
 - Windows: `%APPDATA%\Kizuna\mecab\unidic`
 - Linux: `~/.config/Kizuna/mecab/unidic`
 
 Options > Parser & Dictionaries > Open UniDic folder creates and opens the
-folder for you. Keep the dictionary there rather than under the application
-installation directory so it survives Kizuna updates. Legacy copies from the
-old resource location are migrated during an installer upgrade or the first
-startup that can still see them; Linux development installs continue using the
-system dictionary.
+folder for you. After extracting the files, reopen Options or restart Kizuna,
+then select UniDic under Options > Parser & Dictionaries. If the folder is
+missing or has the wrong layout, Kizuna reports UniDic as **Missing** and keeps
+bundled IPADIC available. Keep the dictionary in this persistent folder rather
+than under the application installation/resources directory so application
+updates cannot delete it. Existing installations with a dictionary in the old
+`resources/mecab/unidic` location are migrated when possible; do not install new
+copies there. Unpackaged Linux development continues using the system
+dictionary.
+
+### Yomitan-format dictionaries
+
+Use [Yomitan's maintained recommended-dictionaries
+page](https://yomitan.wiki/dictionaries/) to find dictionaries. It lists free
+Japanese options such as Jitendex, plus separate frequency and other metadata
+dictionaries. The page is the source of truth for current recommendations.
+
+Keep downloaded Yomitan dictionaries as `.zip` files; do not extract them.
+In Options > Parser & Dictionaries, choose **Import dictionaries…** under
+**Yomitan dictionaries**, select the ZIP, and wait for the import to finish.
+Enable the imported dictionaries and use the arrows to set their order. Term
+dictionaries provide definitions, while frequency dictionaries can improve
+word-popup ordering and pitch dictionaries can add pitch-accent metadata.
+
+Kizuna imports the Yomitan dictionary format directly; the Yomitan browser
+extension is not required. Only Yomitan-format ZIPs with files Kizuna supports
+can be imported; arbitrary ZIPs and unpacked dictionary folders are not
+supported. Kizuna does not bundle these third-party datasets, and you are
+responsible for following each dictionary's license and usage terms. After
+import, dictionary lookup is stored locally and works offline.
 
 ## Privacy and network access
 
 Playback, subtitle processing, dictionaries, settings, history, and vocabulary
 data stay on the computer. Kizuna has no telemetry, analytics, account system,
-automatic crash upload, or background update checks.
+or automatic crash upload. Imported dictionary lookup is local and does not
+contact the dictionary source.
 
-Network access occurs only when you choose a network feature: translating a
-subtitle, syncing WaniKani, or using AnkiConnect. A remote
+Network access occurs when you enable or manually start an update check, or when
+you choose another network feature: translating a subtitle, syncing WaniKani,
+or using AnkiConnect. A remote
 AnkiConnect endpoint receives mined text and media; plain HTTP does not encrypt
 that traffic.
 
