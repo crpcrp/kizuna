@@ -31,7 +31,7 @@ function region(
 describe('GameOcrBoxes', () => {
   it('renders one selectable plain-text box per region in deterministic source order', () => {
     const { container } = render(
-      <GameOcrBoxes regions={[region('later', 'ĺľŚ', 20, 20), region('first', 'ĺ‰Ť\nčˇŚ', 10, 10)]} />
+      <GameOcrBoxes regions={[region('later', '\u5f8c', 20, 20), region('first', '\u524d\n\u884c', 10, 10)]} />
     )
 
     expect(
@@ -45,25 +45,25 @@ describe('GameOcrBoxes', () => {
 
   it('passes token, knowledge, highlight, and compound data to InteractiveText', () => {
     const tokens = [
-      makeToken({ surface: 'çĄž', lemma: 'çĄž' }),
-      makeToken({ surface: 'ć§', lemma: 'ć§', startOffset: 1 }),
-      makeToken({ surface: 'ă¨', lemma: 'ă¨', pos: 'ĺŠ©č©ž', startOffset: 2 })
+      makeToken({ surface: '\u795e', lemma: '\u795e' }),
+      makeToken({ surface: '\u69d8', lemma: '\u69d8', startOffset: 1 }),
+      makeToken({ surface: '\u3068', lemma: '\u3068', pos: '\u52a9\u8a5e', startOffset: 2 })
     ]
     const { container } = render(
       <GameOcrBoxes
         regions={[
-          region('compound', 'çĄžć§ă¨', 0, 0, {
+          region('compound', '\u795e\u69d8\u3068', 0, 0, {
             tokens,
             highlightedTokens: tokens.slice(0, 2),
-            levels: { çĄž: 'unknown', ć§: 'unknown', ă¨: 'unknown' },
+            levels: { \u795e: 'unknown', \u69d8: 'unknown', \u3068: 'unknown' },
             vocabularySpans: [
               {
                 cueKey: 'compound',
                 startOffset: 0,
                 endOffset: 2,
                 memberTokenOffsets: [0, 1],
-                expression: 'çĄžć§',
-                matchedSurface: 'çĄžć§',
+                expression: '\u795e\u69d8',
+                matchedSurface: '\u795e\u69d8',
                 level: 'known'
               }
             ]
@@ -83,7 +83,7 @@ describe('GameOcrBoxes', () => {
     const onActiveRegionChange = vi.fn()
     const { container } = render(
       <GameOcrBoxes
-        regions={[region('one', 'ä¸€', 0, 0), region('two', 'äşŚ', 120, 0)]}
+        regions={[region('one', '\u4e00', 0, 0), region('two', '\u4e8c', 120, 0)]}
         onActiveRegionChange={onActiveRegionChange}
       />
     )
@@ -104,7 +104,7 @@ describe('GameOcrBoxes', () => {
     const onClose = vi.fn()
     const { container } = render(
       <GameOcrFrame onClose={onClose}>
-        <GameOcrBoxes regions={[region('one', 'é¸ćŠžă§ăŤă‚‹ć–‡ĺ­—', 0, 0)]} />
+        <GameOcrBoxes regions={[region('one', '\u9078\u629e\u3067\u304d\u308b\u6587\u5b57', 0, 0)]} />
       </GameOcrFrame>
     )
     const box = container.querySelector('[data-region-id="one"]') as HTMLElement
@@ -123,7 +123,7 @@ describe('GameOcrBoxes', () => {
     fireEvent.select(box)
     fireEvent.copy(box)
 
-    expect(selectedText).toContain('é¸ćŠžă§ăŤă‚‹ć–‡ĺ­—')
+    expect(selectedText).toContain('\u9078\u629e\u3067\u304d\u308b\u6587\u5b57')
     expect(selection?.toString()).toBe(selectedText)
     expect(onClose).not.toHaveBeenCalled()
 
@@ -135,7 +135,7 @@ describe('GameOcrBoxes', () => {
     const onClose = vi.fn()
     const { container } = render(
       <GameOcrFrame onClose={onClose}>
-        <GameOcrBoxes regions={[region('one', 'ć–‡ĺ­—', 0, 0)]} />
+        <GameOcrBoxes regions={[region('one', '\u6587\u5b57', 0, 0)]} />
       </GameOcrFrame>
     )
     const box = container.querySelector('[data-region-id="one"]') as HTMLElement
@@ -155,7 +155,7 @@ describe('GameOcrBoxes', () => {
     const { container, rerender } = render(
       <GameOcrBoxes
         captureKey="first-capture"
-        regions={[region('same-id', 'ĺŚă', 0, 0)]}
+        regions={[region('same-id', '\u540c\u3058', 0, 0)]}
         onActiveRegionChange={onActiveRegionChange}
       />
     )
@@ -166,7 +166,7 @@ describe('GameOcrBoxes', () => {
     rerender(
       <GameOcrBoxes
         captureKey="second-capture"
-        regions={[region('same-id', 'ĺŚă', 0, 0)]}
+        regions={[region('same-id', '\u540c\u3058', 0, 0)]}
         onActiveRegionChange={onActiveRegionChange}
       />
     )
