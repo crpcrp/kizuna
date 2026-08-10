@@ -404,6 +404,10 @@ function migrateLegacyUnidicFromResources(
   // Unpackaged Linux resolves the distro's shared UniDic path, not a legacy
   // Kizuna resource folder; never copy a system dictionary into app data.
   if (!app.isPackaged && process.platform === 'linux') return
+  // Same guard the NSIS hook applies: only a compiled dictionary is worth
+  // migrating. Copying an empty leftover folder would claim the persistent
+  // target and block a later migration of a real one.
+  if (!isValidMecabDictionaryDir(binaryPaths.unidicDir, fs, process.platform)) return
 
   const result = migrateLegacyUnidic({
     legacyDir: binaryPaths.unidicDir,
