@@ -2,14 +2,10 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*.*.*']
+    paths: [package.json]
   workflow_dispatch:
-    inputs:
-      create_release:
-        description: Create the version tag and a draft pre-release
-        required: true
-        default: false
-        type: boolean
 
 concurrency:
   group: release-${{ github.ref }}
@@ -23,6 +19,8 @@ jobs:
     name: Validate release ref
     runs-on: ubuntu-latest
     outputs:
+      build: ${{ steps.release.outputs.build }}
+      publish: ${{ steps.release.outputs.publish }}
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
     steps:
@@ -34,13 +32,16 @@ jobs:
       - name: Verify release ref
         id: release
         env:
-          CREATE_RELEASE: ${{ inputs.create_release || false }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
         run: |
           set -euo pipefail
           version=$(node -p "require('./package.json').version")
           tag="v$version"
+          build=true
+          publish=false
 
           if [[ "$REF_TYPE" == "tag" ]]; then
             if [[ ! "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
@@ -55,17 +56,37 @@ jobs:
               echo 'The tagged commit is not in main history' >&2
               exit 1
             fi
-          elif [[ "$CREATE_RELEASE" == "true" && "$REF_NAME" != "main" ]]; then
-            echo 'Manual runs that create a release must run from main' >&2
-            exit 1
+            publish=true
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            previous_version=$(git show "$EVENT_BEFORE:package.json" | node -e \
+              "let source=''; process.stdin.on('data', chunk => source += chunk); process.stdin.on('end', () => console.log(JSON.parse(source).version))")
+            if [[ "$previous_version" == "$version" ]]; then
+              echo 'package.json changed without a version change; skipping release build'
+              build=false
+            else
+              lock_version=$(node -p "require('./package-lock.json').version")
+              root_lock_version=$(node -p "require('./package-lock.json').packages[''].version")
+              if [[ "$lock_version" != "$version" || "$root_lock_version" != "$version" ]]; then
+                echo 'package.json and package-lock.json versions do not match' >&2
+                exit 1
+              fi
+              if git rev-parse --verify --quiet "refs/tags/$tag"; then
+                echo "Release tag already exists: $tag" >&2
+                exit 1
+              fi
+              publish=true
+            fi
           fi
 
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
   build-windows:
     name: Build and smoke-test Windows x64
     needs: validate
+    if: needs.validate.outputs.build == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,6 +220,7 @@ jobs:
   build-linux:
     name: Build and smoke-test Linux x64
     needs: validate
+    if: needs.validate.outputs.build == 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -287,10 +309,7 @@ jobs:
   publish:
     name: Create draft pre-release
     needs: [validate, build-windows, build-linux]
-    if: >-
-      success() &&
-      ((github.event_name == 'push' && github.ref_type == 'tag') ||
-      (github.event_name == 'workflow_dispatch' && inputs.create_release))
+    if: success() && needs.validate.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
