@@ -12,6 +12,33 @@ export interface WordPopupPosition {
   y: number
 }
 
+/** The part of a DOMRect needed to anchor a popup to interactive text. */
+export interface WordPopupAnchorRect {
+  left: number
+  top: number
+  width: number
+}
+
+/** Optional cue-independent context supplied by surfaces such as Game OCR. */
+export interface WordPopupTextContext {
+  /** The independent text instance that owns the clicked token. */
+  textId: string
+  /** Every token in that text instance, never tokens from a neighboring box. */
+  tokens: Token[]
+  /** The original text used as dictionary sentence context. */
+  sentence: string
+  /** The hovered/clicked text element's viewport rectangle, when measurable. */
+  anchorRect?: WordPopupAnchorRect
+}
+
+/**
+ * Maximum popup dimensions from WordPopup.css. Keeping the worst-case box
+ * inside the viewport also keeps a short result inside it.
+ */
+const WORD_POPUP_MAX_WIDTH = 440
+const WORD_POPUP_MAX_HEIGHT_RATIO = 0.55
+const WORD_POPUP_GAP = 14
+
 /**
  * Pure: computes the word popup's anchor position. Prefers the subtitle
  * box's own rect (so the popup anchors above the whole subtitle line,
@@ -20,12 +47,40 @@ export interface WordPopupPosition {
  * to {0,0} when neither is (e.g. hover fired with no event).
  */
 export function wordPopupPosition(
-  subtitleRect: { left: number; top: number; width: number } | undefined,
+  subtitleRect: WordPopupAnchorRect | undefined,
   event?: { clientX: number; clientY: number }
 ): WordPopupPosition {
   if (subtitleRect) return { x: subtitleRect.left + subtitleRect.width / 2, y: subtitleRect.top }
   if (event) return { x: event.clientX, y: event.clientY }
   return { x: 0, y: 0 }
+}
+
+/**
+ * Keeps a popup anchored above its target while reserving the maximum space
+ * the fixed popup can occupy. This is used for OCR boxes, whose anchors can
+ * be at any display edge; the existing subtitle position remains unchanged.
+ */
+export function constrainWordPopupPosition(
+  position: WordPopupPosition,
+  viewport: { width: number; height: number }
+): WordPopupPosition {
+  const width = Math.min(WORD_POPUP_MAX_WIDTH, Math.max(0, viewport.width * 0.9))
+  const height = Math.min(
+    Math.max(0, viewport.height),
+    Math.max(0, viewport.height * WORD_POPUP_MAX_HEIGHT_RATIO)
+  )
+  const xMin = width / 2
+  const xMax = Math.max(xMin, viewport.width - width / 2)
+  const yMin = Math.min(viewport.height, height + WORD_POPUP_GAP)
+  const yMax = Math.max(yMin, viewport.height)
+  return {
+    x: clamp(position.x, xMin, xMax),
+    y: clamp(position.y, yMin, yMax)
+  }
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum)
 }
 
 /** Subset of the preload `kizuna.dict` bridge that lookupWordPopup needs. */

@@ -8,6 +8,7 @@ import {
 } from 'react'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import type { GameOcrLayoutResult } from '../state/gameOcrLayout'
 import InteractiveText, { type InteractiveTextProps } from './InteractiveText'
@@ -33,6 +34,9 @@ export interface GameOcrBoxesProps {
   /** Optional controlled active region. */
   activeRegionId?: string | null
   onActiveRegionChange?: (regionId: string | null) => void
+  /** Popup highlight returned by the controller, scoped to one OCR region. */
+  popupHighlightedRegionId?: string | null
+  popupHighlightedTokens?: Token[]
   onWordHover?: InteractiveTextProps['onWordHover']
   onWordClick?: InteractiveTextProps['onWordClick']
   onWordLeave?: InteractiveTextProps['onWordLeave']
@@ -48,6 +52,8 @@ export default function GameOcrBoxes({
   captureKey,
   activeRegionId: controlledActiveRegionId,
   onActiveRegionChange,
+  popupHighlightedRegionId,
+  popupHighlightedTokens,
   onWordHover,
   onWordClick,
   onWordLeave
@@ -90,6 +96,8 @@ export default function GameOcrBoxes({
       {orderedRegions.map((region) => {
         const active = activeRegionId === region.id
         const bounds = region.layout.displayBounds
+        const highlightedTokens =
+          popupHighlightedRegionId === region.id ? popupHighlightedTokens : region.highlightedTokens
         return (
           <div
             key={region.id}
@@ -123,12 +131,16 @@ export default function GameOcrBoxes({
               id={region.id}
               text={region.text}
               tokens={region.tokens}
-              highlightedTokens={region.highlightedTokens}
+              highlightedTokens={highlightedTokens}
               levels={region.levels}
               vocabularySpans={region.vocabularySpans}
               className="game-ocr-box__text"
-              onWordHover={onWordHover}
-              onWordClick={onWordClick}
+              onWordHover={(token, event) =>
+                onWordHover?.(token, event, popupContextFor(region, event))
+              }
+              onWordClick={(token, event) =>
+                onWordClick?.(token, event, popupContextFor(region, event))
+              }
               onWordLeave={onWordLeave}
               onMouseDown={stopPropagation}
               onSelect={stopPropagation}
@@ -138,6 +150,21 @@ export default function GameOcrBoxes({
       })}
     </div>
   )
+}
+
+function popupContextFor(region: GameOcrBoxRegion, event?: React.MouseEvent): WordPopupTextContext {
+  const target = event?.currentTarget as HTMLElement | undefined
+  const rect = target?.getBoundingClientRect()
+  const anchorRect =
+    rect && (rect.width > 0 || rect.height > 0)
+      ? { left: rect.left, top: rect.top, width: rect.width }
+      : undefined
+  return {
+    textId: region.id,
+    tokens: region.tokens ?? [],
+    sentence: region.text,
+    anchorRect
+  }
 }
 
 function compareRegions(left: GameOcrBoxRegion, right: GameOcrBoxRegion): number {

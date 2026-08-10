@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   type DictLookupBridge,
   buildLongestMatchCandidates,
+  constrainWordPopupPosition,
   lookupLinkedWord,
   lookupWordPopup,
   matchedTokenSpan,
@@ -32,6 +33,17 @@ describe('wordPopupPosition', () => {
 
   it('falls back to {0,0} when neither a rect nor an event is given', () => {
     expect(wordPopupPosition(undefined)).toEqual({ x: 0, y: 0 })
+  })
+
+  it('keeps an OCR popup anchor inside the viewport for edge regions', () => {
+    expect(constrainWordPopupPosition({ x: 0, y: 0 }, { width: 1000, height: 800 })).toMatchObject({
+      x: 220,
+      y: expect.closeTo(454)
+    })
+    expect(constrainWordPopupPosition({ x: 1000, y: 800 }, { width: 1000, height: 800 })).toEqual({
+      x: 780,
+      y: 800
+    })
   })
 })
 

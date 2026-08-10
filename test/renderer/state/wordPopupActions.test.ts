@@ -124,6 +124,34 @@ describe('word popup actions', () => {
     expect(setProvenance).toHaveBeenCalledWith({})
   })
 
+  it('uses only the owning OCR region for lookup and keeps its sentence context', async () => {
+    const { actions, showPopup } = setup()
+    const first = makeToken({ surface: '前', lemma: '前', startOffset: 0 })
+    const second = makeToken({ surface: '後', lemma: '後', startOffset: 1 })
+    const contextToken = makeToken({ surface: '箱', lemma: '箱', startOffset: 0 })
+    const dict = { lookup: vi.fn().mockResolvedValue([result('箱')]) }
+
+    await actions.open(dict, { findExisting: vi.fn().mockResolvedValue(null) }, fakeKnowledge(), {
+      ...input(contextToken),
+      cueTokens: [first, second],
+      sentence: 'wrong context',
+      textContext: {
+        textId: 'ocr-region-2',
+        tokens: [contextToken],
+        sentence: '箱の文章'
+      }
+    })
+
+    expect(dict.lookup).toHaveBeenCalledWith('箱', undefined, null, undefined, ['箱'], '箱')
+    expect(showPopup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        textId: 'ocr-region-2',
+        sentence: '箱の文章',
+        highlightedTokens: [contextToken]
+      })
+    )
+  })
+
   it('keeps the popup usable when an advisory existing-card check fails', async () => {
     const { actions, showPopup, setExisting } = setup()
     await actions.open(

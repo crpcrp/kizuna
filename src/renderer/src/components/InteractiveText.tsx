@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
 
@@ -20,8 +21,8 @@ export interface InteractiveText {
 
 export interface InteractiveTextProps extends InteractiveText {
   className?: string
-  onWordHover?: (token: Token, event?: React.MouseEvent) => void
-  onWordClick?: (token: Token, event?: React.MouseEvent) => void
+  onWordHover?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
+  onWordClick?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
   onWordLeave?: () => void
   onMouseDown?: React.MouseEventHandler<HTMLSpanElement>
   onSelect?: React.ReactEventHandler<HTMLSpanElement>

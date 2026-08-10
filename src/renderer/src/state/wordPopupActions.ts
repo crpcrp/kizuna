@@ -6,6 +6,7 @@ import { type AnkiExistingBridge } from './ankiMining'
 import {
   type DictLookupBridge,
   type WordPopupPosition,
+  type WordPopupTextContext,
   lookupLinkedWord,
   lookupWordPopup
 } from './wordLookup'
@@ -33,6 +34,8 @@ export interface WordPopupPayload {
   highlightedTokens: Token[]
   token: Token
   sentence: string
+  /** Cue-independent text instance that owns the popup, such as an OCR box. */
+  textId?: string
   /** Media-clock start/end of the cue this popup was opened from, retained so
    * a later mine can clip its audio. Absent when the popup was
    * opened with no active cue. */
@@ -59,6 +62,7 @@ export interface WordPopupActions {
       sentence: string
       cueStart?: number
       cueEnd?: number
+      textContext?: WordPopupTextContext
       duplicatePolicy?: DuplicatePolicy
     }
   ): Promise<void>
@@ -90,7 +94,7 @@ export function createWordPopupActions(callbacks: {
           input.position,
           input.frequencyDictId,
           input.sortOrder,
-          input.cueTokens
+          input.textContext?.tokens ?? input.cueTokens
         )
       } catch (error) {
         if (requests.isCurrent(request)) throw error
@@ -101,7 +105,8 @@ export function createWordPopupActions(callbacks: {
       callbacks.showPopup({
         ...popup,
         token: input.token,
-        sentence: input.sentence,
+        sentence: input.textContext?.sentence ?? input.sentence,
+        textId: input.textContext?.textId,
         cueStart: input.cueStart,
         cueEnd: input.cueEnd
       })
