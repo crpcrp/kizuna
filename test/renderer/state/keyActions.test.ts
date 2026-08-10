@@ -159,10 +159,14 @@ describe('performKeyAction', () => {
     expect(deps.onToggleMiniPlayer).toHaveBeenCalledTimes(1)
   })
 
-  it('subtitleFontScale advances one font-size step', () => {
-    const deps = makeDeps()
-    expect(performKeyAction('subtitleFontScale', deps)).toBe(false)
-    expect(deps.onAdjustSubtitleFontScale).toHaveBeenCalledWith(1)
+  it('routes the two subtitle-size actions to opposite font-size steps', () => {
+    const up = makeDeps()
+    expect(performKeyAction('subtitleFontScaleUp', up)).toBe(false)
+    expect(up.onAdjustSubtitleFontScale).toHaveBeenCalledWith(1)
+
+    const down = makeDeps()
+    expect(performKeyAction('subtitleFontScaleDown', down)).toBe(false)
+    expect(down.onAdjustSubtitleFontScale).toHaveBeenCalledWith(-1)
   })
 })
 

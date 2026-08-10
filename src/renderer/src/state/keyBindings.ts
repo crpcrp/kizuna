@@ -1,6 +1,7 @@
 import {
   DEFAULT_KEY_BINDINGS,
-  MOUSE_WHEEL_BINDING_CODE,
+  MOUSE_WHEEL_DOWN_BINDING_CODE,
+  MOUSE_WHEEL_UP_BINDING_CODE,
   isKeyModifier,
   type KeyBinding,
   type KeyBindings,
@@ -51,10 +52,22 @@ export interface KeyChord {
 }
 
 export interface WheelChord {
+  /** Chromium/the OS translates a shifted vertical wheel to `deltaX` on some
+   * platforms, so the direction is read off whichever axis moved. */
+  deltaX: number
+  deltaY: number
   ctrlKey: boolean
   shiftKey: boolean
   altKey: boolean
   metaKey: boolean
+}
+
+/** Maps a wheel gesture to one vertical direction, regardless of axis.
+ * `-1` is wheel up, `1` is wheel down, `0` is a wheel event to ignore. */
+export function wheelDirection(deltaY: number, deltaX: number): -1 | 0 | 1 {
+  const axis = Number.isFinite(deltaY) && deltaY !== 0 ? deltaY : deltaX
+  if (!Number.isFinite(axis) || axis === 0) return 0
+  return axis < 0 ? -1 : 1
 }
 
 export function eventKeyBinding(event: KeyChord, held: ReadonlySet<string>): KeyBinding | null {
@@ -78,23 +91,24 @@ function leftModifierIsHeld(
   return held.size === 0 || (held.has(left) && !held.has(right))
 }
 
+/** The binding a wheel gesture produces, direction included. A zero-delta event
+ * yields null so it can neither reassign nor trigger a binding. */
 export function wheelEventKeyBinding(
   event: WheelChord,
   held: ReadonlySet<string>
 ): KeyBinding | null {
   if (event.altKey || event.metaKey) return null
   if (event.ctrlKey && event.shiftKey) return null
+  const direction = wheelDirection(event.deltaY, event.deltaX)
+  if (direction === 0) return null
+  const code = direction < 0 ? MOUSE_WHEEL_UP_BINDING_CODE : MOUSE_WHEEL_DOWN_BINDING_CODE
   if (event.ctrlKey) {
-    return leftModifierIsHeld(held, 'ControlLeft', 'ControlRight')
-      ? `ControlLeft+${MOUSE_WHEEL_BINDING_CODE}`
-      : null
+    return leftModifierIsHeld(held, 'ControlLeft', 'ControlRight') ? `ControlLeft+${code}` : null
   }
   if (event.shiftKey) {
-    return leftModifierIsHeld(held, 'ShiftLeft', 'ShiftRight')
-      ? `ShiftLeft+${MOUSE_WHEEL_BINDING_CODE}`
-      : null
+    return leftModifierIsHeld(held, 'ShiftLeft', 'ShiftRight') ? `ShiftLeft+${code}` : null
   }
-  return MOUSE_WHEEL_BINDING_CODE
+  return code
 }
 
 export interface ModifierTracker {
@@ -126,7 +140,8 @@ export function describeKeyCode(code: string): string {
     ArrowRight: '→',
     ArrowUp: '↑',
     ArrowDown: '↓',
-    [MOUSE_WHEEL_BINDING_CODE]: 'mouse wheel'
+    [MOUSE_WHEEL_UP_BINDING_CODE]: 'mouse wheel up',
+    [MOUSE_WHEEL_DOWN_BINDING_CODE]: 'mouse wheel down'
   }
   if (named[code]) return named[code]
   if (code.startsWith('Key')) return code.slice(3)

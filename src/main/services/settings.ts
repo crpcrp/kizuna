@@ -7,14 +7,13 @@ import {
   DEFAULT_PLAYER_SETTINGS,
   normalizeAppearance,
   normalizeAudioDevice,
-  normalizeKeyBinding,
+  normalizeKeyBindings,
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePopupSettings,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
   subtitleOffsetKey,
-  type KeyBindings,
   type PlayerSettings
 } from '../../shared/playerSettings'
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
@@ -106,18 +105,8 @@ function mergeUpdateSettings(raw: unknown): UpdateSettings {
 function mergePlayerSettings(raw: unknown): PlayerSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
-  const rawKeyBindings =
-    obj.keyBindings && typeof obj.keyBindings === 'object'
-      ? (obj.keyBindings as Record<string, unknown>)
-      : {}
-  const keyBindings = { ...DEFAULT_PLAYER_SETTINGS.keyBindings } as KeyBindings
-  for (const action of Object.keys(keyBindings) as (keyof KeyBindings)[]) {
-    const binding = normalizeKeyBinding(rawKeyBindings[action])
-    if (binding) keyBindings[action] = binding
-  }
-
   return {
-    keyBindings,
+    keyBindings: normalizeKeyBindings(obj.keyBindings),
     skipSeconds: positiveNumberOr(obj.skipSeconds, DEFAULT_PLAYER_SETTINGS.skipSeconds),
     popupSettings: normalizePopupSettings(obj.popupSettings, DEFAULT_PLAYER_SETTINGS.popupSettings),
     subtitleStyle: normalizeSubtitleStyle(obj.subtitleStyle, DEFAULT_PLAYER_SETTINGS.subtitleStyle),

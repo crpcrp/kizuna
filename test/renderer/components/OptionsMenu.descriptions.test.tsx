@@ -17,11 +17,14 @@ function renderMenu(): string {
 }
 
 describe('OptionsMenu setting descriptions', () => {
-  it('shows the subtitle-size wheel shortcut as a rebindable action', () => {
+  it('shows the subtitle-size wheel shortcuts as two directional rebindable actions', () => {
     const html = renderMenu()
-    expect(html).toContain('Subtitle size ±10%')
-    expect(html).toContain('Shift + mouse wheel')
-    expect(html).toContain('aria-label="Rebind Subtitle size ±10%"')
+    expect(html).toContain('Increase subtitle size by 10%')
+    expect(html).toContain('Decrease subtitle size by 10%')
+    expect(html).toContain('Shift + mouse wheel up')
+    expect(html).toContain('Shift + mouse wheel down')
+    expect(html).toContain('aria-label="Rebind Increase subtitle size by 10%"')
+    expect(html).toContain('aria-label="Rebind Decrease subtitle size by 10%"')
   })
 
   it('describes the Playback settings that are not self-explanatory', () => {

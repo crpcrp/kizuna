@@ -14,46 +14,93 @@ function wheel(init: WheelEventInit): WheelEvent {
   return event
 }
 
-describe('KeybindingsTab subtitle-size binding', () => {
-  it('captures a modifier plus mouse wheel through the regular rebind row', () => {
-    const onChangeKeyBinding = vi.fn()
-    render(
-      <KeybindingsTab
-        active
-        open
-        keyBindings={DEFAULT_KEY_BINDINGS}
-        onChangeKeyBinding={onChangeKeyBinding}
-      />
-    )
+const INCREASE_ROW = 'Rebind Increase subtitle size by 10%'
+const DECREASE_ROW = 'Rebind Decrease subtitle size by 10%'
 
-    const button = screen.getByRole('button', { name: 'Rebind Subtitle size ±10%' })
-    expect(button.textContent).toContain('Shift + mouse wheel')
+function renderTab(onChangeKeyBinding = vi.fn()) {
+  render(
+    <KeybindingsTab
+      active
+      open
+      keyBindings={DEFAULT_KEY_BINDINGS}
+      onChangeKeyBinding={onChangeKeyBinding}
+    />
+  )
+  return onChangeKeyBinding
+}
+
+describe('KeybindingsTab subtitle-size bindings', () => {
+  it('shows both directional rows with distinct labels', () => {
+    renderTab()
+    expect(screen.getByRole('button', { name: INCREASE_ROW }).textContent).toContain(
+      'Shift + mouse wheel up'
+    )
+    expect(screen.getByRole('button', { name: DECREASE_ROW }).textContent).toContain(
+      'Shift + mouse wheel down'
+    )
+  })
+
+  it('records the observed wheel direction on each row', () => {
+    const onChangeKeyBinding = renderTab()
+
+    const button = screen.getByRole('button', { name: INCREASE_ROW })
     fireEvent.click(button)
     expect(button.textContent).toContain('Press a key or scroll…')
+    const up = wheel({ ctrlKey: true, deltaY: -1 })
+    window.dispatchEvent(up)
+    expect(onChangeKeyBinding).toHaveBeenCalledWith(
+      'subtitleFontScaleUp',
+      'ControlLeft+MouseWheelUp'
+    )
+    expect(up.defaultPrevented).toBe(true)
 
-    const event = wheel({ ctrlKey: true, deltaY: -1 })
-    window.dispatchEvent(event)
+    fireEvent.click(screen.getByRole('button', { name: DECREASE_ROW }))
+    const down = wheel({ ctrlKey: true, deltaY: 1 })
+    window.dispatchEvent(down)
+    expect(onChangeKeyBinding).toHaveBeenCalledWith(
+      'subtitleFontScaleDown',
+      'ControlLeft+MouseWheelDown'
+    )
+  })
 
-    expect(onChangeKeyBinding).toHaveBeenCalledWith('subtitleFontScale', 'ControlLeft+MouseWheel')
-    expect(event.defaultPrevented).toBe(true)
+  it('records the direction through the Shift-translated horizontal axis', () => {
+    const onChangeKeyBinding = renderTab()
+    fireEvent.click(screen.getByRole('button', { name: DECREASE_ROW }))
+    window.dispatchEvent(wheel({ shiftKey: true, deltaY: 0, deltaX: 40 }))
+    expect(onChangeKeyBinding).toHaveBeenCalledWith(
+      'subtitleFontScaleDown',
+      'ShiftLeft+MouseWheelDown'
+    )
   })
 
   it('also accepts a normal key through the same capture flow', () => {
-    const onChangeKeyBinding = vi.fn()
-    render(
-      <KeybindingsTab
-        active
-        open
-        keyBindings={DEFAULT_KEY_BINDINGS}
-        onChangeKeyBinding={onChangeKeyBinding}
-      />
-    )
+    const onChangeKeyBinding = renderTab()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Rebind Subtitle size ±10%' }))
+    fireEvent.click(screen.getByRole('button', { name: INCREASE_ROW }))
     const event = new KeyboardEvent('keydown', { code: 'KeyZ', bubbles: true, cancelable: true })
     window.dispatchEvent(event)
 
-    expect(onChangeKeyBinding).toHaveBeenCalledWith('subtitleFontScale', 'KeyZ')
+    expect(onChangeKeyBinding).toHaveBeenCalledWith('subtitleFontScaleUp', 'KeyZ')
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('cancels on Escape and ignores zero-delta or unsupported-modifier gestures', () => {
+    const onChangeKeyBinding = renderTab()
+
+    const button = screen.getByRole('button', { name: INCREASE_ROW })
+    fireEvent.click(button)
+    const zeroDelta = wheel({ shiftKey: true, deltaY: 0, deltaX: 0 })
+    const altWheel = wheel({ altKey: true, deltaY: -1 })
+    window.dispatchEvent(zeroDelta)
+    window.dispatchEvent(altWheel)
+    expect(onChangeKeyBinding).not.toHaveBeenCalled()
+    // An ignored gesture is not consumed, so the Options panel still scrolls.
+    expect(zeroDelta.defaultPrevented).toBe(false)
+    expect(altWheel.defaultPrevented).toBe(false)
+    expect(button.textContent).toContain('Press a key or scroll…')
+
+    fireEvent.keyDown(window, { code: 'Escape' })
+    expect(onChangeKeyBinding).not.toHaveBeenCalled()
+    expect(button.textContent).toContain('Shift + mouse wheel up')
   })
 })

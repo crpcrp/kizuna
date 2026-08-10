@@ -47,11 +47,7 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
-import {
-  adjustSubtitleFontScale,
-  isSubtitleFontWheelShortcut,
-  subtitleFontWheelDirection
-} from './state/subtitleFontWheel'
+import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
@@ -292,11 +288,11 @@ export default function App({
       mediaSession.banner.reportError(errorMessage(err))
     }
   }
-  const handleAdjustSubtitleFontScale = (direction: -1 | 1): void => {
+  const handleAdjustSubtitleFontScale = (step: -1 | 1): void => {
     dispatch({
       type: 'setSubtitleStyle',
       value: {
-        fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, direction)
+        fontScale: adjustSubtitleFontScale(state.subtitleStyle.fontScale, step)
       }
     })
   }
@@ -454,18 +450,10 @@ export default function App({
           id="content"
           ref={contentRef}
           onWheel={(event) => {
-            if (
-              !isSubtitleFontWheelShortcut(
-                event,
-                state.keyBindings.subtitleFontScale,
-                modifiers.held
-              )
-            )
-              return
-            const direction = subtitleFontWheelDirection(event.deltaY, event.deltaX)
-            if (direction === 0) return
+            const step = subtitleFontWheelStep(event, state.keyBindings, modifiers.held)
+            if (step === null) return
             event.preventDefault()
-            handleAdjustSubtitleFontScale(direction)
+            handleAdjustSubtitleFontScale(step)
           }}
           onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {
