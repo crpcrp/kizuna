@@ -141,6 +141,20 @@ export const LAUNCH_CHANNELS = {
   error: 'launch:error'
 } as const
 
+/** Dedicated Windows Game OCR frozen-frame renderer channels. */
+export const GAME_OCR_CHANNELS = {
+  /** main→renderer: replace the frozen screenshot and recognition state. */
+  present: 'gameOcr:present',
+  /** main→renderer: clear screenshot, boxes, selection, and indicator state. */
+  discard: 'gameOcr:discard',
+  /** main→renderer: update the processing indicator after OCR settles. */
+  recognitionState: 'gameOcr:recognitionState',
+  /** renderer→main: close the whole frozen frame. */
+  close: 'gameOcr:close',
+  /** renderer→main: the dedicated page has subscribed to presentation pushes. */
+  rendererReady: 'gameOcr:rendererReady'
+} as const
+
 /**
  * MeCab tokenization bridge: renderer→main invoke/handle channels for
  * tokenizing text, listing available dictionaries, and switching the active

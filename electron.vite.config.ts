@@ -24,6 +24,14 @@ export default defineConfig({
   },
   preload: {},
   renderer: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          gameOcr: resolve(__dirname, 'src/renderer/gameOcr.html')
+        }
+      }
+    },
     plugins: [react()],
     // Force react/react-dom to be pre-bundled at dev-server startup instead
     // of lazily on the first page request. Without this, a fully cold start
