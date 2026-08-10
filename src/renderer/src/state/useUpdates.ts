@@ -17,6 +17,7 @@ export function useUpdates(bridge: UpdatesBridge): {
   settings: UpdateSettings
   setCheckAutomatically(value: boolean): void
   dismissAvailable(): void
+  dismissError(): void
   deferInstall(): void
   download(): void
   install(): void
@@ -102,6 +103,7 @@ export function useUpdates(bridge: UpdatesBridge): {
       if (workflow.snapshot.status === 'available')
         dispatch({ type: 'dismissAvailable', version: workflow.snapshot.version })
     },
+    dismissError: () => dispatch({ type: 'dismissError' }),
     deferInstall: () => {
       if (workflow.snapshot.status === 'downloaded')
         dispatch({ type: 'deferDownloaded', version: workflow.snapshot.version })
