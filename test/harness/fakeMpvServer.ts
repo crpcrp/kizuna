@@ -203,8 +203,8 @@ export class FakeMpvServer {
     this.resourcesCleaned = true
   }
 
-  private onData(chunk: Buffer): void {
-    this.buffer += chunk.toString('utf8')
+  private onData(chunk: string | Buffer): void {
+    this.buffer += typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     const lines = this.buffer.split('\n')
     this.buffer = lines.pop() ?? ''
     for (const line of lines) {

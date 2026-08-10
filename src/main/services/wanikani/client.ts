@@ -53,8 +53,8 @@ export function createWaniKaniClient(deps: {
     sleep = defaultSleep,
     now = Date.now,
     requestTimeoutMs = WANIKANI_REQUEST_TIMEOUT_MS,
-    setTimeoutFn = setTimeout,
-    clearTimeoutFn = clearTimeout
+    setTimeoutFn = (callback, delayMs) => setTimeout(callback, delayMs),
+    clearTimeoutFn = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
   } = deps
 
   async function fetchWithAuth(url: string) {
