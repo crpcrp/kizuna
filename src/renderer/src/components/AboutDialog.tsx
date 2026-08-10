@@ -66,6 +66,14 @@ function UpdateSection({
           </button>
         </>
       )}
+      {state.status === 'noPublishedRelease' && (
+        <>
+          <p role="status">No published updates are available (v{state.currentVersion}).</p>
+          <button type="button" className="about-button" onClick={onCheck}>
+            Check again
+          </button>
+        </>
+      )}
       {state.status === 'available' && (
         <>
           <p role="status">

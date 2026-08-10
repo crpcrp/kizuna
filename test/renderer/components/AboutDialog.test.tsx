@@ -100,6 +100,17 @@ describe('AboutDialog', () => {
     expect(props.onCheckForUpdates).toHaveBeenCalledOnce()
   })
 
+  it('states plainly when no published update exists instead of blaming the connection', () => {
+    const { props } = renderAbout({
+      updateState: { status: 'noPublishedRelease', currentVersion: '0.2.0', checkedAt: '' }
+    })
+
+    expect(screen.getByText('No published updates are available (v0.2.0).')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+    expect(props.onCheckForUpdates).toHaveBeenCalledOnce()
+  })
+
   it('shows available release details and requires download consent', () => {
     const { props } = renderAbout({
       updateState: {

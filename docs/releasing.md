@@ -153,18 +153,23 @@ must not be discoverable.
    24.04 test systems. On Linux, test the deb and AppImage separately.
 2. Start N-1 once and confirm it identifies its installed package type. For the
    AppImage, launch the file directly so the `APPIMAGE` environment is present.
-3. Publish N as a pre-release and check for updates from N-1.
-4. Confirm NSIS downloads the `.exe`, deb downloads the `.deb` and requests the
+3. Install the still-draft N artifact on a test system and check for updates
+   while online. About must report **No published updates are available**, not a
+   connection error, and no persistent error banner may appear.
+4. Publish N as a pre-release and check for updates from N-1.
+5. Check for updates again from the N build installed in step 3. It must remain
+   up to date and must never offer the older public release as a downgrade.
+6. Confirm NSIS downloads the `.exe`, deb downloads the `.deb` and requests the
    expected package-manager authentication/elevation, and AppImage downloads
    the `.AppImage`. No Linux installation may select the other format.
-5. Install the update, restart, and confirm the running version is N and the
+7. Install the update, restart, and confirm the running version is N and the
    existing user data remains intact. Repeat the playback, subtitle,
    tokenization, and dictionary checks from the manual QA table.
-6. For NSIS, confirm the `.blockmap` is available and a differential download
+8. For NSIS, confirm the `.blockmap` is available and a differential download
    can fall back to the full installer. For AppImage, confirm the embedded
    blockmap can likewise fall back to the full image. The deb update is a full
    package download.
-7. Restore or uninstall each test installation and record the result in the
+9. Restore or uninstall each test installation and record the result in the
    release notes. If any update path fails, withdraw the pre-release and fix it
    before treating N as the supported update.
 

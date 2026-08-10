@@ -11,6 +11,13 @@ export type UpdateUnsupportedReason =
 
 export type UpdateErrorStage = 'check' | 'download' | 'install'
 
+/**
+ * Why an update check could not produce a result. `noPublishedRelease` is the
+ * expected outcome for a draft-only repository/channel and is not an error.
+ */
+export type UpdateCheckFailureReason =
+  'noPublishedRelease' | 'network' | 'rateLimited' | 'permission' | 'metadata' | 'unknown'
+
 export interface UpdateRelease {
   currentVersion: string
   version: string
@@ -32,6 +39,7 @@ export type UpdateState =
   | { status: 'idle' }
   | { status: 'checking'; origin: UpdateCheckOrigin }
   | { status: 'upToDate'; currentVersion: string; checkedAt: string }
+  | { status: 'noPublishedRelease'; currentVersion: string; checkedAt: string }
   | ({ status: 'available' } & UpdateRelease)
   | ({ status: 'downloading'; progress: UpdateProgress } & UpdateRelease)
   | ({ status: 'downloaded' } & UpdateRelease)
@@ -40,5 +48,6 @@ export type UpdateState =
       stage: UpdateErrorStage
       message: string
       retryable: boolean
+      reason?: UpdateCheckFailureReason
       cancelled?: boolean
     }
