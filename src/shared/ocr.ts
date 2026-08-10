@@ -6,6 +6,57 @@ export interface OcrImageSize {
   height: number
 }
 
+/** Logical desktop bounds of the display that supplied a capture. */
+export interface OcrDisplayBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Metadata needed to place captured-image pixels in desktop CSS coordinates. */
+export interface OcrDisplayCaptureMetadata {
+  readonly displayId: number
+  readonly displayBounds: Readonly<OcrDisplayBounds>
+  readonly scaleFactor: number
+  readonly imageSize: Readonly<OcrImageSize>
+}
+
+/** A point in either captured-image pixels or logical desktop coordinates. */
+export interface OcrPoint {
+  x: number
+  y: number
+}
+
+/**
+ * Converts a point in the physical screenshot into logical desktop CSS
+ * coordinates. The display origin is intentionally retained, including when
+ * Windows places the display at a negative desktop coordinate.
+ */
+export function capturePixelToCssPoint(
+  metadata: Pick<OcrDisplayCaptureMetadata, 'displayBounds' | 'scaleFactor'>,
+  point: OcrPoint
+): OcrPoint {
+  return {
+    x: metadata.displayBounds.x + point.x / metadata.scaleFactor,
+    y: metadata.displayBounds.y + point.y / metadata.scaleFactor
+  }
+}
+
+/** Converts a captured-image rectangle into logical desktop CSS coordinates. */
+export function capturePixelsToCssBounds(
+  metadata: Pick<OcrDisplayCaptureMetadata, 'displayBounds' | 'scaleFactor'>,
+  bounds: OcrBounds
+): OcrDisplayBounds {
+  const topLeft = capturePixelToCssPoint(metadata, bounds)
+  return {
+    x: topLeft.x,
+    y: topLeft.y,
+    width: bounds.width / metadata.scaleFactor,
+    height: bounds.height / metadata.scaleFactor
+  }
+}
+
 /** An integer rectangle in captured-image pixel coordinates. */
 export interface OcrBounds {
   x: number
