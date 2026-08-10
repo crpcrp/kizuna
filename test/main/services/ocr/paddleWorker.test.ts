@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildPaddleOcrWorkerArgs,
@@ -7,9 +8,12 @@ import {
   type PaddleOcrSpawn,
   type PaddleOcrWorkerProcess
 } from '@src/main/services/ocr/paddleWorker'
-import { fixture } from '@test/paths'
+import { fixture, REPO_ROOT } from '@test/paths'
 
 const JAPANESE_WORKER_FIXTURE = readFileSync(fixture('ocr', 'paddle-worker-japanese.jsonl'), 'utf8')
+const JAPANESE_SCREENSHOT_BASE64 = readFileSync(join(REPO_ROOT, 'build', 'player.jpg')).toString(
+  'base64'
+)
 
 class FakePaddleProcess extends EventEmitter implements PaddleOcrWorkerProcess {
   readonly writes: string[] = []
@@ -146,10 +150,25 @@ describe('createPaddleOcrWorkerService', () => {
     expect(process.writes).toHaveLength(2)
   })
 
-  it('accepts the committed Japanese protocol fixture with valid pixel bounds', async () => {
+  it('accepts zero-valued session and capture counters from the shared OCR contract', async () => {
     const process = new FakePaddleProcess()
     const { service } = createService(process)
-    const pending = service.recognize(request())
+    const pending = service.recognize({ ...request(0), sessionId: 0 })
+    process.ready()
+    await vi.waitFor(() => expect(process.writes).toHaveLength(1))
+    process.result(1, [japaneseRegion(10)])
+
+    await expect(pending).resolves.toMatchObject({ sessionId: 0, captureId: 0 })
+  })
+
+  it('runs the adapter against the committed Japanese screenshot fixture', async () => {
+    const process = new FakePaddleProcess()
+    const { service } = createService(process)
+    const pending = service.recognize({
+      ...request(),
+      imageSize: { width: 1272, height: 688 },
+      imageBase64: JAPANESE_SCREENSHOT_BASE64
+    })
     const [readyLine, resultLine] = JAPANESE_WORKER_FIXTURE.trimEnd().split('\n')
     process.stdout.emit('data', readyLine + '\n')
     await vi.waitFor(() => expect(process.writes).toHaveLength(1))
