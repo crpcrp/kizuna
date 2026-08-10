@@ -158,4 +158,3 @@ function handleKeyDown(event: KeyboardEvent<HTMLDivElement>, activate: () => voi
   event.stopPropagation()
   activate()
 }
-
