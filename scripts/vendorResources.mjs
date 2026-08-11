@@ -7,9 +7,19 @@
 // the logical resources/ layout used by the application and fails closed on
 // hash, manifest, path, mode, or layout mismatches.
 //
+// The mirror is delivered as a per-platform archive attached to a GitHub
+// release, not as a git checkout. Cloning it meant `git lfs pull`, which
+// downloads every LFS object at the commit — ~855 MB, both platforms' payloads,
+// on every build that missed its cache — and Git LFS bandwidth is a metered
+// monthly quota. Release assets are not metered that way, carry only the
+// selected platform, and compress to roughly a third of the size. The archive
+// is laid out exactly like the mirror repository, so `from` paths,
+// manifest.json and SHA256SUMS.txt are unchanged and so is every check below.
+//
 // Everything here is plain ESM so scripts/fetch-resources.mjs can run it with
-// bare node. Git is reached only through an injected runGit, so the tests use
-// tiny fixture trees with no network and no live binaries.
+// bare node. The download and unpack are reached only through an injected
+// materialize callback, so the tests use tiny fixture trees with no network and
+// no live binaries.
 
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
@@ -17,11 +27,20 @@ import { chmod, copyFile, mkdir, readFile, stat, unlink } from 'node:fs/promises
 import { dirname, join, posix, resolve } from 'node:path'
 
 /**
+ * @typedef {object} LockArchive
+ * @property {string} release Release tag holding the asset.
+ * @property {string} asset Asset file name.
+ * @property {string} sha256 Hash of the archive itself, checked before unpacking.
+ * @property {number} size Expected byte length, checked before hashing.
+ */
+
+/**
  * @typedef {object} LockSource
  * @property {string} repo
- * @property {string} commit
+ * @property {string} commit Mirror revision the archive was packaged from.
  * @property {string} manifest
  * @property {string} checksums
+ * @property {LockArchive} archive
  */
 
 /**
@@ -43,11 +62,18 @@ import { dirname, join, posix, resolve } from 'node:path'
  */
 
 /**
+ * The pre-`platforms` lock shape, kept only so notices.mjs can still read an
+ * old file and explain why it is unusable. It never carried an archive.
+ *
+ * @typedef {Omit<LockSource, 'archive'>} LegacyLockSource
+ */
+
+/**
  * @typedef {object} LockFile
  * @property {number} schemaVersion
  * @property {Record<string, PlatformLock>} [platforms]
  * @property {string} [platform]
- * @property {LockSource} [source]
+ * @property {LegacyLockSource} [source]
  * @property {string[]} [requiredPaths]
  * @property {LockFileEntry[]} [files]
  */
@@ -59,7 +85,7 @@ import { dirname, join, posix, resolve } from 'node:path'
  */
 
 /** Lock-file schema this module understands. A bump means a script update. */
-export const SUPPORTED_SCHEMA_VERSION = 2
+export const SUPPORTED_SCHEMA_VERSION = 3
 
 /** Platform keys supported by the vendor mirror and the application. */
 export const SUPPORTED_PLATFORM_KEYS = Object.freeze(['win32-x64', 'linux-x64'])
@@ -94,7 +120,7 @@ export function platformKeyFor(platform = process.platform, architecture = proce
 }
 
 /**
- * Select one platform entry from a schema-v2 lock.
+ * Select one platform entry from a schema-v3 lock.
  *
  * @param {LockFile} lock
  * @param {string} platformKey
@@ -174,6 +200,46 @@ function safePath(root, relative, label) {
 }
 
 /**
+ * A release tag and an asset name both become path segments of the download
+ * URL, so they are restricted to characters that cannot smuggle in a traversal,
+ * a query string, or a different host. Git tags may legally contain slashes;
+ * these deliberately may not.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSafeUrlSegment(value) {
+  return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
+}
+
+/**
+ * @param {unknown} archive
+ * @param {string} label
+ * @returns {string[]}
+ */
+function archiveProblems(archive, label) {
+  const problems = []
+  if (!isPlainObject(archive)) {
+    problems.push(label + ' is missing; schema 3 fetches a release asset, not a git checkout')
+    return problems
+  }
+  const a = /** @type {Partial<LockArchive>} */ (archive)
+  if (!isSafeUrlSegment(a.release)) {
+    problems.push(label + '.release must be a release tag safe to use as a URL segment')
+  }
+  if (!isSafeUrlSegment(a.asset) || !a.asset?.endsWith('.tar.gz')) {
+    problems.push(label + '.asset must be a .tar.gz file name safe to use as a URL segment')
+  }
+  if (!/^[0-9a-f]{64}$/.test(a.sha256 ?? '')) {
+    problems.push(label + '.sha256 must be a sha256 hex digest of the archive')
+  }
+  if (!Number.isSafeInteger(a.size) || Number(a.size) <= 0) {
+    problems.push(label + '.size must be the archive length in bytes')
+  }
+  return problems
+}
+
+/**
  * Reject a lock file that this script cannot honour, before any network or disk
  * work. Returns reasons so callers can report all structural failures together.
  *
@@ -237,6 +303,7 @@ export function lockProblems(lock) {
         problems.push(label + '.source.' + field + ' must be a safe relative path')
       }
     }
+    problems.push(...archiveProblems(source?.archive, label + '.source.archive'))
 
     if (!Array.isArray(entry.requiredPaths) || entry.requiredPaths.length === 0) {
       problems.push(label + '.requiredPaths is empty, so a truncated mirror could pass silently')
@@ -326,44 +393,55 @@ export function lockProblems(lock) {
       if (source?.commit !== firstSource.commit) {
         problems.push('all platform entries must use the same immutable vendor commit')
       }
+      if (source?.archive?.release !== firstSource.archive?.release) {
+        problems.push('all platform entries must use the same vendor release')
+      }
     }
   }
   return problems
 }
 
 /**
- * Anonymous HTTPS clone URL for the public mirror.
+ * Anonymous HTTPS download URL for one release asset of the public mirror.
+ * Every segment is validated by `lockProblems` before it reaches this function,
+ * so the result cannot be steered off github.com by a lock-file edit.
  *
- * @param {string} repo owner/name
+ * @param {{ repo: string, release: string, asset: string }} options
  * @returns {string}
  */
-export function vendorRemoteUrl(repo) {
-  return 'https://github.com/' + repo + '.git'
+export function vendorArchiveUrl({ repo, release, asset }) {
+  if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(repo)) {
+    throw new Error('vendor repo must be owner/name: ' + String(repo))
+  }
+  if (!isSafeUrlSegment(release) || !isSafeUrlSegment(asset)) {
+    throw new Error('vendor release and asset must be safe URL segments')
+  }
+  return 'https://github.com/' + repo + '/releases/download/' + release + '/' + asset
 }
 
 /**
- * Git argv sequence that materialises exactly one commit, with LFS payloads
- * pulled after checkout. Returned rather than executed so its ordering is
- * assertable in tests.
+ * Everything the materialiser needs to turn a lock entry into a vendor
+ * directory. Returned rather than executed so the plan is assertable in tests
+ * without a network.
  *
- * @param {{ url: string, commit: string }} options
- * @returns {{ argv: string[], env?: Record<string, string>, allowFailure?: boolean }[]}
+ * @param {PlatformLock} selected
+ * @returns {{ url: string, asset: string, sha256: string, size: number, stamp: string }}
  */
-export function vendorFetchSteps({ url, commit }) {
-  return [
-    { argv: ['init', '--quiet'] },
-    { argv: ['config', 'core.autocrlf', 'false'] },
-    { argv: ['config', 'core.eol', 'lf'] },
-    { argv: ['remote', 'remove', 'origin'], allowFailure: true },
-    { argv: ['remote', 'add', 'origin', url] },
-    { argv: ['fetch', '--depth', '1', '--no-tags', 'origin', commit] },
-    {
-      argv: ['-c', 'advice.detachedHead=false', 'checkout', '--force', commit],
-      env: { GIT_LFS_SKIP_SMUDGE: '1' }
-    },
-    { argv: ['lfs', 'pull'] }
-  ]
+export function vendorFetchPlan(selected) {
+  const { repo, archive } = selected.source
+  return {
+    url: vendorArchiveUrl({ repo, release: archive.release, asset: archive.asset }),
+    asset: archive.asset,
+    sha256: archive.sha256,
+    size: archive.size,
+    // Written into the unpacked directory so a warm cache can be recognised
+    // without rehashing several hundred megabytes of payload.
+    stamp: VENDOR_STAMP_FILE
+  }
 }
+
+/** Records which archive produced the contents of a vendor directory. */
+export const VENDOR_STAMP_FILE = '.kizuna-vendor-archive'
 
 /**
  * SHA-256 of a file, streamed so large ffmpeg builds never land in memory.
@@ -557,9 +635,11 @@ export function verificationError(result, commit) {
     '',
     'Likely causes, in the order worth checking:',
     '  - The selected platform does not match the vendor manifest or checksum file.',
+    '  - Everything differs: the lock was regenerated without re-pinning source.commit,',
+    '    or source.archive names a release packaged from a different commit.',
+    'With --vendor-dir, pointing at your own clone of the mirror rather than the release asset:',
     '  - Only text files differ: the checkout converted line endings. Set core.autocrlf=false and core.eol=lf.',
-    '  - A Git LFS pointer is present: install Git LFS and run git lfs pull in the vendor checkout.',
-    '  - Everything differs: the lock was regenerated without re-pinning source.commit.'
+    '  - A Git LFS pointer is present: install Git LFS and run git lfs pull in the vendor checkout.'
   ].join('\n')
 }
 
@@ -732,7 +812,7 @@ export async function missingRequiredPaths({ lock, platformKey, resourcesDir }) 
  * @param {string} options.platformKey
  * @param {string} options.vendorDir
  * @param {string} options.resourcesDir
- * @param {(steps: ReturnType<typeof vendorFetchSteps>, dir: string) => Promise<void>} [options.materialize]
+ * @param {(plan: ReturnType<typeof vendorFetchPlan>, dir: string) => Promise<void>} [options.materialize]
  * @param {(message: string) => void} [options.log]
  * @returns {Promise<StageReport>}
  */
@@ -751,24 +831,10 @@ export async function acquireResources({
   const selected = selectPlatformLock(lock, platformKey)
 
   if (materialize) {
-    log(
-      'Fetching ' +
-        selected.source.repo +
-        ' at ' +
-        selected.source.commit +
-        ' for ' +
-        platformKey +
-        ' into ' +
-        vendorDir
-    )
+    const plan = vendorFetchPlan(selected)
+    log('Fetching ' + plan.asset + ' for ' + platformKey + ' into ' + vendorDir)
     await mkdir(vendorDir, { recursive: true })
-    await materialize(
-      vendorFetchSteps({
-        url: vendorRemoteUrl(selected.source.repo),
-        commit: selected.source.commit
-      }),
-      vendorDir
-    )
+    await materialize(plan, vendorDir)
   } else {
     log('Using existing vendor checkout at ' + vendorDir + ' for ' + platformKey)
   }

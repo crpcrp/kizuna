@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { REPO_ROOT } from '@test/paths'
 
 import { parsePlatformArg, parseVendorDirArg } from '@scripts/fetch-resources.mjs'
-import { lockProblems, vendorRemoteUrl } from '@scripts/vendorResources.mjs'
+import { lockProblems, vendorFetchPlan } from '@scripts/vendorResources.mjs'
 
 describe('fetch-resources arguments', () => {
   it('reads vendor directory and platform overrides in separated and inline forms', () => {
@@ -22,9 +22,18 @@ describe('fetch-resources arguments', () => {
 
 describe('resources.lock.json', () => {
   type PlatformEntry = {
-    source: { repo: string; commit: string; manifest: string; checksums: string }
+    platform: string
+    architecture: string
+    source: {
+      repo: string
+      commit: string
+      manifest: string
+      checksums: string
+      archive: { release: string; asset: string; sha256: string; size: number }
+    }
+    requiredPaths: string[]
     requiredExecutables: string[]
-    files: { from: string; to: string; executable: boolean }[]
+    files: { from: string; to: string; sha256: string; executable: boolean }[]
   }
   const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf-8')) as {
     platforms: Record<string, PlatformEntry>
@@ -50,19 +59,32 @@ describe('resources.lock.json', () => {
     )
   })
 
-  it('pins both entries to the same vendor repository and commit', () => {
+  it('pins both entries to the same vendor repository, commit, and release', () => {
     const entries = Object.values(lock.platforms)
     expect(new Set(entries.map((entry) => entry.source.repo))).toEqual(
       new Set(['crpcrp/kizuna-vendor'])
     )
     expect(new Set(entries.map((entry) => entry.source.commit)).size).toBe(1)
+    expect(new Set(entries.map((entry) => entry.source.archive.release)).size).toBe(1)
     for (const entry of entries) {
       expect(entry.source.manifest).toBe('manifest.json')
       expect(entry.source.checksums).toBe('SHA256SUMS.txt')
     }
-    expect(vendorRemoteUrl(entries[0].source.repo)).toBe(
-      'https://github.com/crpcrp/kizuna-vendor.git'
-    )
+  })
+
+  it('names a distinct release asset per platform, on github.com', () => {
+    const assets = Object.entries(lock.platforms).map(([key, entry]) => {
+      const plan = vendorFetchPlan(entry)
+      expect(
+        plan.url.startsWith('https://github.com/crpcrp/kizuna-vendor/releases/download/')
+      ).toBe(true)
+      expect(plan.size).toBeGreaterThan(0)
+      return [key, plan.asset]
+    })
+    expect(assets).toEqual([
+      ['win32-x64', 'kizuna-vendor-win32-x64.tar.gz'],
+      ['linux-x64', 'kizuna-vendor-linux-x64.tar.gz']
+    ])
   })
 
   it('carries license files in each selected platform tree', () => {

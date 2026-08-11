@@ -6,22 +6,33 @@ FFmpeg/ffprobe, and MeCab. These files are kept out of Git and staged under
 
 ## Setup
 
-Install Git LFS, then run:
-
 ```powershell
 npm run resources
 ```
 
 The command selects the current host platform, reads
-[`resources.lock.json`](../resources.lock.json), fetches the pinned files from
-the public [`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor)
-mirror, and verifies every file by SHA-256. No credentials are required.
+[`resources.lock.json`](../resources.lock.json), downloads that platform's
+payload archive from the public
+[`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor) mirror, and
+verifies every file by SHA-256. No credentials, no git, and no Git LFS client
+are required.
+
+The archive is a release asset, not a clone. Cloning the mirror meant
+`git lfs pull`, which downloads every LFS object at the commit — both
+platforms' payloads, on every build that missed its cache — and Git LFS
+bandwidth is a metered monthly quota that a few releases exhaust. The asset
+carries one platform, compresses to roughly a third of the size, and is not
+metered. It is unpacked into `.vendor-cache/`, stamped with the archive hash so
+a second run skips the download, and re-verified from the lock every time
+regardless.
 
 Each platform lock owns its `requiredPaths`, `requiredExecutables`, and file
-map. Both locks must name the same immutable mirror commit, manifest, and
-checksum file. Windows sources live at the mirror root; Linux sources live
-under `linux-x64/`. Both are copied into the platform-neutral `resources/`
-layout below, so runtime path selection does not leak vendor-mirror paths.
+map. Both locks must name the same immutable mirror commit, release, manifest,
+and checksum file; `source.archive` pins the asset by name, SHA-256, and byte
+length, and the download is rejected before unpacking if either disagrees.
+Windows sources live at the archive root; Linux sources live under
+`linux-x64/`. Both are copied into the platform-neutral `resources/` layout
+below, so runtime path selection does not leak vendor-mirror paths.
 
 For a CI cross-check or a foreign-platform staging run, pass an explicit lock
 key:
@@ -35,13 +46,17 @@ The platform override changes only the selected payload; it does not make
 Windows execute Linux binaries. The staging validation removes files managed by
 the other platform. First-party resource files are left alone.
 
-To use an existing mirror checkout:
+To stage from a local clone of the mirror instead of the release asset — the
+usual loop when a payload is being changed and not yet published:
 
 ```powershell
 npm run resources -- --vendor-dir C:\path\to\kizuna-vendor
 ```
 
-The `KIZUNA_VENDOR_DIR` environment variable provides the same override.
+The `KIZUNA_VENDOR_DIR` environment variable provides the same override. A
+directory supplied this way is used exactly as it is: nothing is downloaded,
+nothing is deleted, and the hashes still have to match. That clone is the one
+place a `git lfs pull` is still needed.
 
 ## Required files
 
@@ -108,12 +123,15 @@ reports the missing worker.
 1. Add the reviewed build, license texts, source reference, build recipe, and
    updated `manifest.json`/`SHA256SUMS.txt` to the vendor mirror. Do not replace
    files at an existing pin.
-2. Pin the new full mirror commit in both platform locks, but change file maps
-   and hashes only for the platform being updated. The lock validator requires
-   both platforms to use one immutable vendor snapshot.
-3. Update only the matching platform metadata in
+2. Publish the payload archives for the new mirror commit by running
+   `scripts/publish-payloads.sh` there. It prints the `source` block to paste
+   here, including the archive hashes.
+3. Pin the new full mirror commit and release in both platform locks, but change
+   file maps and hashes only for the platform being updated. The lock validator
+   requires both platforms to use one immutable vendor snapshot.
+4. Update only the matching platform metadata in
    [`third-party.json`](../third-party.json).
-4. Stage and verify the changed platform explicitly, then verify both lock
+5. Stage and verify the changed platform explicitly, then verify both lock
    selections and notices:
 
    ```bash
@@ -124,7 +142,7 @@ reports the missing worker.
    npm test
    ```
 
-5. Build and smoke-test the changed package on its native host. A platform
+6. Build and smoke-test the changed package on its native host. A platform
    override verifies schema, hashes, and copying but cannot execute a foreign
    payload or prove Linux file modes on Windows.
 
