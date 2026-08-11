@@ -201,6 +201,38 @@ describe('Game OCR payload', () => {
     for (const file of linux.files) expect(file.to, file.to).not.toContain(OCR_ROOT)
     for (const path of linux.requiredPaths) expect(path, path).not.toContain(OCR_ROOT)
   })
+
+  // The other half. `win.extraResources` copies a directory, so an empty
+  // `resources/paddleocr` still packages: only the lock decides whether the
+  // worker and the models are in it.
+  it('stages the worker, both models, and their licences for Windows', () => {
+    const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf8')) as {
+      platforms: Record<
+        string,
+        { files: { to: string; executable: boolean }[]; requiredExecutables: string[] }
+      >
+    }
+    const windows = lock.platforms['win32-x64']
+    const staged = new Map(windows.files.map((file) => [file.to, file]))
+
+    expect(staged.get(`${OCR_ROOT}/paddleocr.exe`)?.executable).toBe(true)
+    expect(windows.requiredExecutables).toContain(`${OCR_ROOT}/paddleocr.exe`)
+    for (const model of ['det', 'rec']) {
+      // The worker refuses to start unless all three sit together.
+      for (const name of ['inference.json', 'inference.pdiparams', 'inference.yml']) {
+        expect(staged.has(`${OCR_ROOT}/models/${model}/${name}`)).toBe(true)
+      }
+    }
+    // The runtime is GPL-3.0-or-later, so its licence text ships beside it.
+    expect(staged.has(`${OCR_ROOT}/licenses/LICENSE.GPLv3.txt`)).toBe(true)
+    // Every DLL the worker loads comes from its own directory, so they are all
+    // flattened out of the mirror's bin/ rather than staged under it.
+    const binaries = [...staged.keys()].filter(
+      (path) => path.startsWith(`${OCR_ROOT}/`) && path.endsWith('.dll')
+    )
+    expect(binaries.length).toBe(14)
+    for (const path of binaries) expect(path, path).toMatch(/^paddleocr\/[^/]+\.dll$/)
+  })
 })
 
 describe('Linux packaging commands', () => {
