@@ -1,0 +1,20 @@
+/* Page shell for the Game OCR entry point. The main window's App.css belongs
+   to the other HTML entry and is never loaded here, so this page has to
+   establish its own reset: without `height: 100%` on the whole html/body/#root
+   chain, every percentage height inside the frozen frame resolves against an
+   auto-height ancestor and collapses to zero, and the default body margin
+   insets the frame from the display it is supposed to cover exactly. */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+#root {
+  height: 100%;
+}

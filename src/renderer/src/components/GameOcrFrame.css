@@ -1,7 +1,11 @@
+/* Anchored to the viewport rather than sized from its parent: the frame must
+   cover the window's exact client rectangle, and a percentage height would
+   depend on an unbroken height chain above it (see gameOcr.css). `fixed` also
+   keeps the containing block the absolutely positioned image, boxes, and
+   indicator inside it are placed against. */
 .game-ocr-frame {
-  position: relative;
-  width: 100%;
-  height: 100%;
+  position: fixed;
+  inset: 0;
   overflow: hidden;
   background: var(--surface-panel);
   color: var(--text-primary);
