@@ -92,6 +92,25 @@ describe('createQuitCoordinator', () => {
     expect(appQuit).toHaveBeenCalledOnce()
   })
 
+  it('waits for Game OCR cleanup before calling app.quit', async () => {
+    const appQuit = vi.fn()
+    const gameOcrStop = deferred<void>()
+    const fixture = createAppLifecycleCoordinator({
+      defaultSession: { flushStorageData: vi.fn() },
+      controller: { quit: vi.fn(async () => undefined), dispose: vi.fn() },
+      stopGameOcr: vi.fn(() => gameOcrStop.promise),
+      appQuit
+    })
+
+    fixture.handleBeforeQuit(quitEvent())
+    await flushMicrotasks()
+    expect(appQuit).not.toHaveBeenCalled()
+
+    gameOcrStop.resolve()
+    await flushMicrotasks()
+    expect(appQuit).toHaveBeenCalledOnce()
+  })
+
   it('reports a controller quit failure', async () => {
     const fixture = makeFixture()
     const event = quitEvent()
