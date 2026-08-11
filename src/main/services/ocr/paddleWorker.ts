@@ -28,8 +28,17 @@ const WORKER_ARGS = {
   protocolVersion: '--protocol-version',
   language: '--lang',
   detectionModel: '--det-model',
-  recognitionModel: '--rec-model'
+  recognitionModel: '--rec-model',
+  detectionSideLength: '--det-side-len'
 } as const
+
+/**
+ * Preserve small game UI glyphs by asking the bundled sidecar to inspect the
+ * complete captured frame. Its pipeline currently caps the long side at 4000
+ * pixels, which keeps 1080p, 1440p, ultrawide, and 4K captures at their native
+ * resolution instead of shrinking them to the sidecar's 960px default.
+ */
+export const PADDLE_OCR_DETECTION_SIDE_LENGTH = 4000
 
 /** The model directories are injected so packaging can own their locations. */
 export interface PaddleOcrModelPaths {
@@ -149,7 +158,9 @@ export function buildPaddleOcrWorkerArgs(modelPaths: PaddleOcrModelPaths): strin
     WORKER_ARGS.detectionModel,
     modelPaths.detection,
     WORKER_ARGS.recognitionModel,
-    modelPaths.recognition
+    modelPaths.recognition,
+    WORKER_ARGS.detectionSideLength,
+    String(PADDLE_OCR_DETECTION_SIDE_LENGTH)
   ]
   return args
 }

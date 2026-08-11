@@ -22,8 +22,8 @@ export interface GameOcrBoxMetrics {
 }
 
 export const DEFAULT_GAME_OCR_BOX_METRICS: GameOcrBoxMetrics = {
-  fontSize: 15,
-  lineHeight: 19,
+  fontSize: 18,
+  lineHeight: 23,
   paddingX: 9,
   paddingY: 7
 }
