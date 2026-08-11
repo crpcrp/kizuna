@@ -67,6 +67,13 @@ export const SUPPORTED_PLATFORM_KEYS = Object.freeze(['win32-x64', 'linux-x64'])
 const supportedPlatformSet = new Set(SUPPORTED_PLATFORM_KEYS)
 
 /**
+ * Resource roots that only one platform may stage. Game OCR runs on Windows
+ * alone, and its PaddleOCR payload is large, so a lock entry that leaked it
+ * into the Linux tree would inflate those artifacts with an unusable runtime.
+ */
+const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'paddleocr/': 'win32-x64' })
+
+/**
  * Convert a Node platform/architecture pair into a validated lock key.
  *
  * @param {string} platform
@@ -288,6 +295,11 @@ export function lockProblems(lock) {
         problems.push(
           label + ' file ' + String(file?.from) + ' must declare executable true or false'
         )
+      }
+      for (const [root, owner] of Object.entries(PLATFORM_EXCLUSIVE_ROOTS)) {
+        if (key !== owner && typeof file?.to === 'string' && file.to.startsWith(root)) {
+          problems.push(label + ' stages ' + file.to + ', which only ' + owner + ' may ship')
+        }
       }
     }
 

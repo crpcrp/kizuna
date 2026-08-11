@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
 import {
+  missingResourceMessage,
+  requiredGameOcrResources,
   requiredPackagedResources,
   resolveBinaryPaths,
+  resolveGameOcrPaths,
   resolveThirdPartyNoticesPath,
   resolveUserUnidicDir
 } from '@src/main/resourcePaths'
@@ -236,5 +239,93 @@ describe.each(PATH_PLATFORMS)('resolveThirdPartyNoticesPath on $label', ({ platf
         platform
       })
     ).toBe(path.join(resourcesPath, 'notices', 'THIRD_PARTY_NOTICES.md'))
+  })
+})
+
+describe('resolveGameOcrPaths', () => {
+  it('resolves the packaged Windows payload beside the other resources', () => {
+    const resourcesPath = 'C:\\Program Files\\Kizuna\\resources'
+    expect(
+      resolveGameOcrPaths({
+        isPackaged: true,
+        resourcesPath,
+        appRoot: 'E:\\ignored',
+        platform: 'win32'
+      })
+    ).toEqual({
+      workerPath: win32.join(resourcesPath, 'paddleocr', 'paddleocr.exe'),
+      detectionModelDir: win32.join(resourcesPath, 'paddleocr', 'models', 'det'),
+      recognitionModelDir: win32.join(resourcesPath, 'paddleocr', 'models', 'rec')
+    })
+  })
+
+  it('resolves the development payload under the project resources folder', () => {
+    expect(
+      resolveGameOcrPaths({
+        isPackaged: false,
+        resourcesPath: 'C:\\ignored',
+        appRoot: 'E:\\src\\kizuna',
+        platform: 'win32'
+      }).workerPath
+    ).toBe(win32.join('E:\\src\\kizuna', 'resources', 'paddleocr', 'paddleocr.exe'))
+  })
+
+  // The Linux artifacts deliberately omit the payload (see
+  // `win.extraResources` in electron-builder.cjs), so there is no Linux path
+  // to hand out and a caller asking for one is the bug worth reporting.
+  it('refuses to resolve a Linux path', () => {
+    expect(() =>
+      resolveGameOcrPaths({
+        isPackaged: true,
+        resourcesPath: '/opt/kizuna/resources',
+        appRoot: '/ignored',
+        platform: 'linux'
+      })
+    ).toThrow('Game OCR resources ship on Windows only, not linux')
+  })
+})
+
+describe('Game OCR resource validation', () => {
+  const paths = resolveGameOcrPaths({
+    isPackaged: true,
+    resourcesPath: 'C:\\Kizuna\\resources',
+    appRoot: 'ignored',
+    platform: 'win32'
+  })
+  const required = requiredGameOcrResources(paths)
+
+  it('requires the worker executable and both model directories', () => {
+    expect(required).toEqual([
+      { label: 'PaddleOCR worker', path: paths.workerPath, kind: 'file' },
+      { label: 'PaddleOCR detection model', path: paths.detectionModelDir, kind: 'directory' },
+      { label: 'PaddleOCR recognition model', path: paths.recognitionModelDir, kind: 'directory' }
+    ])
+  })
+
+  it('passes when every resource has the expected kind', () => {
+    expect(
+      missingResourceMessage(required, (path) => (path === paths.workerPath ? 'file' : 'directory'))
+    ).toBeUndefined()
+  })
+
+  it('names the missing resource and its path', () => {
+    const message = missingResourceMessage(required, (path) =>
+      path === paths.recognitionModelDir
+        ? 'missing'
+        : path === paths.workerPath
+          ? 'file'
+          : 'directory'
+    )
+
+    expect(message).toContain('PaddleOCR recognition model is missing')
+    expect(message).toContain(paths.recognitionModelDir)
+  })
+
+  // A truncated download can leave a model directory replaced by a stray file,
+  // which spawns a worker that fails with an opaque Paddle error instead.
+  it('reports a resource of the wrong kind', () => {
+    expect(missingResourceMessage(required, () => 'file')).toContain(
+      'PaddleOCR detection model is not a directory'
+    )
   })
 })

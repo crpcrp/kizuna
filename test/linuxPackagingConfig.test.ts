@@ -21,10 +21,17 @@ interface LinuxTarget {
   arch: string[]
 }
 
+interface ExtraResource {
+  from: string
+  to: string
+}
+
 /** Only the keys these assertions read; electron-builder accepts many more. */
 interface BuilderConfig {
   homepage?: string
   directories: { output: string }
+  extraResources: ExtraResource[]
+  win: { extraResources?: ExtraResource[] }
   linux: {
     target: LinuxTarget[]
     icon: string
@@ -164,6 +171,35 @@ describe('Linux packaging configuration', () => {
     expect(categories).toContain('AudioVideo')
     expect(categories).toContain('Video')
     expect(categories).toContain('Player')
+  })
+})
+
+// Game OCR is a Windows-only feature, and its PaddleOCR runtime is the largest
+// payload Kizuna would ship. Both halves are asserted together: the Windows
+// installer must carry it, and neither Linux artifact may.
+describe('Game OCR payload', () => {
+  const OCR_ROOT = 'paddleocr'
+
+  it('bundles the PaddleOCR payload from the Windows target only', () => {
+    const config = builderConfig()
+
+    expect(config.win.extraResources).toEqual([{ from: `resources/${OCR_ROOT}`, to: OCR_ROOT }])
+    // electron-builder concatenates the platform list with the shared one, so
+    // a shared entry would reach Linux as well.
+    for (const entry of config.extraResources) {
+      expect(entry.to, entry.to).not.toBe(OCR_ROOT)
+      expect(entry.from, entry.from).not.toContain(OCR_ROOT)
+    }
+  })
+
+  it('stages no OCR resource for the Linux vendor payload', () => {
+    const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf8')) as {
+      platforms: Record<string, { files: { to: string }[]; requiredPaths: string[] }>
+    }
+    const linux = lock.platforms['linux-x64']
+
+    for (const file of linux.files) expect(file.to, file.to).not.toContain(OCR_ROOT)
+    for (const path of linux.requiredPaths) expect(path, path).not.toContain(OCR_ROOT)
   })
 })
 

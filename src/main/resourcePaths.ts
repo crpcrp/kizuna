@@ -153,6 +153,69 @@ export function requiredPackagedResources(
   return required
 }
 
+/**
+ * The Windows-only Game OCR payload. It is staged into `resources/paddleocr`
+ * by the same vendor pipeline that stages mpv, FFmpeg, and MeCab, and
+ * electron-builder copies it from `win.extraResources` only, so a Linux
+ * artifact never contains it and these paths never exist there.
+ */
+export interface GameOcrPaths {
+  /** The PaddleOCR sidecar the worker adapter spawns. */
+  workerPath: string
+  /** Japanese detection model directory passed to the sidecar. */
+  detectionModelDir: string
+  /** Japanese recognition model directory passed to the sidecar. */
+  recognitionModelDir: string
+}
+
+/** Pure. Resolves the Game OCR payload for a run mode. Windows only. */
+export function resolveGameOcrPaths({
+  isPackaged,
+  resourcesPath,
+  appRoot,
+  platform = process.platform
+}: ResolveBinaryPathsOptions): GameOcrPaths {
+  if (platform !== 'win32') {
+    throw new Error('Game OCR resources ship on Windows only, not ' + platform)
+  }
+  const root = isPackaged ? resourcesPath : win32.join(appRoot, 'resources')
+  const base = win32.join(root, 'paddleocr')
+  return {
+    workerPath: win32.join(base, 'paddleocr.exe'),
+    detectionModelDir: win32.join(base, 'models', 'det'),
+    recognitionModelDir: win32.join(base, 'models', 'rec')
+  }
+}
+
+/** Pure. Lists what must be on disk before Game OCR spawns its worker. */
+export function requiredGameOcrResources(paths: GameOcrPaths): RequiredPackagedResource[] {
+  return [
+    { label: 'PaddleOCR worker', path: paths.workerPath, kind: 'file' },
+    { label: 'PaddleOCR detection model', path: paths.detectionModelDir, kind: 'directory' },
+    { label: 'PaddleOCR recognition model', path: paths.recognitionModelDir, kind: 'directory' }
+  ]
+}
+
+/** What a probe found at a path; `missing` also covers an unreadable entry. */
+export type ResourceKindProbe = (path: string) => 'file' | 'directory' | 'missing'
+
+/**
+ * Pure. Describes the first unusable resource so a caller can surface it as a
+ * recoverable status error instead of letting a spawn fail with errno text.
+ */
+export function missingResourceMessage(
+  resources: readonly RequiredPackagedResource[],
+  probe: ResourceKindProbe
+): string | undefined {
+  for (const resource of resources) {
+    const found = probe(resource.path)
+    if (found === resource.kind) continue
+    const detail = found === 'missing' ? 'is missing' : 'is not a ' + resource.kind
+    return `The bundled ${resource.label} ${detail}: ${resource.path}. Reinstall Kizuna to restore it.`
+  }
+  return undefined
+}
+
 /** Pure. Resolves runtime binary paths for the given run mode and platform. */
 export function resolveBinaryPaths({
   isPackaged,

@@ -8,7 +8,12 @@ import type {
 import { createSettingsStore } from '@src/main/services/settings'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 
-function setup(overrides: { setAccelerator?: (shortcut: string) => Promise<boolean> } = {}) {
+function setup(
+  overrides: {
+    setAccelerator?: (shortcut: string) => Promise<boolean>
+    preflight?: () => string | undefined
+  } = {}
+) {
   let controllerStatus: GameOcrStatus = { state: 'off', sessionId: 0 }
   let notifyController: ((status: GameOcrStatus) => void) | undefined
   const controller: GameOcrController = {
@@ -35,7 +40,12 @@ function setup(overrides: { setAccelerator?: (shortcut: string) => Promise<boole
     getStatus: vi.fn(() => workerStatus)
   }
   const settings = createSettingsStore(fakeIo(undefined))
-  const runtime = createGameOcrRuntimeService({ settings, controller, worker })
+  const runtime = createGameOcrRuntimeService({
+    settings,
+    controller,
+    worker,
+    preflight: overrides.preflight
+  })
   return {
     runtime,
     controller,
@@ -83,5 +93,21 @@ describe('Game OCR runtime service', () => {
     expect(fake.runtime.getStatus()).toMatchObject({
       game: { state: 'armed', error: 'The Game OCR shortcut is already in use: Alt+O' }
     })
+  })
+
+  it('reports a failed resource check instead of arming', async () => {
+    let problem: string | undefined = 'The bundled PaddleOCR worker is missing: C:\\ocr.exe.'
+    const fake = setup({ preflight: () => problem })
+
+    const status = await fake.runtime.start()
+
+    expect(fake.controller.arm).not.toHaveBeenCalled()
+    expect(status).toMatchObject({ game: { state: 'stopped', error: problem } })
+
+    // Recoverable: restoring the files and retrying arms without a restart.
+    problem = undefined
+    expect(await fake.runtime.retry()).toMatchObject({ game: { state: 'armed' } })
+    expect(fake.controller.arm).toHaveBeenCalledTimes(1)
+    expect(fake.runtime.getStatus().game).not.toHaveProperty('error')
   })
 })

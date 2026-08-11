@@ -214,6 +214,31 @@ describe('platform selection and lock validation', () => {
     mismatched.platforms['linux-x64'].source.commit = 'b'.repeat(40)
     expect(lockProblems(mismatched).join('\n')).toContain('same immutable vendor commit')
   })
+
+  // Game OCR runs on Windows only, so its PaddleOCR runtime must never enter
+  // the Linux tree: staging it there would add a large payload that the Linux
+  // application can never run.
+  it('keeps the Game OCR payload out of the Linux entry', () => {
+    const leaked = mutableLock()
+    leaked.platforms['linux-x64'].files.push({
+      from: 'linux-x64/mpv/bin/mpv',
+      to: 'paddleocr/paddleocr.exe',
+      sha256: 'c'.repeat(64),
+      executable: true
+    })
+    expect(lockProblems(leaked).join('\n')).toContain(
+      'stages paddleocr/paddleocr.exe, which only win32-x64 may ship'
+    )
+
+    const windows = mutableLock()
+    windows.platforms['win32-x64'].files.push({
+      from: 'paddleocr/paddleocr.exe',
+      to: 'paddleocr/paddleocr.exe',
+      sha256: 'c'.repeat(64),
+      executable: true
+    })
+    expect(lockProblems(windows)).toEqual([])
+  })
 })
 
 describe('checksums and acquisition', () => {

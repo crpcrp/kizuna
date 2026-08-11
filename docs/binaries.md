@@ -83,6 +83,26 @@ it. The persistent location survives package updates.
 The FFmpeg build must provide `libmp3lame` for mined sentence audio. If it does
 not, card creation continues without that audio clip.
 
+### Game OCR (Windows only)
+
+Game OCR spawns a PaddleOCR sidecar, so its payload is staged under
+`resources/paddleocr/` and bundled from `win.extraResources` alone. Linux
+artifacts never carry it, `resolveGameOcrPaths` refuses to produce a Linux
+path, and `resources.lock.json` may only stage `paddleocr/` under `win32-x64`.
+
+| Installed path | Purpose |
+|---|---|
+| `resources/paddleocr/paddleocr.exe` | PaddleOCR sidecar and its Paddle Inference runtime |
+| `resources/paddleocr/models/det` | Japanese text-detection model |
+| `resources/paddleocr/models/rec` | Japanese text-recognition model |
+
+All three are checked before every Game OCR arm attempt. A missing or
+wrong-kind entry is reported in Options > Game OCR and clears on retry once the
+files are restored, so no capture is attempted against an incomplete runtime.
+The payload is not pinned in `resources.lock.json` yet; until the vendor mirror
+carries it, `npm run resources` stages nothing under `paddleocr/` and Game OCR
+reports the missing worker.
+
 ## Updating a pinned binary
 
 1. Add the reviewed build, license texts, source reference, build recipe, and

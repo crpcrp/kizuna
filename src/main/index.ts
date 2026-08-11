@@ -38,7 +38,14 @@ import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
-import { resolveBinaryPaths, resolveThirdPartyNoticesPath, type BinaryPaths } from './resourcePaths'
+import {
+  missingResourceMessage,
+  requiredGameOcrResources,
+  resolveBinaryPaths,
+  resolveGameOcrPaths,
+  resolveThirdPartyNoticesPath,
+  type BinaryPaths
+} from './resourcePaths'
 import { createAppInfoService, registerAppInfoBridge } from './appInfoBridge'
 import { registerMecabBridge, createMecabService } from './mecabBridge'
 import { isValidMecabDictionaryDir } from './services/mecab/dictionaryValidation'
@@ -530,21 +537,36 @@ function startPlayerSettings(settings: SettingsStore, mpv: MpvConfigManager): vo
   registerPlayerSettingsBridge(ipcMain, playerSettingsService)
 }
 
+/** Reports what is on disk at a path without throwing on a missing entry. */
+function probeResourceKind(path: string): 'file' | 'directory' | 'missing' {
+  try {
+    return fs.statSync(path).isDirectory() ? 'directory' : 'file'
+  } catch {
+    return 'missing'
+  }
+}
+
 /**
  * Wires the Windows-only Game OCR runtime to the main-window bridge. The
- * resource paths intentionally stay small and explicit; the packaging issue
- * owns supplying the executable and model directories later.
+ * PaddleOCR payload is bundled by `win.extraResources`, so the paths resolve
+ * against the same resources root as mpv and MeCab, and the runtime checks
+ * them before each arm rather than trusting the installer.
  */
 function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   if (process.platform !== 'win32') return
 
   const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
-  const paddleBase = join(resourcesBase, 'paddleocr')
+  const ocrPaths = resolveGameOcrPaths({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appRoot: app.getAppPath(),
+    platform: 'win32'
+  })
   const worker = createPaddleOcrWorkerService({
-    executablePath: join(paddleBase, 'paddleocr.exe'),
+    executablePath: ocrPaths.workerPath,
     modelPaths: {
-      detection: join(paddleBase, 'models', 'det'),
-      recognition: join(paddleBase, 'models', 'rec')
+      detection: ocrPaths.detectionModelDir,
+      recognition: ocrPaths.recognitionModelDir
     },
     onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
   })
@@ -569,7 +591,12 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     ocr: worker,
     onError: (message) => gameOcr?.reportError(message)
   })
-  const runtime = createGameOcrRuntimeService({ settings, controller, worker })
+  const runtime = createGameOcrRuntimeService({
+    settings,
+    controller,
+    worker,
+    preflight: () => missingResourceMessage(requiredGameOcrResources(ocrPaths), probeResourceKind)
+  })
   gameOcr = runtime
   gameOcrLifecycle = createGameOcrBackgroundLifecycle({
     runtime,
