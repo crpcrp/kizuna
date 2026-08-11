@@ -92,6 +92,11 @@ import { createProductionDisplayCapture } from './services/gameOcr/displayCaptur
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
 import { createPaddleOcrWorkerService } from './services/ocr/paddleWorker'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
+import {
+  createGameOcrBackgroundLifecycle,
+  type GameOcrBackgroundLifecycle
+} from './services/gameOcr/backgroundLifecycle'
+import { createElectronGameOcrTrayFactory } from './services/gameOcr/tray'
 import { registerGameOcrBridge } from './gameOcrBridge'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
@@ -131,6 +136,7 @@ let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
 let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
 let gameOcr: GameOcrRuntimeService | undefined
+let gameOcrLifecycle: GameOcrBackgroundLifecycle | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -151,7 +157,8 @@ function createWindow(
   settings: SettingsStore
 ): void {
   const windows = createAppWindowSet({
-    preloadPath: join(__dirname, '../preload/index.js')
+    preloadPath: join(__dirname, '../preload/index.js'),
+    closeGuard: (event) => gameOcrLifecycle?.handleWindowClose(event) ?? true
   })
   const { videoHost, uiOverlay } = windows
   appWindows = windows
@@ -164,7 +171,9 @@ function createWindow(
   applyReloadGuard(uiOverlay.webContents)
   uiOverlay.on('closed', () => {
     if (mainWindow === uiOverlay) mainWindow = undefined
+    gameOcrLifecycle?.handleWindowLost()
   })
+  uiOverlay.webContents.on('render-process-gone', () => gameOcrLifecycle?.handleWindowLost())
 
   // In `dev`, electron-vite serves the renderer over HTTP (with HMR).
   // In a packaged/built app, load the compiled HTML from disk.
@@ -180,6 +189,8 @@ function createWindow(
   // only the opaque host visible during startup; the transparent renderer
   // overlay waits until the IPC bridge and renderer are ready.
   if (videoHost !== uiOverlay) videoHost.show()
+
+  startGameOcr(settings, windows)
 
   // Do not let renderer effects invoke player channels before their handlers
   // exist. A failed mpv start is caught inside startPlayer and still loads a
@@ -524,7 +535,7 @@ function startPlayerSettings(settings: SettingsStore, mpv: MpvConfigManager): vo
  * resource paths intentionally stay small and explicit; the packaging issue
  * owns supplying the executable and model directories later.
  */
-function startGameOcr(settings: SettingsStore): void {
+function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   if (process.platform !== 'win32') return
 
   const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
@@ -558,10 +569,22 @@ function startGameOcr(settings: SettingsStore): void {
     ocr: worker,
     onError: (message) => gameOcr?.reportError(message)
   })
-  gameOcr = createGameOcrRuntimeService({ settings, controller, worker })
+  const runtime = createGameOcrRuntimeService({ settings, controller, worker })
+  gameOcr = runtime
+  gameOcrLifecycle = createGameOcrBackgroundLifecycle({
+    runtime,
+    window: {
+      hide: () => windows.uiOverlay.hide(),
+      activate: () => windows.activate()
+    },
+    tray: createElectronGameOcrTrayFactory(
+      nativeImage.createFromPath(join(resourcesBase, 'icons', 'play.png'))
+    ),
+    quit: () => app.quit()
+  })
   registerGameOcrBridge(
     ipcMain,
-    gameOcr,
+    runtime,
     (channel, value) => sendToWindow(mainWindow, channel, value),
     (sender) => sender === mainWindow?.webContents
   )
@@ -640,12 +663,15 @@ if (!gotSingleInstanceLock) {
       flushStorageData: () => session.defaultSession.flushStorageData()
     },
     controller,
+    stopGameOcr: async () => {
+      if (gameOcrLifecycle) await gameOcrLifecycle.stop()
+      else await gameOcr?.stop()
+    },
     flushHistory: () => mediaHistory?.flush(),
     releasePowerSave: () => powerSave?.dispose(),
     disposeSystemMedia: () => systemMedia?.dispose(),
     onShutdownStart: () => {
       updates?.beginShutdown()
-      void gameOcr?.stop()
     },
     appQuit: () => {
       appWindows?.close()
@@ -708,7 +734,6 @@ if (!gotSingleInstanceLock) {
     startAnki(settings, binaryPaths.ffmpegPath)
     startKnowledge(settings)
     startPlayerSettings(settings, mpvConfig)
-    startGameOcr(settings)
     startIntegrationStatus(binaryPaths)
     startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
@@ -731,7 +756,10 @@ if (!gotSingleInstanceLock) {
   })
 
   app.on('before-quit', lifecycle.handleBeforeQuit)
-  app.on('will-quit', () => updates?.dispose())
+  app.on('will-quit', () => {
+    gameOcrLifecycle?.dispose()
+    updates?.dispose()
+  })
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit()

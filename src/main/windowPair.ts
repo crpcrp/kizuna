@@ -8,17 +8,22 @@ import {
 } from './windowOptions'
 import type { WindowShapeRect } from '../shared/windowShape'
 
-/** Events used by the coordinator; the callbacks intentionally ignore Electron's event object. */
+/** Events used by the coordinator; close additionally carries its preventable event. */
 type WindowPairEvent =
   'close' | 'closed' | 'move' | 'resize' | 'enter-full-screen' | 'leave-full-screen'
+
+export interface WindowCloseEvent {
+  preventDefault(): void
+}
 
 interface ManagedWindow extends WindowControlTarget {
   isDestroyed(): boolean
   isMinimized(): boolean
+  show(): void
   restore(): void
   getMediaSourceId(): string
   moveAbove(mediaSourceId: string): void
-  on(event: WindowPairEvent, listener: () => void): unknown
+  on(event: WindowPairEvent, listener: (event?: WindowCloseEvent) => void): unknown
 }
 
 export interface AppWindowSet {
@@ -44,6 +49,7 @@ export interface CreateAppWindowSetOptions {
   preloadPath: string
   platform?: NodeJS.Platform
   createWindow?: BrowserWindowFactory
+  closeGuard?: (event: WindowCloseEvent) => boolean
   setTimeoutFn?: WindowPairSetTimeout
   clearTimeoutFn?: WindowPairClearTimeout
 }
@@ -53,6 +59,7 @@ export type WindowPairClearTimeout = (handle: unknown) => void
 
 interface AppWindowCoordinatorOptions {
   paired?: boolean
+  closeGuard?: (event: WindowCloseEvent) => boolean
   setTimeoutFn?: WindowPairSetTimeout
   clearTimeoutFn?: WindowPairClearTimeout
 }
@@ -81,7 +88,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
   private readonly setTimeoutFn: WindowPairSetTimeout
   private readonly clearTimeoutFn: WindowPairClearTimeout
   private readonly fullscreenListeners = new Set<(fullscreen: boolean) => void>()
-  private readonly closePair: () => void
+  private readonly closePair: (force?: boolean) => void
   private syncScheduled = false
   private syncTimer: unknown
   private syncing = false
@@ -97,6 +104,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
     uiOverlay: ManagedWindow,
     {
       paired = videoHost !== uiOverlay,
+      closeGuard,
       setTimeoutFn,
       clearTimeoutFn
     }: AppWindowCoordinatorOptions = {}
@@ -107,7 +115,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
     this.setTimeoutFn = setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
     this.clearTimeoutFn =
       clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
-    this.closePair = attachPairCloseHandlers(videoHost, uiOverlay)
+    this.closePair = attachPairCloseHandlers(videoHost, uiOverlay, closeGuard)
 
     if (paired) {
       videoHost.on('move', this.queueHostBoundsSync)
@@ -168,6 +176,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
 
   /** Second-instance activation treats the pair as one foreground application. */
   activate(): void {
+    this.forEachDistinctLive((window) => this.callSafely(window, () => window.show()))
     this.restore()
     this.focus()
   }
@@ -213,9 +222,9 @@ export class AppWindowCoordinator implements WindowControlTarget {
   }
 
   /** Closes the pair once and cancels any pending geometry callback. */
-  close(): void {
+  close(force = false): void {
     this.cancelScheduledSync()
-    this.closePair()
+    this.closePair(force)
   }
 
   isCompletelyDestroyed(): boolean {
@@ -392,6 +401,7 @@ export function createAppWindowSet({
   preloadPath,
   platform = process.platform,
   createWindow = (options) => new BrowserWindow(options),
+  closeGuard,
   setTimeoutFn,
   clearTimeoutFn
 }: CreateAppWindowSetOptions): AppWindowSet {
@@ -399,6 +409,7 @@ export function createAppWindowSet({
     const window = createWindow(getMainWindowOptions(preloadPath))
     const coordinator = new AppWindowCoordinator(window, window, {
       paired: false,
+      closeGuard,
       setTimeoutFn,
       clearTimeoutFn
     })
@@ -410,7 +421,7 @@ export function createAppWindowSet({
         candidate === window && !coordinator.isCompletelyDestroyed() ? coordinator : null,
       onFullscreenChanged: (listener) => coordinator.onFullscreenChanged(listener),
       activate: () => coordinator.activate(),
-      close: () => coordinator.close()
+      close: () => coordinator.close(true)
     }
   }
 
@@ -419,6 +430,7 @@ export function createAppWindowSet({
   syncInitialWindowBounds(videoHost, uiOverlay)
   const coordinator = new AppWindowCoordinator(videoHost, uiOverlay, {
     paired: true,
+    closeGuard,
     setTimeoutFn,
     clearTimeoutFn
   })
@@ -433,7 +445,7 @@ export function createAppWindowSet({
         : null,
     onFullscreenChanged: (listener) => coordinator.onFullscreenChanged(listener),
     activate: () => coordinator.activate(),
-    close: () => coordinator.close()
+    close: () => coordinator.close(true)
   }
 }
 
@@ -451,7 +463,7 @@ export function syncInitialWindowBounds(
 }
 
 interface CloseableWindow {
-  on(event: 'close' | 'closed', listener: () => void): unknown
+  on(event: 'close' | 'closed', listener: (event?: WindowCloseEvent) => void): unknown
   close(): void
   isDestroyed(): boolean
 }
@@ -460,27 +472,41 @@ interface CloseableWindow {
  * Closes the other side when either side is closed or unexpectedly destroyed.
  * The guard is intentionally local to the pair: it prevents close handlers from
  * recursively closing each other while still allowing the app's normal
- * `window-all-closed`/`before-quit` path to run.
+ * `window-all-closed`/`before-quit` path to run. A close guard can prevent a
+ * user close while an app-owned forced close bypasses it.
  */
 export function attachPairCloseHandlers(
   videoHost: CloseableWindow,
-  uiOverlay: CloseableWindow
-): () => void {
+  uiOverlay: CloseableWindow,
+  closeGuard?: (event: WindowCloseEvent) => boolean
+): (force?: boolean) => void {
   let closing = false
 
-  const closePair = (initiator?: CloseableWindow): void => {
+  const closePair = (
+    initiator?: CloseableWindow,
+    event?: WindowCloseEvent,
+    force = false,
+    checkGuard = false
+  ): void => {
     if (closing) return
+    if (!force && checkGuard && closeGuard) {
+      const allowClose = closeGuard(event ?? { preventDefault: () => {} })
+      if (!allowClose) {
+        event?.preventDefault()
+        return
+      }
+    }
     closing = true
     if (initiator !== uiOverlay && !uiOverlay.isDestroyed()) uiOverlay.close()
     if (initiator !== videoHost && !videoHost.isDestroyed()) videoHost.close()
   }
 
-  videoHost.on('close', () => closePair(videoHost))
-  uiOverlay.on('close', () => closePair(uiOverlay))
+  videoHost.on('close', (event) => closePair(videoHost, event, false, true))
+  uiOverlay.on('close', (event) => closePair(uiOverlay, event, false, true))
   videoHost.on('closed', () => closePair(videoHost))
   uiOverlay.on('closed', () => closePair(uiOverlay))
 
-  return () => closePair()
+  return (force = true) => closePair(undefined, undefined, force, true)
 }
 
 export interface RendererWindowLoadOptions {

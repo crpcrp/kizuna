@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import {
+  attachPairCloseHandlers,
   createAppWindowSet,
   loadRendererWindow,
   presentAppWindowSet,
-  syncInitialWindowBounds
+  syncInitialWindowBounds,
+  type WindowCloseEvent
 } from '@src/main/windowPair'
 
 type WindowEvent =
@@ -398,9 +400,60 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.minimize).toHaveBeenCalledTimes(1)
     expect(host.restore).toHaveBeenCalledTimes(1)
     expect(overlay.restore).toHaveBeenCalledTimes(1)
+    expect(host.show).toHaveBeenCalledTimes(1)
+    expect(overlay.show).toHaveBeenCalledTimes(1)
     expect(host.focus).toHaveBeenCalledTimes(1)
     expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
     expect(overlay.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets a close guard keep an armed app window in the background', () => {
+    type EventName = 'close' | 'closed'
+    type Listener = (event?: WindowCloseEvent) => void
+    const makeCloseable = () => {
+      const listeners = new Map<EventName, Listener[]>()
+      return {
+        close: vi.fn(),
+        isDestroyed: () => false,
+        on(event: EventName, listener: Listener) {
+          listeners.set(event, [...(listeners.get(event) ?? []), listener])
+        },
+        emit(event: EventName, value?: WindowCloseEvent) {
+          for (const listener of listeners.get(event) ?? []) listener(value)
+        }
+      }
+    }
+    const videoHost = makeCloseable()
+    const uiOverlay = makeCloseable()
+    const guard = vi.fn(() => false)
+    attachPairCloseHandlers(videoHost, uiOverlay, guard)
+    const event = { preventDefault: vi.fn() }
+
+    videoHost.emit('close', event)
+
+    expect(guard).toHaveBeenCalledWith(event)
+    expect(event.preventDefault).toHaveBeenCalledOnce()
+    expect(videoHost.close).not.toHaveBeenCalled()
+    expect(uiOverlay.close).not.toHaveBeenCalled()
+  })
+
+  it('guards renderer close requests but lets app shutdown force the window closed', () => {
+    const factory = makeWindowFactory()
+    const guard = vi.fn(() => false)
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      closeGuard: guard
+    })
+    const window = factory.created[0]
+
+    windows.coordinator.close()
+    expect(guard).toHaveBeenCalledOnce()
+    expect(window.close).not.toHaveBeenCalled()
+
+    windows.close()
+    expect(window.close).toHaveBeenCalledOnce()
   })
 
   it('coordinates fullscreen on the host and restores the paired rectangle once', () => {

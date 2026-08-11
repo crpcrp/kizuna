@@ -26,6 +26,7 @@ export type ClearTimeoutFn = (handle: unknown) => void
 export interface QuitCoordinatorDeps {
   defaultSession: FlushableSession
   controller: QuittableController
+  stopGameOcr?: () => Promise<void>
   flushHistory?: () => void
   releasePowerSave?: () => void
   disposeSystemMedia?: () => void
@@ -123,14 +124,15 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
     runSafely('history flush', flushHistory)
     runSafely('session storage flush', () => deps.defaultSession.flushStorageData())
     const controllerQuit = startAsync(() => deps.controller.quit())
-    const cleanup = Promise.allSettled([controllerQuit])
+    const gameOcrStop = startAsync(() => deps.stopGameOcr?.() ?? Promise.resolve())
+    const cleanup = Promise.allSettled([controllerQuit, gameOcrStop])
     const timer = setTimeoutFn(() => {
       disposeHard()
       finishShutdown()
     }, SHUTDOWN_TIMEOUT_MS)
 
     shutdownPromise = cleanup.then((results) => {
-      const operations = ['mpv quit']
+      const operations = ['mpv quit', 'Game OCR cleanup']
       for (const [index, result] of results.entries()) {
         if (result.status === 'rejected') reportFailure(operations[index], result.reason)
       }
