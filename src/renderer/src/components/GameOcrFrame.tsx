@@ -61,12 +61,30 @@ export default function GameOcrFrame({
 
   const stopBackgroundClose = (event: SyntheticEvent): void => event.stopPropagation()
 
+  /**
+   * A press that starts on a box or a popup and ends on the screenshot fires
+   * its click on their common ancestor — this element — which would close the
+   * frame out from under the selection the user was dragging. Recording where
+   * the press started separates that drag from a real background click; the
+   * capture phase sees it before a box stops the event bubbling.
+   */
+  const startedOnContentRef = useRef(false)
+  const onPointerDownCapture = (event: React.PointerEvent<HTMLElement>): void => {
+    const target = event.target as Element | null
+    startedOnContentRef.current = Boolean(target?.closest?.('.game-ocr-frame__content'))
+  }
+  const onBackgroundClick = (): void => {
+    if (startedOnContentRef.current) return
+    close()
+  }
+
   return (
     <GameOcrFrameCloseContext.Provider value={registerCloseHandler}>
       <main
         className="game-ocr-frame"
         aria-label="Frozen game frame"
-        onClick={close}
+        onPointerDownCapture={onPointerDownCapture}
+        onClick={onBackgroundClick}
         data-image-size={
           presentation
             ? `${presentation.imageSize.width}x${presentation.imageSize.height}`

@@ -65,10 +65,19 @@ export function useGameOcrSession({
   // settings change, so `clear` reaches the newest pipeline indirectly.
   const invalidatePipeline = useLatestCallback((): void => pipeline.invalidate())
 
+  // A lookup-settings change builds a replacement pipeline. Dropping the old
+  // one without invalidating it would leave its in-flight dictionary and
+  // knowledge work resolving into caches nothing reads again.
+  useEffect(() => () => pipeline.invalidate(), [pipeline])
+
   const clear = useCallback((): void => {
     setResult(undefined)
     setText(undefined)
     invalidatePipeline()
+    // The boxes a selection lived in are about to unmount, and the renderer
+    // survives to serve the next frame. Leaving the range behind would let a
+    // stale selection reach the clipboard or the translator.
+    document.getSelection()?.removeAllRanges()
   }, [invalidatePipeline])
 
   useEffect(() => {

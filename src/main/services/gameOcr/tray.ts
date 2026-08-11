@@ -1,10 +1,5 @@
 import { Menu, Tray, type NativeImage } from 'electron'
-import {
-  TRAY_TOOLTIP,
-  type GameOcrTray,
-  type GameOcrTrayActions,
-  type GameOcrTrayFactory
-} from './backgroundLifecycle'
+import type { GameOcrTray, GameOcrTrayActions, GameOcrTrayFactory } from './backgroundLifecycle'
 
 /** Creates the one native tray icon used while Game OCR is armed. */
 export function createElectronGameOcrTrayFactory(icon: NativeImage): GameOcrTrayFactory {
@@ -18,7 +13,8 @@ export function createElectronGameOcrTrayFactory(icon: NativeImage): GameOcrTray
           { label: 'Quit Kizuna', click: actions.quit }
         ])
       )
-      tray.setToolTip(TRAY_TOOLTIP)
+      // The tooltip is the lifecycle's to set: it owns when the tray means
+      // "armed" and is the surface the tests assert against.
       return tray
     }
   }

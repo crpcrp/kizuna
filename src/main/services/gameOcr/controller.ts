@@ -45,6 +45,11 @@ export interface GameOcrControllerOptions {
   accelerator: string
   capture: DisplayCaptureService
   settle: GameOcrSettleBoundary
+  /**
+   * Builds the frozen-frame window. Called once per armed run rather than once
+   * per capture: the coordinator retains the window between frames and only
+   * asks for a new one after the old one is gone.
+   */
   createPresentation: (metadata: OcrDisplayCaptureMetadata) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
   /** Clears renderer-side token, lookup, popup, and translation work. */
@@ -68,7 +73,7 @@ export interface GameOcrController {
 
 interface Session extends OcrCaptureIdentity {
   valid: boolean
-  closeBeforeCapture: Promise<void>
+  dismissBeforeCapture: Promise<void>
 }
 
 /**
@@ -76,16 +81,21 @@ interface Session extends OcrCaptureIdentity {
  * details. A hotkey starts one serialized capture pipeline; newer sessions
  * invalidate older work immediately, while the pipeline itself prevents two
  * display captures from racing each other.
+ *
+ * One frozen-frame window serves every capture in an armed run. A frame ends
+ * by dropping its screenshot and hiding, not by destroying the window, so the
+ * next capture pays neither a renderer boot nor a readiness handshake. The
+ * window is destroyed only when Game OCR stops, when a display change
+ * invalidates its placement, or when its renderer becomes unusable.
  */
 export function createGameOcrController(options: GameOcrControllerOptions): GameOcrController {
   let status: GameOcrStatus = { state: 'off', sessionId: 0 }
   const listeners = new Set<(next: GameOcrStatus) => void>()
   let activeSession: Session | undefined
   let activeCapture: DisplayCapture | undefined
-  let activePresentation: GameOcrWindow | undefined
-  let presentationClose: Promise<void> | undefined
-  let presentationCloseTarget: GameOcrWindow | undefined
-  const intentionalClosures = new WeakSet<GameOcrWindow>()
+  let presentation: GameOcrWindow | undefined
+  let presentationDismiss: Promise<void> | undefined
+  let presentationDismissTarget: GameOcrWindow | undefined
   let accelerator = options.accelerator
   let shortcutRegistered = false
   let lifecycle = 0
@@ -123,6 +133,17 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     activeCapture = undefined
   }
 
+  /**
+   * Frees one screenshot's encoded bytes as soon as recognition is done with
+   * them. The renderer already holds the pixels it presents, so keeping the
+   * main-process copy alive for the whole inspection would pin up to
+   * `MAX_DISPLAY_CAPTURE_ENCODED_BYTES` per frozen frame for no reader.
+   */
+  const releaseCapture = (capture: DisplayCapture): void => {
+    capture.dispose()
+    if (activeCapture === capture) activeCapture = undefined
+  }
+
   const isCurrent = (session: Session): boolean =>
     activeSession === session && session.valid && !stopping && status.state !== 'off'
 
@@ -131,28 +152,49 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     return current + 1
   }
 
-  const closePresentation = (): Promise<void> => {
-    const presentation = activePresentation
-    if (!presentation) return presentationClose ?? Promise.resolve()
-    if (presentationCloseTarget === presentation && presentationClose) return presentationClose
+  /**
+   * Ends the visible frame without destroying the window: the renderer drops
+   * the screenshot and its boxes, and the promise resolves only once the
+   * window is no longer visible, which is what lets the next capture read the
+   * live game instead of Kizuna's own frame.
+   */
+  const dismissPresentation = (): Promise<void> => {
+    const target = presentation
+    if (!target) return presentationDismiss ?? Promise.resolve()
+    if (presentationDismissTarget === target && presentationDismiss) return presentationDismiss
 
-    intentionalClosures.add(presentation)
-    let close: Promise<void>
+    let discard: Promise<void>
     try {
-      close = Promise.resolve(presentation.close())
+      discard = Promise.resolve(target.discard())
     } catch (error) {
-      close = Promise.reject(error)
+      discard = Promise.reject(error)
     }
-    const tracked = close.finally(() => {
-      if (activePresentation === presentation) activePresentation = undefined
-      if (presentationCloseTarget === presentation) {
-        presentationCloseTarget = undefined
-        presentationClose = undefined
+    const tracked = discard.finally(() => {
+      if (presentationDismissTarget === target) {
+        presentationDismissTarget = undefined
+        presentationDismiss = undefined
       }
     })
-    presentationCloseTarget = presentation
-    presentationClose = tracked
+    presentationDismissTarget = target
+    presentationDismiss = tracked
     return tracked
+  }
+
+  /** Destroys the retained window. Only stopping Game OCR goes this far. */
+  const closePresentation = (): Promise<void> => {
+    const target = presentation
+    if (!target) return Promise.resolve()
+    // Dropped here rather than in the close notification: a window that is
+    // already destroyed resolves without emitting anything, and a retained
+    // reference to it would leave the next armed run without a usable frame.
+    presentation = undefined
+    presentationDismissTarget = undefined
+    presentationDismiss = undefined
+    try {
+      return Promise.resolve(target.close())
+    } catch (error) {
+      return Promise.reject(error)
+    }
   }
 
   const invalidateSession = (): void => {
@@ -176,20 +218,44 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     notify({ state: 'error', sessionId: session?.sessionId ?? status.sessionId, error: message })
   }
 
-  const attachPresentation = (presentation: GameOcrWindow): void => {
-    activePresentation = presentation
-    presentation.onClosed(() => {
-      if (activePresentation !== presentation) return
-      activePresentation = undefined
-      disposeCapture()
-      invalidateResults()
-      if (intentionalClosures.has(presentation)) return
-      if (activeSession) activeSession.valid = false
-      activeSession = undefined
-      lifecycle++
-      if (!stopping && status.state !== 'off')
-        notify({ state: 'armed', sessionId: status.sessionId })
-    })
+  /**
+   * The frozen frame ended without the coordinator asking: the user dismissed
+   * it, a display change invalidated its placement, or its renderer died.
+   * `destroyed` distinguishes a window that must be rebuilt from one that is
+   * merely hidden and ready to serve the next capture.
+   */
+  const handleFrameEnded = (target: GameOcrWindow, destroyed: boolean): void => {
+    if (presentation !== target) return
+    if (destroyed) {
+      presentation = undefined
+      presentationDismissTarget = undefined
+      presentationDismiss = undefined
+    }
+    disposeCapture()
+    invalidateResults()
+    if (activeSession) activeSession.valid = false
+    activeSession = undefined
+    lifecycle++
+    // Only a still-registered hotkey means armed. A failure released the
+    // shortcut on its way into `error`, and reporting armed there would both
+    // mislead the Options surface and let `arm`'s fast path decline to
+    // register the shortcut again.
+    if (!stopping && status.state !== 'off' && shortcutRegistered)
+      notify({ state: 'armed', sessionId: status.sessionId })
+  }
+
+  /** Reuses the retained window, moved onto the newly captured display. */
+  const ensurePresentation = (metadata: OcrDisplayCaptureMetadata): GameOcrWindow => {
+    const retained = presentation
+    if (retained) {
+      retained.moveTo(metadata.displayBounds)
+      return retained
+    }
+    const created = options.createPresentation(metadata)
+    presentation = created
+    created.onDismissed(() => handleFrameEnded(created, false))
+    created.onClosed(() => handleFrameEnded(created, true))
+    return created
   }
 
   const beginSession = (): Session => {
@@ -200,7 +266,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       sessionId: nextSessionId,
       captureId: nextCaptureId,
       valid: true,
-      closeBeforeCapture: closePresentation()
+      dismissBeforeCapture: dismissPresentation()
     }
     activeSession = session
     notify({ state: 'capturing', sessionId: session.sessionId })
@@ -210,7 +276,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const recognize = async (
     session: Session,
     capture: DisplayCapture,
-    presentation: GameOcrWindow
+    frame: GameOcrWindow
   ): Promise<void> => {
     if (!isCurrent(session)) return
     notify({ state: 'recognizing', sessionId: session.sessionId })
@@ -232,8 +298,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       }
       // Boxes and indicator swap together: the sign is only meaningful while
       // OCR runs, and the regions belong to the screenshot already presented.
-      presentation.setRegions(result)
-      presentation.setRecognizing(false)
+      frame.setRegions(result)
+      frame.setRecognizing(false)
       try {
         options.onResult?.(result)
       } catch (error) {
@@ -243,22 +309,24 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       notify({ state: 'inspecting', sessionId: session.sessionId })
     } catch (error) {
       if (!isCurrent(session)) return
-      presentation.setRecognizing(false)
+      frame.setRecognizing(false)
       fail(session, 'Game OCR recognition failed.', error)
+    } finally {
+      releaseCapture(capture)
     }
   }
 
   const runCapture = async (session: Session): Promise<void> => {
     try {
-      await session.closeBeforeCapture
+      await session.dismissBeforeCapture
       if (!isCurrent(session)) return
-      if (activePresentation?.isVisible()) {
+      if (presentation?.isVisible()) {
         throw new Error('The previous Game OCR presentation is still visible.')
       }
 
       await options.settle.settle()
       if (!isCurrent(session)) return
-      if (activePresentation?.isVisible()) {
+      if (presentation?.isVisible()) {
         throw new Error('The previous Game OCR presentation became visible again.')
       }
 
@@ -271,24 +339,22 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       const imageBase64 = capture.imageBase64
       if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
 
-      const presentation = options.createPresentation(capture.metadata)
-      attachPresentation(presentation)
-      await presentation.present({
+      const frame = ensurePresentation(capture.metadata)
+      await frame.present({
         imageBase64,
         imageSize: capture.imageSize,
         recognizing: true
       } satisfies GameOcrPresentation)
       if (!isCurrent(session)) {
-        intentionalClosures.add(presentation)
-        await presentation.close()
+        await frame.discard()
         return
       }
 
-      void recognize(session, capture, presentation)
+      void recognize(session, capture, frame)
     } catch (error) {
       if (!isCurrent(session)) return
-      await closePresentation().catch((closeError) => {
-        reportError('Game OCR presentation cleanup failed.', closeError)
+      await dismissPresentation().catch((dismissError) => {
+        reportError('Game OCR presentation cleanup failed.', dismissError)
       })
       fail(session, 'Game OCR capture failed.', error)
     }
@@ -326,10 +392,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const arm = (): Promise<boolean> => {
     if (
-      status.state === 'armed' ||
-      status.state === 'capturing' ||
-      status.state === 'recognizing' ||
-      status.state === 'inspecting'
+      shortcutRegistered &&
+      (status.state === 'armed' ||
+        status.state === 'capturing' ||
+        status.state === 'recognizing' ||
+        status.state === 'inspecting')
     ) {
       return Promise.resolve(true)
     }

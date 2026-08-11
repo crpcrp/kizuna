@@ -21,7 +21,6 @@ export interface GameOcrOptions {
 
 export interface GameOcrMenuCommand {
   label: string
-  disabled?: boolean
   onClick: () => void
 }
 

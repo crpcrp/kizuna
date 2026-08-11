@@ -43,7 +43,7 @@ const DEFAULT_WORKER_STATUS: PaddleOcrWorkerStatus = { state: 'stopped' }
  */
 export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): GameOcrRuntimeService {
   const listeners = new Set<(status: GameOcrRuntimeStatus) => void>()
-  let workerStatus = options.worker.getStatus?.() ?? DEFAULT_WORKER_STATUS
+  let workerStatus = options.worker.getStatus() ?? DEFAULT_WORKER_STATUS
   let nonFatalError: string | undefined
 
   const currentSettings = (): GameOcrSettings => options.settings.get().gameOcr
