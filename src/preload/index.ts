@@ -60,6 +60,7 @@ import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/u
 import type { GameOcrPresentation } from '../shared/gameOcr'
 import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
 import type { GameOcrSettings } from '../shared/gameOcrSettings'
+import type { OcrResult } from '../shared/ocr'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -178,6 +179,8 @@ const api = {
     onDiscard: (cb: () => void): (() => void) => subscribe(GAME_OCR_CHANNELS.discard, cb),
     onRecognitionState: (cb: (recognizing: boolean) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
+    onRegions: (cb: (result: OcrResult) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.regions, cb),
     rendererReady: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
     close: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.close)
   },

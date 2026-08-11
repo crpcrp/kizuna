@@ -230,6 +230,9 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       ) {
         return
       }
+      // Boxes and indicator swap together: the sign is only meaningful while
+      // OCR runs, and the regions belong to the screenshot already presented.
+      presentation.setRegions(result)
       presentation.setRecognizing(false)
       try {
         options.onResult?.(result)

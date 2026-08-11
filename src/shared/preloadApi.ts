@@ -48,6 +48,7 @@ import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
 import type { GameOcrPresentation } from './gameOcr'
 import type { GameOcrRuntimeStatus } from './gameOcr'
 import type { GameOcrSettings } from './gameOcrSettings'
+import type { OcrResult } from './ocr'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -125,6 +126,8 @@ export interface KizunaApi {
     onPresentation(cb: (value: GameOcrPresentation) => void): () => void
     onDiscard(cb: () => void): () => void
     onRecognitionState(cb: (recognizing: boolean) => void): () => void
+    /** The accepted OCR regions for the screenshot currently presented. */
+    onRegions(cb: (result: OcrResult) => void): () => void
     rendererReady(): void
     close(): void
   }
