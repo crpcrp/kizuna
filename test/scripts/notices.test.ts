@@ -71,8 +71,15 @@ const LOCK = {
   ]
 }
 
+const archiveFor = (platformKey: string) => ({
+  release: 'payloads-' + COMMIT.slice(0, 12),
+  asset: 'kizuna-vendor-' + platformKey + '.tar.gz',
+  sha256: sha256(platformKey),
+  size: 1024
+})
+
 const PLATFORM_LOCK = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   platforms: {
     'win32-x64': {
       platform: 'win32',
@@ -81,7 +88,8 @@ const PLATFORM_LOCK = {
         repo: 'crpcrp/kizuna-vendor',
         commit: COMMIT,
         manifest: 'manifest.json',
-        checksums: 'SHA256SUMS.txt'
+        checksums: 'SHA256SUMS.txt',
+        archive: archiveFor('win32-x64')
       },
       requiredPaths: ['mpv/mpv.exe'],
       requiredExecutables: ['mpv/mpv.exe'],
@@ -98,7 +106,8 @@ const PLATFORM_LOCK = {
         repo: 'crpcrp/kizuna-vendor',
         commit: COMMIT,
         manifest: 'manifest.json',
-        checksums: 'SHA256SUMS.txt'
+        checksums: 'SHA256SUMS.txt',
+        archive: archiveFor('linux-x64')
       },
       requiredPaths: ['mpv/mpv'],
       requiredExecutables: ['mpv/mpv'],
