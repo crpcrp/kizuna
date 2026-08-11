@@ -105,7 +105,9 @@ describe('buildPaddleOcrWorkerArgs', () => {
       '--det-model',
       'C:\\det model',
       '--rec-model',
-      'C:\\rec model'
+      'C:\\rec model',
+      '--det-side-len',
+      '4000'
     ])
   })
 })

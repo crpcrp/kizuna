@@ -51,6 +51,10 @@ function snapshot(overrides: Partial<GameOcrTextSnapshot> = {}): GameOcrTextSnap
 }
 
 describe('buildGameOcrBoxRegions', () => {
+  it('sizes replacement text with the larger overlay typography', () => {
+    expect(DEFAULT_GAME_OCR_BOX_METRICS).toMatchObject({ fontSize: 18, lineHeight: 23 })
+  })
+
   it('places each region at its captured location scaled into the viewport', () => {
     const [box] = buildGameOcrBoxRegions({
       result: result(),
