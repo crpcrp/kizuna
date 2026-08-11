@@ -2,15 +2,9 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import GameOcrFrame from './components/GameOcrFrame'
 import GameOcrInteraction from './components/GameOcrInteraction'
-import {
-  DEFAULT_APPEARANCE,
-  DEFAULT_POPUP_SETTINGS,
-  type Appearance,
-  type LevelColors,
-  type PopupSettings
-} from '../../shared/playerSettings'
 import type { GameOcrLayoutSize } from './state/gameOcrLayout'
 import { useAppearance } from './state/useAppearance'
+import { useGameOcrPreferences } from './state/useGameOcrPreferences'
 import { useGameOcrSession } from './state/useGameOcrSession'
 import './theme.css'
 
@@ -33,52 +27,10 @@ function useViewportSize(): GameOcrLayoutSize {
   return size
 }
 
-interface GameOcrPreferences {
-  popup: PopupSettings
-  translationEnabled: boolean
-  appearance: Appearance
-  levelColors: LevelColors
-}
-
-/**
- * Reads the preferences the player window persists. The frozen frame is a
- * second renderer, so it loads them itself rather than inheriting anything
- * from the player's React tree — including the theme and the knowledge-level
- * colors its boxes are drawn with.
- */
-function usePlayerPreferences(): GameOcrPreferences {
-  const [preferences, setPreferences] = useState<GameOcrPreferences>({
-    popup: DEFAULT_POPUP_SETTINGS,
-    translationEnabled: false,
-    appearance: DEFAULT_APPEARANCE,
-    levelColors: {}
-  })
-  useEffect(() => {
-    let active = true
-    void window.kizuna.playerSettings.getSettings().then(
-      (settings) => {
-        if (!active) return
-        setPreferences({
-          popup: settings.popupSettings,
-          translationEnabled: settings.translationEnabled,
-          appearance: settings.appearance,
-          levelColors: settings.levelColors
-        })
-      },
-      // Defaults keep lookup working; only the opt-in translator stays off.
-      () => undefined
-    )
-    return () => {
-      active = false
-    }
-  }, [])
-  return preferences
-}
-
 function GameOcrApp(): React.JSX.Element {
   const kizuna = window.kizuna
   const viewportSize = useViewportSize()
-  const { popup, translationEnabled, appearance, levelColors } = usePlayerPreferences()
+  const { popup, translationEnabled, appearance, levelColors } = useGameOcrPreferences(kizuna)
   useAppearance({ appearance, levelColors })
   const session = useGameOcrSession({
     bridge: {

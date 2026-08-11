@@ -87,8 +87,17 @@ That window is sandboxed with context isolation like the main renderer, and it
 reuses the existing tokenization, knowledge, dictionary, popup, and optional
 translation surfaces through the same bridges.
 
+One window serves every capture in an armed run. A frame ends by dropping its
+screenshot and hiding; only stopping, a display change, or an unusable renderer
+destroys the window, and the coordinator builds a replacement on the next
+capture. Retaining it is what keeps a frame's latency to the capture itself
+rather than a renderer boot, and it moves the retained window onto whichever
+display the newest capture came from. The renderer therefore treats every
+screenshot as a boundary: it re-reads the player's preferences and clears the
+text selection, while keeping the lookup caches that make later frames faster.
+
 One session ID orders everything. A capture invalidates the previous session,
-closes the previous frozen window, waits for confirmation that it is no longer
+hides the previous frozen frame, waits for confirmation that it is no longer
 visible, allows one bounded compositor-settle step, and only then captures — so
 a recapture can never read Kizuna's own screenshot. Capture, OCR,
 tokenization, lookup, and translation results are accepted only for the current

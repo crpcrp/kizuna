@@ -9,7 +9,7 @@ import {
   type GameOcrShortcut
 } from '@src/main/services/gameOcr/controller'
 import type { GameOcrWindow } from '@src/main/services/gameOcr/frozenFrameWindow'
-import type { OcrDisplayCaptureMetadata, OcrResult } from '@src/shared/ocr'
+import type { OcrDisplayBounds, OcrDisplayCaptureMetadata, OcrResult } from '@src/shared/ocr'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -67,17 +67,31 @@ function result(sessionId: number, captureId: number, text: string): OcrResult {
   }
 }
 
+type FakeWindow = GameOcrWindow & {
+  triggerDismissed(): void
+  triggerClosed(): void
+  visible(): boolean
+  boundsHistory: OcrDisplayBounds[]
+}
+
 function makeWindow(
   id: number,
   events: string[],
-  options: { close?: () => Promise<void> } = {}
-): GameOcrWindow & { triggerClosed(): void; visible(): boolean } {
+  options: { discard?: () => Promise<void> } = {}
+): FakeWindow {
   let visible = false
   const closedListeners = new Set<() => void>()
+  const dismissedListeners = new Set<() => void>()
+  const boundsHistory: OcrDisplayBounds[] = []
   const triggerClosed = (): void => {
     visible = false
     closedListeners.forEach((listener) => listener())
   }
+  const discard = vi.fn(async () => {
+    events.push(`discard:${id}`)
+    if (options.discard) await options.discard()
+    visible = false
+  })
   return {
     present: vi.fn(async () => {
       events.push(`present:${id}`)
@@ -86,27 +100,44 @@ function makeWindow(
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
+    moveTo: vi.fn((bounds) => {
+      events.push(`moveTo:${id}:${bounds.x}`)
+      boundsHistory.push({ ...bounds })
+    }),
+    discard,
+    dismiss: vi.fn(async () => {
+      dismissedListeners.forEach((listener) => listener())
+      await discard()
+    }),
     close: vi.fn(async () => {
       events.push(`close:${id}`)
-      if (options.close) await options.close()
       triggerClosed()
     }),
     isVisible: () => visible,
+    onDismissed: (listener) => {
+      dismissedListeners.add(listener)
+      return () => dismissedListeners.delete(listener)
+    },
     onClosed: (listener) => {
       closedListeners.add(listener)
       return () => closedListeners.delete(listener)
     },
+    triggerDismissed: () => {
+      visible = false
+      dismissedListeners.forEach((listener) => listener())
+    },
     triggerClosed,
-    visible: () => visible
+    visible: () => visible,
+    boundsHistory
   }
 }
 
 function setup(
   overrides: Partial<Parameters<typeof createGameOcrController>[0]> = {},
-  windowOptions: { close?: () => Promise<void> } = {}
+  windowOptions: { discard?: () => Promise<void> } = {}
 ) {
   const events: string[] = []
-  const windows: Array<GameOcrWindow & { triggerClosed(): void; visible(): boolean }> = []
+  const windows: FakeWindow[] = []
   const captures = [capture(1), capture(2), capture(3)]
   const usedCaptures: DisplayCapture[] = []
   let shortcutCallback: (() => void) | undefined
@@ -172,6 +203,7 @@ function setup(
       return shortcutCallback
     },
     captureService,
+    createPresentation: base.createPresentation,
     ocr,
     recognitionRequests,
     settle: base.settle,
@@ -191,18 +223,23 @@ describe('createGameOcrController', () => {
     const secondCapture = fake.controller.capture()
     await secondCapture
 
+    // One window serves both frames: the second capture moves it onto the
+    // newly captured display instead of building a replacement.
     expect(fake.events).toEqual([
       'settle',
       'capture:1',
       'present:1',
       'recognize:1',
-      'close:1',
+      'discard:1',
       'settle',
       'capture:2',
-      'present:2',
+      'moveTo:1:200',
+      'present:1',
       'recognize:2'
     ])
-    expect(fake.windows[0].visible()).toBe(false)
+    expect(fake.windows).toHaveLength(1)
+    expect(fake.createPresentation).toHaveBeenCalledOnce()
+    expect(fake.windows[0].visible()).toBe(true)
     expect(fake.captures[0]).toBeDefined()
 
     const secondRequest = fake.recognitionRequests[1]
@@ -218,31 +255,30 @@ describe('createGameOcrController', () => {
     )
   })
 
-  it('publishes accepted regions to the frame that was captured for them', async () => {
+  it('publishes accepted regions only for the capture they belong to', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
     const firstRequest = fake.recognitionRequests[0]
     await fake.controller.capture()
     const secondRequest = fake.recognitionRequests[1]
+    const frame = fake.windows[0]
 
     firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
     await Promise.resolve()
-    expect(fake.windows[0].setRegions).not.toHaveBeenCalled()
-    expect(fake.windows[1].setRegions).not.toHaveBeenCalled()
+    expect(frame.setRegions).not.toHaveBeenCalled()
 
     const fresh = result(secondRequest.request.sessionId, secondRequest.request.captureId, 'new')
     secondRequest.deferred.resolve(fresh)
-    await vi.waitFor(() => expect(fake.windows[1].setRegions).toHaveBeenCalledOnce())
-    expect(fake.windows[1].setRegions).toHaveBeenCalledWith(fresh)
-    expect(fake.windows[0].setRegions).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(frame.setRegions).toHaveBeenCalledOnce())
+    expect(frame.setRegions).toHaveBeenCalledWith(fresh)
     // The sign only covers the recognition it belongs to.
-    expect(fake.windows[1].setRecognizing).toHaveBeenCalledWith(false)
+    expect(frame.setRecognizing).toHaveBeenCalledWith(false)
   })
 
   it('never captures while a prior presentation is still visible', async () => {
-    const closeGate = deferred<void>()
-    const fake = setup({}, { close: () => closeGate.promise })
+    const discardGate = deferred<void>()
+    const fake = setup({}, { discard: () => discardGate.promise })
     await expect(fake.controller.arm()).resolves.toBe(true)
     await fake.controller.capture()
 
@@ -251,14 +287,14 @@ describe('createGameOcrController', () => {
     expect(fake.captureService.capture).toHaveBeenCalledOnce()
     expect(fake.windows[0]?.visible()).toBe(true)
 
-    closeGate.resolve()
+    discardGate.resolve()
     await second
     expect(fake.captureService.capture).toHaveBeenCalledTimes(2)
-    expect(fake.windows[0]?.visible()).toBe(false)
+    expect(fake.windows[0]?.visible()).toBe(true)
   })
 
-  it('does not restore stale state when closing the old frame fails', async () => {
-    const fake = setup({}, { close: async () => Promise.reject(new Error('close failed')) })
+  it('does not restore stale state when discarding the old frame fails', async () => {
+    const fake = setup({}, { discard: async () => Promise.reject(new Error('discard failed')) })
     await fake.controller.arm()
     await fake.controller.capture()
     await fake.controller.capture()
@@ -329,7 +365,7 @@ describe('createGameOcrController', () => {
     expect(fake.onResult).not.toHaveBeenCalled()
   })
 
-  it('stays in error after a failed frame is closed, and re-arms the released shortcut', async () => {
+  it('stays in error after a failed frame is dismissed, and re-arms the released shortcut', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
@@ -339,9 +375,9 @@ describe('createGameOcrController', () => {
     await vi.waitFor(() => expect(fake.controller.getStatus()).toMatchObject({ state: 'error' }))
     expect(fake.shortcut.unregister).toHaveBeenCalledWith('Control+Shift+G')
 
-    // Closing the failed frame must not advertise an armed hotkey that the
+    // Dismissing the failed frame must not advertise an armed hotkey that the
     // failure already released.
-    fake.windows[0].triggerClosed()
+    fake.windows[0].triggerDismissed()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'error' })
 
     ;(fake.shortcut.register as ReturnType<typeof vi.fn>).mockClear()
@@ -365,18 +401,55 @@ describe('createGameOcrController', () => {
     expect(fake.captures.length).toBe(used)
   })
 
-  it('invalidates recognition when the user closes the frozen frame', async () => {
+  it('invalidates recognition when the user dismisses the frozen frame', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
     const request = fake.recognitionRequests[0]
 
-    fake.windows[0].triggerClosed()
+    fake.windows[0].triggerDismissed()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
     expect(fake.invalidateResults).toHaveBeenCalled()
 
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'closed'))
     await Promise.resolve()
     expect(fake.onResult).not.toHaveBeenCalled()
+  })
+
+  it('reuses the retained window across frames and rebuilds it after one is destroyed', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    await fake.controller.capture()
+
+    expect(fake.createPresentation).toHaveBeenCalledOnce()
+    // The second capture landed on another display, so the retained window
+    // followed it rather than staying on the first display's bounds.
+    expect(fake.windows[0].boundsHistory).toEqual([{ x: 200, y: 0, width: 640, height: 480 }])
+
+    // A display change or a dead renderer destroys the window; the next
+    // capture must build a replacement instead of reusing a dead one.
+    fake.windows[0].triggerClosed()
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
+
+    await fake.controller.capture()
+    expect(fake.createPresentation).toHaveBeenCalledTimes(2)
+    expect(fake.windows).toHaveLength(2)
+    expect(fake.windows[1].visible()).toBe(true)
+  })
+
+  it('destroys the retained window when Game OCR stops', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    await fake.controller.stop()
+    expect(fake.windows[0].close).toHaveBeenCalledOnce()
+    expect(fake.windows[0].visible()).toBe(false)
+
+    // A later run gets a fresh window rather than the closed one.
+    await fake.controller.arm()
+    await fake.controller.capture()
+    expect(fake.createPresentation).toHaveBeenCalledTimes(2)
   })
 })

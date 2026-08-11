@@ -119,11 +119,15 @@ to the player's React tree does not reach it. Anything renderer-facing has to be
 declared in `electron.vite.config.ts`'s renderer inputs to be built.
 
 `services/gameOcr/controller.ts` owns session identity and the
-invalidate → close → settle → capture → present → recognize order that keeps a
-recapture off Kizuna's own frozen screenshot. Work that must not survive a
-recapture belongs behind that session ID, not behind a renderer-side guard. See
-[Game OCR](game-ocr.md) for the user-visible behavior and the manual
-verification matrix.
+invalidate → discard → settle → capture → move → present → recognize order that
+keeps a recapture off Kizuna's own frozen screenshot. It retains one frozen-frame
+window for the whole armed run, so a frame ends by hiding rather than closing;
+`services/gameOcr/frozenFrameWindow.ts` separates that discard from the close
+that only stopping, a display change, or a dead renderer performs. Work that
+must not survive a recapture belongs behind the session ID, not behind a
+renderer-side guard, and anything a fresh renderer used to pick up at boot has
+to be refreshed per frame instead. See [Game OCR](game-ocr.md) for the
+user-visible behavior and the manual verification matrix.
 
 ### Update runtime binaries
 

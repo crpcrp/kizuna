@@ -64,16 +64,32 @@ own screenshot. The coordinator therefore always:
 
 1. invalidates the old session and drops its boxes, popups, selection,
    indicator, and screenshot references;
-2. closes the old frozen window and waits for confirmation that it is no longer
-   visible;
+2. drops the screenshot from the frozen window and hides it, then waits for
+   confirmation that it is no longer visible;
 3. allows one bounded compositor-settle step;
 4. captures the now-visible live game;
-5. presents the new screenshot immediately;
+5. moves the window onto the captured display and presents the new screenshot
+   immediately;
 6. accepts OCR, tokenization, lookup, and translation results only for the new
    session ID.
 
 If a recapture fails after the old frame is gone, the live game stays visible.
 The stale screenshot is never restored.
+
+### One retained window
+
+Every capture in an armed run is served by the same frozen-frame window. A
+frame ends by dropping its screenshot and boxes and hiding, not by destroying
+the window, so only the first capture of a run pays for a renderer boot — every
+later frame appears as soon as the screenshot is taken. The window is destroyed
+only when Game OCR stops, when a display change invalidates its placement, or
+when its renderer becomes unusable; the next capture then builds a replacement.
+
+Because the renderer outlives each frame, it re-reads the player's popup,
+theme, and translation preferences for every screenshot, and clears any leftover
+text selection at each frame boundary. The dictionary and knowledge caches it
+built are deliberately kept: they are what makes a second frame's lookups
+faster than the first's.
 
 ### Tray
 

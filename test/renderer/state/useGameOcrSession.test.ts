@@ -147,6 +147,30 @@ describe('useGameOcrSession', () => {
     expect(hook.result.current.regions).toEqual([])
   })
 
+  it('clears a leftover selection at every frame boundary', async () => {
+    const { hook, pushes } = setup()
+    const removeAllRanges = vi.fn()
+    const getSelection = vi
+      .spyOn(document, 'getSelection')
+      .mockReturnValue({ removeAllRanges } as unknown as Selection)
+
+    // The renderer survives every frame now, so a range left inside the boxes
+    // of one screenshot must not reach the clipboard or translator of the next.
+    act(() => pushes.presentation?.(presentation('frame-one')))
+    expect(removeAllRanges).toHaveBeenCalledTimes(1)
+
+    act(() => pushes.presentation?.(presentation('frame-two')))
+    expect(removeAllRanges).toHaveBeenCalledTimes(2)
+
+    act(() => pushes.discard?.())
+    expect(removeAllRanges).toHaveBeenCalledTimes(3)
+
+    act(() => hook.result.current.close())
+    expect(removeAllRanges).toHaveBeenCalledTimes(4)
+
+    getSelection.mockRestore()
+  })
+
   it('keeps the OCR text usable when tokenization fails', async () => {
     const { hook, pushes, bridge } = setup()
     bridge.mecab.tokenizeBatch.mockRejectedValueOnce(new Error('mecab is unavailable'))

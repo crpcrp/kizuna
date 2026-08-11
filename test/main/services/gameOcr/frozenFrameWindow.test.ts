@@ -12,7 +12,7 @@ type Listener = (...args: unknown[]) => void
 
 function fakeWindow(): {
   window: GameOcrNativeWindow
-  fireWindow(event: 'closed'): void
+  fireWindow(event: 'closed' | 'hide'): void
   fireRenderer(
     event: 'did-finish-load' | 'render-process-gone' | 'did-fail-load',
     ...args: unknown[]
@@ -40,7 +40,10 @@ function fakeWindow(): {
     hide: vi.fn(),
     focus: vi.fn(),
     close: vi.fn(),
-    on: vi.fn((event: 'closed', listener: () => void) => on(windowListeners, event, listener)),
+    setBounds: vi.fn(),
+    on: vi.fn((event: 'closed' | 'hide', listener: () => void) =>
+      on(windowListeners, event, listener)
+    ),
     webContents: {
       isDestroyed: () => destroyed,
       send: vi.fn(),
@@ -58,11 +61,16 @@ function fakeWindow(): {
     window,
     fireWindow: (event) => {
       visible = false
-      destroyed = true
+      if (event === 'closed') destroyed = true
       fire(windowListeners, event)
     },
     fireRenderer: (event, ...args) => fire(rendererListeners, event, ...args)
   }
+}
+
+function windowListenerCount(window: GameOcrNativeWindow, event: 'closed' | 'hide'): number {
+  const on = window.on as unknown as ReturnType<typeof vi.fn>
+  return on.mock.calls.filter((call) => call[0] === event).length
 }
 
 const presentation: GameOcrPresentation = {
@@ -190,11 +198,113 @@ describe('createGameOcrWindowController', () => {
     const first = controller.close()
     const second = controller.close()
     expect(fake.window.close).toHaveBeenCalledOnce()
-    expect((fake.window.on as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2)
+    expect(windowListenerCount(fake.window, 'closed')).toBe(2)
 
     fake.fireWindow('closed')
     await Promise.all([first, second])
     expect(controller.isVisible()).toBe(false)
+  })
+
+  it('keeps the window and its renderer alive across a discard', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const onClosed = vi.fn()
+    controller.onClosed(onClosed)
+    await controller.present(presentation)
+
+    const discarding = controller.discard()
+    expect(fake.window.webContents.send).toHaveBeenLastCalledWith(GAME_OCR_CHANNELS.discard)
+    expect(fake.window.hide).toHaveBeenCalledOnce()
+    expect(fake.window.close).not.toHaveBeenCalled()
+
+    let settled = false
+    void discarding.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+
+    fake.fireWindow('hide')
+    await discarding
+    expect(controller.isVisible()).toBe(false)
+    expect(onClosed).not.toHaveBeenCalled()
+
+    // The retained renderer is still ready, so the next frame needs no
+    // handshake: presenting resolves without a `did-finish-load` round trip.
+    const next = { ...presentation, imageBase64: 'bmV4dA==' }
+    await controller.present(next)
+    expect(fake.window.webContents.send).toHaveBeenLastCalledWith(GAME_OCR_CHANNELS.present, next)
+    expect(controller.isVisible()).toBe(true)
+  })
+
+  it('serves many discards from one native hide listener', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+
+    for (let frame = 0; frame < 5; frame++) {
+      await controller.present(presentation)
+      const discarding = controller.discard()
+      fake.fireWindow('hide')
+      await discarding
+    }
+
+    expect(windowListenerCount(fake.window, 'hide')).toBe(1)
+  })
+
+  it('moves the retained window onto the next captured display only when it changes', () => {
+    const fake = fakeWindow()
+    const constructed = { x: 0, y: 0, width: 2560, height: 1440 }
+    const controller = createGameOcrWindowController({
+      window: fake.window,
+      loaded: true,
+      displayBounds: constructed
+    })
+
+    // Recapturing on the display the window was built for moves nothing.
+    controller.moveTo(constructed)
+    expect(fake.window.setBounds).not.toHaveBeenCalled()
+
+    const secondary = { x: -1920, y: 40, width: 1920, height: 1080 }
+    controller.moveTo(secondary)
+    controller.moveTo(secondary)
+    expect(fake.window.setBounds).toHaveBeenCalledOnce()
+    expect(fake.window.setBounds).toHaveBeenCalledWith(secondary)
+
+    controller.moveTo(constructed)
+    expect(fake.window.setBounds).toHaveBeenCalledTimes(2)
+  })
+
+  it('notifies dismissal listeners when the renderer asks for the live game back', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const onDismissed = vi.fn()
+    const onClosed = vi.fn()
+    controller.onDismissed(onDismissed)
+    controller.onClosed(onClosed)
+    await controller.present(presentation)
+
+    const dismissing = controller.dismiss()
+    expect(onDismissed).toHaveBeenCalledOnce()
+    fake.fireWindow('hide')
+    await dismissing
+
+    expect(onClosed).not.toHaveBeenCalled()
+    expect(fake.window.close).not.toHaveBeenCalled()
+    // A coordinator-driven discard is not a dismissal.
+    const discarding = controller.discard()
+    fake.fireWindow('hide')
+    await discarding
+    expect(onDismissed).toHaveBeenCalledOnce()
+  })
+
+  it('releases a pending discard when the window is destroyed instead', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await controller.present(presentation)
+
+    const discarding = controller.discard()
+    fake.fireWindow('closed')
+    await expect(discarding).resolves.toBeUndefined()
   })
 
   it('closes and notifies listeners without retaining the old presentation', async () => {
@@ -216,24 +326,32 @@ describe('createGameOcrWindowController', () => {
     await expect(controller.present(presentation)).resolves.toBeUndefined()
   })
 
-  it('hides after renderer loss and can load a later renderer again', async () => {
+  it('tears the window down when its renderer becomes unusable', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const onClosed = vi.fn()
+    controller.onClosed(onClosed)
     await controller.present(presentation)
 
+    // A retained window whose renderer is gone can never complete another
+    // readiness handshake, so it is closed for the coordinator to rebuild.
     fake.fireRenderer('render-process-gone')
-    expect(fake.window.hide).toHaveBeenCalledOnce()
+    expect(fake.window.close).toHaveBeenCalledOnce()
 
-    const nextPresentation = { ...presentation, recognizing: false }
-    const presenting = controller.present(nextPresentation)
-    fake.fireRenderer('did-finish-load')
-    controller.rendererReady()
-    await presenting
+    fake.fireWindow('closed')
+    expect(onClosed).toHaveBeenCalledOnce()
+    expect(controller.isVisible()).toBe(false)
+  })
 
-    expect(fake.window.webContents.send).toHaveBeenLastCalledWith(
-      GAME_OCR_CHANNELS.present,
-      nextPresentation
-    )
+  it('tears the window down when its renderer fails to load', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window })
+
+    const presenting = controller.present(presentation)
+    fake.fireRenderer('did-fail-load', -6, 'ERR_FILE_NOT_FOUND')
+
+    await expect(presenting).rejects.toThrow('ERR_FILE_NOT_FOUND')
+    expect(fake.window.close).toHaveBeenCalledOnce()
   })
 
   it('rejects malformed presentation data before it reaches the renderer', async () => {
@@ -259,15 +377,17 @@ describe('createGameOcrWindowController', () => {
       removeListener: vi.fn()
     }
     const rendererReady = vi.fn()
-    const close = vi.fn(async () => {})
-    const remove = registerGameOcrIpc(ipc, fake.window, { rendererReady, close })
+    // The renderer's close request dismisses the frame; it never destroys the
+    // window the next capture is going to reuse.
+    const dismiss = vi.fn(async () => {})
+    const remove = registerGameOcrIpc(ipc, fake.window, { rendererReady, dismiss })
 
     listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: {} })
     expect(rendererReady).not.toHaveBeenCalled()
     listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: fake.window.webContents })
     listeners.get(GAME_OCR_CHANNELS.close)!({ sender: fake.window.webContents })
     expect(rendererReady).toHaveBeenCalledOnce()
-    expect(close).toHaveBeenCalledOnce()
+    expect(dismiss).toHaveBeenCalledOnce()
 
     remove()
     expect(ipc.removeListener).toHaveBeenCalledTimes(2)

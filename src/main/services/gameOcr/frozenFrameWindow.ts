@@ -62,9 +62,10 @@ export interface GameOcrNativeWindow extends SendTarget {
   focus(): void
   close(): void
   isVisible(): boolean
+  setBounds(bounds: OcrDisplayBounds): void
   loadURL(url: string): Promise<unknown> | unknown
   loadFile(path: string): Promise<unknown> | unknown
-  on(event: 'closed', listener: () => void): unknown
+  on(event: 'closed' | 'hide', listener: () => void): unknown
   webContents: SendTarget['webContents'] &
     NavigationGuardTarget &
     InputGuardTarget & {
@@ -90,9 +91,25 @@ export interface GameOcrWindow {
   setRegions(result: OcrResult): void
   /** Marks the dedicated renderer ready to receive presentation pushes. */
   rendererReady(): void
+  /**
+   * Places the retained window on the display the next frame was captured
+   * from. Only meaningful while hidden; the coordinator calls it between a
+   * discard and the following present.
+   */
+  moveTo(displayBounds: OcrDisplayBounds): void
+  /**
+   * Drops the screenshot and boxes, hides the window, and resolves once it is
+   * no longer visible. The renderer survives, so the next frame skips the
+   * whole load-and-handshake cost.
+   */
+  discard(): Promise<void>
+  /** The renderer asked for the live game back: discards, then notifies. */
+  dismiss(): Promise<void>
   /** Clears state, closes the native window, and resolves after it is closed. */
   close(): Promise<void>
   isVisible(): boolean
+  /** Subscribes to renderer-requested dismissals of the current frame. */
+  onDismissed(listener: () => void): () => void
   /** Subscribes to native close/crash cleanup notifications. */
   onClosed(listener: () => void): () => void
 }
@@ -115,6 +132,9 @@ export interface GameOcrDisplayEvents {
 export interface GameOcrWindowControllerOptions {
   window: GameOcrNativeWindow
   loaded?: boolean
+  /** The bounds the native window was constructed with, so the first capture
+   * on that same display does not move a window that is already there. */
+  displayBounds?: OcrDisplayBounds
 }
 
 /**
@@ -124,7 +144,8 @@ export interface GameOcrWindowControllerOptions {
  */
 export function createGameOcrWindowController({
   window,
-  loaded = false
+  loaded = false,
+  displayBounds
 }: GameOcrWindowControllerOptions): GameOcrWindow {
   let rendererLoaded = loaded
   let rendererIsReady = loaded
@@ -133,7 +154,10 @@ export function createGameOcrWindowController({
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
   let closePromise: Promise<void> | undefined
+  let bounds: OcrDisplayBounds | undefined = displayBounds ? { ...displayBounds } : undefined
   const closeListeners = new Set<() => void>()
+  const dismissListeners = new Set<() => void>()
+  const hideWaiters = new Set<() => void>()
 
   /**
    * Only `present` awaits readiness. A load that fails while no presentation is
@@ -157,6 +181,12 @@ export function createGameOcrWindowController({
     ready = createReadyPromise()
   }
 
+  const releaseHideWaiters = (): void => {
+    const waiters = [...hideWaiters]
+    hideWaiters.clear()
+    for (const waiter of waiters) waiter()
+  }
+
   const notifyClosed = (): void => {
     if (closed) return
     closed = true
@@ -169,6 +199,9 @@ export function createGameOcrWindowController({
     }
     readyReject = undefined
     readyResolve = undefined
+    // A destroyed window never emits `hide`, so anything waiting on one must
+    // be released here or a pending discard would hang the capture queue.
+    releaseHideWaiters()
     for (const listener of closeListeners) listener()
   }
 
@@ -184,6 +217,18 @@ export function createGameOcrWindowController({
     sendToWindow(window, GAME_OCR_CHANNELS.present, next)
     if (!window.isVisible()) window.show()
     window.focus()
+  }
+
+  // One `hide` listener for the window's whole life, however many discards it
+  // serves. The window is reused across frames, so registering per call would
+  // grow a listener list for as long as Game OCR stays armed.
+  const waitUntilHidden = (): Promise<void> => {
+    if (closed || window.isDestroyed() || !window.isVisible()) return Promise.resolve()
+    return new Promise<void>((resolve) => {
+      hideWaiters.add(resolve)
+      window.hide()
+      if (!window.isVisible() && hideWaiters.delete(resolve)) resolve()
+    })
   }
 
   // Both the renderer's close request and a display change can ask for the
@@ -207,21 +252,26 @@ export function createGameOcrWindowController({
   }
 
   window.on('closed', notifyClosed)
+  window.on('hide', releaseHideWaiters)
   window.webContents.on('did-finish-load', () => {
     rendererLoaded = true
   })
+  // A window whose renderer is unusable cannot serve the next frame either.
+  // Tearing it down hands the coordinator a clean rebuild instead of a
+  // retained window whose readiness handshake would never complete again.
   window.webContents.on('did-fail-load', (...args) => {
     const reason = typeof args[1] === 'string' ? args[1] : 'renderer load failed'
     readyReject?.(new Error(`Game OCR renderer failed to load: ${reason}`))
     readyReject = undefined
     readyResolve = undefined
+    void waitUntilClosed()
   })
   window.webContents.on('render-process-gone', () => {
     rendererLoaded = false
     rendererIsReady = false
     pending = undefined
     resetReadyPromise()
-    if (!closed && window.isVisible()) window.hide()
+    void waitUntilClosed()
   })
 
   return {
@@ -256,6 +306,29 @@ export function createGameOcrWindowController({
       showPending()
     },
 
+    moveTo(displayBounds): void {
+      if (closed || window.isDestroyed()) return
+      if (bounds && sameBounds(bounds, displayBounds)) return
+      bounds = { ...displayBounds }
+      window.setBounds(bounds)
+    },
+
+    async discard(): Promise<void> {
+      pending = undefined
+      sendDiscard()
+      await waitUntilHidden()
+    },
+
+    async dismiss(): Promise<void> {
+      pending = undefined
+      sendDiscard()
+      // Listeners learn the frame is gone before the hide settles: the
+      // coordinator has to invalidate the session's results either way, and
+      // the user already sees the live game.
+      for (const listener of [...dismissListeners]) listener()
+      await waitUntilHidden()
+    },
+
     async close(): Promise<void> {
       pending = undefined
       sendDiscard()
@@ -266,11 +339,25 @@ export function createGameOcrWindowController({
       return !closed && !window.isDestroyed() && window.isVisible()
     },
 
+    onDismissed(listener): () => void {
+      dismissListeners.add(listener)
+      return () => dismissListeners.delete(listener)
+    },
+
     onClosed(listener): () => void {
       closeListeners.add(listener)
       return () => closeListeners.delete(listener)
     }
   }
+}
+
+function sameBounds(left: OcrDisplayBounds, right: OcrDisplayBounds): boolean {
+  return (
+    left.x === right.x &&
+    left.y === right.y &&
+    left.width === right.width &&
+    left.height === right.height
+  )
 }
 
 export interface CreateGameOcrWindowOptions extends GameOcrWindowConstructionOptions {
@@ -320,7 +407,10 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
     void window.loadFile(options.packagedHtmlPath)
   }
 
-  const controller = createGameOcrWindowController({ window })
+  const controller = createGameOcrWindowController({
+    window,
+    displayBounds: options.displayBounds
+  })
   const ipc = options.ipcMain ?? electron?.ipcMain
   if (ipc) {
     const removeIpcHandlers = registerGameOcrIpc(ipc, window, controller)
@@ -345,13 +435,15 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
 export function registerGameOcrIpc(
   ipc: GameOcrIpcMain,
   window: GameOcrNativeWindow,
-  controller: Pick<GameOcrWindow, 'rendererReady' | 'close'>
+  controller: Pick<GameOcrWindow, 'rendererReady' | 'dismiss'>
 ): () => void {
   const onRendererReady = (event: { sender: unknown }): void => {
     if (event.sender === window.webContents) controller.rendererReady()
   }
   const onClose = (event: { sender: unknown }): void => {
-    if (event.sender === window.webContents) void controller.close()
+    // The renderer returns the user to the live game; it does not tear the
+    // retained window down. Stopping Game OCR is what closes it for good.
+    if (event.sender === window.webContents) void controller.dismiss()
   }
   ipc.on(GAME_OCR_CHANNELS.rendererReady, onRendererReady)
   ipc.on(GAME_OCR_CHANNELS.close, onClose)
@@ -369,8 +461,12 @@ function unsupportedWindow(): GameOcrWindow {
     setRecognizing: () => {},
     setRegions: () => {},
     rendererReady: () => {},
+    moveTo: () => {},
+    discard: async () => {},
+    dismiss: async () => {},
     close: async () => {},
     isVisible: () => false,
+    onDismissed: () => () => {},
     onClosed: () => () => {}
   }
 }

@@ -74,6 +74,10 @@ export function useGameOcrSession({
     setResult(undefined)
     setText(undefined)
     invalidatePipeline()
+    // The boxes a selection lived in are about to unmount, and the renderer
+    // survives to serve the next frame. Leaving the range behind would let a
+    // stale selection reach the clipboard or the translator.
+    document.getSelection()?.removeAllRanges()
   }, [invalidatePipeline])
 
   useEffect(() => {
