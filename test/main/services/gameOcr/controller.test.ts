@@ -263,6 +263,31 @@ describe('createGameOcrController', () => {
     expect(fake.shortcutCallback).toBeUndefined()
   })
 
+  it('keeps the old shortcut registered when a rebind conflicts', async () => {
+    const register = vi.fn((accelerator: string, callback: () => void) => {
+      if (accelerator === 'Alt+O') return false
+      fakeCallback = callback
+      return true
+    })
+    let fakeCallback: (() => void) | undefined
+    const fake = setup({
+      shortcut: { register, unregister: vi.fn() }
+    })
+
+    await expect(fake.controller.arm()).resolves.toBe(true)
+    await expect(fake.controller.setAccelerator('Alt+O')).resolves.toBe(false)
+
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
+    expect(register).toHaveBeenNthCalledWith(1, 'Control+Shift+G', expect.any(Function))
+    expect(register).toHaveBeenNthCalledWith(2, 'Alt+O', expect.any(Function))
+    expect(fake.shortcut.unregister).not.toHaveBeenCalled()
+    expect(fake.onError).toHaveBeenCalledWith(
+      'The Game OCR shortcut is already in use: Alt+O',
+      expect.any(Error)
+    )
+    expect(fakeCallback).toBeDefined()
+  })
+
   it('stops every active boundary, disposes the capture, and ignores late OCR', async () => {
     const fake = setup()
     await fake.controller.arm()

@@ -18,6 +18,11 @@ export interface MenuBarProps {
   onOpenOptions: () => void
   onOpenAbout?: () => void
   onOpenChange?: (open: boolean) => void
+  gameOcr?: {
+    label: string
+    disabled?: boolean
+    onClick: () => void
+  }
 }
 
 export function isAnyMenuOpen(openMenu: string | null): boolean {
@@ -33,7 +38,8 @@ export default function MenuBar({
   vocabulary,
   onOpenOptions,
   onOpenAbout = () => {},
-  onOpenChange
+  onOpenChange,
+  gameOcr
 }: MenuBarProps): React.JSX.Element {
   const [openMenu, setOpenMenu] = useState<string | null>(null)
 
@@ -103,6 +109,15 @@ export default function MenuBar({
         open={openMenu === 'settings'}
         onToggle={() => toggle('settings')}
       >
+        {gameOcr && (
+          <CommandItem
+            label={gameOcr.label}
+            ariaLabel={gameOcr.label}
+            id="game-ocr-command"
+            disabled={gameOcr.disabled}
+            onClick={run(gameOcr.onClick)}
+          />
+        )}
         <CommandItem
           label="Options…"
           ariaLabel="Options"

@@ -146,7 +146,7 @@ describe('OptionsMenu experimental translation', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
     const checkbox = screen.getByRole('checkbox', {
-      name: 'Enable experimental subtitle translation'
+      name: 'Enable experimental translation for subtitles and OCR'
     })
     expect((checkbox as HTMLInputElement).checked).toBe(false)
     expect(screen.getByText(/Google's unofficial online endpoint/)).not.toBeNull()
@@ -159,7 +159,9 @@ describe('OptionsMenu experimental translation', () => {
     renderMenu(true, onChangeTranslationEnabled)
     fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
     fireEvent.click(
-      screen.getByRole('checkbox', { name: 'Enable experimental subtitle translation' })
+      screen.getByRole('checkbox', {
+        name: 'Enable experimental translation for subtitles and OCR'
+      })
     )
     expect(onChangeTranslationEnabled).toHaveBeenLastCalledWith(false)
     expect(screen.getByText(/Google's unofficial online endpoint/)).not.toBeNull()

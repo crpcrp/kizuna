@@ -58,6 +58,8 @@ import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
 import type { GameOcrPresentation } from '../shared/gameOcr'
+import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
+import type { GameOcrSettings } from '../shared/gameOcrSettings'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -161,6 +163,16 @@ const api = {
   },
 
   gameOcr: {
+    supported: process.platform === 'win32',
+    getSettings: (): Promise<GameOcrSettings> => ipcRenderer.invoke(GAME_OCR_CHANNELS.getSettings),
+    setSettings: (patch: Partial<GameOcrSettings>): Promise<GameOcrSettings> =>
+      ipcRenderer.invoke(GAME_OCR_CHANNELS.setSettings, patch),
+    getStatus: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.getStatus),
+    start: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.start),
+    stop: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.stop),
+    retry: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.retry),
+    onStatusChange: (cb: (status: GameOcrRuntimeStatus) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.statusChanged, cb),
     onPresentation: (cb: (value: GameOcrPresentation) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.present, cb),
     onDiscard: (cb: () => void): (() => void) => subscribe(GAME_OCR_CHANNELS.discard, cb),

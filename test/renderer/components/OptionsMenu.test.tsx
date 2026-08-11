@@ -41,13 +41,14 @@ const NO_YOMITAN_DICTS: DictInfo[] = []
 
 type MenuOverrides = Omit<
   Partial<OptionsMenuProps>,
-  'keybindings' | 'playback' | 'appearance' | 'subtitles' | 'dictionaries'
+  'keybindings' | 'playback' | 'appearance' | 'subtitles' | 'dictionaries' | 'gameOcr'
 > & {
   keybindings?: Partial<OptionsMenuProps['keybindings']>
   playback?: Partial<OptionsMenuProps['playback']>
   appearance?: Partial<OptionsMenuProps['appearance']>
   subtitles?: Partial<OptionsMenuProps['subtitles']>
   dictionaries?: Partial<OptionsMenuProps['dictionaries']>
+  gameOcr?: Partial<OptionsMenuProps['gameOcr']>
 }
 
 function renderMenu(overrides: MenuOverrides = {}): string {
@@ -66,6 +67,7 @@ function renderMenu(overrides: MenuOverrides = {}): string {
         yomitanDicts: NO_YOMITAN_DICTS,
         ...overrides.dictionaries
       }}
+      gameOcr={{ ...base.gameOcr, ...overrides.gameOcr }}
     />
   )
 }
@@ -149,6 +151,7 @@ describe('OptionsMenu markup', () => {
     expect(html).toContain('>Playback<')
     expect(html).toContain('>Appearance<')
     expect(html).toContain('>Subtitles<')
+    expect(html).not.toContain('>Game OCR<')
     expect(html).toContain('>Parser &amp; Dictionaries<')
     expect(html).toContain('>Anki<')
     expect(html).toContain('>Known words<')

@@ -47,6 +47,7 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
+import { useGameOcr } from './state/useGameOcr'
 import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
@@ -141,6 +142,7 @@ export default function App({
     settingsPersistenceRef,
     reportError: mediaSession.banner.reportError
   })
+  const gameOcr = useGameOcr(kizuna, mediaSession.banner.reportError)
   const about = useAboutDialog({
     bridge: kizuna,
     reportError: mediaSession.banner.reportError
@@ -349,7 +351,9 @@ export default function App({
     updates: {
       settings: updates.settings,
       onChangeCheckAutomatically: updates.setCheckAutomatically
-    }
+    },
+    supportsGameOcr: gameOcr.supported,
+    gameOcr: gameOcr.options
   })
 
   return (
@@ -399,6 +403,7 @@ export default function App({
             onOpenOptions={options.openDialog}
             onOpenAbout={about.openDialog}
             onOpenChange={setMenuBarOpen}
+            gameOcr={gameOcr.menu}
           />
         )}
       </div>

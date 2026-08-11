@@ -180,7 +180,7 @@ describe('App settings hydration', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Options' }))
     fireEvent.click(screen.getByRole('tab', { name: 'Subtitles' }))
     const checkbox = screen.getByRole('checkbox', {
-      name: 'Enable experimental subtitle translation'
+      name: 'Enable experimental translation for subtitles and OCR'
     }) as HTMLInputElement
     expect(checkbox.checked).toBe(false)
 
@@ -197,7 +197,7 @@ describe('App settings hydration', () => {
     expect(
       (
         screen.getByRole('checkbox', {
-          name: 'Enable experimental subtitle translation'
+          name: 'Enable experimental translation for subtitles and OCR'
         }) as HTMLInputElement
       ).checked
     ).toBe(true)

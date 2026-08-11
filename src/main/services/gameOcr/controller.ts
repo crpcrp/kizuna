@@ -58,6 +58,8 @@ export interface GameOcrController {
   getStatus(): GameOcrStatus
   subscribe(listener: (status: GameOcrStatus) => void): () => void
   arm(): Promise<boolean>
+  /** Changes the global shortcut, retaining the old registration on conflict. */
+  setAccelerator(accelerator: string): Promise<boolean>
   /** Handles one configured global-shortcut press. Useful for tests and IPC. */
   capture(): Promise<void>
   stop(): Promise<void>
@@ -84,6 +86,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let presentationClose: Promise<void> | undefined
   let presentationCloseTarget: GameOcrWindow | undefined
   const intentionalClosures = new WeakSet<GameOcrWindow>()
+  let accelerator = options.accelerator
   let shortcutRegistered = false
   let lifecycle = 0
   let nextSessionId = 0
@@ -300,7 +303,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const registerShortcut = (): boolean => {
     if (shortcutRegistered) return true
-    const registered = options.shortcut.register(options.accelerator, () => {
+    const registered = options.shortcut.register(accelerator, () => {
       void requestCapture()
     })
     if (!registered) return false
@@ -312,7 +315,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     if (!shortcutRegistered) return
     shortcutRegistered = false
     try {
-      options.shortcut.unregister(options.accelerator)
+      options.shortcut.unregister(accelerator)
     } catch (error) {
       reportError('Game OCR shortcut cleanup failed.', error)
     }
@@ -337,7 +340,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         await options.ocr.start?.()
         if (armLifecycle !== lifecycle || stopping) return false
         if (!registerShortcut()) {
-          throw new Error(`The Game OCR shortcut is already in use: ${options.accelerator}`)
+          throw new Error(`The Game OCR shortcut is already in use: ${accelerator}`)
         }
         notify({ state: 'armed', sessionId: status.sessionId })
         return true
@@ -359,6 +362,37 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     return tracked
   }
 
+  const setAccelerator = async (next: string): Promise<boolean> => {
+    if (next === accelerator) return true
+    if (!shortcutRegistered) {
+      accelerator = next
+      return true
+    }
+
+    // Register the replacement first. If Electron reports a conflict, the
+    // existing shortcut remains active and the caller can keep persisted
+    // settings aligned with that usable state.
+    const registered = options.shortcut.register(next, () => {
+      void requestCapture()
+    })
+    if (!registered) {
+      reportError(
+        `The Game OCR shortcut is already in use: ${next}`,
+        new Error('Shortcut conflict.')
+      )
+      return false
+    }
+
+    const previous = accelerator
+    accelerator = next
+    try {
+      options.shortcut.unregister(previous)
+    } catch (error) {
+      reportError('Game OCR shortcut cleanup failed.', error)
+    }
+    return true
+  }
+
   const stop = async (): Promise<void> => {
     stopping = true
     lifecycle++
@@ -377,6 +411,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       return () => listeners.delete(listener)
     },
     arm,
+    setAccelerator,
     capture: requestCapture,
     stop,
     shutdown: stop

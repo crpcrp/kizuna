@@ -24,6 +24,11 @@ import {
 } from '../../shared/mediaHistory'
 import { DEFAULT_KNOWLEDGE_TUNING, type KnowledgeTuning } from '../../shared/knowledge'
 import type { UpdateSettings } from '../../shared/update'
+import {
+  DEFAULT_GAME_OCR_SETTINGS,
+  normalizeGameOcrShortcut,
+  type GameOcrSettings
+} from '../../shared/gameOcrSettings'
 
 export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
@@ -36,6 +41,7 @@ export interface Settings {
   knowledge: KnowledgeSettings
   updates: UpdateSettings
   player: PlayerSettings
+  gameOcr: GameOcrSettings
   mediaHistory: MediaHistory
 }
 
@@ -55,6 +61,7 @@ export const defaultSettings: Settings = {
   knowledge: defaultKnowledgeSettings,
   updates: defaultUpdateSettings,
   player: DEFAULT_PLAYER_SETTINGS,
+  gameOcr: DEFAULT_GAME_OCR_SETTINGS,
   mediaHistory: normalizeMediaHistory(undefined)
 }
 
@@ -87,7 +94,15 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     knowledge: mergeKnowledgeSettings(obj.knowledge),
     updates: mergeUpdateSettings(obj.updates),
     player: mergePlayerSettings(obj.player),
+    gameOcr: mergeGameOcrSettings(obj.gameOcr),
     mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
+  }
+}
+
+function mergeGameOcrSettings(raw: unknown): GameOcrSettings {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    captureShortcut: normalizeGameOcrShortcut(obj.captureShortcut)
   }
 }
 

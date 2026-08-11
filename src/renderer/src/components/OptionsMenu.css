@@ -348,6 +348,20 @@
   color: var(--text-muted);
   background: var(--control-bg);
 }
+.state-badge.error {
+  color: var(--danger-text);
+  background: var(--danger-bg);
+}
+.options-status-actions {
+  padding-top: 4px;
+  padding-bottom: 10px;
+}
+.options-status-actions .options-error {
+  margin-top: 0;
+}
+.options-actions-row {
+  justify-content: flex-start;
+}
 
 /* Status dot in front of a setup row's name — the at-a-glance signal; the
    badge next to it carries the same state in words for screen readers. */
