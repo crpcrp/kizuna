@@ -53,8 +53,8 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The mirror carries the LFS payloads; this repository has none, and
-          # checking out with LFS enabled would only waste a request.
+          # This repository has no LFS objects, and since the mirror is fetched
+          # as a release asset rather than cloned, nothing here touches Git LFS.
           lfs: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -102,22 +102,21 @@ jobs:
           key: ${{ steps.node_modules.outputs.cache-primary-key }}
 
       # Keyed on the leg and the lock file, so a mirror bump is a cache miss and
-      # nothing else is, and a checkout produced on one host is never reused on
+      # nothing else is, and an archive unpacked for one host is never reused on
       # the other. On a hit, `npm run resources` re-verifies every hash locally
-      # and the git steps become no-ops — Git LFS bandwidth is only spent when
-      # resources.lock.json actually changes. The mirror is public, so this
+      # and the download is skipped entirely. The mirror is public, so this
       # needs no credential and works the same on a fork.
       #
-      # The `v3` prefix invalidates caches saved before the key became
-      # leg-specific; the `v2` generation before it invalidated checkouts made
-      # before the fetch pinned core.autocrlf=false, whose text files had been
-      # rewritten to CRLF. Bump it again if the fetch ever changes how the
-      # working tree is produced.
+      # The `v4` generation is the first that holds an unpacked release asset
+      # rather than a git checkout; `v3` made the key leg-specific, and `v2`
+      # invalidated checkouts made before the fetch pinned core.autocrlf=false,
+      # whose text files had been rewritten to CRLF. Bump it again if the fetch
+      # ever changes how the directory is produced.
       - name: Restore pinned binary mirror
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .vendor-cache
-          key: vendor-v3-${{ matrix.id }}-${{ hashFiles('resources.lock.json') }}
+          key: vendor-v4-${{ matrix.id }}-${{ hashFiles('resources.lock.json') }}
 
       # Selects this host's payload from resources.lock.json, verifies every
       # staged file by SHA-256, and fails closed on a foreign-platform file.

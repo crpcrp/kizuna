@@ -16,7 +16,8 @@ import {
   stagedResourceProblems,
   verificationError,
   verifyVendorFiles,
-  vendorFetchSteps
+  vendorArchiveUrl,
+  vendorFetchPlan
 } from '@scripts/vendorResources.mjs'
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
@@ -39,12 +40,20 @@ const MIRROR_FILES: Record<string, string> = {
   'linux-x64/mecab/lib/libmecab.so.2': 'linux-library'
 }
 
-const source = {
+const RELEASE = 'payloads-' + COMMIT.slice(0, 12)
+
+const sourceFor = (platformKey: string) => ({
   repo: 'crpcrp/kizuna-vendor',
   commit: COMMIT,
   manifest: 'manifest.json',
-  checksums: 'SHA256SUMS.txt'
-}
+  checksums: 'SHA256SUMS.txt',
+  archive: {
+    release: RELEASE,
+    asset: 'kizuna-vendor-' + platformKey + '.tar.gz',
+    sha256: sha256(platformKey),
+    size: 1024
+  }
+})
 
 const linuxDestination = (from: string): string => {
   const relative = from.slice('linux-x64/'.length)
@@ -68,7 +77,7 @@ const LOCK = {
     'win32-x64': {
       platform: 'win32',
       architecture: 'x64',
-      source,
+      source: sourceFor('win32-x64'),
       requiredPaths: ['mpv/mpv.exe', 'mecab/mecab.exe', 'mecab/mecabrc', 'mecab/ipadic/sys.dic'],
       requiredExecutables: ['mpv/mpv.exe', 'mecab/mecab.exe'],
       files: [
@@ -82,7 +91,7 @@ const LOCK = {
     'linux-x64': {
       platform: 'linux',
       architecture: 'x64',
-      source,
+      source: sourceFor('linux-x64'),
       requiredPaths: [
         'mpv/mpv',
         'ffmpeg/ffmpeg',
@@ -121,7 +130,7 @@ type MutableLock = {
   platforms: Record<
     string,
     {
-      source: { commit: string }
+      source: { commit: string; archive: { release: string; asset: string; sha256: string } }
       files: { from: string; to: string; sha256: string; executable: boolean }[]
     }
   >
@@ -213,6 +222,30 @@ describe('platform selection and lock validation', () => {
     const mismatched = mutableLock()
     mismatched.platforms['linux-x64'].source.commit = 'b'.repeat(40)
     expect(lockProblems(mismatched).join('\n')).toContain('same immutable vendor commit')
+
+    const splitRelease = mutableLock()
+    splitRelease.platforms['linux-x64'].source.archive.release = 'payloads-elsewhere'
+    expect(lockProblems(splitRelease).join('\n')).toContain('same vendor release')
+  })
+
+  it('rejects an archive that could point the download somewhere else', () => {
+    const traversal = mutableLock()
+    traversal.platforms['win32-x64'].source.archive.release = '../../other'
+    expect(lockProblems(traversal).join('\n')).toContain('archive.release must be a release tag')
+
+    const foreignHost = mutableLock()
+    foreignHost.platforms['win32-x64'].source.archive.asset = 'https://evil.test/p.tar.gz'
+    expect(lockProblems(foreignHost).join('\n')).toContain('archive.asset must be a .tar.gz')
+
+    const unhashedArchive = mutableLock()
+    unhashedArchive.platforms['win32-x64'].source.archive.sha256 = ''
+    expect(lockProblems(unhashedArchive).join('\n')).toContain('archive.sha256 must be a sha256')
+
+    const legacy = mutableLock() as unknown as {
+      platforms: Record<string, { source: Record<string, unknown> }>
+    }
+    delete legacy.platforms['win32-x64'].source.archive
+    expect(lockProblems(legacy).join('\n')).toContain('schema 3 fetches a release asset')
   })
 })
 
@@ -224,19 +257,29 @@ describe('checksums and acquisition', () => {
     })
   })
 
-  it('pins the checkout, disables line-ending conversion, and pulls LFS after checkout', () => {
-    const steps = vendorFetchSteps({ url: 'https://example.test/vendor.git', commit: COMMIT })
-    expect(steps.map((step) => step.argv)).toContainEqual([
-      'fetch',
-      '--depth',
-      '1',
-      '--no-tags',
-      'origin',
-      COMMIT
-    ])
-    expect(steps.map((step) => step.argv)).toContainEqual(['config', 'core.autocrlf', 'false'])
-    expect(steps.map((step) => step.argv)).toContainEqual(['config', 'core.eol', 'lf'])
-    expect(steps[steps.length - 1].argv).toEqual(['lfs', 'pull'])
+  it('plans a download of the platform asset, pinned by hash and length', () => {
+    const plan = vendorFetchPlan(LOCK.platforms['linux-x64'])
+    expect(plan).toEqual({
+      url:
+        'https://github.com/crpcrp/kizuna-vendor/releases/download/' +
+        RELEASE +
+        '/kizuna-vendor-linux-x64.tar.gz',
+      asset: 'kizuna-vendor-linux-x64.tar.gz',
+      sha256: sha256('linux-x64'),
+      size: 1024,
+      stamp: '.kizuna-vendor-archive'
+    })
+    // Windows must not be handed the Linux payload, and vice versa.
+    expect(vendorFetchPlan(LOCK.platforms['win32-x64']).asset).toBe(
+      'kizuna-vendor-win32-x64.tar.gz'
+    )
+  })
+
+  it('refuses to build a URL that leaves the mirror repository', () => {
+    const archive = { repo: 'crpcrp/kizuna-vendor', release: RELEASE, asset: 'p.tar.gz' }
+    expect(() => vendorArchiveUrl({ ...archive, repo: 'evil.test/a/b' })).toThrow(/owner\/name/)
+    expect(() => vendorArchiveUrl({ ...archive, release: '../../..' })).toThrow(/safe URL/)
+    expect(() => vendorArchiveUrl({ ...archive, asset: 'a/b.tar.gz' })).toThrow(/safe URL/)
   })
 
   it('verifies both the lock hashes and the selected manifest payload', async () => {
@@ -327,22 +370,25 @@ describe('resource staging', () => {
 describe('acquireResources', () => {
   it('materialises, verifies, stages, and returns a report', async () => {
     const { vendorDir, resourcesDir } = await makeMirror()
-    const seen: string[][] = []
+    const seen: { url: string; sha256: string }[] = []
     const report = await acquireResources({
       lock: LOCK,
       platformKey: 'linux-x64',
       vendorDir,
       resourcesDir,
-      materialize: async (steps) => {
-        for (const step of steps) seen.push(step.argv)
+      materialize: async (plan) => {
+        seen.push({ url: plan.url, sha256: plan.sha256 })
       }
     })
     expect(report.copied).toHaveLength(9)
-    expect(seen).toContainEqual([
-      'remote',
-      'add',
-      'origin',
-      'https://github.com/crpcrp/kizuna-vendor.git'
+    expect(seen).toEqual([
+      {
+        url:
+          'https://github.com/crpcrp/kizuna-vendor/releases/download/' +
+          RELEASE +
+          '/kizuna-vendor-linux-x64.tar.gz',
+        sha256: sha256('linux-x64')
+      }
     ])
   })
 

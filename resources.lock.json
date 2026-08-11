@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "platforms": {
     "win32-x64": {
       "platform": "win32",
@@ -8,7 +8,13 @@
         "repo": "crpcrp/kizuna-vendor",
         "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
         "manifest": "manifest.json",
-        "checksums": "SHA256SUMS.txt"
+        "checksums": "SHA256SUMS.txt",
+        "archive": {
+          "release": "payloads-d2c9aefb9ac4",
+          "asset": "kizuna-vendor-win32-x64.tar.gz",
+          "sha256": "f70bebe547f3013236cf01ad9b86434a8fa22c40a881d95bd32c74b3aa84ee2e",
+          "size": 146430734
+        }
       },
       "requiredPaths": [
         "mpv/mpv.exe",
@@ -356,7 +362,13 @@
         "repo": "crpcrp/kizuna-vendor",
         "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
         "manifest": "manifest.json",
-        "checksums": "SHA256SUMS.txt"
+        "checksums": "SHA256SUMS.txt",
+        "archive": {
+          "release": "payloads-d2c9aefb9ac4",
+          "asset": "kizuna-vendor-linux-x64.tar.gz",
+          "sha256": "8771d96e2783fe10fa0bb2740ec1e9f7e114f10586d253a0e8d4383c50fb1905",
+          "size": 15353880
+        }
       },
       "requiredPaths": [
         "mpv/mpv",

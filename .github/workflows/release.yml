@@ -100,6 +100,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Same key generation as ci.yml, so a tag built from a commit CI already
+      # ran restores the unpacked payload instead of downloading it again.
+      - name: Restore pinned binary mirror
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .vendor-cache
+          key: vendor-v4-windows-x64-${{ hashFiles('resources.lock.json') }}
+
       - name: Fetch pinned Windows resources
         run: npm run resources -- --platform win32-x64
 
@@ -242,6 +250,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Same key generation as ci.yml, so a tag built from a commit CI already
+      # ran restores the unpacked payload instead of downloading it again.
+      - name: Restore pinned binary mirror
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .vendor-cache
+          key: vendor-v4-linux-x64-${{ hashFiles('resources.lock.json') }}
 
       - name: Fetch pinned Linux resources
         run: npm run resources -- --platform linux-x64
