@@ -19,6 +19,7 @@ import {
   renderCorrespondingSource,
   renderThirdPartyNotices,
   resolveComponentVersions,
+  resolvePlatformNotices,
   writeNoticeBundle
 } from '@scripts/notices.mjs'
 
@@ -178,6 +179,54 @@ describe('noticesProblems', () => {
       bundled: 'node_modules'
     })
     expect(noticesProblems(noticesWith(component)).join()).toContain('has no packageName')
+  })
+
+  it('rejects a platformExclusive that names no supported platform', () => {
+    const component = invalid({ ...MPV, platformExclusive: 'win32-arm64' })
+    expect(noticesProblems(noticesWith(component)).join()).toContain(
+      'platformExclusive must be one of'
+    )
+  })
+})
+
+// Game OCR ships on Windows alone, so its notice must not follow the Linux
+// artifact around: those licence texts are never staged there, and a notice
+// naming them would be a promise the bundle does not keep.
+describe('resolvePlatformNotices', () => {
+  const PADDLE: NoticeComponent = {
+    ...MPV,
+    id: 'paddleocr',
+    name: 'PaddleOCR',
+    resourceRoot: 'paddleocr',
+    licenseFiles: ['paddleocr/licenses/LICENSE.GPLv3.txt'],
+    platformExclusive: 'win32-x64'
+  }
+
+  it('keeps a platform-exclusive component on the platform that ships it', () => {
+    const resolved = resolvePlatformNotices(noticesWith(MPV, PADDLE), 'win32-x64')
+    expect(resolved.components.map((component) => component.id)).toEqual(['mpv', 'paddleocr'])
+  })
+
+  it('drops it everywhere else', () => {
+    const resolved = resolvePlatformNotices(noticesWith(MPV, PADDLE), 'linux-x64')
+    expect(resolved.components.map((component) => component.id)).toEqual(['mpv'])
+  })
+
+  it('keeps every component when no platform is selected', () => {
+    const notices = noticesWith(MPV, PADDLE)
+    expect(resolvePlatformNotices(notices, undefined)).toBe(notices)
+  })
+
+  // Kept on Windows, the component is held to the same standard as any other:
+  // its licence texts have to be staged. Dropped on Linux, it says nothing.
+  it('holds the component to the lock only on its own platform', () => {
+    const notices = noticesWith(MPV, PADDLE)
+    expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'win32-x64').join()).toContain(
+      'paddleocr/licenses/LICENSE.GPLv3.txt'
+    )
+    expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'linux-x64').join()).not.toContain(
+      'paddleocr'
+    )
   })
 })
 
@@ -437,6 +486,35 @@ describe('writeNoticeBundle', () => {
     expect(await readFile(join(root, 'out', 'licenses/mpv/LICENSE.GPLv3.txt'), 'utf-8')).toBe(
       'gpl text'
     )
+  })
+
+  // Generating one platform's bundle over another's: the Windows-only licence
+  // texts must not survive into the Linux artifact.
+  it('removes a licence text the previous run wrote and this one did not', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kizuna-notices-'))
+    const outDir = join(root, 'out')
+    const source = join(root, 'GPLv3.txt')
+    await writeFile(source, 'gpl text')
+    await writeNoticeBundle({
+      outDir,
+      plan: [
+        { from: source, to: 'licenses/mpv/LICENSE.GPLv3.txt' },
+        { from: source, to: 'licenses/paddleocr/LICENSE.GPLv3.txt' }
+      ],
+      documents: { [NOTICES_FILE]: 'windows notices' }
+    })
+
+    const written = await writeNoticeBundle({
+      outDir,
+      plan: [{ from: source, to: 'licenses/mpv/LICENSE.GPLv3.txt' }],
+      documents: { [NOTICES_FILE]: 'linux notices' }
+    })
+
+    expect(written).toEqual([NOTICES_FILE, 'licenses/mpv/LICENSE.GPLv3.txt'])
+    await expect(
+      readFile(join(outDir, 'licenses/paddleocr/LICENSE.GPLv3.txt'), 'utf-8')
+    ).rejects.toThrow()
+    expect(await readFile(join(outDir, NOTICES_FILE), 'utf-8')).toBe('linux notices')
   })
 })
 

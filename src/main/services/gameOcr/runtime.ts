@@ -26,6 +26,13 @@ export interface GameOcrRuntimeOptions {
   settings: SettingsStore
   controller: GameOcrController
   worker: Pick<PaddleOcrWorkerService, 'getStatus'>
+  /**
+   * Checked before every arm attempt. Returning a message keeps the runtime
+   * stopped and reports that message instead of spawning a worker that would
+   * fail on a missing or damaged bundled resource. Re-run by `retry`, so
+   * restoring the files recovers without a restart.
+   */
+  preflight?: () => string | undefined
 }
 
 const DEFAULT_WORKER_STATUS: PaddleOcrWorkerStatus = { state: 'stopped' }
@@ -76,6 +83,12 @@ export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): Gam
 
   const start = async (): Promise<GameOcrRuntimeStatus> => {
     nonFatalError = undefined
+    const problem = options.preflight?.()
+    if (problem) {
+      nonFatalError = problem
+      notify()
+      return buildStatus()
+    }
     await options.controller.arm()
     notify()
     return buildStatus()

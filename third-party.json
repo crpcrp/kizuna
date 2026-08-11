@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "vendorCommit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+  "vendorCommit": "64f5c7e0f1aa466039db1287027df2fd51b9294f",
   "npmLicenseFallbacks": {
     "lazy-val": "licenses/lazy-val/LICENSE"
   },
@@ -185,6 +185,85 @@
             "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/d2c9aefb9ac46df7066ce2c09ce392c468f1b53c/scripts/refresh-linux-x64.sh"
           }
         }
+      }
+    },
+    {
+      "id": "paddleocr",
+      "name": "PaddleOCR Game OCR runtime",
+      "version": "3.7.0",
+      "license": "GPL-3.0-or-later AND Apache-2.0",
+      "copyright": "Copyright (C) 2026 Kizuna contributors; Copyright (c) PaddlePaddle Authors; Copyright (c) 2018 Intel Corporation; Copyright (c) OpenCV team; Copyright (c) 2010-2017 Angus Johnson.",
+      "bundled": "resources",
+      "resourceRoot": "paddleocr",
+      "platformExclusive": "win32-x64",
+      "licenseFiles": [
+        "paddleocr/licenses/LICENSE.GPLv3.txt",
+        "paddleocr/licenses/LICENSE.PaddleOCR.txt",
+        "paddleocr/licenses/LICENSE.Paddle.txt",
+        "paddleocr/licenses/LICENSE.oneDNN.txt",
+        "paddleocr/licenses/THIRD-PARTY-PROGRAMS.oneDNN.txt",
+        "paddleocr/licenses/LICENSE.Intel-MKLML.txt",
+        "paddleocr/licenses/THIRD-PARTY-PROGRAMS.Intel-MKLML.txt",
+        "paddleocr/licenses/LICENSE.OpenCV.txt",
+        "paddleocr/licenses/LICENSE.Abseil.txt",
+        "paddleocr/licenses/LICENSE.Clipper.txt",
+        "paddleocr/licenses/LICENSE.nlohmann-json.txt",
+        "paddleocr/licenses/LICENSE.dirent.txt",
+        "paddleocr/licenses/LICENSE.glog.txt",
+        "paddleocr/licenses/LICENSE.gflags.txt",
+        "paddleocr/licenses/LICENSE.protobuf.txt",
+        "paddleocr/licenses/LICENSE.xxHash.txt",
+        "paddleocr/licenses/LICENSE.yaml-cpp.txt",
+        "paddleocr/licenses/README.Microsoft-runtime.txt"
+      ],
+      "notes": [
+        "paddleocr.exe is Kizuna's persistent OCR worker compiled against PaddleOCR 3.7.0's deploy/cpp_infer. The worker entrypoint is GPL-3.0-or-later, so the whole executable is conveyed under GPLv3; Apache-2.0 is one-way compatible with it and the linked libraries keep their own terms.",
+        "The shared libraries beside it are separate works: Paddle Inference 3.2.0 and oneDNN 3.6.2 (Apache-2.0), OpenCV 4.10.0 (Apache-2.0), Abseil (Apache-2.0), Clipper 6.4.2 (BSL-1.0), the Intel MKL small libraries (Intel Simplified Software License), and the Microsoft VC143 runtime files.",
+        "Windows only, because Game OCR is. oneDNN acceleration is gated on an Intel CPU brand string, so AMD hosts use the plain CPU backend. opencv_world4100.dll imports Media Foundation, which Windows N editions lack until the Media Feature Pack is installed."
+      ],
+      "copyleft": true,
+      "source": {
+        "code": "https://github.com/crpcrp/kizuna-vendor/tree/64f5c7e0f1aa466039db1287027df2fd51b9294f/paddleocr/worker",
+        "binaryArchive": "https://github.com/PaddlePaddle/PaddleOCR/archive/refs/tags/v3.7.0.tar.gz",
+        "binaryArchiveSha256": "8e5f1f9ba18c29621d38394b4f72925960640b315281391c3b3c86804f079a73",
+        "buildRecipe": "https://github.com/crpcrp/kizuna-vendor/tree/64f5c7e0f1aa466039db1287027df2fd51b9294f/scripts/build-paddleocr-win-x64.ps1",
+        "additional": [
+          {
+            "label": "Paddle Inference 3.2.0 Windows CPU AVX MKL package",
+            "url": "https://paddle-inference-lib.bj.bcebos.com/3.2.0/cxx_c/Windows/CPU/x86-64_avx-mkl-vs2019/paddle_inference.zip"
+          },
+          {
+            "label": "OpenCV 4.10.0 Windows package",
+            "url": "https://github.com/opencv/opencv/releases/download/4.10.0/opencv-4.10.0-windows.exe"
+          }
+        ]
+      }
+    },
+    {
+      "id": "ppocr-models",
+      "name": "PP-OCRv5 Japanese models",
+      "version": "PP-OCRv5",
+      "license": "Apache-2.0",
+      "copyright": "Copyright (c) PaddlePaddle Authors.",
+      "bundled": "resources",
+      "resourceRoot": "paddleocr/models",
+      "platformExclusive": "win32-x64",
+      "licenseFiles": ["paddleocr/licenses/LICENSE.PaddleOCR.txt"],
+      "notes": [
+        "PP-OCRv5_mobile_det and PP-OCRv5_mobile_rec, redistributed unmodified from PaddlePaddle's official inference archives.",
+        "PP-OCRv5 recognition covers Simplified Chinese, Traditional Chinese, English, Japanese, and Pinyin in one model; the other scripts are a property of the weights, not an added language payload. There is no separate character dictionary because PIR-format models embed it."
+      ],
+      "copyleft": false,
+      "source": {
+        "binaryArchive": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_rec_infer.tar",
+        "binaryArchiveSha256": "566b9512b34e34a9f0db54d87b51fa5a0b9ed2cf1ab7e49728cc0b8b5a64f414",
+        "code": "https://github.com/PaddlePaddle/PaddleOCR/tree/v3.7.0",
+        "additional": [
+          {
+            "label": "PP-OCRv5_mobile_det inference archive",
+            "url": "https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0/PP-OCRv5_mobile_det_infer.tar"
+          }
+        ]
       }
     },
     {

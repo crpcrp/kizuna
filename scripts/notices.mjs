@@ -18,7 +18,7 @@
 // through explicit directory arguments, so `test/scripts/notices.test.ts`
 // exercises the whole flow against temp directories with no network.
 
-import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, posix } from 'node:path'
 
 import {
@@ -51,6 +51,7 @@ import {
  * @property {string} [packageName] `node_modules/<packageName>`, for `bundled: 'node_modules'`.
  * @property {string[]} [licenseFiles] Licence texts to copy into the bundle.
  * @property {Record<string, NoticePlatformOverride>} [platforms] Platform-specific metadata.
+ * @property {string} [platformExclusive] The one platform key that ships this component.
  * @property {string[]} [notes]
  * @property {boolean} [copyleft]
  * @property {NoticeSource} [source]
@@ -95,6 +96,12 @@ export const SOURCE_FILE = 'CORRESPONDING_SOURCE.md'
  * Resolve platform-specific component metadata without mutating the committed
  * notices object. Components without an override retain the common metadata.
  *
+ * A `platformExclusive` component is dropped everywhere else. Game OCR's
+ * PaddleOCR payload ships on Windows alone — the same rule
+ * `PLATFORM_EXCLUSIVE_ROOTS` enforces on the lock — and a notice for a
+ * component the Linux artifact does not contain would name licence texts that
+ * platform never stages.
+ *
  * @param {NoticesFile} notices
  * @param {string | undefined} platformKey
  * @returns {NoticesFile}
@@ -103,19 +110,24 @@ export function resolvePlatformNotices(notices, platformKey) {
   if (!platformKey) return notices
   return {
     ...notices,
-    components: notices.components.map((component) => {
-      const override = component.platforms?.[platformKey]
-      if (!override) return component
-      return {
-        ...component,
-        ...override,
-        platforms: component.platforms,
-        source: override.source ?? component.source,
-        licenseFiles: override.licenseFiles ?? component.licenseFiles,
-        notes: override.notes ?? component.notes,
-        copyleft: override.copyleft ?? component.copyleft
-      }
-    })
+    components: notices.components
+      .filter(
+        (component) =>
+          component.platformExclusive === undefined || component.platformExclusive === platformKey
+      )
+      .map((component) => {
+        const override = component.platforms?.[platformKey]
+        if (!override) return component
+        return {
+          ...component,
+          ...override,
+          platforms: component.platforms,
+          source: override.source ?? component.source,
+          licenseFiles: override.licenseFiles ?? component.licenseFiles,
+          notes: override.notes ?? component.notes,
+          copyleft: override.copyleft ?? component.copyleft
+        }
+      })
   }
 }
 
@@ -190,6 +202,17 @@ export function noticesProblems(notices) {
     }
     if (component?.bundled === 'node_modules' && !component.packageName) {
       problems.push(`component "${label}" has no packageName`)
+    }
+    if (
+      component?.platformExclusive !== undefined &&
+      !SUPPORTED_PLATFORM_KEYS.includes(component.platformExclusive)
+    ) {
+      problems.push(
+        'component "' +
+          label +
+          '" platformExclusive must be one of ' +
+          SUPPORTED_PLATFORM_KEYS.join(', ')
+      )
     }
     if (component?.platforms !== undefined) {
       if (
@@ -610,9 +633,39 @@ export function resolveComponentVersions(notices, packageLock) {
 }
 
 /**
+ * Every file currently in the bundle directory, as bundle-relative POSIX paths.
+ *
+ * @param {string} outDir
+ * @param {string} [prefix]
+ * @returns {Promise<string[]>}
+ */
+async function existingBundleFiles(outDir, prefix = '') {
+  /** @type {import('node:fs').Dirent[]} */
+  let entries
+  try {
+    entries = await readdir(join(outDir, prefix), { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const found = []
+  for (const entry of entries) {
+    const path = prefix ? posix.join(prefix, entry.name) : entry.name
+    if (entry.isDirectory()) found.push(...(await existingBundleFiles(outDir, path)))
+    else found.push(path)
+  }
+  return found
+}
+
+/**
  * Copy the planned licence texts and write the two generated documents.
  * Destinations are deduplicated: two components can legitimately reference the
  * same GPLv3 text, and copying it twice under one name is not an error.
+ *
+ * Anything the bundle already held and this run did not write is deleted. The
+ * bundle is per-platform, and generating one platform's after another's — a
+ * local `npm run dist` then `npm run dist:linux` — otherwise leaves the first
+ * platform's licence texts behind, so the Linux artifact would carry notices
+ * for binaries it does not contain, PaddleOCR's GPLv3 text among them.
  *
  * @param {object} options
  * @param {string} options.outDir
@@ -621,6 +674,7 @@ export function resolveComponentVersions(notices, packageLock) {
  * @returns {Promise<string[]>} Bundle-relative paths written, sorted.
  */
 export async function writeNoticeBundle({ outDir, plan, documents }) {
+  const before = await existingBundleFiles(outDir)
   const written = new Set()
   for (const entry of plan) {
     if (written.has(entry.to)) continue
@@ -634,6 +688,9 @@ export async function writeNoticeBundle({ outDir, plan, documents }) {
     await mkdir(dirname(destination), { recursive: true })
     await writeFile(destination, contents, 'utf-8')
     written.add(path)
+  }
+  for (const path of before) {
+    if (!written.has(path)) await rm(join(outDir, path))
   }
   return [...written].sort()
 }
