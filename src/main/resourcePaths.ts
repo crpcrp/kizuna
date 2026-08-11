@@ -149,6 +149,30 @@ export function requiredPackagedResources(
       ipadic('char.bin'),
       ipadic('unk.dic')
     )
+    // Game OCR's payload is Windows-only and arrives from the same vendor
+    // archive, so the packaged smoke check covers it too: an installer that
+    // shipped without the worker or a model file fails the release build
+    // rather than the first capture.
+    const gameOcr = resolveGameOcrPaths({
+      isPackaged: true,
+      resourcesPath,
+      appRoot: '',
+      platform
+    })
+    required.push({ label: 'PaddleOCR worker', path: gameOcr.workerPath, kind: 'file' })
+    for (const [label, directory] of [
+      ['detection', gameOcr.detectionModelDir],
+      ['recognition', gameOcr.recognitionModelDir]
+    ] as const) {
+      // The worker refuses to start unless all three are beside each other.
+      for (const name of ['inference.json', 'inference.pdiparams', 'inference.yml']) {
+        required.push({
+          label: `PaddleOCR ${label} model ${name}`,
+          path: win32.join(directory, name),
+          kind: 'file'
+        })
+      }
+    }
   }
   return required
 }

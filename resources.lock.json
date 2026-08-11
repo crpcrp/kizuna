@@ -6,14 +6,14 @@
       "architecture": "x64",
       "source": {
         "repo": "crpcrp/kizuna-vendor",
-        "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+        "commit": "64f5c7e0f1aa466039db1287027df2fd51b9294f",
         "manifest": "manifest.json",
         "checksums": "SHA256SUMS.txt",
         "archive": {
-          "release": "payloads-d2c9aefb9ac4",
+          "release": "payloads-64f5c7e0f1aa",
           "asset": "kizuna-vendor-win32-x64.tar.gz",
-          "sha256": "f70bebe547f3013236cf01ad9b86434a8fa22c40a881d95bd32c74b3aa84ee2e",
-          "size": 146430734
+          "sha256": "1cf59ffa3fc19cdb5c96260cb5e04bfde3483d0d730ad6920d56626b7709a88c",
+          "size": 265424038
         }
       },
       "requiredPaths": [
@@ -26,13 +26,21 @@
         "mecab/ipadic/sys.dic",
         "mecab/ipadic/matrix.bin",
         "mecab/ipadic/char.bin",
-        "mecab/ipadic/unk.dic"
+        "mecab/ipadic/unk.dic",
+        "paddleocr/paddleocr.exe",
+        "paddleocr/models/det/inference.json",
+        "paddleocr/models/det/inference.pdiparams",
+        "paddleocr/models/det/inference.yml",
+        "paddleocr/models/rec/inference.json",
+        "paddleocr/models/rec/inference.pdiparams",
+        "paddleocr/models/rec/inference.yml"
       ],
       "requiredExecutables": [
         "mpv/mpv.exe",
         "ffmpeg/ffmpeg.exe",
         "ffmpeg/ffprobe.exe",
-        "mecab/mecab.exe"
+        "mecab/mecab.exe",
+        "paddleocr/paddleocr.exe"
       ],
       "files": [
         {
@@ -352,6 +360,240 @@
           "to": "mpv/mpv.exe",
           "sha256": "334cefcbd09df397ec6ba2a900d597553c3d72cae22e18a7cd9995c01f470009",
           "executable": true
+        },
+        {
+          "from": "paddleocr/bin/abseil_dll.dll",
+          "to": "paddleocr/abseil_dll.dll",
+          "sha256": "a5e0417b8d1e1d19d03cc9e866d2b41b02106a2e1b32b92b581dc845d8beb980",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/common.dll",
+          "to": "paddleocr/common.dll",
+          "sha256": "14aeb242647aadd69b4bb2940770563497b9213ca64957451bb59ab1734c2d6d",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/concrt140.dll",
+          "to": "paddleocr/concrt140.dll",
+          "sha256": "e2e4609c569c69f7b1686f6d0e81ce62187ac5df05e0247954500053b3c3de3f",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/libiomp5md.dll",
+          "to": "paddleocr/libiomp5md.dll",
+          "sha256": "bc9e17190505a3beda7feedd90ba3ab7b6dc3f7ca5d980b2140c53ae459fc5ae",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/mkldnn.dll",
+          "to": "paddleocr/mkldnn.dll",
+          "sha256": "3fcd796e77fa6e8e0d78b44bb339e33b5fa91c13140ee1725ce95b90ee02d45d",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/mklml.dll",
+          "to": "paddleocr/mklml.dll",
+          "sha256": "e2a7fd93e1534568626cffe22676b15164a5a2b3a62f1919a55993478b45811e",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/msvcp140.dll",
+          "to": "paddleocr/msvcp140.dll",
+          "sha256": "9057d39b36b6c7d054865ee2bf9cde7a490fe3b01ec4e82514687e24f576269f",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/opencv_world4100.dll",
+          "to": "paddleocr/opencv_world4100.dll",
+          "sha256": "e6e31e55b9b377b775782c4b27a80b2460dffe3dbee7898e034d25729dca0198",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/paddle_inference.dll",
+          "to": "paddleocr/paddle_inference.dll",
+          "sha256": "aa1edb491b170420b0ca3fe7b8881569c06576d320ef7d89813b69b2a4a245be",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/paddleocr.exe",
+          "to": "paddleocr/paddleocr.exe",
+          "sha256": "c660d80a8f07a0cca19a79eb3b2c2bc5da815f3b9465b96cdc49ef31c834b612",
+          "executable": true
+        },
+        {
+          "from": "paddleocr/bin/phi.dll",
+          "to": "paddleocr/phi.dll",
+          "sha256": "30e840f4fefca21be742892b3f039698fdaf741cac32346ead8d1888c9a6faff",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/polyclipping.dll",
+          "to": "paddleocr/polyclipping.dll",
+          "sha256": "b0123d452edaae4605424d604db0da4882e3c70285d2788239898ad4d50876e7",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/vcomp140.dll",
+          "to": "paddleocr/vcomp140.dll",
+          "sha256": "036b9b3f7ece8dfd48aeccd77113721c5305043aaa9c64d1e72812252727aa7c",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/vcruntime140.dll",
+          "to": "paddleocr/vcruntime140.dll",
+          "sha256": "da72e6677bd1bcd01c453c1998aaa19aeaf6659f4774cf6848409da8232a95b2",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/bin/vcruntime140_1.dll",
+          "to": "paddleocr/vcruntime140_1.dll",
+          "sha256": "26e470b29bed3d873e0c328186e53f95e9edbfe0b0fd0cda44743a0b1a04a828",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.Abseil.txt",
+          "to": "paddleocr/licenses/LICENSE.Abseil.txt",
+          "sha256": "c79a7fea0e3cac04cd43f20e7b648e5a0ff8fa5344e644b0ee09ca1162b62747",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.Clipper.txt",
+          "to": "paddleocr/licenses/LICENSE.Clipper.txt",
+          "sha256": "ec8e9d57c56498b74cd632264ff9b8f3ce038e2546d6cde96a4073ca9e804910",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.GPLv3.txt",
+          "to": "paddleocr/licenses/LICENSE.GPLv3.txt",
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.Intel-MKLML.txt",
+          "to": "paddleocr/licenses/LICENSE.Intel-MKLML.txt",
+          "sha256": "c50689a87e94a779ee875116405bdd75ad83c182465ea14fda0bded4d4486e86",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.OpenCV.txt",
+          "to": "paddleocr/licenses/LICENSE.OpenCV.txt",
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.Paddle.txt",
+          "to": "paddleocr/licenses/LICENSE.Paddle.txt",
+          "sha256": "ff6311c56c1b22c9209c96cc8afc16da91c24ee55a15e14ebc46fe1960dbd856",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.PaddleOCR.txt",
+          "to": "paddleocr/licenses/LICENSE.PaddleOCR.txt",
+          "sha256": "3840c5c0c61c294264d2dd77b8777be6ddd90121ef4e0e64abcd22edea581d6e",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.dirent.txt",
+          "to": "paddleocr/licenses/LICENSE.dirent.txt",
+          "sha256": "2f414f6c48e8c25ffb5d03cddd6043b3b613187f758d0a6964ca2ad7ed749e50",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.gflags.txt",
+          "to": "paddleocr/licenses/LICENSE.gflags.txt",
+          "sha256": "90d1f3701813c3cd65eee2dc736746fe46b465918f3f7d6d31463a2018b33fa5",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.glog.txt",
+          "to": "paddleocr/licenses/LICENSE.glog.txt",
+          "sha256": "0fc497129c5c69ff6f22da6933c7e4aaef082fde8437fd57680c2780100772a4",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.nlohmann-json.txt",
+          "to": "paddleocr/licenses/LICENSE.nlohmann-json.txt",
+          "sha256": "dd262584b550d76b855b86d77c2e522b02e397a0133dc5840e8db112ea681cb8",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.oneDNN.txt",
+          "to": "paddleocr/licenses/LICENSE.oneDNN.txt",
+          "sha256": "9dad27256276bb4fce6725c162ef619b5aa2e8abc8f341a4dab0b870aad55664",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.protobuf.txt",
+          "to": "paddleocr/licenses/LICENSE.protobuf.txt",
+          "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.xxHash.txt",
+          "to": "paddleocr/licenses/LICENSE.xxHash.txt",
+          "sha256": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/LICENSE.yaml-cpp.txt",
+          "to": "paddleocr/licenses/LICENSE.yaml-cpp.txt",
+          "sha256": "aa6fcc27be034e41e21dd832f9175bfe694a48491d9e14ff0fa278e19ad14f1b",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/README.Microsoft-runtime.txt",
+          "to": "paddleocr/licenses/README.Microsoft-runtime.txt",
+          "sha256": "1ed4100888d3095edef159a3f2726b61c30925b5a8bbb62edcb7492f6504faca",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/THIRD-PARTY-PROGRAMS.Intel-MKLML.txt",
+          "to": "paddleocr/licenses/THIRD-PARTY-PROGRAMS.Intel-MKLML.txt",
+          "sha256": "4b0ae1fa6cd44474e3042d7ab844cbe42c4943495d882bebaad37950e1c46df8",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/licenses/THIRD-PARTY-PROGRAMS.oneDNN.txt",
+          "to": "paddleocr/licenses/THIRD-PARTY-PROGRAMS.oneDNN.txt",
+          "sha256": "09e0dc933fb800311bf653cd849531c54ce43f1fbe4aacd0d20f644e7dfe220b",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/det/inference.json",
+          "to": "paddleocr/models/det/inference.json",
+          "sha256": "05feef1acb00aa4cd7362b15f7f501fc4f99d7b1fa73c1c871e0c7b1504b0f5c",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/det/inference.pdiparams",
+          "to": "paddleocr/models/det/inference.pdiparams",
+          "sha256": "afa1820cb16c1fd0dad589d0f8b389139061c1ef6d68019685fd07be997dda5b",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/det/inference.yml",
+          "to": "paddleocr/models/det/inference.yml",
+          "sha256": "98069072e1b6b37d727fd9d9f11725faa46d6ea0de012f2ed26caea011c37699",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/rec/inference.json",
+          "to": "paddleocr/models/rec/inference.json",
+          "sha256": "24587345250c7332d0fc6f9a44e794d078cdaeb64c302fef906f325619de2569",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/rec/inference.pdiparams",
+          "to": "paddleocr/models/rec/inference.pdiparams",
+          "sha256": "2460da90875937c94db97eba74ae3d9e5d4c4c57c42f1f41531c09a26bcc771a",
+          "executable": false
+        },
+        {
+          "from": "paddleocr/models/rec/inference.yml",
+          "to": "paddleocr/models/rec/inference.yml",
+          "sha256": "5dfeb2777f6d0db8177d8128a8acfcf6e6276dc4ac73ea3bf0dc06d6a5e85d8e",
+          "executable": false
         }
       ]
     },
@@ -360,14 +602,14 @@
       "architecture": "x64",
       "source": {
         "repo": "crpcrp/kizuna-vendor",
-        "commit": "d2c9aefb9ac46df7066ce2c09ce392c468f1b53c",
+        "commit": "64f5c7e0f1aa466039db1287027df2fd51b9294f",
         "manifest": "manifest.json",
         "checksums": "SHA256SUMS.txt",
         "archive": {
-          "release": "payloads-d2c9aefb9ac4",
+          "release": "payloads-64f5c7e0f1aa",
           "asset": "kizuna-vendor-linux-x64.tar.gz",
-          "sha256": "8771d96e2783fe10fa0bb2740ec1e9f7e114f10586d253a0e8d4383c50fb1905",
-          "size": 15353880
+          "sha256": "9f8a3dbef498abf8d28653c3b5da9d1426ff1998c353a4846e4687dac3cd6a70",
+          "size": 15358912
         }
       },
       "requiredPaths": [

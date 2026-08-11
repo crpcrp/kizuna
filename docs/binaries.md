@@ -114,9 +114,24 @@ path, and `resources.lock.json` may only stage `paddleocr/` under `win32-x64`.
 All three are checked before every Game OCR arm attempt. A missing or
 wrong-kind entry is reported in Options > Game OCR and clears on retry once the
 files are restored, so no capture is attempted against an incomplete runtime.
-The payload is not pinned in `resources.lock.json` yet; until the vendor mirror
-carries it, `npm run resources` stages nothing under `paddleocr/` and Game OCR
-reports the missing worker.
+The same paths are in `requiredPackagedResources`, so an installer built
+without the worker or a model file fails the packaged smoke check rather than
+the first capture.
+
+The payload is 15 binaries and 6 model files, roughly 350 MB unpacked, and
+`resources/paddleocr/` is flat by design: the worker resolves its own DLLs from
+the directory it sits in. Everything those binaries import and the payload does
+not provide is a Windows system DLL, with one caveat —
+`opencv_world4100.dll` imports Media Foundation, which Windows N editions do
+not have until the Media Feature Pack is installed. AVX is required, and
+PaddleOCR gates oneDNN acceleration on an Intel CPU brand string, so AMD hosts
+fall back to the plain CPU backend.
+
+`paddleocr.exe` is GPL-3.0-or-later: its worker entrypoint is first-party GPL
+source, so the whole executable is conveyed under GPLv3 even though everything
+it links is Apache-2.0 or permissive. The corresponding source and the script
+that builds it live in the vendor mirror and are linked from the generated
+`CORRESPONDING_SOURCE.md`.
 
 ## Updating a pinned binary
 

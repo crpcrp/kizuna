@@ -146,7 +146,19 @@ describe('requiredPackagedResources', () => {
         label: 'MeCab IPADIC unk.dic',
         path: win32.join('C:\\app\\resources', 'mecab', 'ipadic', 'unk.dic'),
         kind: 'file'
-      }
+      },
+      {
+        label: 'PaddleOCR worker',
+        path: win32.join('C:\\app\\resources', 'paddleocr', 'paddleocr.exe'),
+        kind: 'file'
+      },
+      ...(['det', 'rec'] as const).flatMap((model) =>
+        ['inference.json', 'inference.pdiparams', 'inference.yml'].map((name) => ({
+          label: `PaddleOCR ${model === 'det' ? 'detection' : 'recognition'} model ${name}`,
+          path: win32.join('C:\\app\\resources', 'paddleocr', 'models', model, name),
+          kind: 'file' as const
+        }))
+      )
     ])
   })
 
