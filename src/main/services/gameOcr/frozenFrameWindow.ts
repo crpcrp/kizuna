@@ -2,7 +2,7 @@ import { createRequire } from 'node:module'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
 import type { GameOcrPresentation } from '../../../shared/gameOcr'
-import type { OcrDisplayBounds } from '../../../shared/ocr'
+import type { OcrDisplayBounds, OcrResult } from '../../../shared/ocr'
 import {
   applyNavigationGuards,
   applyReloadGuard,
@@ -81,6 +81,13 @@ export interface GameOcrWindow {
   present(presentation: GameOcrPresentation): Promise<void>
   /** Updates the small renderer-owned recognition indicator. */
   setRecognizing(recognizing: boolean): void
+  /**
+   * Publishes the accepted OCR regions for the presented screenshot. The
+   * result carries its own session/capture identity, so a renderer that has
+   * already been discarded can drop a late push instead of drawing boxes over
+   * a newer frame.
+   */
+  setRegions(result: OcrResult): void
   /** Marks the dedicated renderer ready to receive presentation pushes. */
   rendererReady(): void
   /** Clears renderer state, hides the window, and resolves after it is hidden. */
@@ -235,6 +242,14 @@ export function createGameOcrWindowController({
       sendToWindow(window, GAME_OCR_CHANNELS.recognitionState, recognizing)
     },
 
+    setRegions(result): void {
+      // A result that arrives before the renderer has taken its screenshot
+      // would paint boxes over nothing; the coordinator only recognizes after
+      // `present` resolved, so dropping it here is the crash/reload case.
+      if (closed || !rendererLoaded || !rendererIsReady) return
+      sendToWindow(window, GAME_OCR_CHANNELS.regions, result)
+    },
+
     rendererReady(): void {
       if (closed || !rendererLoaded || rendererIsReady) return
       rendererIsReady = true
@@ -361,6 +376,7 @@ function unsupportedWindow(): GameOcrWindow {
       throw new Error('Game OCR frozen-frame presentation is only supported on Windows.')
     },
     setRecognizing: () => {},
+    setRegions: () => {},
     rendererReady: () => {},
     discard: async () => {},
     close: async () => {},

@@ -130,6 +130,48 @@ describe('createGameOcrWindowController', () => {
     expect(controller.isVisible()).toBe(true)
   })
 
+  it('sends accepted regions to the renderer that is showing their screenshot', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const result = {
+      sessionId: 4,
+      captureId: 4,
+      imageSize: { width: 1920, height: 1080 },
+      regions: [
+        {
+          id: 'one',
+          text: '日本語',
+          bounds: { x: 10, y: 10, width: 100, height: 30 },
+          confidence: 0.9
+        }
+      ]
+    }
+
+    await controller.present(presentation)
+    controller.setRegions(result)
+
+    expect(fake.window.webContents.send).toHaveBeenLastCalledWith(GAME_OCR_CHANNELS.regions, result)
+  })
+
+  it('drops regions once the frame is gone rather than reviving it', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await controller.present(presentation)
+    fake.fireWindow('closed')
+
+    controller.setRegions({
+      sessionId: 5,
+      captureId: 5,
+      imageSize: { width: 1920, height: 1080 },
+      regions: []
+    })
+
+    expect(fake.window.webContents.send).not.toHaveBeenCalledWith(
+      GAME_OCR_CHANNELS.regions,
+      expect.anything()
+    )
+  })
+
   it('updates and clears the recognition state through the dedicated channels', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })

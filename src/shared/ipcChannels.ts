@@ -163,6 +163,8 @@ export const GAME_OCR_CHANNELS = {
   discard: 'gameOcr:discard',
   /** main→renderer: update the processing indicator after OCR settles. */
   recognitionState: 'gameOcr:recognitionState',
+  /** main→renderer: the accepted OCR regions for the presented screenshot. */
+  regions: 'gameOcr:regions',
   /** renderer→main: close the whole frozen frame. */
   close: 'gameOcr:close',
   /** renderer→main: the dedicated page has subscribed to presentation pushes. */

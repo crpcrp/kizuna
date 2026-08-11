@@ -15,7 +15,7 @@ find the owner of a change; use code search for the exact function or test.
 | `test/harness/` | Fakes for external processes and services |
 | `test/fixtures/` | Committed test data |
 | `scripts/` | Resource fetching, notice generation, Linux packaging verification, and test tooling |
-| `docs/` | Architecture, binaries, licensing, and release documentation |
+| `docs/` | Architecture, binaries, licensing, release, and Game OCR documentation |
 
 The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 `src/preload/index.ts`. IPC channel names live in
@@ -36,6 +36,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Subtitle sidebar | `components/SubtitleSidebar.tsx` (cue rows and search), `components/SubtitleTranslationPopup.tsx`, `state/sidebarSearch.ts`, `state/subtitleSearchDebounce.ts`, `state/sidebarTranslation.ts`, `state/useSidebarTranslation.ts` | — |
 | Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
+| Game OCR (Windows, experimental) | `gameOcr.tsx` and `gameOcr.html` (the second renderer entry), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (sessions, hotkey, recapture order), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameWindow.ts`, `services/gameOcr/runtime.ts`, `services/gameOcr/backgroundLifecycle.ts`, `services/gameOcr/tray.ts`, `services/ocr/paddleWorker.ts`, `resourcePaths.ts` (bundled payload) |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `startupProbe.ts`, `electron-builder.cjs`, `scripts/linuxPackaging.mjs`, `scripts/smoke-linux-package.mjs` |
 | Application updates | `shared/update.ts`, typed `preloadApi.ts` surface | `updateSupport.ts`, `electronUpdaterAdapter.ts`, `updaterErrors.ts`, `updateService.ts`, `updateBridge.ts`, lifecycle composition in `index.ts` |
 
@@ -107,6 +108,22 @@ and the dictionary/Anki actions that refresh it) — rather than to the root
 component. A new Options row is wired in `state/optionsMenuProps.ts`, next to
 the rest of the dialog's props. Use semantic colors from `theme.css` rather
 than adding isolated color literals.
+
+### Change Game OCR
+
+The experimental Windows OCR flow spans two renderers. `src/renderer/index.html`
+owns only the Options tab and the Settings-menu command; the frozen frame is a
+separate entry point (`src/renderer/gameOcr.html` →
+`src/renderer/src/gameOcr.tsx`) that main loads into its own window, so a change
+to the player's React tree does not reach it. Anything renderer-facing has to be
+declared in `electron.vite.config.ts`'s renderer inputs to be built.
+
+`services/gameOcr/controller.ts` owns session identity and the
+invalidate → close → settle → capture → present → recognize order that keeps a
+recapture off Kizuna's own frozen screenshot. Work that must not survive a
+recapture belongs behind that session ID, not behind a renderer-side guard. See
+[Game OCR](game-ocr.md) for the user-visible behavior and the manual
+verification matrix.
 
 ### Update runtime binaries
 

@@ -84,6 +84,7 @@ function makeWindow(
       visible = true
     }),
     setRecognizing: vi.fn(),
+    setRegions: vi.fn(),
     rendererReady: vi.fn(),
     discard: vi.fn(async () => {
       visible = false
@@ -215,6 +216,28 @@ describe('createGameOcrController', () => {
     expect(fake.onResult).toHaveBeenCalledWith(
       result(secondRequest.request.sessionId, secondRequest.request.captureId, 'new')
     )
+  })
+
+  it('publishes accepted regions to the frame that was captured for them', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    const firstRequest = fake.recognitionRequests[0]
+    await fake.controller.capture()
+    const secondRequest = fake.recognitionRequests[1]
+
+    firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
+    await Promise.resolve()
+    expect(fake.windows[0].setRegions).not.toHaveBeenCalled()
+    expect(fake.windows[1].setRegions).not.toHaveBeenCalled()
+
+    const fresh = result(secondRequest.request.sessionId, secondRequest.request.captureId, 'new')
+    secondRequest.deferred.resolve(fresh)
+    await vi.waitFor(() => expect(fake.windows[1].setRegions).toHaveBeenCalledOnce())
+    expect(fake.windows[1].setRegions).toHaveBeenCalledWith(fresh)
+    expect(fake.windows[0].setRegions).not.toHaveBeenCalled()
+    // The sign only covers the recognition it belongs to.
+    expect(fake.windows[1].setRecognizing).toHaveBeenCalledWith(false)
   })
 
   it('never captures while a prior presentation is still visible', async () => {

@@ -31,5 +31,6 @@ Renderer components own their CSS files. Colors come from semantic variables in
 `src/renderer/src/theme.css`.
 
 Use `docs/codebase-map.md` for navigation, `docs/architecture-plan.md` for
-architectural decisions, `docs/binaries.md` for external tools, and
-`docs/licensing.md` for redistribution requirements.
+architectural decisions, `docs/binaries.md` for external tools,
+`docs/licensing.md` for redistribution requirements, and `docs/game-ocr.md` for
+the experimental Windows Game OCR flow.

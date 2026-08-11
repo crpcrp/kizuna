@@ -14,7 +14,10 @@
   border-radius: 4px;
   background: var(--surface-subtitle);
   color: var(--text-primary);
+  /* Kept in step with DEFAULT_GAME_OCR_BOX_METRICS in state/gameOcrBoxRegions.ts,
+     which sizes each box before it paints. */
   font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans JP', sans-serif;
+  font-size: 15px;
   line-height: 1.25;
   text-align: left;
   white-space: pre-wrap;

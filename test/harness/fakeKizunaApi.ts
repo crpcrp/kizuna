@@ -89,6 +89,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       onPresentation: vi.fn(() => listenerCleanup),
       onDiscard: vi.fn(() => listenerCleanup),
       onRecognitionState: vi.fn(() => listenerCleanup),
+      onRegions: vi.fn(() => listenerCleanup),
       rendererReady: vi.fn(),
       close: vi.fn()
     },

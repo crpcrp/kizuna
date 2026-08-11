@@ -100,6 +100,8 @@ not, card creation continues without that audio clip.
 
 ### Game OCR (Windows only)
 
+The experimental feature itself is documented in [Game OCR](game-ocr.md).
+
 Game OCR spawns a PaddleOCR sidecar, so its payload is staged under
 `resources/paddleocr/` and bundled from `win.extraResources` alone. Linux
 artifacts never carry it, `resolveGameOcrPaths` refuses to produce a Linux

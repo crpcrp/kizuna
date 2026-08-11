@@ -60,6 +60,51 @@ platform's staged payload is validated before packaging. Subprocess output is
 bounded and long-running operations use timeouts or cancellation where
 appropriate.
 
+## Game OCR (Windows only, experimental)
+
+Game OCR is a second, self-contained surface: a global shortcut freezes the
+display under the mouse pointer, PaddleOCR reads it locally, and interactive
+text boxes are drawn over the detected regions. It is Windows only. The capture
+service, the frozen-frame window, and the preload's `supported` flag all refuse
+any other platform, so no Linux or macOS behavior is implied or claimed.
+
+Ownership follows the same process boundaries as the rest of the application.
+Display capture, the global shortcut, the native window, the tray, and the
+PaddleOCR subprocess live in the main process behind injected interfaces;
+PaddleOCR itself is a spawned sidecar speaking a newline-delimited JSON
+protocol over stdio, never a linked library. Only validated, serializable data
+crosses the preload: a base64 screenshot, its dimensions, and normalized OCR
+regions. Executable paths, native image handles, and raw worker output stay in
+main.
+
+The frozen frame is its own renderer entry point (`src/renderer/gameOcr.html`),
+loaded into a dedicated opaque, always-on-top, full-display BrowserWindow
+placed at the captured display's logical bounds — including negative
+coordinates on a secondary monitor. It is deliberately separate from the
+player's window pair: it must cover the game rather than participate in
+video-host/overlay stacking, and it must be closable without touching playback.
+That window is sandboxed with context isolation like the main renderer, and it
+reuses the existing tokenization, knowledge, dictionary, popup, and optional
+translation surfaces through the same bridges.
+
+One session ID orders everything. A capture invalidates the previous session,
+closes the previous frozen window, waits for confirmation that it is no longer
+visible, allows one bounded compositor-settle step, and only then captures — so
+a recapture can never read Kizuna's own screenshot. Capture, OCR,
+tokenization, lookup, and translation results are accepted only for the current
+session; a failed recapture leaves the live game visible rather than restoring
+a stale frame.
+
+While Game OCR is armed the player window hides behind a tray icon, and
+stopping or quitting releases the shortcut, the worker process, the frozen
+window, the retained screenshot, and the tray together.
+
+OCR runs locally and the models are bundled; the only network path is the
+existing opt-in translator, and only for text the user explicitly selects. The
+PaddleOCR payload ships in Windows artifacts alone. See
+[Game OCR](game-ocr.md) for behavior and limitations, and
+[Runtime binaries](binaries.md) for the payload layout.
+
 ## Local data
 
 Kizuna stores dictionaries and vocabulary knowledge in separate SQLite
