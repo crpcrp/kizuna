@@ -50,7 +50,7 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 | Hover or click a word | The usual dictionary popup, with knowledge coloring and Anki mining |
 | Click inside a box | Native text selection; **Ctrl+C** copies it |
 | Right-click a selection | Translation popup, when experimental translation is enabled |
-| Click the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game |
+| Click the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. A press that started on a box or popup and ended on the background is a selection drag, not a close |
 | Escape | The same, and Game OCR stays armed |
 | Press the shortcut again | Recapture (see below) |
 

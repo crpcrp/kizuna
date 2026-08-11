@@ -85,6 +85,25 @@ describe('GameOcrFrame', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps the frame open when a press that started on content ends on the background', () => {
+    const onClose = vi.fn()
+    render(
+      <GameOcrFrame presentation={presentation} onClose={onClose}>
+        <button type="button">OCR text box</button>
+      </GameOcrFrame>
+    )
+    const background = screen.getByRole('main', { name: 'Frozen game frame' })
+
+    // A selection drag out of a box fires its click on the shared ancestor.
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'OCR text box' }))
+    fireEvent.click(background)
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(background)
+    fireEvent.click(background)
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
   it('renders no screenshot or indicator after a discard state', () => {
     render(<GameOcrFrame onClose={vi.fn()} />)
 

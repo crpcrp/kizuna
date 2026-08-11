@@ -12,7 +12,7 @@ type Listener = (...args: unknown[]) => void
 
 function fakeWindow(): {
   window: GameOcrNativeWindow
-  fireWindow(event: 'closed' | 'hide'): void
+  fireWindow(event: 'closed'): void
   fireRenderer(
     event: 'did-finish-load' | 'render-process-gone' | 'did-fail-load',
     ...args: unknown[]
@@ -40,9 +40,7 @@ function fakeWindow(): {
     hide: vi.fn(),
     focus: vi.fn(),
     close: vi.fn(),
-    on: vi.fn((event: 'closed' | 'hide', listener: () => void) =>
-      on(windowListeners, event, listener)
-    ),
+    on: vi.fn((event: 'closed', listener: () => void) => on(windowListeners, event, listener)),
     webContents: {
       isDestroyed: () => destroyed,
       send: vi.fn(),
@@ -59,11 +57,8 @@ function fakeWindow(): {
   return {
     window,
     fireWindow: (event) => {
-      if (event === 'hide') visible = false
-      if (event === 'closed') {
-        visible = false
-        destroyed = true
-      }
+      visible = false
+      destroyed = true
       fire(windowListeners, event)
     },
     fireRenderer: (event, ...args) => fire(rendererListeners, event, ...args)
@@ -183,20 +178,22 @@ describe('createGameOcrWindowController', () => {
       GAME_OCR_CHANNELS.recognitionState,
       false
     )
+  })
 
-    const discarding = controller.discard()
-    expect(fake.window.webContents.send).toHaveBeenLastCalledWith(GAME_OCR_CHANNELS.discard)
-    expect(fake.window.hide).toHaveBeenCalledOnce()
+  it('answers repeated close requests with one native close', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await controller.present(presentation)
 
-    let settled = false
-    void discarding.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
+    // The renderer's close request and a display change can both arrive for
+    // the same frame; neither may add another `closed` listener.
+    const first = controller.close()
+    const second = controller.close()
+    expect(fake.window.close).toHaveBeenCalledOnce()
+    expect((fake.window.on as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2)
 
-    fake.fireWindow('hide')
-    await discarding
+    fake.fireWindow('closed')
+    await Promise.all([first, second])
     expect(controller.isVisible()).toBe(false)
   })
 

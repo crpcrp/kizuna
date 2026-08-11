@@ -86,9 +86,6 @@ function makeWindow(
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
-    discard: vi.fn(async () => {
-      visible = false
-    }),
     close: vi.fn(async () => {
       events.push(`close:${id}`)
       if (options.close) await options.close()
@@ -111,6 +108,7 @@ function setup(
   const events: string[] = []
   const windows: Array<GameOcrWindow & { triggerClosed(): void; visible(): boolean }> = []
   const captures = [capture(1), capture(2), capture(3)]
+  const usedCaptures: DisplayCapture[] = []
   let shortcutCallback: (() => void) | undefined
   const shortcut: GameOcrShortcut = {
     register: vi.fn((_accelerator, callback) => {
@@ -125,6 +123,7 @@ function setup(
       const next = captures.shift()
       if (!next) throw new Error('no fake capture')
       if (windows.some((window) => window.visible())) throw new Error('captured a visible frame')
+      usedCaptures.push(next)
       return next
     })
   }
@@ -167,6 +166,7 @@ function setup(
     events,
     windows,
     captures,
+    usedCaptures,
     shortcut,
     get shortcutCallback() {
       return shortcutCallback
@@ -327,6 +327,42 @@ describe('createGameOcrController', () => {
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'late'))
     await Promise.resolve()
     expect(fake.onResult).not.toHaveBeenCalled()
+  })
+
+  it('stays in error after a failed frame is closed, and re-arms the released shortcut', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    const request = fake.recognitionRequests[0]
+
+    request.deferred.reject(new Error('the worker died mid-recognition'))
+    await vi.waitFor(() => expect(fake.controller.getStatus()).toMatchObject({ state: 'error' }))
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('Control+Shift+G')
+
+    // Closing the failed frame must not advertise an armed hotkey that the
+    // failure already released.
+    fake.windows[0].triggerClosed()
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'error' })
+
+    ;(fake.shortcut.register as ReturnType<typeof vi.fn>).mockClear()
+    await expect(fake.controller.arm()).resolves.toBe(true)
+    expect(fake.shortcut.register).toHaveBeenCalledWith('Control+Shift+G', expect.any(Function))
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
+  })
+
+  it('releases the encoded screenshot once recognition has finished with it', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    const request = fake.recognitionRequests[0]
+    const used = fake.captures.length
+
+    request.deferred.resolve(result(request.request.sessionId, request.request.captureId, '日本語'))
+    await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledOnce())
+
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
+    expect(fake.usedCaptures[0]?.disposed).toBe(true)
+    expect(fake.captures.length).toBe(used)
   })
 
   it('invalidates recognition when the user closes the frozen frame', async () => {

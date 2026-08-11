@@ -123,6 +123,17 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     activeCapture = undefined
   }
 
+  /**
+   * Frees one screenshot's encoded bytes as soon as recognition is done with
+   * them. The renderer already holds the pixels it presents, so keeping the
+   * main-process copy alive for the whole inspection would pin up to
+   * `MAX_DISPLAY_CAPTURE_ENCODED_BYTES` per frozen frame for no reader.
+   */
+  const releaseCapture = (capture: DisplayCapture): void => {
+    capture.dispose()
+    if (activeCapture === capture) activeCapture = undefined
+  }
+
   const isCurrent = (session: Session): boolean =>
     activeSession === session && session.valid && !stopping && status.state !== 'off'
 
@@ -187,7 +198,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       if (activeSession) activeSession.valid = false
       activeSession = undefined
       lifecycle++
-      if (!stopping && status.state !== 'off')
+      // Only a still-registered hotkey means armed. A failure released the
+      // shortcut on its way into `error`, and reporting armed there would both
+      // mislead the Options surface and let `arm`'s fast path decline to
+      // register the shortcut again.
+      if (!stopping && status.state !== 'off' && shortcutRegistered)
         notify({ state: 'armed', sessionId: status.sessionId })
     })
   }
@@ -245,6 +260,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       if (!isCurrent(session)) return
       presentation.setRecognizing(false)
       fail(session, 'Game OCR recognition failed.', error)
+    } finally {
+      releaseCapture(capture)
     }
   }
 
@@ -326,10 +343,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const arm = (): Promise<boolean> => {
     if (
-      status.state === 'armed' ||
-      status.state === 'capturing' ||
-      status.state === 'recognizing' ||
-      status.state === 'inspecting'
+      shortcutRegistered &&
+      (status.state === 'armed' ||
+        status.state === 'capturing' ||
+        status.state === 'recognizing' ||
+        status.state === 'inspecting')
     ) {
       return Promise.resolve(true)
     }

@@ -64,7 +64,7 @@ export interface GameOcrNativeWindow extends SendTarget {
   isVisible(): boolean
   loadURL(url: string): Promise<unknown> | unknown
   loadFile(path: string): Promise<unknown> | unknown
-  on(event: 'closed' | 'hide', listener: () => void): unknown
+  on(event: 'closed', listener: () => void): unknown
   webContents: SendTarget['webContents'] &
     NavigationGuardTarget &
     InputGuardTarget & {
@@ -90,8 +90,6 @@ export interface GameOcrWindow {
   setRegions(result: OcrResult): void
   /** Marks the dedicated renderer ready to receive presentation pushes. */
   rendererReady(): void
-  /** Clears renderer state, hides the window, and resolves after it is hidden. */
-  discard(): Promise<void>
   /** Clears state, closes the native window, and resolves after it is closed. */
   close(): Promise<void>
   isVisible(): boolean
@@ -134,20 +132,29 @@ export function createGameOcrWindowController({
   let closed = false
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
-  let ready = rendererLoaded
-    ? Promise.resolve()
-    : new Promise<void>((resolve, reject) => {
-        readyResolve = resolve
-        readyReject = reject
-      })
+  let closePromise: Promise<void> | undefined
   const closeListeners = new Set<() => void>()
 
-  const resetReadyPromise = (): void => {
-    rendererIsReady = false
-    ready = new Promise<void>((resolve, reject) => {
+  /**
+   * Only `present` awaits readiness. A load that fails while no presentation is
+   * queued — a crashed renderer whose reload also fails, for instance — would
+   * otherwise reject a promise nobody holds, which Node reports as an
+   * unhandled rejection, so the rejection is marked handled here.
+   */
+  const createReadyPromise = (): Promise<void> => {
+    const promise = new Promise<void>((resolve, reject) => {
       readyResolve = resolve
       readyReject = reject
     })
+    void promise.catch(() => undefined)
+    return promise
+  }
+
+  let ready = rendererLoaded ? Promise.resolve() : createReadyPromise()
+
+  const resetReadyPromise = (): void => {
+    rendererIsReady = false
+    ready = createReadyPromise()
   }
 
   const notifyClosed = (): void => {
@@ -179,24 +186,13 @@ export function createGameOcrWindowController({
     window.focus()
   }
 
-  const waitUntilHidden = (): Promise<void> => {
-    if (closed || window.isDestroyed() || !window.isVisible()) return Promise.resolve()
-    return new Promise<void>((resolve) => {
-      let settled = false
-      const finish = (): void => {
-        if (settled) return
-        settled = true
-        resolve()
-      }
-      window.on('hide', finish)
-      window.hide()
-      if (!window.isVisible()) finish()
-    })
-  }
-
+  // Both the renderer's close request and a display change can ask for the
+  // same close. The in-flight promise is reused so one native window never
+  // accumulates a `closed` listener per request.
   const waitUntilClosed = (): Promise<void> => {
     if (closed || window.isDestroyed()) return Promise.resolve()
-    return new Promise<void>((resolve) => {
+    if (closePromise) return closePromise
+    closePromise = new Promise<void>((resolve) => {
       let settled = false
       const finish = (): void => {
         if (settled) return
@@ -207,6 +203,7 @@ export function createGameOcrWindowController({
       window.close()
       if (window.isDestroyed()) finish()
     })
+    return closePromise
   }
 
   window.on('closed', notifyClosed)
@@ -257,12 +254,6 @@ export function createGameOcrWindowController({
       readyResolve = undefined
       readyReject = undefined
       showPending()
-    },
-
-    async discard(): Promise<void> {
-      pending = undefined
-      sendDiscard()
-      await waitUntilHidden()
     },
 
     async close(): Promise<void> {
@@ -378,7 +369,6 @@ function unsupportedWindow(): GameOcrWindow {
     setRecognizing: () => {},
     setRegions: () => {},
     rendererReady: () => {},
-    discard: async () => {},
     close: async () => {},
     isVisible: () => false,
     onClosed: () => () => {}

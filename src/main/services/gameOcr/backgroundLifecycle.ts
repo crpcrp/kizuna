@@ -178,5 +178,3 @@ export function createGameOcrBackgroundLifecycle(
     }
   }
 }
-
-export { TRAY_TOOLTIP }
