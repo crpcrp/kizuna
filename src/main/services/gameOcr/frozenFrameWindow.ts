@@ -398,6 +398,12 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
   const window = createWindow(
     getGameOcrWindowOptions(options.preloadPath, options.displayBounds)
   ) as unknown as GameOcrNativeWindow
+  // Windows clamps a window's *initial* size to the display's work area, so a
+  // window constructed at the full display bounds comes up short by the
+  // taskbar and leaves a live strip of the game uncovered below the frozen
+  // frame. Re-asserting the same rectangle is not clamped, and applying it
+  // while the window is still hidden means the first frame is already exact.
+  window.setBounds({ ...options.displayBounds })
   applyNavigationGuards(window.webContents)
   applyReloadGuard(window.webContents)
 

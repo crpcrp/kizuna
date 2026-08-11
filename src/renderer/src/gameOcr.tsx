@@ -7,6 +7,7 @@ import { useAppearance } from './state/useAppearance'
 import { useGameOcrPreferences } from './state/useGameOcrPreferences'
 import { useGameOcrSession } from './state/useGameOcrSession'
 import './theme.css'
+import './gameOcr.css'
 
 /** The frozen window is fixed to one display, but DPI changes still resize it. */
 function useViewportSize(): GameOcrLayoutSize {

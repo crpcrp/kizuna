@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { BrowserWindow } from 'electron'
 import {
+  createGameOcrWindow,
   createGameOcrWindowController,
   getGameOcrWindowOptions,
   registerGameOcrIpc,
@@ -41,6 +43,8 @@ function fakeWindow(): {
     focus: vi.fn(),
     close: vi.fn(),
     setBounds: vi.fn(),
+    loadURL: vi.fn(async () => undefined),
+    loadFile: vi.fn(async () => undefined),
     on: vi.fn((event: 'closed' | 'hide', listener: () => void) =>
       on(windowListeners, event, listener)
     ),
@@ -109,6 +113,29 @@ describe('getGameOcrWindowOptions', () => {
       nodeIntegration: false,
       sandbox: true
     })
+  })
+})
+
+describe('createGameOcrWindow', () => {
+  it('re-asserts the display bounds Windows clamps away at construction', () => {
+    const fake = fakeWindow()
+    const displayBounds = { x: 0, y: 0, width: 2560, height: 1440 }
+    const createWindow = vi.fn(() => fake.window as unknown as BrowserWindow)
+
+    createGameOcrWindow({
+      platform: 'win32',
+      preloadPath: '/fake/preload.js',
+      displayBounds,
+      packagedHtmlPath: '/fake/gameOcr.html',
+      createWindow
+    })
+
+    expect(createWindow).toHaveBeenCalledWith(expect.objectContaining(displayBounds))
+    // Windows shrinks the *initial* size of a window to the display's work
+    // area. Without this second assignment the frozen frame comes up a taskbar
+    // short and leaves a live strip of the game showing below the screenshot.
+    expect(fake.window.setBounds).toHaveBeenCalledWith(displayBounds)
+    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html')
   })
 })
 
