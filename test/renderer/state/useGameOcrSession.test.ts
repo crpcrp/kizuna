@@ -17,7 +17,7 @@ const tokens: Token[] = [
 function presentation(imageBase64: string): GameOcrPresentation {
   return {
     imageBase64,
-    imageMediaType: 'image/jpeg',
+    imageMediaType: 'image/png',
     imageSize: { width: 1920, height: 1080 },
     recognizing: true
   }

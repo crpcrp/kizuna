@@ -75,10 +75,11 @@ PP-OCR itself is a spawned sidecar speaking a newline-delimited JSON
 protocol over stdio, never a linked library. Only validated, serializable data
 crosses the preload: a base64 screenshot with its media type, its dimensions,
 and normalized OCR regions. Executable paths, native image handles, and raw
-worker output stay in main. The screenshot is encoded once, as JPEG, and those
-bytes serve both the frozen frame and the OCR worker: the encode sits directly
-between the hotkey and the pixels the user sees, and a lossless full-display
-encode costs more on every step that follows it than PP-OCR can resolve.
+worker output stay in main. The screenshot is encoded once and those bytes serve
+both the frozen frame and the OCR worker, so the format is set by the stricter
+consumer: the worker's vendored OpenCV has no JPEG codec, and PNG is the only
+thing it decodes. The media type travels with the presentation rather than being
+assumed at either end.
 
 The frozen frame is its own renderer entry point (`src/renderer/gameOcr.html`),
 loaded into a dedicated opaque, always-on-top, full-display BrowserWindow

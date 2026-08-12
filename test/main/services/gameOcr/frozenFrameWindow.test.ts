@@ -78,8 +78,8 @@ function windowListenerCount(window: GameOcrNativeWindow, event: 'closed' | 'hid
 }
 
 const presentation: GameOcrPresentation = {
-  imageBase64: '/9j/4AAQ',
-  imageMediaType: 'image/jpeg',
+  imageBase64: 'iVBORw0KGgo=',
+  imageMediaType: 'image/png',
   imageSize: { width: 1920, height: 1080 },
   recognizing: true
 }

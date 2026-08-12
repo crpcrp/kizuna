@@ -94,29 +94,59 @@ faster than the first's.
 ### Capture latency
 
 Everything between the hotkey and the visible screenshot is latency the user
-feels, so the path is deliberately short:
+feels. Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
-- **One lossy encode serves both consumers.** The capture is encoded once, as
-  JPEG at quality 92, and those same bytes become the frozen frame's image and
-  the OCR worker's input. A lossless full-display PNG costs hundreds of
-  milliseconds of encode time on the main process' own thread and produces
-  several megabytes to base64, hand over IPC, decode in the renderer, and push
-  down the worker's stdin — every one of which JPEG makes roughly an order of
-  magnitude cheaper. The artefacts stay below what PP-OCR's detector and
-  recognizer resolve; the models were trained and evaluated on JPEG imagery.
-  `imageMediaType` travels with the presentation, so no consumer assumes a
-  format.
+| Step | Cost |
+|---|---:|
+| `desktopCapturer.getSources` | ~300 ms |
+| `nativeImage.toPNG()` | ~85 ms (448 KB) |
+| base64, IPC, `JSON.stringify` | under 1 ms each |
+| compositor settle, when paid | 32 ms |
+
+**Electron's capture call is the cost, and it is not reducible from here.** It
+charges roughly the same ~300 ms whether the requested thumbnail is 1×1 or the
+full display, so there is nothing to win by asking for less; and it does not
+warm up, so calling it early to prime the pipeline just pays it twice. It also
+scales a full-size thumbnail for every attached display and discards all but
+the one under the pointer, which would need an API Electron does not expose.
+
+Two things the path does do:
+
 - **The compositor settle is only paid when it buys something.** The bounded
   repaint wait exists so a recapture cannot photograph Kizuna's own frozen
   frame. The first capture of a run, and every capture taken after the user
   returned to the game, reads pixels Kizuna never covered, so the step is
   skipped there.
+- **One encode serves both consumers**, and it is PNG because the worker's
+  vendored OpenCV is built without a JPEG codec — see below. JPEG would save
+  ~70 ms of a ~400 ms path, which is not worth a vendor rebuild.
 
-What remains is dominated by Windows' own `desktopCapturer` read, which also
-scales a full-size thumbnail for every attached display and discards all but
-the one under the pointer. To see the split on a real machine, start Kizuna with
+To see the split on a real machine, start Kizuna with
 `KIZUNA_GAME_OCR_TIMING=1`; each capture then logs its dismiss, settle, capture,
 and present costs.
+
+### The screenshot must be PNG
+
+`ppocr.exe` links a minimal static OpenCV built `WITH_JPEG=OFF` /
+`BUILD_JPEG=OFF`, with only zlib and libpng, so `cv::imdecode` accepts PNG and
+nothing else. Confirmed against the staged worker: the same 1920×1080 frame as
+PNG returns six regions, and as JPEG returns `request failed: unsupported image
+format`. That presents as a recognition failure *after* the screenshot has
+already appeared — the frozen frame comes up looking correct and only OCR fails.
+PNG is not even the larger payload for game-like content: that frame is 62 KB of
+base64 as PNG against 93 KB as JPEG at quality 92.
+
+`DISPLAY_CAPTURE_MEDIA_TYPE` is the single place the format is decided, and
+`imageMediaType` travels with the presentation so the renderer's data URL
+follows it rather than hardcoding a prefix. Changing it means rebuilding and
+republishing the vendor payload with the matching codec first.
+
+When the worker does reject a request it says why on stderr. That line is now
+carried into the error the Options tab shows, so a failure reads
+"Game OCR recognition failed: PP-OCR worker rejected the request: request
+failed: unsupported image format" rather than stopping at the stage name — the
+worker's stderr was previously counted against a byte budget and then dropped,
+so nothing reached the console either.
 
 ### Tray
 

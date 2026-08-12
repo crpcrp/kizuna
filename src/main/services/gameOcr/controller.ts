@@ -95,6 +95,23 @@ export interface GameOcrController {
   shutdown(): Promise<void>
 }
 
+/** Longest failure detail carried into a status message. */
+const MAX_FAILURE_DETAIL_LENGTH = 200
+
+/**
+ * Joins a stage label to whatever the failing boundary said, so the Options
+ * surface reports a cause rather than only the stage that hit it.
+ */
+function describeFailure(stage: string, error: unknown): string {
+  const message = error instanceof Error ? error.message.trim() : ''
+  if (message === '') return `${stage}.`
+  const detail =
+    message.length > MAX_FAILURE_DETAIL_LENGTH
+      ? `${message.slice(0, MAX_FAILURE_DETAIL_LENGTH)}…`
+      : message
+  return `${stage}: ${detail}`
+}
+
 interface Session extends OcrCaptureIdentity {
   valid: boolean
   dismissBeforeCapture: Promise<void>
@@ -354,7 +371,9 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     } catch (error) {
       if (!isCurrent(session)) return
       frame.setRecognizing(false)
-      fail(session, 'Game OCR recognition failed.', error)
+      // The reason travels with the message. "Recognition failed." on its own
+      // sends the user to a console that never had the worker's stderr in it.
+      fail(session, describeFailure('Game OCR recognition failed', error), error)
     } finally {
       releaseCapture(capture)
     }
@@ -422,7 +441,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       await dismissPresentation().catch((dismissError) => {
         reportError('Game OCR presentation cleanup failed.', dismissError)
       })
-      fail(session, 'Game OCR capture failed.', error)
+      fail(session, describeFailure('Game OCR capture failed', error), error)
     }
   }
 

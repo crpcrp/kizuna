@@ -9,8 +9,8 @@ import type { GameOcrPresentation } from '@src/shared/gameOcr'
 afterEach(cleanup)
 
 const presentation: GameOcrPresentation = {
-  imageBase64: '/9j/4AAQ',
-  imageMediaType: 'image/jpeg',
+  imageBase64: 'iVBORw0KGgo=',
+  imageMediaType: 'image/png',
   imageSize: { width: 2400, height: 1350 },
   recognizing: true
 }

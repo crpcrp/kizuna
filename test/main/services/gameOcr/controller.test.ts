@@ -38,7 +38,7 @@ function capture(id: number, onDispose?: () => void): DisplayCapture {
   return {
     ...metadata,
     metadata,
-    imageMediaType: 'image/jpeg',
+    imageMediaType: 'image/png',
     get imageBase64() {
       return imageBase64
     },
@@ -304,7 +304,10 @@ describe('createGameOcrController', () => {
     expect(fake.captureService.capture).toHaveBeenCalledOnce()
     expect(fake.onResult).not.toHaveBeenCalled()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'error' })
-    expect(fake.onError).toHaveBeenCalledWith('Game OCR capture failed.', expect.any(Error))
+    expect(fake.onError).toHaveBeenCalledWith(
+      'Game OCR capture failed: discard failed',
+      expect.any(Error)
+    )
   })
 
   it('rejects a shortcut conflict without claiming that Game OCR is armed', async () => {
@@ -418,6 +421,40 @@ describe('createGameOcrController', () => {
     expect(fake.onResult).not.toHaveBeenCalled()
   })
 
+  it('reports why recognition failed, not only that it failed', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    fake.recognitionRequests[0].deferred.reject(
+      new Error('PP-OCR worker rejected the request: request failed: invalid recognition request')
+    )
+
+    await vi.waitFor(() =>
+      expect(fake.controller.getStatus()).toMatchObject({
+        state: 'error',
+        error:
+          'Game OCR recognition failed: PP-OCR worker rejected the request: ' +
+          'request failed: invalid recognition request'
+      })
+    )
+  })
+
+  it('falls back to the bare stage when the failure carries no message', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    fake.recognitionRequests[0].deferred.reject(new Error(''))
+
+    await vi.waitFor(() =>
+      expect(fake.controller.getStatus()).toMatchObject({
+        state: 'error',
+        error: 'Game OCR recognition failed.'
+      })
+    )
+  })
+
   it('skips the compositor settle when the user had already returned to the game', async () => {
     const fake = setup()
     await fake.controller.arm()
@@ -441,7 +478,7 @@ describe('createGameOcrController', () => {
 
     expect(fake.windows[0].present).toHaveBeenCalledWith({
       imageBase64: 'image-1',
-      imageMediaType: 'image/jpeg',
+      imageMediaType: 'image/png',
       imageSize: { width: 640, height: 480 },
       recognizing: true
     })

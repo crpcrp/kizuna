@@ -13,20 +13,21 @@ export const MAX_DISPLAY_CAPTURE_ENCODED_BYTES = 32 * 1024 * 1024
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
 
 /**
- * One encode serves both the frozen frame and the OCR worker, and it sits
- * directly between the hotkey and the pixels the user sees, so the format is
- * chosen for latency. Lossless PNG of a full display costs hundreds of
- * milliseconds of libpng time on the main process' own thread and produces
- * several megabytes to base64, hand across IPC, decode in the renderer, and
- * push down the worker's stdin. JPEG at this quality is roughly an order of
- * magnitude cheaper on every one of those steps, and its artefacts stay well
- * below what PP-OCR's detector and recognizer resolve — the models themselves
- * were trained and evaluated on JPEG imagery.
+ * One encode serves both the frozen frame and the OCR worker, so the format has
+ * to satisfy the stricter consumer, and that is the worker: the vendored OpenCV
+ * inside `ppocr.exe` is built `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only
+ * zlib and libpng, so `cv::imdecode` accepts PNG and nothing else. Handing it
+ * JPEG yields an empty `Mat` and a rejected request — a failure that looks like
+ * a recognition bug because the screenshot appears first and only the OCR step
+ * fails. Changing this constant means rebuilding and republishing the vendor
+ * payload with the matching codec.
+ *
+ * Measured on a 2560x1440 display (Ryzen 7 5800X3D): the encode is 85 ms and
+ * produces 448 KB, against 14 ms and 427 KB for JPEG at quality 92. That 71 ms
+ * is not where the latency is — `desktopCapturer.getSources` costs ~300 ms of
+ * the same path, and it costs that regardless of the requested thumbnail size.
  */
-export const DISPLAY_CAPTURE_JPEG_QUALITY = 92
-
-/** Media type of the encoded bytes every capture carries. */
-export const DISPLAY_CAPTURE_MEDIA_TYPE = 'image/jpeg'
+export const DISPLAY_CAPTURE_MEDIA_TYPE = 'image/png'
 
 /** Minimal screen surface needed by the capture adapter. */
 export interface DisplayCaptureScreen {
@@ -65,7 +66,7 @@ export interface DisplayCaptureSource {
 export interface DisplayCaptureThumbnail {
   isEmpty(): boolean
   getSize(): OcrImageSize
-  toJPEG(quality: number): Uint8Array
+  toPNG(): Uint8Array
 }
 
 export interface DisplayCaptureService {
@@ -330,7 +331,7 @@ function encodeThumbnail(
 
   let encoded: Uint8Array
   try {
-    encoded = thumbnail.toJPEG(DISPLAY_CAPTURE_JPEG_QUALITY)
+    encoded = thumbnail.toPNG()
   } catch (cause) {
     throw new DisplayCaptureError('capture-denied', undefined, cause)
   }
