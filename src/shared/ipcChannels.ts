@@ -172,6 +172,8 @@ export const GAME_OCR_CHANNELS = {
   recognitionState: 'gameOcr:recognitionState',
   /** main→renderer: the accepted OCR regions for the presented screenshot. */
   regions: 'gameOcr:regions',
+  /** renderer→main: the accepted regions have reached a browser paint. */
+  regionsRendered: 'gameOcr:regionsRendered',
   /**
    * main→renderer: copy the frame's current text selection. The frozen frame
    * never holds keyboard focus, so Ctrl+C reaches it as a global shortcut

@@ -188,6 +188,7 @@ const api = {
       subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
     onRegions: (cb: (result: OcrResult) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.regions, cb),
+    regionsRendered: (value): void => ipcRenderer.send(GAME_OCR_CHANNELS.regionsRendered, value),
     onCopySelection: (cb: () => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.copySelection, cb),
     rendererReady: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),

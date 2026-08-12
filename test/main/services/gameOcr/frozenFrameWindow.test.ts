@@ -557,23 +557,30 @@ describe('createGameOcrWindowController', () => {
     // The renderer's close request dismisses the frame; it never destroys the
     // window the next capture is going to reuse.
     const dismiss = vi.fn(async () => {})
+    const reportRegionsRendered = vi.fn()
     const remove = registerGameOcrIpc(ipc, fake.window, {
       rendererReady,
       dismiss,
       reportFrozen: vi.fn(),
-      reportCaptureBytes: vi.fn()
+      reportCaptureBytes: vi.fn(),
+      reportRegionsRendered
     })
 
     listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: {} })
     expect(rendererReady).not.toHaveBeenCalled()
     listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: fake.window.webContents })
     listeners.get(GAME_OCR_CHANNELS.close)!({ sender: fake.window.webContents })
+    const regionsRenderedListener = listeners.get(GAME_OCR_CHANNELS.regionsRendered) as unknown as (
+      event: { sender: unknown },
+      value: { sessionId: number; captureId: number }
+    ) => void
+    regionsRenderedListener({ sender: fake.window.webContents }, { sessionId: 1, captureId: 1 })
     expect(rendererReady).toHaveBeenCalledOnce()
     expect(dismiss).toHaveBeenCalledOnce()
+    expect(reportRegionsRendered).toHaveBeenCalledWith({ sessionId: 1, captureId: 1 })
 
     remove()
-    // Four channels now: ready and close in, plus the frozen and encoded
-    // reports the renderer sends back for each capture.
-    expect(ipc.removeListener).toHaveBeenCalledTimes(4)
+    // Ready and close, plus the frozen, encoded, and painted reports.
+    expect(ipc.removeListener).toHaveBeenCalledTimes(5)
   })
 })

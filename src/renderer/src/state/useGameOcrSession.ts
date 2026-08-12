@@ -51,6 +51,23 @@ export function useGameOcrSession({
   const [result, setResult] = useState<OcrResult | undefined>()
   const [text, setText] = useState<GameOcrTextSnapshot | undefined>()
 
+  useEffect(() => {
+    if (!result) return
+    let secondFrame = 0
+    const firstFrame = requestAnimationFrame(() => {
+      // A single animation-frame callback runs before its paint. Waiting for
+      // the following frame means the committed boxes have actually had an
+      // opportunity to reach the screen before main stops the latency clock.
+      secondFrame = requestAnimationFrame(() => {
+        api.regionsRendered({ sessionId: result.sessionId, captureId: result.captureId })
+      })
+    })
+    return () => {
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+    }
+  }, [api, result])
+
   const { mecab, dict, knowledge } = bridge
   const copyText = useLatestCallback((text: string): Promise<void> =>
     bridge.clipboard.writeText(text)
