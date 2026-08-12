@@ -33,23 +33,9 @@ describe('SubtitleOverlay.css glyph outline (issue #132)', () => {
   // tokenized descendants), not merely present anywhere in the file.
   const subtitleRule = css.slice(css.indexOf('#subtitle {'), css.indexOf('\n}') + 2)
 
-  it('declares a black text-shadow outline in all eight surrounding directions', () => {
+  it('declares a configurable text-shadow outline in all eight surrounding directions', () => {
     expect(subtitleRule).toContain('text-shadow:')
-    const directions = [
-      '-1px -1px 0',
-      '0 -1px 0',
-      '1px -1px 0',
-      '-1px 0 0',
-      '1px 0 0',
-      '-1px 1px 0',
-      '0 1px 0',
-      '1px 1px 0'
-    ]
-    for (const direction of directions) {
-      expect(subtitleRule, `#subtitle text-shadow is missing the ${direction} offset`).toContain(
-        direction
-      )
-    }
+    expect(subtitleRule.match(/var\(--subtitle-outline-size\)/g)).toHaveLength(12)
   })
 
   it('outlines with the black --subtitle-outline token, not a literal color', () => {
@@ -137,12 +123,13 @@ describe('SubtitleOverlay markup', () => {
       <SubtitleOverlay
         cues={cues}
         timePos={1}
-        style={{ fontScale: 2, xPct: 25, yPct: 60, backgroundEnabled: true }}
+        style={{ fontScale: 2, outlineSizePx: 3, xPct: 25, yPct: 60, backgroundEnabled: true }}
       />
     )
     expect(html).toContain('left:25%')
     expect(html).toContain('top:60%')
     expect(html).toContain('font-size:2.2rem')
+    expect(html).toContain('--subtitle-outline-size:3px')
   })
 
   it.each([
@@ -174,13 +161,20 @@ describe('subtitleBoxStyle (pure)', () => {
       top: '82%',
       transform: 'translate(-50%, -50%)',
       fontSize: '1.1rem',
-      fontFamily: '"Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif'
+      fontFamily: '"Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif',
+      '--subtitle-outline-size': '1px'
     })
   })
 
   it('scales font size by fontScale', () => {
     expect(
-      subtitleBoxStyle({ fontScale: 1.5, xPct: 10, yPct: 20, backgroundEnabled: true }).fontSize
+      subtitleBoxStyle({
+        fontScale: 1.5,
+        outlineSizePx: 1,
+        xPct: 10,
+        yPct: 20,
+        backgroundEnabled: true
+      }).fontSize
     ).toBe('1.65rem')
   })
 

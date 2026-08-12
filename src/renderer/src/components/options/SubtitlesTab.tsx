@@ -4,6 +4,9 @@ import {
   SUBTITLE_FONT_SCALE_MAX,
   SUBTITLE_FONT_SCALE_MIN,
   SUBTITLE_FONT_SCALE_STEP,
+  SUBTITLE_OUTLINE_SIZE_MAX,
+  SUBTITLE_OUTLINE_SIZE_MIN,
+  SUBTITLE_OUTLINE_SIZE_STEP,
   type SubtitleStyleSettings
 } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
@@ -47,6 +50,13 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
     category: 'subtitles',
     keywords: ['bigger', 'smaller', 'scale', 'text size'],
     targetId: 'subtitle-font-scale-input'
+  },
+  {
+    id: 'subtitle-outline-size',
+    label: 'Subtitle black border size',
+    category: 'subtitles',
+    keywords: ['outline', 'stroke', 'pixel', 'appearance'],
+    targetId: 'subtitle-outline-size-input'
   },
   {
     id: 'subtitle-x',
@@ -130,6 +140,32 @@ export default function SubtitlesTab({
               if (fontScale !== null) onChangeSubtitleStyle({ fontScale })
             }}
             onBlur={() => setFontScaleDraft(null)}
+          />
+        </div>
+        <div className="options-row">
+          <label htmlFor="subtitle-outline-size-input" className="options-row-label">
+            Black border size (px)
+            <span className="options-row-description">
+              Thickness of the black outline around subtitle characters.
+            </span>
+          </label>
+          <input
+            type="number"
+            id="subtitle-outline-size-input"
+            min={SUBTITLE_OUTLINE_SIZE_MIN}
+            max={SUBTITLE_OUTLINE_SIZE_MAX}
+            step={SUBTITLE_OUTLINE_SIZE_STEP}
+            value={subtitleStyle.outlineSizePx}
+            onChange={(e) => {
+              const outlineSizePx = Number(e.target.value)
+              if (
+                Number.isFinite(outlineSizePx) &&
+                outlineSizePx >= SUBTITLE_OUTLINE_SIZE_MIN &&
+                outlineSizePx <= SUBTITLE_OUTLINE_SIZE_MAX
+              ) {
+                onChangeSubtitleStyle({ outlineSizePx })
+              }
+            }}
           />
         </div>
         <div className="options-row">

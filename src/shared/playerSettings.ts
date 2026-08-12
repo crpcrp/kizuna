@@ -208,6 +208,7 @@ export const DEFAULT_POPUP_SETTINGS: PopupSettings = {
 
 export interface SubtitleStyleSettings {
   fontScale: number
+  outlineSizePx: number
   xPct: number
   yPct: number
   backgroundEnabled: boolean
@@ -217,9 +218,13 @@ export interface SubtitleStyleSettings {
 export const SUBTITLE_FONT_SCALE_MIN = 0.5
 export const SUBTITLE_FONT_SCALE_MAX = 3
 export const SUBTITLE_FONT_SCALE_STEP = 0.1
+export const SUBTITLE_OUTLINE_SIZE_MIN = 0
+export const SUBTITLE_OUTLINE_SIZE_MAX = 10
+export const SUBTITLE_OUTLINE_SIZE_STEP = 1
 
 export const DEFAULT_SUBTITLE_STYLE: SubtitleStyleSettings = {
   fontScale: 1,
+  outlineSizePx: 1,
   xPct: 50,
   yPct: 82,
   backgroundEnabled: true
@@ -481,6 +486,13 @@ export function normalizeSubtitleStyle(
     fontScale: inRange(parsed.fontScale, SUBTITLE_FONT_SCALE_MIN, SUBTITLE_FONT_SCALE_MAX)
       ? parsed.fontScale
       : defaults.fontScale,
+    outlineSizePx: inRange(
+      parsed.outlineSizePx,
+      SUBTITLE_OUTLINE_SIZE_MIN,
+      SUBTITLE_OUTLINE_SIZE_MAX
+    )
+      ? parsed.outlineSizePx
+      : defaults.outlineSizePx,
     xPct: inRange(parsed.xPct, 0, 100) ? parsed.xPct : defaults.xPct,
     yPct: inRange(parsed.yPct, 0, 100) ? parsed.yPct : defaults.yPct,
     backgroundEnabled:

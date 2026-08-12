@@ -81,8 +81,9 @@ export function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSPropert
     top: `${style.yPct}%`,
     transform: 'translate(-50%, -50%)',
     fontSize: `${fontRem}rem`,
-    fontFamily: SUBTITLE_FONT_FAMILY
-  }
+    fontFamily: SUBTITLE_FONT_FAMILY,
+    '--subtitle-outline-size': `${style.outlineSizePx}px`
+  } as React.CSSProperties
 }
 
 export default function SubtitleOverlay({
