@@ -36,7 +36,7 @@ describe('GameOcrTab', () => {
     renderTab()
 
     expect(screen.getByText(/display under the mouse is captured/)).not.toBeNull()
-    expect(screen.getByText(/PaddleOCR runs locally/)).not.toBeNull()
+    expect(screen.getByText(/PP-OCR and ONNX Runtime run locally/)).not.toBeNull()
     expect(screen.getByText('Not started')).not.toBeNull()
     expect(screen.getByText('Stopped')).not.toBeNull()
     expect(
@@ -57,12 +57,12 @@ describe('GameOcrTab', () => {
       onRetry,
       status: {
         ...stoppedStatus,
-        paddle: { state: 'error', error: 'PaddleOCR model is missing.' },
+        paddle: { state: 'error', error: 'PP-OCR model is missing.' },
         game: { state: 'armed' }
       }
     })
 
-    expect(screen.getByText('PaddleOCR model is missing.')).not.toBeNull()
+    expect(screen.getByText('PP-OCR model is missing.')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Retry' })).not.toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     fireEvent.click(screen.getByRole('button', { name: 'Stop Game OCR' }))

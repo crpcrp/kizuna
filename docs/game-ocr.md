@@ -11,7 +11,7 @@ the surfaces, and the limitations below are expected to change.
 
 Related documents: [codebase map](codebase-map.md) for file ownership,
 [architecture](architecture-plan.md) for the process and window boundaries,
-[runtime binaries](binaries.md) for the bundled PaddleOCR payload, and
+[runtime binaries](binaries.md) for the bundled PP-OCR / ONNX Runtime payload, and
 [licensing](licensing.md) for redistribution terms.
 
 ## Status and scope
@@ -28,7 +28,7 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 
 1. Open **Options → Game OCR** and press **Start** (or use **Settings → Start
    Game OCR** in the menu bar). Kizuna registers the configured global
-   shortcut, starts the local PaddleOCR worker, hides its own window, and
+   shortcut, starts the local PP-OCR worker, hides its own window, and
    leaves a tray icon behind.
 2. Move the mouse onto the display showing the game and press the shortcut
    (**Ctrl+Shift+O** by default; rebind it in the same tab).
@@ -106,7 +106,7 @@ window, the retained screenshot, and the tray icon.
 
 ## Privacy
 
-OCR is local. The PaddleOCR worker is a bundled subprocess, the models ship
+OCR is local. The PP-OCR worker and CPU-only ONNX Runtime are bundled, the models ship
 with the application, and nothing about a capture leaves the machine.
 
 The one exception is explicit: right-clicking a selection with experimental

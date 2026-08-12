@@ -19,7 +19,7 @@ export interface GameOcrSettleBoundary {
   settle(): Promise<void>
 }
 
-/** The OCR adapter may be a real PaddleOCR worker or a fixture-backed fake. */
+/** The OCR adapter may be a real PP-OCR worker or a fixture-backed fake. */
 export interface GameOcrRecognitionAdapter {
   start?(): Promise<void>
   recognize(request: {

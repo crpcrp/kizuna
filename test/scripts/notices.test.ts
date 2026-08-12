@@ -193,40 +193,38 @@ describe('noticesProblems', () => {
 // artifact around: those licence texts are never staged there, and a notice
 // naming them would be a promise the bundle does not keep.
 describe('resolvePlatformNotices', () => {
-  const PADDLE: NoticeComponent = {
+  const PPOCR: NoticeComponent = {
     ...MPV,
-    id: 'paddleocr',
-    name: 'PaddleOCR',
-    resourceRoot: 'paddleocr',
-    licenseFiles: ['paddleocr/licenses/LICENSE.GPLv3.txt'],
+    id: 'ppocr',
+    name: 'PP-OCR / ONNX Runtime',
+    resourceRoot: 'ppocr',
+    licenseFiles: ['ppocr/licenses/LICENSE.GPLv3.txt'],
     platformExclusive: 'win32-x64'
   }
 
   it('keeps a platform-exclusive component on the platform that ships it', () => {
-    const resolved = resolvePlatformNotices(noticesWith(MPV, PADDLE), 'win32-x64')
-    expect(resolved.components.map((component) => component.id)).toEqual(['mpv', 'paddleocr'])
+    const resolved = resolvePlatformNotices(noticesWith(MPV, PPOCR), 'win32-x64')
+    expect(resolved.components.map((component) => component.id)).toEqual(['mpv', 'ppocr'])
   })
 
   it('drops it everywhere else', () => {
-    const resolved = resolvePlatformNotices(noticesWith(MPV, PADDLE), 'linux-x64')
+    const resolved = resolvePlatformNotices(noticesWith(MPV, PPOCR), 'linux-x64')
     expect(resolved.components.map((component) => component.id)).toEqual(['mpv'])
   })
 
   it('keeps every component when no platform is selected', () => {
-    const notices = noticesWith(MPV, PADDLE)
+    const notices = noticesWith(MPV, PPOCR)
     expect(resolvePlatformNotices(notices, undefined)).toBe(notices)
   })
 
   // Kept on Windows, the component is held to the same standard as any other:
   // its licence texts have to be staged. Dropped on Linux, it says nothing.
   it('holds the component to the lock only on its own platform', () => {
-    const notices = noticesWith(MPV, PADDLE)
+    const notices = noticesWith(MPV, PPOCR)
     expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'win32-x64').join()).toContain(
-      'paddleocr/licenses/LICENSE.GPLv3.txt'
+      'ppocr/licenses/LICENSE.GPLv3.txt'
     )
-    expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'linux-x64').join()).not.toContain(
-      'paddleocr'
-    )
+    expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'linux-x64').join()).not.toContain('ppocr')
   })
 })
 
@@ -499,7 +497,7 @@ describe('writeNoticeBundle', () => {
       outDir,
       plan: [
         { from: source, to: 'licenses/mpv/LICENSE.GPLv3.txt' },
-        { from: source, to: 'licenses/paddleocr/LICENSE.GPLv3.txt' }
+        { from: source, to: 'licenses/ppocr/LICENSE.GPLv3.txt' }
       ],
       documents: { [NOTICES_FILE]: 'windows notices' }
     })
@@ -512,7 +510,7 @@ describe('writeNoticeBundle', () => {
 
     expect(written).toEqual([NOTICES_FILE, 'licenses/mpv/LICENSE.GPLv3.txt'])
     await expect(
-      readFile(join(outDir, 'licenses/paddleocr/LICENSE.GPLv3.txt'), 'utf-8')
+      readFile(join(outDir, 'licenses/ppocr/LICENSE.GPLv3.txt'), 'utf-8')
     ).rejects.toThrow()
     expect(await readFile(join(outDir, NOTICES_FILE), 'utf-8')).toBe('linux notices')
   })

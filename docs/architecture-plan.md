@@ -63,15 +63,15 @@ appropriate.
 ## Game OCR (Windows only, experimental)
 
 Game OCR is a second, self-contained surface: a global shortcut freezes the
-display under the mouse pointer, PaddleOCR reads it locally, and interactive
+display under the mouse pointer, PP-OCR reads it locally through ONNX Runtime, and interactive
 text boxes are drawn over the detected regions. It is Windows only. The capture
 service, the frozen-frame window, and the preload's `supported` flag all refuse
 any other platform, so no Linux or macOS behavior is implied or claimed.
 
 Ownership follows the same process boundaries as the rest of the application.
 Display capture, the global shortcut, the native window, the tray, and the
-PaddleOCR subprocess live in the main process behind injected interfaces;
-PaddleOCR itself is a spawned sidecar speaking a newline-delimited JSON
+PP-OCR subprocess live in the main process behind injected interfaces;
+PP-OCR itself is a spawned sidecar speaking a newline-delimited JSON
 protocol over stdio, never a linked library. Only validated, serializable data
 crosses the preload: a base64 screenshot, its dimensions, and normalized OCR
 regions. Executable paths, native image handles, and raw worker output stay in
@@ -110,7 +110,7 @@ window, the retained screenshot, and the tray together.
 
 OCR runs locally and the models are bundled; the only network path is the
 existing opt-in translator, and only for text the user explicitly selects. The
-PaddleOCR payload ships in Windows artifacts alone. See
+PP-OCR / ONNX Runtime payload ships in Windows artifacts alone. See
 [Game OCR](game-ocr.md) for behavior and limitations, and
 [Runtime binaries](binaries.md) for the payload layout.
 

@@ -38,7 +38,7 @@ export interface GameOcrRuntimeOptions {
 const DEFAULT_WORKER_STATUS: PaddleOcrWorkerStatus = { state: 'stopped' }
 
 /**
- * Joins the persisted shortcut, PaddleOCR worker, and coordinator into the
+ * Joins the persisted shortcut, PP-OCR worker, and coordinator into the
  * small serializable state consumed by the main-window Options surface.
  */
 export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): GameOcrRuntimeService {

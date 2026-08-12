@@ -174,13 +174,13 @@ describe('Linux packaging configuration', () => {
   })
 })
 
-// Game OCR is a Windows-only feature, and its PaddleOCR runtime is the largest
+// Game OCR is a Windows-only feature, and its PP-OCR runtime is substantial
 // payload Kizuna would ship. Both halves are asserted together: the Windows
 // installer must carry it, and neither Linux artifact may.
 describe('Game OCR payload', () => {
-  const OCR_ROOT = 'paddleocr'
+  const OCR_ROOT = 'ppocr'
 
-  it('bundles the PaddleOCR payload from the Windows target only', () => {
+  it('bundles the PP-OCR payload from the Windows target only', () => {
     const config = builderConfig()
 
     expect(config.win.extraResources).toEqual([{ from: `resources/${OCR_ROOT}`, to: OCR_ROOT }])
@@ -203,7 +203,7 @@ describe('Game OCR payload', () => {
   })
 
   // The other half. `win.extraResources` copies a directory, so an empty
-  // `resources/paddleocr` still packages: only the lock decides whether the
+  // `resources/ppocr` still packages: only the lock decides whether the
   // worker and the models are in it.
   it('stages the worker, both models, and their licences for Windows', () => {
     const lock = JSON.parse(readFileSync(join(REPO_ROOT, 'resources.lock.json'), 'utf8')) as {
@@ -215,13 +215,10 @@ describe('Game OCR payload', () => {
     const windows = lock.platforms['win32-x64']
     const staged = new Map(windows.files.map((file) => [file.to, file]))
 
-    expect(staged.get(`${OCR_ROOT}/paddleocr.exe`)?.executable).toBe(true)
-    expect(windows.requiredExecutables).toContain(`${OCR_ROOT}/paddleocr.exe`)
-    for (const model of ['det', 'rec']) {
-      // The worker refuses to start unless all three sit together.
-      for (const name of ['inference.json', 'inference.pdiparams', 'inference.yml']) {
-        expect(staged.has(`${OCR_ROOT}/models/${model}/${name}`)).toBe(true)
-      }
+    expect(staged.get(`${OCR_ROOT}/ppocr.exe`)?.executable).toBe(true)
+    expect(windows.requiredExecutables).toContain(`${OCR_ROOT}/ppocr.exe`)
+    for (const name of ['det.onnx', 'rec.onnx', 'keys.txt']) {
+      expect(staged.has(`${OCR_ROOT}/models/${name}`)).toBe(true)
     }
     // The runtime is GPL-3.0-or-later, so its licence text ships beside it.
     expect(staged.has(`${OCR_ROOT}/licenses/LICENSE.GPLv3.txt`)).toBe(true)
@@ -230,8 +227,8 @@ describe('Game OCR payload', () => {
     const binaries = [...staged.keys()].filter(
       (path) => path.startsWith(`${OCR_ROOT}/`) && path.endsWith('.dll')
     )
-    expect(binaries.length).toBe(14)
-    for (const path of binaries) expect(path, path).toMatch(/^paddleocr\/[^/]+\.dll$/)
+    expect(binaries.length).toBe(6)
+    for (const path of binaries) expect(path, path).toMatch(/^ppocr\/[^/]+\.dll$/)
   })
 })
 

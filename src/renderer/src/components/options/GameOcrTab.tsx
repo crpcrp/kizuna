@@ -32,7 +32,7 @@ export const GAME_OCR_SETTING_ENTRIES: SettingEntry[] = [
     id: 'game-ocr-privacy',
     label: 'Game OCR privacy and translation',
     category: 'gameOcr',
-    keywords: ['privacy', 'local', 'paddleocr', 'online', 'translator']
+    keywords: ['privacy', 'local', 'pp-ocr', 'onnx', 'paddleocr', 'online', 'translator']
   },
   {
     id: 'game-ocr-shortcut',
@@ -43,9 +43,9 @@ export const GAME_OCR_SETTING_ENTRIES: SettingEntry[] = [
   },
   {
     id: 'game-ocr-paddle-status',
-    label: 'PaddleOCR status',
+    label: 'PP-OCR / ONNX Runtime status',
     category: 'gameOcr',
-    keywords: ['paddle', 'ocr', 'model', 'worker', 'ready']
+    keywords: ['pp-ocr', 'onnx', 'paddle', 'ocr', 'model', 'worker', 'ready']
   },
   {
     id: 'game-ocr-status',
@@ -150,8 +150,8 @@ export default function GameOcrTab({
           Japanese text is recognized.
         </p>
         <p className="options-hint">
-          PaddleOCR runs locally. Only text you explicitly select for translation is sent to the
-          existing online translator.
+          PP-OCR and ONNX Runtime run locally. Only text you explicitly select for translation is
+          sent to the existing online translator.
         </p>
         <div className="options-row options-shortcut-row">
           <span className="options-row-label">
@@ -175,7 +175,7 @@ export default function GameOcrTab({
       <div className="options-section">
         <h3>Status</h3>
         <div className="options-row" id="game-ocr-paddle-status">
-          <span className="options-row-label">PaddleOCR</span>
+          <span className="options-row-label">PP-OCR / ONNX Runtime</span>
           <span className={badgeClass(status.paddle.state)}>
             {PADDLE_LABELS[status.paddle.state]}
           </span>

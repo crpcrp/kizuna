@@ -96,7 +96,7 @@ describe('Game OCR runtime service', () => {
   })
 
   it('reports a failed resource check instead of arming', async () => {
-    let problem: string | undefined = 'The bundled PaddleOCR worker is missing: C:\\ocr.exe.'
+    let problem: string | undefined = 'The bundled PP-OCR worker is missing: C:\\ocr.exe.'
     const fake = setup({ preflight: () => problem })
 
     const status = await fake.runtime.start()

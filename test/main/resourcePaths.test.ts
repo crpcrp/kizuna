@@ -148,17 +148,37 @@ describe('requiredPackagedResources', () => {
         kind: 'file'
       },
       {
-        label: 'PaddleOCR worker',
-        path: win32.join('C:\\app\\resources', 'paddleocr', 'paddleocr.exe'),
+        label: 'PP-OCR ONNX worker',
+        path: win32.join('C:\\app\\resources', 'ppocr', 'ppocr.exe'),
         kind: 'file'
       },
-      ...(['det', 'rec'] as const).flatMap((model) =>
-        ['inference.json', 'inference.pdiparams', 'inference.yml'].map((name) => ({
-          label: `PaddleOCR ${model === 'det' ? 'detection' : 'recognition'} model ${name}`,
-          path: win32.join('C:\\app\\resources', 'paddleocr', 'models', model, name),
-          kind: 'file' as const
-        }))
-      )
+      ...[
+        'onnxruntime.dll',
+        'onnxruntime_providers_shared.dll',
+        'msvcp140.dll',
+        'msvcp140_1.dll',
+        'vcruntime140.dll',
+        'vcruntime140_1.dll'
+      ].map((name) => ({
+        label: `PP-OCR runtime library ${name}`,
+        path: win32.join('C:\\app\\resources', 'ppocr', name),
+        kind: 'file' as const
+      })),
+      {
+        label: 'PP-OCR detection model',
+        path: win32.join('C:\\app\\resources', 'ppocr', 'models', 'det.onnx'),
+        kind: 'file'
+      },
+      {
+        label: 'PP-OCR recognition model',
+        path: win32.join('C:\\app\\resources', 'ppocr', 'models', 'rec.onnx'),
+        kind: 'file'
+      },
+      {
+        label: 'PP-OCR recognition dictionary',
+        path: win32.join('C:\\app\\resources', 'ppocr', 'models', 'keys.txt'),
+        kind: 'file'
+      }
     ])
   })
 
@@ -265,9 +285,10 @@ describe('resolveGameOcrPaths', () => {
         platform: 'win32'
       })
     ).toEqual({
-      workerPath: win32.join(resourcesPath, 'paddleocr', 'paddleocr.exe'),
-      detectionModelDir: win32.join(resourcesPath, 'paddleocr', 'models', 'det'),
-      recognitionModelDir: win32.join(resourcesPath, 'paddleocr', 'models', 'rec')
+      workerPath: win32.join(resourcesPath, 'ppocr', 'ppocr.exe'),
+      detectionModelPath: win32.join(resourcesPath, 'ppocr', 'models', 'det.onnx'),
+      recognitionModelPath: win32.join(resourcesPath, 'ppocr', 'models', 'rec.onnx'),
+      keysPath: win32.join(resourcesPath, 'ppocr', 'models', 'keys.txt')
     })
   })
 
@@ -279,7 +300,7 @@ describe('resolveGameOcrPaths', () => {
         appRoot: 'E:\\src\\kizuna',
         platform: 'win32'
       }).workerPath
-    ).toBe(win32.join('E:\\src\\kizuna', 'resources', 'paddleocr', 'paddleocr.exe'))
+    ).toBe(win32.join('E:\\src\\kizuna', 'resources', 'ppocr', 'ppocr.exe'))
   })
 
   // The Linux artifacts deliberately omit the payload (see
@@ -306,38 +327,45 @@ describe('Game OCR resource validation', () => {
   })
   const required = requiredGameOcrResources(paths)
 
-  it('requires the worker executable and both model directories', () => {
+  it('requires the worker, both ONNX models, and recognition dictionary', () => {
     expect(required).toEqual([
-      { label: 'PaddleOCR worker', path: paths.workerPath, kind: 'file' },
-      { label: 'PaddleOCR detection model', path: paths.detectionModelDir, kind: 'directory' },
-      { label: 'PaddleOCR recognition model', path: paths.recognitionModelDir, kind: 'directory' }
+      { label: 'PP-OCR ONNX worker', path: paths.workerPath, kind: 'file' },
+      ...[
+        'onnxruntime.dll',
+        'onnxruntime_providers_shared.dll',
+        'msvcp140.dll',
+        'msvcp140_1.dll',
+        'vcruntime140.dll',
+        'vcruntime140_1.dll'
+      ].map((name) => ({
+        label: `PP-OCR runtime library ${name}`,
+        path: win32.join(win32.dirname(paths.workerPath), name),
+        kind: 'file' as const
+      })),
+      { label: 'PP-OCR detection model', path: paths.detectionModelPath, kind: 'file' },
+      { label: 'PP-OCR recognition model', path: paths.recognitionModelPath, kind: 'file' },
+      { label: 'PP-OCR recognition dictionary', path: paths.keysPath, kind: 'file' }
     ])
   })
 
   it('passes when every resource has the expected kind', () => {
-    expect(
-      missingResourceMessage(required, (path) => (path === paths.workerPath ? 'file' : 'directory'))
-    ).toBeUndefined()
+    expect(missingResourceMessage(required, () => 'file')).toBeUndefined()
   })
 
   it('names the missing resource and its path', () => {
     const message = missingResourceMessage(required, (path) =>
-      path === paths.recognitionModelDir
-        ? 'missing'
-        : path === paths.workerPath
-          ? 'file'
-          : 'directory'
+      path === paths.recognitionModelPath ? 'missing' : 'file'
     )
 
-    expect(message).toContain('PaddleOCR recognition model is missing')
-    expect(message).toContain(paths.recognitionModelDir)
+    expect(message).toContain('PP-OCR recognition model is missing')
+    expect(message).toContain(paths.recognitionModelPath)
   })
 
-  // A truncated download can leave a model directory replaced by a stray file,
-  // which spawns a worker that fails with an opaque Paddle error instead.
+  // A truncated download can leave a model file replaced by a stray directory,
+  // which would otherwise fail only when the worker starts.
   it('reports a resource of the wrong kind', () => {
-    expect(missingResourceMessage(required, () => 'file')).toContain(
-      'PaddleOCR detection model is not a directory'
+    expect(missingResourceMessage(required, () => 'directory')).toContain(
+      'PP-OCR ONNX worker is not a file'
     )
   })
 })

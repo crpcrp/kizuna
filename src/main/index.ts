@@ -551,7 +551,7 @@ const GAME_OCR_COMPOSITOR_SETTLE_MS = 32
 
 /**
  * Wires the Windows-only Game OCR runtime to the main-window bridge. The
- * PaddleOCR payload is bundled by `win.extraResources`, so the paths resolve
+ * PP-OCR ONNX payload is bundled by `win.extraResources`, so the paths resolve
  * against the same resources root as mpv and MeCab, and the runtime checks
  * them before each arm rather than trusting the installer.
  */
@@ -568,8 +568,9 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   const worker = createPaddleOcrWorkerService({
     executablePath: ocrPaths.workerPath,
     modelPaths: {
-      detection: ocrPaths.detectionModelDir,
-      recognition: ocrPaths.recognitionModelDir
+      detection: ocrPaths.detectionModelPath,
+      recognition: ocrPaths.recognitionModelPath,
+      keys: ocrPaths.keysPath
     },
     onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
   })

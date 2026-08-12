@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -248,25 +248,25 @@ describe('platform selection and lock validation', () => {
     expect(lockProblems(legacy).join('\n')).toContain('schema 3 fetches a release asset')
   })
 
-  // Game OCR runs on Windows only, so its PaddleOCR runtime must never enter
+  // Game OCR runs on Windows only, so its PP-OCR runtime must never enter
   // the Linux tree: staging it there would add a large payload that the Linux
   // application can never run.
   it('keeps the Game OCR payload out of the Linux entry', () => {
     const leaked = mutableLock()
     leaked.platforms['linux-x64'].files.push({
       from: 'linux-x64/mpv/bin/mpv',
-      to: 'paddleocr/paddleocr.exe',
+      to: 'ppocr/ppocr.exe',
       sha256: 'c'.repeat(64),
       executable: true
     })
     expect(lockProblems(leaked).join('\n')).toContain(
-      'stages paddleocr/paddleocr.exe, which only win32-x64 may ship'
+      'stages ppocr/ppocr.exe, which only win32-x64 may ship'
     )
 
     const windows = mutableLock()
     windows.platforms['win32-x64'].files.push({
-      from: 'paddleocr/paddleocr.exe',
-      to: 'paddleocr/paddleocr.exe',
+      from: 'ppocr/bin/ppocr.exe',
+      to: 'ppocr/ppocr.exe',
       sha256: 'c'.repeat(64),
       executable: true
     })
@@ -340,6 +340,38 @@ describe('checksums and acquisition', () => {
     const result = await verifyVendorFiles({ lock: LOCK, platformKey: 'linux-x64', vendorDir })
     expect(verificationError(result, COMMIT)).toContain('manifest has no payload for linux-x64')
   })
+
+  it('allows an archive to carry an unselected replacement component', async () => {
+    const { vendorDir } = await makeMirror()
+    const manifestPath = join(vendorDir, 'manifest.json')
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    manifest.payloads
+      .find((payload: { platform: string }) => payload.platform === 'win32')
+      .components.push({
+        name: 'replacement-ocr',
+        files: [{ path: 'replacement/worker.exe', sha256: 'e'.repeat(64) }],
+        licenseFiles: ['replacement/LICENSE.txt']
+      })
+    await writeFile(manifestPath, JSON.stringify(manifest))
+
+    const result = await verifyVendorFiles({ lock: LOCK, platformKey: 'win32-x64', vendorDir })
+    expect(result.metadataProblems).toEqual([])
+  })
+
+  it('requires every file once the lock selects a manifest component', async () => {
+    const { vendorDir } = await makeMirror()
+    const incomplete = copy(LOCK)
+    incomplete.platforms['win32-x64'].files = incomplete.platforms['win32-x64'].files.filter(
+      (file) => file.from !== 'mpv/LICENSE.GPLv3.txt'
+    )
+
+    const result = await verifyVendorFiles({
+      lock: incomplete,
+      platformKey: 'win32-x64',
+      vendorDir
+    })
+    expect(result.metadataProblems.join('\n')).toContain('has unlocked path')
+  })
 })
 
 describe('resource staging', () => {
@@ -354,6 +386,21 @@ describe('resource staging', () => {
     expect(
       await stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
     ).toEqual([])
+  })
+
+  it('removes the retired Paddle runtime while preserving first-party resources', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    await mkdir(join(resourcesDir, 'paddleocr'), { recursive: true })
+    await writeFile(join(resourcesDir, 'paddleocr/paddleocr.exe'), 'retired')
+    await mkdir(join(resourcesDir, 'icons'), { recursive: true })
+    await writeFile(join(resourcesDir, 'icons/play.png'), 'first party')
+
+    await stageResources({ lock: LOCK, platformKey: 'win32-x64', vendorDir, resourcesDir })
+
+    await expect(stat(join(resourcesDir, 'paddleocr'))).rejects.toThrow()
+    await expect(readFile(join(resourcesDir, 'icons/play.png'), 'utf8')).resolves.toBe(
+      'first party'
+    )
   })
 
   it('is idempotent and reports missing required paths', async () => {

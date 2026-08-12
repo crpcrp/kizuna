@@ -159,37 +159,26 @@ export function requiredPackagedResources(
       appRoot: '',
       platform
     })
-    required.push({ label: 'PaddleOCR worker', path: gameOcr.workerPath, kind: 'file' })
-    for (const [label, directory] of [
-      ['detection', gameOcr.detectionModelDir],
-      ['recognition', gameOcr.recognitionModelDir]
-    ] as const) {
-      // The worker refuses to start unless all three are beside each other.
-      for (const name of ['inference.json', 'inference.pdiparams', 'inference.yml']) {
-        required.push({
-          label: `PaddleOCR ${label} model ${name}`,
-          path: win32.join(directory, name),
-          kind: 'file'
-        })
-      }
-    }
+    required.push(...requiredGameOcrResources(gameOcr))
   }
   return required
 }
 
 /**
- * The Windows-only Game OCR payload. It is staged into `resources/paddleocr`
+ * The Windows-only Game OCR payload. It is staged into `resources/ppocr`
  * by the same vendor pipeline that stages mpv, FFmpeg, and MeCab, and
  * electron-builder copies it from `win.extraResources` only, so a Linux
  * artifact never contains it and these paths never exist there.
  */
 export interface GameOcrPaths {
-  /** The PaddleOCR sidecar the worker adapter spawns. */
+  /** The PP-OCR ONNX sidecar the worker adapter spawns. */
   workerPath: string
-  /** Japanese detection model directory passed to the sidecar. */
-  detectionModelDir: string
-  /** Japanese recognition model directory passed to the sidecar. */
-  recognitionModelDir: string
+  /** ONNX detection model file passed to the sidecar. */
+  detectionModelPath: string
+  /** ONNX recognition model file passed to the sidecar. */
+  recognitionModelPath: string
+  /** Recognition dictionary extracted from the model metadata. */
+  keysPath: string
 }
 
 /** Pure. Resolves the Game OCR payload for a run mode. Windows only. */
@@ -203,20 +192,35 @@ export function resolveGameOcrPaths({
     throw new Error('Game OCR resources ship on Windows only, not ' + platform)
   }
   const root = isPackaged ? resourcesPath : win32.join(appRoot, 'resources')
-  const base = win32.join(root, 'paddleocr')
+  const base = win32.join(root, 'ppocr')
   return {
-    workerPath: win32.join(base, 'paddleocr.exe'),
-    detectionModelDir: win32.join(base, 'models', 'det'),
-    recognitionModelDir: win32.join(base, 'models', 'rec')
+    workerPath: win32.join(base, 'ppocr.exe'),
+    detectionModelPath: win32.join(base, 'models', 'det.onnx'),
+    recognitionModelPath: win32.join(base, 'models', 'rec.onnx'),
+    keysPath: win32.join(base, 'models', 'keys.txt')
   }
 }
 
 /** Pure. Lists what must be on disk before Game OCR spawns its worker. */
 export function requiredGameOcrResources(paths: GameOcrPaths): RequiredPackagedResource[] {
+  const runtimeRoot = win32.dirname(paths.workerPath)
   return [
-    { label: 'PaddleOCR worker', path: paths.workerPath, kind: 'file' },
-    { label: 'PaddleOCR detection model', path: paths.detectionModelDir, kind: 'directory' },
-    { label: 'PaddleOCR recognition model', path: paths.recognitionModelDir, kind: 'directory' }
+    { label: 'PP-OCR ONNX worker', path: paths.workerPath, kind: 'file' },
+    ...[
+      'onnxruntime.dll',
+      'onnxruntime_providers_shared.dll',
+      'msvcp140.dll',
+      'msvcp140_1.dll',
+      'vcruntime140.dll',
+      'vcruntime140_1.dll'
+    ].map((name) => ({
+      label: `PP-OCR runtime library ${name}`,
+      path: win32.join(runtimeRoot, name),
+      kind: 'file' as const
+    })),
+    { label: 'PP-OCR detection model', path: paths.detectionModelPath, kind: 'file' },
+    { label: 'PP-OCR recognition model', path: paths.recognitionModelPath, kind: 'file' },
+    { label: 'PP-OCR recognition dictionary', path: paths.keysPath, kind: 'file' }
   ]
 }
 
