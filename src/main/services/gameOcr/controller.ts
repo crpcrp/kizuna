@@ -41,22 +41,39 @@ export interface GameOcrStatus {
 
 /**
  * Wall-clock cost of one capture, in milliseconds, split at the boundaries a
- * change can actually move. Reported once the screenshot is on screen, because
- * that is the latency the user feels; `recognizeMs` follows on the same record
- * only when recognition resolves for the same session.
+ * change can actually move. Reported only after the renderer acknowledges a
+ * browser paint containing the accepted word boxes.
  */
 export interface GameOcrCaptureTimings {
   sessionId: number
+  captureId: number
   /** Waiting for a previous frozen frame to stop being visible. */
   dismissMs: number
   /** The bounded compositor-settle step, zero when it was skipped. */
   settleMs: number
-  /** Windows display capture, including the JPEG encode and base64 pass. */
+  /** Locating the display whose pixels are already streaming in the renderer. */
   captureMs: number
   /** Handing the screenshot to the frozen-frame renderer and showing it. */
   presentMs: number
-  /** Hotkey to visible screenshot: the sum of the four steps above. */
+  /** Visible screenshot through PNG encode, OCR inference, and region IPC. */
+  recognizeMs: number
+  /** Region IPC through the renderer's first following browser paint. */
+  renderMs: number
+  /** Shortcut press through word boxes painted on screen. */
   totalMs: number
+}
+
+/** Writes the user-visible end-to-end OCR latency to the main-process terminal. */
+export function writeGameOcrTotalTime(
+  timings: GameOcrCaptureTimings,
+  write: (message: string) => void = (message) => console.log(message)
+): void {
+  write(
+    `[game-ocr] shortcut to word boxes: ${timings.totalMs}ms ` +
+      `(dismiss ${timings.dismissMs}ms, settle ${timings.settleMs}ms, ` +
+      `capture ${timings.captureMs}ms, present ${timings.presentMs}ms, ` +
+      `recognize ${timings.recognizeMs}ms, render ${timings.renderMs}ms)`
+  )
 }
 
 export interface GameOcrControllerOptions {
@@ -126,6 +143,8 @@ function describeFailure(stage: string, error: unknown): string {
 
 interface Session extends OcrCaptureIdentity {
   valid: boolean
+  /** Read synchronously in the shortcut callback, before any queued work. */
+  startedAt: number
   dismissBeforeCapture: Promise<void>
   /**
    * Whether a frozen frame of Kizuna's own was on screen when this session
@@ -133,6 +152,10 @@ interface Session extends OcrCaptureIdentity {
    * only then is the settle step worth its delay.
    */
   settleBeforeCapture: boolean
+  timings?: Omit<GameOcrCaptureTimings, 'recognizeMs' | 'renderMs' | 'totalMs'> & {
+    presentedAt: number
+    regionsSentAt?: number
+  }
 }
 
 /**
@@ -357,6 +380,33 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     presentation = created
     created.onDismissed(() => handleFrameEnded(created, false))
     created.onClosed(() => handleFrameEnded(created, true))
+    created.onRegionsRendered((identity) => {
+      const session = activeSession
+      if (
+        !session ||
+        !isCurrent(session) ||
+        identity.sessionId !== session.sessionId ||
+        identity.captureId !== session.captureId ||
+        session.timings?.regionsSentAt === undefined
+      ) {
+        return
+      }
+      const renderedAt = now()
+      const timings = session.timings
+      const regionsSentAt = timings.regionsSentAt as number
+      session.timings = undefined
+      reportTimings({
+        sessionId: session.sessionId,
+        captureId: session.captureId,
+        dismissMs: timings.dismissMs,
+        settleMs: timings.settleMs,
+        captureMs: timings.captureMs,
+        presentMs: timings.presentMs,
+        recognizeMs: regionsSentAt - timings.presentedAt,
+        renderMs: renderedAt - regionsSentAt,
+        totalMs: renderedAt - session.startedAt
+      })
+    })
     return created
   }
 
@@ -371,6 +421,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       sessionId: nextSessionId,
       captureId: nextCaptureId,
       valid: true,
+      startedAt: now(),
       dismissBeforeCapture: dismissPresentation(),
       settleBeforeCapture
     }
@@ -407,6 +458,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       }
       // Boxes and indicator swap together: the sign is only meaningful while
       // OCR runs, and the regions belong to the screenshot already presented.
+      if (session.timings) session.timings.regionsSentAt = now()
       frame.setRegions(result)
       frame.setRecognizing(false)
       try {
@@ -426,7 +478,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   }
 
   const runCapture = async (session: Session): Promise<void> => {
-    const startedAt = now()
     try {
       await session.dismissBeforeCapture
       if (!isCurrent(session)) return
@@ -475,14 +526,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       // on its way here never leaves Escape taken away from the game.
       holdFrameShortcuts(frame)
       const presentedAt = now()
-      reportTimings({
+      session.timings = {
         sessionId: session.sessionId,
-        dismissMs: dismissedAt - startedAt,
+        captureId: session.captureId,
+        dismissMs: dismissedAt - session.startedAt,
         settleMs: settledAt - dismissedAt,
         captureMs: capturedAt - settledAt,
         presentMs: presentedAt - capturedAt,
-        totalMs: presentedAt - startedAt
-      })
+        presentedAt
+      }
 
       void recognize(session, { ...target.metadata, imageSize }, frame)
     } catch (error) {

@@ -170,9 +170,15 @@ Two ordering properties this relies on:
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
-To see the split on a real machine, start Kizuna with
-`KIZUNA_GAME_OCR_TIMING=1`; each capture then logs its dismiss, settle, capture,
-and present costs.
+Development runs log the complete shortcut-to-word-box time after the renderer
+acknowledges a browser paint. The same line splits dismiss, compositor settle,
+capture, presentation, recognition, and rendering so a slow machine can be
+profiled without guessing which boundary dominates. `KIZUNA_GAME_OCR_TIMING=1`
+additionally enables the frozen frame's detailed input trace.
+
+The detector uses the worker's tuned 960-pixel maximum side. On the committed
+1080p game fixture this preserves all expected Japanese lines while measuring
+about 83 ms warm, compared with about 253 ms when detection runs at 1920.
 
 ### The screenshot must be PNG
 

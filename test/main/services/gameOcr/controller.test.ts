@@ -58,6 +58,7 @@ type FakeWindow = Omit<GameOcrWindow, 'freeze' | 'captureBytes'> & {
   captureBytes: ReturnType<typeof vi.fn>
   triggerDismissed(): void
   triggerClosed(): void
+  triggerRegionsRendered(value: { sessionId: number; captureId: number }): void
   visible(): boolean
   boundsHistory: OcrDisplayBounds[]
 }
@@ -70,6 +71,9 @@ function makeWindow(
   let visible = false
   const closedListeners = new Set<() => void>()
   const dismissedListeners = new Set<() => void>()
+  const regionsRenderedListeners = new Set<
+    (value: { sessionId: number; captureId: number }) => void
+  >()
   const boundsHistory: OcrDisplayBounds[] = []
   const triggerClosed = (): void => {
     visible = false
@@ -102,6 +106,7 @@ function makeWindow(
     }),
     reportFrozen: vi.fn(),
     reportCaptureBytes: vi.fn(),
+    reportRegionsRendered: vi.fn(),
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
@@ -128,11 +133,18 @@ function makeWindow(
       closedListeners.add(listener)
       return () => closedListeners.delete(listener)
     },
+    onRegionsRendered: (listener) => {
+      regionsRenderedListeners.add(listener)
+      return () => regionsRenderedListeners.delete(listener)
+    },
     triggerDismissed: () => {
       visible = false
       dismissedListeners.forEach((listener) => listener())
     },
     triggerClosed,
+    triggerRegionsRendered: (value) => {
+      regionsRenderedListeners.forEach((listener) => listener(value))
+    },
     visible: () => visible,
     boundsHistory
   }
@@ -591,18 +603,27 @@ describe('createGameOcrController', () => {
     )
   })
 
-  it('reports the stage costs of one capture up to the visible screenshot', async () => {
+  it('reports shortcut-to-word-box timing only after the renderer paints the boxes', async () => {
     let clock = 0
     const onTimings = vi.fn()
-    // 2 ms per step: dismiss, capture, present, and the timings read itself.
     const fake = setup({ now: () => (clock += 2), onTimings })
     await fake.controller.arm()
     await fake.controller.capture()
 
+    expect(onTimings).not.toHaveBeenCalled()
+    const request = fake.recognitionRequests[0]
+    request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'text'))
+    await vi.waitFor(() => expect(fake.windows[0].setRegions).toHaveBeenCalledOnce())
+    expect(onTimings).not.toHaveBeenCalled()
+
+    fake.windows[0].triggerRegionsRendered(request.request)
     expect(onTimings).toHaveBeenCalledOnce()
     expect(onTimings.mock.calls[0][0]).toMatchObject({
       sessionId: 1,
+      captureId: 1,
       settleMs: 0,
+      recognizeMs: expect.any(Number),
+      renderMs: expect.any(Number),
       totalMs: expect.any(Number)
     })
   })
@@ -615,8 +636,12 @@ describe('createGameOcrController', () => {
     })
     await fake.controller.arm()
     await fake.controller.capture()
+    const request = fake.recognitionRequests[0]
+    request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'text'))
+    await vi.waitFor(() => expect(fake.windows[0].setRegions).toHaveBeenCalledOnce())
+    fake.windows[0].triggerRegionsRendered(request.request)
 
-    expect(fake.controller.getStatus()).toMatchObject({ state: 'recognizing' })
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
     expect(fake.onError).not.toHaveBeenCalled()
   })
 

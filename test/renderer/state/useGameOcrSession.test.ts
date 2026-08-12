@@ -63,6 +63,7 @@ function setup() {
       pushes.regions = cb
       return () => undefined
     }),
+    regionsRendered: vi.fn(),
     rendererReady: vi.fn(),
     close: vi.fn(),
     onCopySelection: vi.fn((cb: () => void) => {
@@ -97,7 +98,7 @@ describe('useGameOcrSession', () => {
   })
 
   it('shows the screenshot immediately and adds boxes when regions arrive', async () => {
-    const { hook, pushes } = setup()
+    const { hook, pushes, gameOcr } = setup()
 
     act(() => {
       pushes.freeze?.(freezeRequest(1))
@@ -112,6 +113,9 @@ describe('useGameOcrSession', () => {
 
     await waitFor(() => expect(hook.result.current.regions[0]?.tokens).toEqual(tokens))
     expect(hook.result.current.regions[0]?.levels).toEqual({ 日本: 'known' })
+    await waitFor(() =>
+      expect(gameOcr.regionsRendered).toHaveBeenCalledWith({ sessionId: 1, captureId: 1 })
+    )
   })
 
   it('keeps adjacent OCR lines as separate tightly bounded regions', () => {

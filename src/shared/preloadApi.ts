@@ -49,6 +49,7 @@ import type {
   GameOcrCaptureBytes,
   GameOcrFreezeRequest,
   GameOcrFrozenFrame,
+  GameOcrRegionsRendered,
   GameOcrRuntimeStatus
 } from './gameOcr'
 import type { GameOcrSettings } from './gameOcrSettings'
@@ -137,6 +138,8 @@ export interface KizunaApi {
     onRecognitionState(cb: (recognizing: boolean) => void): () => void
     /** The accepted OCR regions for the screenshot currently presented. */
     onRegions(cb: (result: OcrResult) => void): () => void
+    /** Reports that React committed the regions and the browser reached a paint. */
+    regionsRendered(value: GameOcrRegionsRendered): void
     /**
      * Copy the frame's current text selection. The frozen frame is never
      * focused, so Ctrl+C arrives as a global shortcut rather than as a key

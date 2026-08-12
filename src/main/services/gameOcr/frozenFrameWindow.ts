@@ -4,7 +4,8 @@ import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
 import type {
   GameOcrCaptureBytes,
   GameOcrFreezeRequest,
-  GameOcrFrozenFrame
+  GameOcrFrozenFrame,
+  GameOcrRegionsRendered
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
 import {
@@ -118,6 +119,8 @@ export interface GameOcrWindow {
   reportFrozen(frozen: GameOcrFrozenFrame): void
   /** Renderer→main report carrying the encoded screenshot. */
   reportCaptureBytes(value: GameOcrCaptureBytes): void
+  /** Renderer→main report that the accepted word boxes reached a paint. */
+  reportRegionsRendered(value: GameOcrRegionsRendered): void
   /** Updates the small renderer-owned recognition indicator. */
   setRecognizing(recognizing: boolean): void
   /**
@@ -155,6 +158,8 @@ export interface GameOcrWindow {
   onDismissed(listener: () => void): () => void
   /** Subscribes to native close/crash cleanup notifications. */
   onClosed(listener: () => void): () => void
+  /** Subscribes to the renderer's final word-box paint acknowledgement. */
+  onRegionsRendered(listener: (value: GameOcrRegionsRendered) => void): () => void
 }
 
 /** Minimal ipcMain surface used to bind this renderer to its native window. */
@@ -200,6 +205,7 @@ export function createGameOcrWindowController({
   let bounds: OcrDisplayBounds | undefined = displayBounds ? { ...displayBounds } : undefined
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
+  const regionsRenderedListeners = new Set<(value: GameOcrRegionsRendered) => void>()
   const hideWaiters = new Set<() => void>()
   let frozenWaiter:
     | {
@@ -412,6 +418,11 @@ export function createGameOcrWindowController({
       else waiter.resolve(value.imageBase64)
     },
 
+    reportRegionsRendered(value): void {
+      if (closed || !rendererIsReady) return
+      for (const listener of regionsRenderedListeners) listener(value)
+    },
+
     setRecognizing(recognizing): void {
       if (closed || !rendererLoaded) return
       sendToWindow(window, GAME_OCR_CHANNELS.recognitionState, recognizing)
@@ -481,6 +492,11 @@ export function createGameOcrWindowController({
     onClosed(listener): () => void {
       closeListeners.add(listener)
       return () => closeListeners.delete(listener)
+    },
+
+    onRegionsRendered(listener): () => void {
+      regionsRenderedListeners.add(listener)
+      return () => regionsRenderedListeners.delete(listener)
     }
   }
 }
@@ -592,7 +608,7 @@ export function registerGameOcrIpc(
   window: GameOcrNativeWindow,
   controller: Pick<
     GameOcrWindow,
-    'rendererReady' | 'dismiss' | 'reportFrozen' | 'reportCaptureBytes'
+    'rendererReady' | 'dismiss' | 'reportFrozen' | 'reportCaptureBytes' | 'reportRegionsRendered'
   >
 ): () => void {
   const onRendererReady = (event: { sender: unknown }): void => {
@@ -603,6 +619,9 @@ export function registerGameOcrIpc(
   }
   const onCaptureBytes = (event: { sender: unknown }, value: GameOcrCaptureBytes): void => {
     if (event.sender === window.webContents) controller.reportCaptureBytes(value)
+  }
+  const onRegionsRendered = (event: { sender: unknown }, value: GameOcrRegionsRendered): void => {
+    if (event.sender === window.webContents) controller.reportRegionsRendered(value)
   }
   const onClose = (event: { sender: unknown }): void => {
     // The renderer returns the user to the live game; it does not tear the
@@ -617,6 +636,10 @@ export function registerGameOcrIpc(
   ipc.on(GAME_OCR_CHANNELS.close, onClose)
   ipc.on(GAME_OCR_CHANNELS.frozen, onFrozen as (event: { sender: unknown }) => void)
   ipc.on(GAME_OCR_CHANNELS.captureBytes, onCaptureBytes as (event: { sender: unknown }) => void)
+  ipc.on(
+    GAME_OCR_CHANNELS.regionsRendered,
+    onRegionsRendered as (event: { sender: unknown }) => void
+  )
   return () => {
     ipc.removeListener(GAME_OCR_CHANNELS.rendererReady, onRendererReady)
     ipc.removeListener(GAME_OCR_CHANNELS.close, onClose)
@@ -624,6 +647,10 @@ export function registerGameOcrIpc(
     ipc.removeListener(
       GAME_OCR_CHANNELS.captureBytes,
       onCaptureBytes as (event: { sender: unknown }) => void
+    )
+    ipc.removeListener(
+      GAME_OCR_CHANNELS.regionsRendered,
+      onRegionsRendered as (event: { sender: unknown }) => void
     )
   }
 }
@@ -638,6 +665,7 @@ function unsupportedWindow(): GameOcrWindow {
     },
     reportFrozen: () => {},
     reportCaptureBytes: () => {},
+    reportRegionsRendered: () => {},
     setRecognizing: () => {},
     setRegions: () => {},
     rendererReady: () => {},
@@ -648,7 +676,8 @@ function unsupportedWindow(): GameOcrWindow {
     close: async () => {},
     isVisible: () => false,
     onDismissed: () => () => {},
-    onClosed: () => () => {}
+    onClosed: () => () => {},
+    onRegionsRendered: () => () => {}
   }
 }
 
