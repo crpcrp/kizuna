@@ -114,6 +114,25 @@ describe('useGameOcrSession', () => {
     expect(hook.result.current.regions[0]?.levels).toEqual({ 日本: 'known' })
   })
 
+  it('keeps adjacent OCR lines as separate tightly bounded regions', () => {
+    const { hook, pushes } = setup()
+    const lines = result(1, '一行目')
+    lines.regions.push({
+      id: 'two',
+      text: '二行目',
+      bounds: { x: 10, y: 52, width: 160, height: 38 },
+      confidence: 0.9
+    })
+
+    act(() => pushes.regions?.(lines))
+
+    expect(hook.result.current.regions.map(({ text }) => text)).toEqual(['一行目', '二行目'])
+    expect(hook.result.current.regions.map(({ layout }) => layout.displayBounds)).toEqual([
+      { x: 10, y: 10, width: 200, height: 40 },
+      { x: 10, y: 52, width: 160, height: 38 }
+    ])
+  })
+
   it('clears the recognition sign without disturbing the boxes', async () => {
     const { hook, pushes } = setup()
     act(() => {

@@ -10,20 +10,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
-  padding: 6px 8px;
+  overflow: hidden;
+  padding: 1px;
   border: 1px solid var(--border-default);
   border-radius: 4px;
   background: var(--surface-subtitle);
   color: var(--text-primary);
-  /* Kept in step with DEFAULT_GAME_OCR_BOX_METRICS in state/gameOcrBoxRegions.ts,
-     which sizes each box before it paints. */
   font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans JP', sans-serif;
-  font-size: 18px;
-  line-height: 1.25;
+  line-height: 1;
   text-align: center;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  white-space: pre;
+  overflow-wrap: normal;
   user-select: text;
   cursor: text;
   pointer-events: auto;
