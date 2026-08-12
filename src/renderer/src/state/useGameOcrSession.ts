@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GameOcrPresentation } from '../../../shared/gameOcr'
-import type { OcrResult } from '../../../shared/ocr'
+import type { OcrImageSize, OcrResult } from '../../../shared/ocr'
 import type { PopupSettings } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
@@ -16,6 +16,7 @@ export interface GameOcrSessionBridge {
   mecab: Pick<KizunaApi['mecab'], 'tokenizeBatch'>
   dict: Pick<KizunaApi['dict'], 'lookup'>
   knowledge: Pick<KizunaApi['knowledge'], 'levelsFor' | 'detailsFor'>
+  clipboard: Pick<KizunaApi['clipboard'], 'writeText'>
 }
 
 export interface UseGameOcrSessionInput {
@@ -25,6 +26,8 @@ export interface UseGameOcrSessionInput {
 }
 
 export interface UseGameOcrSessionResult {
+  /** Records the frame the capture hook has drawn, which reveals the canvas. */
+  onFrozen(imageSize: OcrImageSize): void
   presentation: GameOcrPresentation | undefined
   regions: GameOcrBoxRegion[]
   /** Identifies the frozen frame; changes invalidate popups and selections. */
@@ -50,6 +53,9 @@ export function useGameOcrSession({
   const [text, setText] = useState<GameOcrTextSnapshot | undefined>()
 
   const { mecab, dict, knowledge } = bridge
+  const copyText = useLatestCallback((text: string): Promise<void> =>
+    bridge.clipboard.writeText(text)
+  )
   const { frequencyDictId, sortOrder } = popupSettings
   const pipeline = useMemo(
     () =>
@@ -82,11 +88,12 @@ export function useGameOcrSession({
   }, [invalidatePipeline])
 
   useEffect(() => {
-    const unsubscribePresentation = api.onPresentation((next) => {
-      // A new screenshot always arrives before its regions do; dropping the
-      // old ones here is what keeps stale boxes off a fresh frame.
+    const unsubscribeFreeze = api.onFreeze(() => {
+      // A freeze request always arrives before the regions of the frame it
+      // starts; dropping the old ones here is what keeps stale boxes off a
+      // fresh screenshot. The screenshot itself is drawn by the capture hook.
       clear()
-      setPresentation(next)
+      setPresentation(undefined)
     })
     const unsubscribeDiscard = api.onDiscard(() => {
       setPresentation(undefined)
@@ -100,14 +107,24 @@ export function useGameOcrSession({
     // agree on the text a region holds or the tokens would land at offsets
     // into a string the box never renders.
     const unsubscribeRegions = api.onRegions((next) => setResult(mergeGameOcrParagraphs(next)))
+    // The frame is never focused, so the browser's own Ctrl+C never fires here
+    // and main forwards the global shortcut instead. An empty selection is not
+    // an error: it is the user pressing Ctrl+C having selected nothing, and
+    // overwriting their clipboard with "" would be worse than doing nothing.
+    const unsubscribeCopy = api.onCopySelection(() => {
+      const selected = document.getSelection()?.toString() ?? ''
+      if (selected === '') return
+      void copyText(selected).catch(() => undefined)
+    })
     api.rendererReady()
     return () => {
-      unsubscribePresentation()
+      unsubscribeFreeze()
       unsubscribeDiscard()
       unsubscribeRecognition()
       unsubscribeRegions()
+      unsubscribeCopy()
     }
-  }, [api, clear])
+  }, [api, clear, copyText])
 
   useEffect(() => {
     if (!result) return
@@ -134,6 +151,10 @@ export function useGameOcrSession({
     [result, text, viewportSize]
   )
 
+  const onFrozen = useCallback((imageSize: OcrImageSize): void => {
+    setPresentation({ imageSize, recognizing: true })
+  }, [])
+
   const close = useCallback((): void => {
     setPresentation(undefined)
     clear()
@@ -142,6 +163,7 @@ export function useGameOcrSession({
 
   return {
     presentation,
+    onFrozen,
     regions,
     captureKey: `${result?.sessionId ?? 0}:${result?.captureId ?? 0}`,
     close
