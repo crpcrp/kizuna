@@ -86,7 +86,7 @@ const presentation: GameOcrPresentation = {
 }
 
 describe('getGameOcrWindowOptions', () => {
-  it('creates an opaque, interactive, always-on-top full-display window', () => {
+  it('creates an opaque, never-focused, always-on-top full-display window', () => {
     const options = getGameOcrWindowOptions('/fake/preload.js', {
       x: -1920,
       y: 40,
@@ -104,7 +104,10 @@ describe('getGameOcrWindowOptions', () => {
       backgroundColor: '#000000',
       show: false,
       skipTaskbar: true,
-      focusable: true,
+      // Never focusable: Windows refuses a cross-process foreground steal, and a
+      // window it has not activated spends the user's first press on activation
+      // instead of delivering it to the page.
+      focusable: false,
       alwaysOnTop: true,
       resizable: false,
       fullscreenable: false
@@ -170,7 +173,7 @@ describe('createGameOcrWindow', () => {
 })
 
 describe('createGameOcrWindowController', () => {
-  it('waits for the renderer, then presents the exact frame and focuses it', async () => {
+  it('waits for the renderer, then presents the exact frame without focusing it', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window })
 
@@ -186,7 +189,8 @@ describe('createGameOcrWindowController', () => {
       presentation
     )
     expect(fake.window.show).toHaveBeenCalledOnce()
-    expect(fake.window.focus).toHaveBeenCalledOnce()
+    // Taking the foreground is what stalls the game behind the frame.
+    expect(fake.window.focus).not.toHaveBeenCalled()
     expect(controller.isVisible()).toBe(true)
   })
 

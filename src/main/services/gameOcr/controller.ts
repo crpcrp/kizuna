@@ -99,6 +99,19 @@ export interface GameOcrController {
 const MAX_FAILURE_DETAIL_LENGTH = 200
 
 /**
+ * Accelerators the frozen frame needs while it is on screen. The window never
+ * takes the Windows foreground — deliberately, so the game keeps rendering and
+ * so no first mouse press is spent activating it — which also means its page
+ * receives no key events at all. These are registered when a frame appears and
+ * released the moment it goes, so Escape and Ctrl+C belong to the game again
+ * for as long as the user is playing it.
+ */
+const FRAME_ACCELERATORS = Object.freeze({
+  dismiss: 'Escape',
+  copySelection: 'CommandOrControl+C'
+})
+
+/**
  * Joins a stage label to whatever the failing boundary said, so the Options
  * surface reports a cause rather than only the stage that hit it.
  */
@@ -151,6 +164,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let captureQueue = Promise.resolve()
   let armPromise: Promise<boolean> | undefined
   let stopping = false
+  let frameShortcutsHeld = false
 
   const now = options.now ?? (() => Date.now())
 
@@ -188,6 +202,56 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const disposeCapture = (): void => {
     activeCapture?.dispose()
     activeCapture = undefined
+  }
+
+  const releaseFrameShortcuts = (): void => {
+    if (!frameShortcutsHeld) return
+    frameShortcutsHeld = false
+    for (const accelerator of Object.values(FRAME_ACCELERATORS)) {
+      try {
+        options.shortcut.unregister(accelerator)
+      } catch (error) {
+        reportError('Game OCR frame shortcut cleanup failed.', error)
+      }
+    }
+  }
+
+  /**
+   * Claimed only while a frame is visible. A refusal is not fatal: another
+   * application already owns the accelerator, and the frame stays usable
+   * without it — background press still dismisses, and the box text can still
+   * be selected — so this reports and carries on rather than failing a capture
+   * the user can see.
+   */
+  const holdFrameShortcuts = (frame: GameOcrWindow): void => {
+    if (frameShortcutsHeld) return
+    frameShortcutsHeld = true
+    try {
+      if (!options.shortcut.register(FRAME_ACCELERATORS.dismiss, () => void dismissFrame(frame))) {
+        reportError(
+          `The Game OCR frame could not claim ${FRAME_ACCELERATORS.dismiss}; press the screenshot background to close it.`,
+          new Error('Shortcut conflict.')
+        )
+      }
+      if (
+        !options.shortcut.register(FRAME_ACCELERATORS.copySelection, () => frame.copySelection())
+      ) {
+        reportError(
+          `The Game OCR frame could not claim ${FRAME_ACCELERATORS.copySelection}; copying selected text is unavailable.`,
+          new Error('Shortcut conflict.')
+        )
+      }
+    } catch (error) {
+      reportError('Game OCR frame shortcut registration failed.', error)
+    }
+  }
+
+  /** Ends the visible frame the way the renderer's own close request does. */
+  const dismissFrame = (frame: GameOcrWindow): Promise<void> => {
+    if (presentation !== frame) return Promise.resolve()
+    return Promise.resolve(frame.dismiss()).catch((error) => {
+      reportError('Game OCR frame dismissal failed.', error)
+    })
   }
 
   /**
@@ -270,6 +334,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       lifecycle++
     }
     disposeCapture()
+    releaseFrameShortcuts()
     unregisterShortcut()
     reportError(message, error)
     notify({ state: 'error', sessionId: session?.sessionId ?? status.sessionId, error: message })
@@ -283,6 +348,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
    */
   const handleFrameEnded = (target: GameOcrWindow, destroyed: boolean): void => {
     if (presentation !== target) return
+    releaseFrameShortcuts()
     if (destroyed) {
       presentation = undefined
       presentationDismissTarget = undefined
@@ -425,6 +491,9 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         await frame.discard()
         return
       }
+      // Claimed only once the frame is actually up, so a capture that failed
+      // on its way here never leaves Escape taken away from the game.
+      holdFrameShortcuts(frame)
       const presentedAt = now()
       reportTimings({
         sessionId: session.sessionId,
@@ -552,6 +621,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     stopping = true
     lifecycle++
     invalidateSession()
+    releaseFrameShortcuts()
     unregisterShortcut()
     const close = closePresentation()
     await Promise.allSettled([close, options.ocr.stop(), armPromise])

@@ -22,6 +22,21 @@ export interface GameOcrWindowConstructionOptions {
  * The dedicated window is opaque and deliberately sits above the game. Its
  * bounds are logical desktop coordinates, so negative secondary-monitor
  * origins are preserved exactly.
+ *
+ * It is deliberately **not focusable**. Windows refuses a cross-process
+ * foreground steal — measured: an external application keeps the real
+ * foreground window for the whole time this window is shown, while Electron's
+ * own `isFocused()` reports true and does not say so — and the cost of that is
+ * paid by the user: the first mouse press on a window the system has not
+ * activated is spent activating it rather than reaching the page, so
+ * dismissing the frame took two presses. A window that never activates has no
+ * activation click to spend, and the game keeps the foreground, which also
+ * means it keeps rendering behind the frozen frame instead of stalling until
+ * the user clicks it back.
+ *
+ * The cost is that the page has no keyboard focus, so Escape and Ctrl+C cannot
+ * arrive as page events. The coordinator registers those as global shortcuts
+ * for exactly as long as a frame is visible.
  */
 export function getGameOcrWindowOptions(
   preloadPath: string,
@@ -38,7 +53,7 @@ export function getGameOcrWindowOptions(
     backgroundColor: '#000000',
     show: false,
     skipTaskbar: true,
-    focusable: true,
+    focusable: false,
     alwaysOnTop: true,
     resizable: false,
     movable: false,
@@ -92,6 +107,11 @@ export interface GameOcrWindow {
   setRegions(result: OcrResult): void
   /** Marks the dedicated renderer ready to receive presentation pushes. */
   rendererReady(): void
+  /**
+   * Asks the frame to put its current text selection on the clipboard. The
+   * window is never focused, so the copy arrives from a global shortcut.
+   */
+  copySelection(): void
   /**
    * Places the retained window on the display the next frame was captured
    * from. Only meaningful while hidden; the coordinator calls it between a
@@ -216,8 +236,10 @@ export function createGameOcrWindowController({
     if (!next || closed || !rendererLoaded) return
     pending = undefined
     sendToWindow(window, GAME_OCR_CHANNELS.present, next)
+    // Shown, never focused. `focus()` on a non-focusable window is at best a
+    // no-op and at worst an attempt to take a foreground Windows will refuse,
+    // and taking it is precisely what stalls the game behind the frame.
     if (!window.isVisible()) window.show()
-    window.focus()
   }
 
   // One `hide` listener for the window's whole life, however many discards it
@@ -310,6 +332,11 @@ export function createGameOcrWindowController({
       readyResolve = undefined
       readyReject = undefined
       showPending()
+    },
+
+    copySelection(): void {
+      if (closed || !rendererLoaded) return
+      sendToWindow(window, GAME_OCR_CHANNELS.copySelection)
     },
 
     moveTo(displayBounds): void {
@@ -492,6 +519,7 @@ function unsupportedWindow(): GameOcrWindow {
     setRecognizing: () => {},
     setRegions: () => {},
     rendererReady: () => {},
+    copySelection: () => {},
     moveTo: () => {},
     discard: async () => {},
     dismiss: async () => {},

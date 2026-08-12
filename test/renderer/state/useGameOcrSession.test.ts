@@ -40,6 +40,7 @@ function setup() {
     discard?: () => void
     recognition?: (recognizing: boolean) => void
     regions?: (value: OcrResult) => void
+    copySelection?: () => void
   } = {}
   const gameOcr = {
     supported: true,
@@ -60,7 +61,11 @@ function setup() {
       return () => undefined
     }),
     rendererReady: vi.fn(),
-    close: vi.fn()
+    close: vi.fn(),
+    onCopySelection: vi.fn((cb: () => void) => {
+      pushes.copySelection = cb
+      return () => undefined
+    })
   }
   const bridge = {
     gameOcr,
@@ -69,7 +74,8 @@ function setup() {
     knowledge: {
       levelsFor: vi.fn(async (): Promise<Record<string, KnowledgeLevel>> => ({ 日本: 'known' })),
       detailsFor: vi.fn(async (): Promise<Record<string, KnowledgeDetails>> => ({}))
-    }
+    },
+    clipboard: { writeText: vi.fn(async () => undefined) }
   }
   const hook = renderHook(() =>
     useGameOcrSession({
@@ -172,6 +178,29 @@ describe('useGameOcrSession', () => {
 
     act(() => hook.result.current.close())
     expect(removeAllRanges).toHaveBeenCalledTimes(4)
+
+    getSelection.mockRestore()
+  })
+
+  it('copies the frame selection when main forwards the global Ctrl+C', async () => {
+    const { hook, pushes, bridge } = setup()
+    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => pushes.regions?.(result(1, '日本')))
+    await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
+    const getSelection = vi
+      .spyOn(document, 'getSelection')
+      .mockReturnValue({ toString: () => '日本語' } as unknown as Selection)
+
+    // The frame never holds keyboard focus, so the browser's own copy never
+    // fires and the shortcut arrives from main instead.
+    act(() => pushes.copySelection?.())
+    expect(bridge.clipboard.writeText).toHaveBeenCalledWith('日本語')
+
+    // An empty selection is the user pressing Ctrl+C having selected nothing;
+    // clearing their clipboard would be worse than doing nothing.
+    getSelection.mockReturnValue({ toString: () => '' } as unknown as Selection)
+    act(() => pushes.copySelection?.())
+    expect(bridge.clipboard.writeText).toHaveBeenCalledOnce()
 
     getSelection.mockRestore()
   })

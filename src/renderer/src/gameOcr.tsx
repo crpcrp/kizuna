@@ -38,7 +38,8 @@ function GameOcrApp(): React.JSX.Element {
       gameOcr: kizuna.gameOcr,
       mecab: kizuna.mecab,
       dict: kizuna.dict,
-      knowledge: kizuna.knowledge
+      knowledge: kizuna.knowledge,
+      clipboard: kizuna.clipboard
     },
     viewportSize,
     popupSettings: popup

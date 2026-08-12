@@ -101,6 +101,7 @@ function makeWindow(
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
+    copySelection: vi.fn(),
     moveTo: vi.fn((bounds) => {
       events.push(`moveTo:${id}:${bounds.x}`)
       boundsHistory.push({ ...bounds })
@@ -419,6 +420,81 @@ describe('createGameOcrController', () => {
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'closed'))
     await Promise.resolve()
     expect(fake.onResult).not.toHaveBeenCalled()
+  })
+
+  it('claims Escape and Ctrl+C only while a frame is on screen', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    const registered = (): string[] =>
+      (fake.shortcut.register as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0])
+
+    // Arming claims the capture hotkey and nothing else: Escape and Ctrl+C
+    // belong to the game until a frame is actually covering it.
+    expect(registered()).toEqual(['Control+Shift+G'])
+
+    await fake.controller.capture()
+    expect(registered()).toEqual(['Control+Shift+G', 'Escape', 'CommandOrControl+C'])
+    expect(fake.shortcut.unregister).not.toHaveBeenCalled()
+
+    fake.windows[0].triggerDismissed()
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('Escape')
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('CommandOrControl+C')
+    expect(fake.shortcut.unregister).not.toHaveBeenCalledWith('Control+Shift+G')
+  })
+
+  it('dismisses the frame from Escape and copies the selection from Ctrl+C', async () => {
+    const handlers = new Map<string, () => void>()
+    const fake = setup({
+      shortcut: {
+        register: vi.fn((accelerator: string, callback: () => void) => {
+          handlers.set(accelerator, callback)
+          return true
+        }),
+        unregister: vi.fn()
+      }
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+    const frame = fake.windows[0]
+
+    handlers.get('CommandOrControl+C')?.()
+    expect(frame.copySelection).toHaveBeenCalledOnce()
+    expect(frame.dismiss).not.toHaveBeenCalled()
+
+    handlers.get('Escape')?.()
+    await vi.waitFor(() => expect(frame.dismiss).toHaveBeenCalledOnce())
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
+  })
+
+  it('keeps the frame usable when Escape is already taken by something else', async () => {
+    const fake = setup({
+      shortcut: {
+        register: vi.fn((accelerator: string) => accelerator !== 'Escape'),
+        unregister: vi.fn()
+      }
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    // A conflict is reported, not fatal: the background press still closes it.
+    expect(fake.onError).toHaveBeenCalledWith(
+      expect.stringContaining('could not claim Escape'),
+      expect.any(Error)
+    )
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'recognizing' })
+    expect(fake.windows[0].visible()).toBe(true)
+  })
+
+  it('releases the frame shortcuts when Game OCR stops with a frame open', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    await fake.controller.stop()
+
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('Escape')
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('CommandOrControl+C')
+    expect(fake.shortcut.unregister).toHaveBeenCalledWith('Control+Shift+G')
   })
 
   it('reports why recognition failed, not only that it failed', async () => {

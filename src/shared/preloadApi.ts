@@ -128,6 +128,12 @@ export interface KizunaApi {
     onRecognitionState(cb: (recognizing: boolean) => void): () => void
     /** The accepted OCR regions for the screenshot currently presented. */
     onRegions(cb: (result: OcrResult) => void): () => void
+    /**
+     * Copy the frame's current text selection. The frozen frame is never
+     * focused, so Ctrl+C arrives as a global shortcut rather than as a key
+     * event the page could handle itself.
+     */
+    onCopySelection(cb: () => void): () => void
     rendererReady(): void
     close(): void
   }

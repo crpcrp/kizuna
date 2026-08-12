@@ -51,7 +51,7 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 | Click inside a box | Native text selection; **Ctrl+C** copies it |
 | Right-click a selection | Translation popup, when experimental translation is enabled |
 | Press the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. One press is enough: the frame ends on pointer-down, not on the click it would become. A press that started on a box or popup is a selection drag, not a close, and a right-click closes nothing |
-| Escape | The same, and Game OCR stays armed |
+| Escape | The same, and Game OCR stays armed. Registered as a global shortcut for exactly as long as a frame is visible (see below), so it is the game's own Escape again the moment the frame closes |
 | Press the shortcut again | Recapture (see below) |
 
 Mining a word from a frozen frame uses the existing **text-only** Anki path.
@@ -90,6 +90,30 @@ theme, and translation preferences for every screenshot, and clears any leftover
 text selection at each frame boundary. The dictionary and knowledge caches it
 built are deliberately kept: they are what makes a second frame's lookups
 faster than the first's.
+
+### The frame never takes focus
+
+The frozen-frame window is created `focusable: false`, so Windows never
+activates it and the game keeps the foreground the whole time a frame is up.
+
+That is not a preference. Windows refuses a cross-process foreground steal, and
+Electron does not report the refusal: measured against an external application
+holding the foreground, it kept the real foreground window for the entire time
+the frame was shown while Electron's own `isFocused()` returned `true`. A window
+the system has not activated spends the user's first mouse press on activation
+rather than delivering it to the page — which is why dismissing a frame took two
+presses, and why moving the dismissal from `click` to pointer-down did not help.
+Never activating means there is no activation press to spend. It also means the
+game keeps rendering behind the frame instead of stalling until it is clicked
+back.
+
+The cost is that the page has no keyboard focus and therefore receives no key
+events. **Escape** and **Ctrl+C** are registered as global shortcuts for exactly
+as long as a frame is visible, and released the moment it goes; Ctrl+C asks the
+frame to put its current text selection on the clipboard, and does nothing when
+nothing is selected. If another application already owns one of them the
+conflict is reported and the frame stays usable — a background press still
+closes it, and the box text is still selectable.
 
 ### Capture latency
 
