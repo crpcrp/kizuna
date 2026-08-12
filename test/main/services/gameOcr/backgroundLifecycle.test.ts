@@ -8,7 +8,7 @@ import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
 function status(state: GameOcrRuntimeStatus['game']['state']): GameOcrRuntimeStatus {
   return {
     shortcut: 'Ctrl+Shift+O',
-    paddle: { state: 'ready' },
+    ocr: { state: 'ready' },
     game: { state }
   }
 }

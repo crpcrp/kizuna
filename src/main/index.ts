@@ -97,7 +97,7 @@ import { detectUpdateSupport } from './updateSupport'
 import { createGameOcrController } from './services/gameOcr/controller'
 import { createProductionDisplayCapture } from './services/gameOcr/displayCapture'
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
-import { createPaddleOcrWorkerService } from './services/ocr/paddleWorker'
+import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
 import {
   createGameOcrBackgroundLifecycle,
@@ -565,7 +565,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     appRoot: app.getAppPath(),
     platform: 'win32'
   })
-  const worker = createPaddleOcrWorkerService({
+  const worker = createPpOcrWorkerService({
     executablePath: ocrPaths.workerPath,
     modelPaths: {
       detection: ocrPaths.detectionModelPath,

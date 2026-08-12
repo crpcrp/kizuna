@@ -24,7 +24,7 @@ const DEFAULT_SYNC_STATUS: SyncStatus = {
 
 const DEFAULT_GAME_OCR_STATUS: GameOcrRuntimeStatus = {
   shortcut: DEFAULT_GAME_OCR_SETTINGS.captureShortcut,
-  paddle: { state: 'not-started' },
+  ocr: { state: 'not-started' },
   game: { state: 'stopped' }
 }
 

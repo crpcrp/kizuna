@@ -4,7 +4,7 @@ import {
   type GameOcrSettings
 } from '../../../../shared/gameOcrSettings'
 import type {
-  GameOcrPaddleState,
+  GameOcrWorkerState,
   GameOcrRuntimeStatus,
   GameOcrUiState
 } from '../../../../shared/gameOcr'
@@ -32,7 +32,7 @@ export const GAME_OCR_SETTING_ENTRIES: SettingEntry[] = [
     id: 'game-ocr-privacy',
     label: 'Game OCR privacy and translation',
     category: 'gameOcr',
-    keywords: ['privacy', 'local', 'pp-ocr', 'onnx', 'paddleocr', 'online', 'translator']
+    keywords: ['privacy', 'local', 'pp-ocr', 'onnx', 'online', 'translator']
   },
   {
     id: 'game-ocr-shortcut',
@@ -42,10 +42,10 @@ export const GAME_OCR_SETTING_ENTRIES: SettingEntry[] = [
     targetId: 'game-ocr-shortcut'
   },
   {
-    id: 'game-ocr-paddle-status',
+    id: 'game-ocr-worker-status',
     label: 'PP-OCR / ONNX Runtime status',
     category: 'gameOcr',
-    keywords: ['pp-ocr', 'onnx', 'paddle', 'ocr', 'model', 'worker', 'ready']
+    keywords: ['pp-ocr', 'onnx', 'ocr', 'model', 'worker', 'ready']
   },
   {
     id: 'game-ocr-status',
@@ -76,7 +76,7 @@ export const GAME_OCR_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-const PADDLE_LABELS: Record<GameOcrPaddleState, string> = {
+const OCR_WORKER_LABELS: Record<GameOcrWorkerState, string> = {
   'not-started': 'Not started',
   starting: 'Starting…',
   ready: 'Ready',
@@ -135,7 +135,7 @@ export default function GameOcrTab({
     return () => setListening(false)
   }, [open])
 
-  const errors = [status.paddle.error, status.game.error].filter(
+  const errors = [status.ocr.error, status.game.error].filter(
     (message, index, all): message is string => Boolean(message) && all.indexOf(message) === index
   )
   const gameStopped = status.game.state === 'stopped'
@@ -174,10 +174,10 @@ export default function GameOcrTab({
 
       <div className="options-section">
         <h3>Status</h3>
-        <div className="options-row" id="game-ocr-paddle-status">
+        <div className="options-row" id="game-ocr-worker-status">
           <span className="options-row-label">PP-OCR / ONNX Runtime</span>
-          <span className={badgeClass(status.paddle.state)}>
-            {PADDLE_LABELS[status.paddle.state]}
+          <span className={badgeClass(status.ocr.state)}>
+            {OCR_WORKER_LABELS[status.ocr.state]}
           </span>
         </div>
         <div className="options-row" id="game-ocr-status">

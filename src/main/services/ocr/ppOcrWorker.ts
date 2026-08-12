@@ -11,16 +11,16 @@ import {
 } from '../../../shared/ocr'
 
 /** Version of the newline-delimited protocol spoken by the PP-OCR worker. */
-export const PADDLE_OCR_PROTOCOL_VERSION = 1
+export const PP_OCR_PROTOCOL_VERSION = 1
 
 /** Conservative defaults; each can be lowered in tests or development tools. */
-export const PADDLE_OCR_STARTUP_TIMEOUT_MS = 15_000
-export const PADDLE_OCR_RECOGNITION_TIMEOUT_MS = 30_000
-export const PADDLE_OCR_SHUTDOWN_TIMEOUT_MS = 2_000
-export const PADDLE_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
-export const PADDLE_OCR_MAX_STDERR_BYTES = 64 * 1024
-export const PADDLE_OCR_MAX_IMAGE_BASE64_BYTES = 32 * 1024 * 1024
-export const PADDLE_OCR_MAX_IMAGE_PIXELS = 64 * 1024 * 1024
+export const PP_OCR_STARTUP_TIMEOUT_MS = 15_000
+export const PP_OCR_RECOGNITION_TIMEOUT_MS = 30_000
+export const PP_OCR_SHUTDOWN_TIMEOUT_MS = 2_000
+export const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
+export const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
+export const PP_OCR_MAX_IMAGE_BASE64_BYTES = 32 * 1024 * 1024
+export const PP_OCR_MAX_IMAGE_PIXELS = 64 * 1024 * 1024
 
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
@@ -33,50 +33,45 @@ const WORKER_ARGS = {
   detectionSideLength: '--det-side-len'
 } as const
 
-/**
- * Match the ONNX worker's measured detector input. Carrying the legacy Paddle
- * value of 4000 into this runtime made the 1080p fixture roughly twenty times
- * slower and introduced a false-positive region; 960 recognizes the five
- * expected Japanese lines and remains within the worker's warm-path budget.
- */
-export const PADDLE_OCR_DETECTION_SIDE_LENGTH = 960
+/** Maximum detector input side length passed to the PP-OCR worker. */
+export const PP_OCR_DETECTION_SIDE_LENGTH = 4000
 
 /** The model and dictionary files are injected so packaging can own their locations. */
-export interface PaddleOcrModelPaths {
+export interface PpOcrModelPaths {
   detection: string
   recognition: string
   keys: string
 }
 
-export interface PaddleOcrWorkerOptions {
+export interface PpOcrWorkerOptions {
   executablePath: string
-  modelPaths: PaddleOcrModelPaths
+  modelPaths: PpOcrModelPaths
   startupTimeoutMs?: number
   recognitionTimeoutMs?: number
   shutdownTimeoutMs?: number
   maxStdoutBytes?: number
   maxStderrBytes?: number
   maxImageBase64Bytes?: number
-  spawn?: PaddleOcrSpawn
-  onStateChange?: (status: PaddleOcrWorkerStatus) => void
+  spawn?: PpOcrSpawn
+  onStateChange?: (status: PpOcrWorkerStatus) => void
 }
 
 /** Raw PNG/JPEG data is passed as base64; it never crosses the public OCR contract. */
-export interface PaddleOcrRequest {
+export interface PpOcrRequest {
   sessionId: number
   captureId: number
   imageSize: OcrImageSize
   imageBase64: string
 }
 
-export type PaddleOcrWorkerState = 'stopped' | 'starting' | 'ready' | 'recognizing' | 'error'
+export type PpOcrWorkerState = 'stopped' | 'starting' | 'ready' | 'recognizing' | 'error'
 
-export interface PaddleOcrWorkerStatus {
-  state: PaddleOcrWorkerState
+export interface PpOcrWorkerStatus {
+  state: PpOcrWorkerState
   error?: string
 }
 
-export type PaddleOcrWorkerErrorCode =
+export type PpOcrWorkerErrorCode =
   | 'cancelled'
   | 'invalid-input'
   | 'startup-failed'
@@ -88,7 +83,7 @@ export type PaddleOcrWorkerErrorCode =
   | 'output-limit'
   | 'shutdown-timeout'
 
-const ERROR_MESSAGES: Record<PaddleOcrWorkerErrorCode, string> = {
+const ERROR_MESSAGES: Record<PpOcrWorkerErrorCode, string> = {
   cancelled: 'PP-OCR work was cancelled',
   'invalid-input': 'PP-OCR received invalid image input',
   'startup-failed': 'PP-OCR worker could not start',
@@ -101,29 +96,29 @@ const ERROR_MESSAGES: Record<PaddleOcrWorkerErrorCode, string> = {
   'shutdown-timeout': 'PP-OCR worker did not stop in time'
 }
 
-export class PaddleOcrWorkerError extends Error {
-  readonly code: PaddleOcrWorkerErrorCode
+export class PpOcrWorkerError extends Error {
+  readonly code: PpOcrWorkerErrorCode
 
-  constructor(code: PaddleOcrWorkerErrorCode, cause?: unknown) {
+  constructor(code: PpOcrWorkerErrorCode, cause?: unknown) {
     super(ERROR_MESSAGES[code], { cause })
-    this.name = 'PaddleOcrWorkerError'
+    this.name = 'PpOcrWorkerError'
     this.code = code
   }
 }
 
 /** Minimal stream surface needed by the adapter; tests provide a small fake. */
-export interface PaddleOcrWorkerOutput {
+export interface PpOcrWorkerOutput {
   on(event: 'data', listener: (chunk: Buffer | string) => void): void
 }
 
 /** Minimal child-process surface needed by the adapter; no Electron object leaks out. */
-export interface PaddleOcrWorkerProcess {
+export interface PpOcrWorkerProcess {
   stdin: {
     write(chunk: string): boolean
     end(): void
   }
-  stdout: PaddleOcrWorkerOutput
-  stderr: PaddleOcrWorkerOutput
+  stdout: PpOcrWorkerOutput
+  stderr: PpOcrWorkerOutput
   on(
     event: 'error' | 'exit' | 'close',
     listener: (errorOrCode: Error | number | null, signal?: string | null) => void
@@ -131,30 +126,30 @@ export interface PaddleOcrWorkerProcess {
   kill(signal?: NodeJS.Signals): boolean
 }
 
-export interface PaddleOcrSpawnOptions {
+export interface PpOcrSpawnOptions {
   stdio: ['pipe', 'pipe', 'pipe']
   windowsHide: boolean
 }
 
-export type PaddleOcrSpawn = (
+export type PpOcrSpawn = (
   executablePath: string,
   args: string[],
-  options: PaddleOcrSpawnOptions
-) => PaddleOcrWorkerProcess
+  options: PpOcrSpawnOptions
+) => PpOcrWorkerProcess
 
 /** Production process factory. Tests inject a fake instead of starting PP-OCR. */
-export const spawnPaddleOcr: PaddleOcrSpawn = (executablePath, args, options) =>
-  spawn(executablePath, args, options) as unknown as PaddleOcrWorkerProcess
+export const spawnPpOcr: PpOcrSpawn = (executablePath, args, options) =>
+  spawn(executablePath, args, options) as unknown as PpOcrWorkerProcess
 
 /**
  * Arguments understood by the PP-OCR ONNX sidecar. The adapter supplies the
  * model files, recognition dictionary and protocol version. All paths are argv
  * entries, never shell text.
  */
-export function buildPaddleOcrWorkerArgs(modelPaths: PaddleOcrModelPaths): string[] {
+export function buildPpOcrWorkerArgs(modelPaths: PpOcrModelPaths): string[] {
   const args = [
     WORKER_ARGS.protocolVersion,
-    String(PADDLE_OCR_PROTOCOL_VERSION),
+    String(PP_OCR_PROTOCOL_VERSION),
     WORKER_ARGS.language,
     'japan',
     WORKER_ARGS.detectionModel,
@@ -164,23 +159,23 @@ export function buildPaddleOcrWorkerArgs(modelPaths: PaddleOcrModelPaths): strin
     WORKER_ARGS.keys,
     modelPaths.keys,
     WORKER_ARGS.detectionSideLength,
-    String(PADDLE_OCR_DETECTION_SIDE_LENGTH)
+    String(PP_OCR_DETECTION_SIDE_LENGTH)
   ]
   return args
 }
 
-export interface PaddleOcrWorkerService {
+export interface PpOcrWorkerService {
   /** Starts one worker and waits for its ready handshake. */
   start(): Promise<void>
   /** Runs one request; a newer request supersedes an older in-flight request. */
-  recognize(request: PaddleOcrRequest): Promise<OcrResult>
+  recognize(request: PpOcrRequest): Promise<OcrResult>
   /** Cancels pending work and terminates the warm worker. */
   stop(): Promise<void>
-  getStatus(): PaddleOcrWorkerStatus
+  getStatus(): PpOcrWorkerStatus
 }
 
 interface ProcessRecord {
-  process: PaddleOcrWorkerProcess
+  process: PpOcrWorkerProcess
   exited: boolean
   exitPromise: Promise<void>
   resolveExit: () => void
@@ -194,7 +189,7 @@ interface StartupAttempt {
 }
 
 interface PendingRecognition {
-  request: PaddleOcrRequest
+  request: PpOcrRequest
   requestId: number
   resolve: (result: OcrResult) => void
   reject: (error: unknown) => void
@@ -208,10 +203,10 @@ const RESULT_KEYS = ['version', 'type', 'requestId', 'regions'] as const
 const ERROR_KEYS = ['version', 'type', 'requestId'] as const
 const REGION_KEYS = ['text', 'confidence', 'quad'] as const
 
-class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
+class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   private readonly options: Required<
     Pick<
-      PaddleOcrWorkerOptions,
+      PpOcrWorkerOptions,
       | 'startupTimeoutMs'
       | 'recognitionTimeoutMs'
       | 'shutdownTimeoutMs'
@@ -220,9 +215,9 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
       | 'maxImageBase64Bytes'
     >
   > &
-    PaddleOcrWorkerOptions
+    PpOcrWorkerOptions
 
-  private status: PaddleOcrWorkerStatus = { state: 'stopped' }
+  private status: PpOcrWorkerStatus = { state: 'stopped' }
   private processRecord?: ProcessRecord
   private cleanupPromise?: Promise<void>
   private stoppingRecord?: ProcessRecord
@@ -236,24 +231,24 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
   private stderrBytes = 0
   private stopRequested = false
 
-  constructor(options: PaddleOcrWorkerOptions) {
+  constructor(options: PpOcrWorkerOptions) {
     validateOptions(options)
     this.options = {
       ...options,
-      startupTimeoutMs: options.startupTimeoutMs ?? PADDLE_OCR_STARTUP_TIMEOUT_MS,
-      recognitionTimeoutMs: options.recognitionTimeoutMs ?? PADDLE_OCR_RECOGNITION_TIMEOUT_MS,
-      shutdownTimeoutMs: options.shutdownTimeoutMs ?? PADDLE_OCR_SHUTDOWN_TIMEOUT_MS,
-      maxStdoutBytes: options.maxStdoutBytes ?? PADDLE_OCR_MAX_STDOUT_BYTES,
-      maxStderrBytes: options.maxStderrBytes ?? PADDLE_OCR_MAX_STDERR_BYTES,
-      maxImageBase64Bytes: options.maxImageBase64Bytes ?? PADDLE_OCR_MAX_IMAGE_BASE64_BYTES
+      startupTimeoutMs: options.startupTimeoutMs ?? PP_OCR_STARTUP_TIMEOUT_MS,
+      recognitionTimeoutMs: options.recognitionTimeoutMs ?? PP_OCR_RECOGNITION_TIMEOUT_MS,
+      shutdownTimeoutMs: options.shutdownTimeoutMs ?? PP_OCR_SHUTDOWN_TIMEOUT_MS,
+      maxStdoutBytes: options.maxStdoutBytes ?? PP_OCR_MAX_STDOUT_BYTES,
+      maxStderrBytes: options.maxStderrBytes ?? PP_OCR_MAX_STDERR_BYTES,
+      maxImageBase64Bytes: options.maxImageBase64Bytes ?? PP_OCR_MAX_IMAGE_BASE64_BYTES
     }
   }
 
-  getStatus(): PaddleOcrWorkerStatus {
+  getStatus(): PpOcrWorkerStatus {
     return { ...this.status }
   }
 
-  private setStatus(status: PaddleOcrWorkerStatus): void {
+  private setStatus(status: PpOcrWorkerStatus): void {
     this.status = { ...status }
     if (this.options.onStateChange) {
       try {
@@ -288,7 +283,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     return tracked
   }
 
-  recognize(request: PaddleOcrRequest): Promise<OcrResult> {
+  recognize(request: PpOcrRequest): Promise<OcrResult> {
     const inputError = validateRequest(request, this.options.maxImageBase64Bytes)
     if (inputError) return Promise.reject(inputError)
 
@@ -304,8 +299,8 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
 
       if (this.active) {
         this.active.stale = true
-        this.rejectPending(this.active, new PaddleOcrWorkerError('cancelled'))
-        if (this.queued) this.rejectPending(this.queued, new PaddleOcrWorkerError('cancelled'))
+        this.rejectPending(this.active, new PpOcrWorkerError('cancelled'))
+        if (this.queued) this.rejectPending(this.queued, new PpOcrWorkerError('cancelled'))
         this.queued = pending
       } else {
         this.active = pending
@@ -317,7 +312,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
 
   async stop(): Promise<void> {
     this.stopRequested = true
-    const cancelled = new PaddleOcrWorkerError('cancelled')
+    const cancelled = new PpOcrWorkerError('cancelled')
     this.rejectStartup(cancelled)
     if (this.active) this.rejectPending(this.active, cancelled)
     if (this.queued) this.rejectPending(this.queued, cancelled)
@@ -340,7 +335,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
 
   private async startInternal(): Promise<void> {
     if (this.cleanupPromise) await this.cleanupPromise.catch(() => undefined)
-    if (this.stopRequested) throw new PaddleOcrWorkerError('cancelled')
+    if (this.stopRequested) throw new PpOcrWorkerError('cancelled')
 
     if (this.processRecord) {
       await this.cleanupRecord(this.processRecord).catch(() => undefined)
@@ -361,9 +356,9 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     this.startup = startup
 
     try {
-      const child = (this.options.spawn ?? spawnPaddleOcr)(
+      const child = (this.options.spawn ?? spawnPpOcr)(
         this.options.executablePath,
-        buildPaddleOcrWorkerArgs(this.options.modelPaths),
+        buildPpOcrWorkerArgs(this.options.modelPaths),
         { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
       )
       const record = createProcessRecord(child)
@@ -371,10 +366,10 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
       this.processRecord = record
       this.attachProcess(record)
       startup.timer = setTimeout(() => {
-        this.fail(new PaddleOcrWorkerError('startup-timeout'), record)
+        this.fail(new PpOcrWorkerError('startup-timeout'), record)
       }, this.options.startupTimeoutMs)
     } catch (error) {
-      const failure = new PaddleOcrWorkerError('startup-failed', error)
+      const failure = new PpOcrWorkerError('startup-failed', error)
       this.startup = undefined
       this.setStatus({ state: 'error', error: failure.message })
       rejectStartup(failure)
@@ -396,14 +391,13 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
       if (this.active !== pending) return
 
       const record = this.processRecord
-      if (!record || record.exited) throw new PaddleOcrWorkerError('worker-exited')
+      if (!record || record.exited) throw new PpOcrWorkerError('worker-exited')
       this.setStatus({ state: 'recognizing' })
       this.stdoutBuffer = ''
       this.stdoutBytes = 0
       this.writeRequest(record, pending)
       pending.timer = setTimeout(() => {
-        if (this.active === pending)
-          this.fail(new PaddleOcrWorkerError('recognition-timeout'), record)
+        if (this.active === pending) this.fail(new PpOcrWorkerError('recognition-timeout'), record)
       }, this.options.recognitionTimeoutMs)
     } catch (error) {
       if (this.active !== pending) return
@@ -414,7 +408,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
 
   private writeRequest(record: ProcessRecord, pending: PendingRecognition): void {
     const message = {
-      version: PADDLE_OCR_PROTOCOL_VERSION,
+      version: PP_OCR_PROTOCOL_VERSION,
       type: 'recognize',
       requestId: pending.requestId,
       sessionId: pending.request.sessionId,
@@ -425,7 +419,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     try {
       record.process.stdin.write(JSON.stringify(message) + '\n')
     } catch (error) {
-      throw new PaddleOcrWorkerError('worker-error', error)
+      throw new PpOcrWorkerError('worker-error', error)
     }
   }
 
@@ -442,12 +436,12 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     this.stdoutBytes += Buffer.byteLength(text, 'utf8')
     if (this.stdoutBytes > this.options.maxStdoutBytes) {
-      this.fail(new PaddleOcrWorkerError('output-limit'), record)
+      this.fail(new PpOcrWorkerError('output-limit'), record)
       return
     }
     this.stdoutBuffer += text
     if (Buffer.byteLength(this.stdoutBuffer, 'utf8') > this.options.maxStdoutBytes) {
-      this.fail(new PaddleOcrWorkerError('output-limit'), record)
+      this.fail(new PpOcrWorkerError('output-limit'), record)
       return
     }
 
@@ -473,18 +467,18 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     this.stderrBytes += Buffer.byteLength(text, 'utf8')
     if (this.stderrBytes > this.options.maxStderrBytes) {
-      this.fail(new PaddleOcrWorkerError('output-limit'), record)
+      this.fail(new PpOcrWorkerError('output-limit'), record)
     }
   }
 
   private handleMessage(record: ProcessRecord, value: unknown): void {
-    if (!isRecord(value) || value.version !== PADDLE_OCR_PROTOCOL_VERSION) {
-      throw new PaddleOcrWorkerError('protocol-error')
+    if (!isRecord(value) || value.version !== PP_OCR_PROTOCOL_VERSION) {
+      throw new PpOcrWorkerError('protocol-error')
     }
 
     if (value.type === 'ready') {
       if (!hasOnlyKeys(value, READY_KEYS) || this.startup?.record !== record) {
-        throw new PaddleOcrWorkerError('protocol-error')
+        throw new PpOcrWorkerError('protocol-error')
       }
       const startup = this.startup
       this.startup = undefined
@@ -496,34 +490,34 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     }
 
     if (value.type === 'error') {
-      if (!hasOnlyKeys(value, ERROR_KEYS)) throw new PaddleOcrWorkerError('protocol-error')
+      if (!hasOnlyKeys(value, ERROR_KEYS)) throw new PpOcrWorkerError('protocol-error')
       const requestId = value.requestId
       if (requestId === undefined && this.startup?.record === record) {
-        this.fail(new PaddleOcrWorkerError('worker-error'), record)
+        this.fail(new PpOcrWorkerError('worker-error'), record)
         return
       }
       if (!isRequestId(requestId) || !this.active || this.active.requestId !== requestId) {
-        throw new PaddleOcrWorkerError('protocol-error')
+        throw new PpOcrWorkerError('protocol-error')
       }
       const pending = this.active
       this.active = undefined
       this.clearPendingTimer(pending)
-      this.rejectPending(pending, new PaddleOcrWorkerError('worker-error'))
+      this.rejectPending(pending, new PpOcrWorkerError('worker-error'))
       this.setStatus({ state: 'ready' })
       this.dispatchQueued()
       return
     }
 
     if (value.type !== 'result' || !hasOnlyKeys(value, RESULT_KEYS)) {
-      throw new PaddleOcrWorkerError('protocol-error')
+      throw new PpOcrWorkerError('protocol-error')
     }
-    if (this.startup?.record === record) throw new PaddleOcrWorkerError('protocol-error')
+    if (this.startup?.record === record) throw new PpOcrWorkerError('protocol-error')
     if (
       !isRequestId(value.requestId) ||
       !this.active ||
       this.active.requestId !== value.requestId
     ) {
-      throw new PaddleOcrWorkerError('protocol-error')
+      throw new PpOcrWorkerError('protocol-error')
     }
 
     const pending = this.active
@@ -537,7 +531,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
 
   private handleProcessError(record: ProcessRecord): void {
     if (record !== this.processRecord || record.exited || this.stoppingRecord === record) return
-    this.fail(new PaddleOcrWorkerError('worker-exited'), record)
+    this.fail(new PpOcrWorkerError('worker-exited'), record)
   }
 
   private handleProcessExit(
@@ -552,11 +546,11 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     this.processRecord = undefined
     if (this.stoppingRecord === record || this.stopRequested) return
 
-    const failure = new PaddleOcrWorkerError('worker-exited', { code, signal })
+    const failure = new PpOcrWorkerError('worker-exited', { code, signal })
     this.fail(failure, record)
   }
 
-  private fail(error: PaddleOcrWorkerError, record?: ProcessRecord): void {
+  private fail(error: PpOcrWorkerError, record?: ProcessRecord): void {
     if (record && this.processRecord && record !== this.processRecord) return
     this.rejectStartup(error)
     if (this.active) this.rejectPending(this.active, error)
@@ -580,7 +574,7 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
     const next = this.queued
     this.queued = undefined
     if (this.stopRequested || !this.processRecord || this.status.state === 'error') {
-      this.rejectPending(next, new PaddleOcrWorkerError('cancelled'))
+      this.rejectPending(next, new PpOcrWorkerError('cancelled'))
       return
     }
     this.active = next
@@ -667,17 +661,15 @@ class PaddleOcrWorkerServiceImpl implements PaddleOcrWorkerService {
         // Report the bounded shutdown failure below.
       }
     }
-    throw new PaddleOcrWorkerError('shutdown-timeout')
+    throw new PpOcrWorkerError('shutdown-timeout')
   }
 }
 
-export function createPaddleOcrWorkerService(
-  options: PaddleOcrWorkerOptions
-): PaddleOcrWorkerService {
-  return new PaddleOcrWorkerServiceImpl(options)
+export function createPpOcrWorkerService(options: PpOcrWorkerOptions): PpOcrWorkerService {
+  return new PpOcrWorkerServiceImpl(options)
 }
 
-function createProcessRecord(process: PaddleOcrWorkerProcess): ProcessRecord {
+function createProcessRecord(process: PpOcrWorkerProcess): ProcessRecord {
   let resolveExit!: () => void
   const exitPromise = new Promise<void>((resolve) => {
     resolveExit = resolve
@@ -685,15 +677,15 @@ function createProcessRecord(process: PaddleOcrWorkerProcess): ProcessRecord {
   return { process, exited: false, exitPromise, resolveExit }
 }
 
-function validateOptions(options: PaddleOcrWorkerOptions): void {
+function validateOptions(options: PpOcrWorkerOptions): void {
   if (!options || typeof options.executablePath !== 'string' || options.executablePath === '') {
-    throw new PaddleOcrWorkerError('invalid-input')
+    throw new PpOcrWorkerError('invalid-input')
   }
   if (!options.modelPaths || !nonEmpty(options.modelPaths.detection)) {
-    throw new PaddleOcrWorkerError('invalid-input')
+    throw new PpOcrWorkerError('invalid-input')
   }
   if (!nonEmpty(options.modelPaths.recognition)) {
-    throw new PaddleOcrWorkerError('invalid-input')
+    throw new PpOcrWorkerError('invalid-input')
   }
   for (const value of [
     options.startupTimeoutMs,
@@ -704,7 +696,7 @@ function validateOptions(options: PaddleOcrWorkerOptions): void {
       value !== undefined &&
       (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMEOUT_MS)
     ) {
-      throw new PaddleOcrWorkerError('invalid-input')
+      throw new PpOcrWorkerError('invalid-input')
     }
   }
   for (const value of [
@@ -716,17 +708,17 @@ function validateOptions(options: PaddleOcrWorkerOptions): void {
       value !== undefined &&
       (!Number.isSafeInteger(value) || value <= 0 || value > MAX_BUFFER_BYTES)
     ) {
-      throw new PaddleOcrWorkerError('invalid-input')
+      throw new PpOcrWorkerError('invalid-input')
     }
   }
 }
 
 function validateRequest(
-  request: PaddleOcrRequest,
+  request: PpOcrRequest,
   maxImageBase64Bytes: number
-): PaddleOcrWorkerError | undefined {
+): PpOcrWorkerError | undefined {
   if (!request || !isOcrIdentifier(request.sessionId) || !isOcrIdentifier(request.captureId)) {
-    return new PaddleOcrWorkerError('invalid-input')
+    return new PpOcrWorkerError('invalid-input')
   }
   const { width, height } = request.imageSize ?? ({} as OcrImageSize)
   if (
@@ -736,28 +728,28 @@ function validateRequest(
     height <= 0 ||
     width > MAX_OCR_IMAGE_DIMENSION ||
     height > MAX_OCR_IMAGE_DIMENSION ||
-    width * height > PADDLE_OCR_MAX_IMAGE_PIXELS
+    width * height > PP_OCR_MAX_IMAGE_PIXELS
   ) {
-    return new PaddleOcrWorkerError('invalid-input')
+    return new PpOcrWorkerError('invalid-input')
   }
   if (
     typeof request.imageBase64 !== 'string' ||
     request.imageBase64.length === 0 ||
     Buffer.byteLength(request.imageBase64, 'utf8') > maxImageBase64Bytes
   ) {
-    return new PaddleOcrWorkerError('invalid-input')
+    return new PpOcrWorkerError('invalid-input')
   }
   return undefined
 }
 
-function buildOcrResult(request: PaddleOcrRequest, rawRegions: unknown): OcrResult {
+function buildOcrResult(request: PpOcrRequest, rawRegions: unknown): OcrResult {
   if (!Array.isArray(rawRegions) || rawRegions.length > MAX_OCR_REGION_COUNT) {
-    throw new PaddleOcrWorkerError('protocol-error')
+    throw new PpOcrWorkerError('protocol-error')
   }
 
   const regions = rawRegions.map((candidate, index) => {
     if (!isRecord(candidate) || !hasOnlyKeys(candidate, REGION_KEYS)) {
-      throw new PaddleOcrWorkerError('protocol-error')
+      throw new PpOcrWorkerError('protocol-error')
     }
     if (
       typeof candidate.text !== 'string' ||
@@ -767,12 +759,12 @@ function buildOcrResult(request: PaddleOcrRequest, rawRegions: unknown): OcrResu
       candidate.confidence < 0 ||
       candidate.confidence > 1
     ) {
-      throw new PaddleOcrWorkerError('protocol-error')
+      throw new PpOcrWorkerError('protocol-error')
     }
     const bounds = quadrilateralToBounds(candidate.quad)
-    if (!bounds) throw new PaddleOcrWorkerError('protocol-error')
+    if (!bounds) throw new PpOcrWorkerError('protocol-error')
     return {
-      id: `paddle-${index + 1}`,
+      id: `ppocr-${index + 1}`,
       text: candidate.text,
       bounds,
       confidence: candidate.confidence
@@ -785,7 +777,7 @@ function buildOcrResult(request: PaddleOcrRequest, rawRegions: unknown): OcrResu
     imageSize: request.imageSize,
     regions
   })
-  if (!normalized.ok) throw new PaddleOcrWorkerError('protocol-error')
+  if (!normalized.ok) throw new PpOcrWorkerError('protocol-error')
   return normalized.value
 }
 
@@ -815,8 +807,8 @@ function quadrilateralToBounds(value: unknown): OcrBounds | undefined {
   return { x: left, y: top, width: right - left, height: bottom - top }
 }
 
-function asWorkerError(error: unknown, fallback: PaddleOcrWorkerErrorCode): PaddleOcrWorkerError {
-  return error instanceof PaddleOcrWorkerError ? error : new PaddleOcrWorkerError(fallback, error)
+function asWorkerError(error: unknown, fallback: PpOcrWorkerErrorCode): PpOcrWorkerError {
+  return error instanceof PpOcrWorkerError ? error : new PpOcrWorkerError(fallback, error)
 }
 
 function isRequestId(value: unknown): value is number {

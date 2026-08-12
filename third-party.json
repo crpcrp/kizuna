@@ -211,7 +211,7 @@
       ],
       "notes": [
         "ppocr.exe is Kizuna's persistent GPL-3.0-or-later protocol-v1 worker, built from patched RapidOcrOnnx and linked statically with OpenCV, Clipper, zlib and libpng.",
-        "The CPU-only ONNX Runtime 1.24.4 DLLs and their transitive Microsoft VC143 runtime closure ship beside the worker. DirectML, Paddle Inference, oneDNN and Intel MKL are not shipped.",
+        "The CPU-only ONNX Runtime 1.24.4 DLLs and their transitive Microsoft VC143 runtime closure ship beside the worker. DirectML and the former inference runtime are not shipped.",
         "The PP-OCRv5 detection and recognition ONNX models come from the RapidOCR v3.9.2 ModelScope mirror. keys.txt is the recognition dictionary extracted from the model metadata.",
         "Windows only, because Game OCR is; the worker and models run locally."
       ],
