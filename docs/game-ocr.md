@@ -171,14 +171,17 @@ The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
-acknowledges a browser paint. The same line splits dismiss, compositor settle,
-capture, presentation, recognition, and rendering so a slow machine can be
-profiled without guessing which boundary dominates. `KIZUNA_GAME_OCR_TIMING=1`
-additionally enables the frozen frame's detailed input trace.
+acknowledges a browser paint. The same line splits dismissal, capture-queue
+waiting, compositor settle, capture, presentation, recognition, and rendering
+so a slow machine can be profiled without guessing which boundary dominates.
+`KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
+input trace.
 
-The detector uses the worker's tuned 960-pixel maximum side. On the committed
-1080p game fixture this preserves all expected Japanese lines while measuring
-about 83 ms warm, compared with about 253 ms when detection runs at 1920.
+Detection runs at the screenshot's native size on ordinary displays. A
+960-pixel limit was faster on one benchmark, but reduced real-game recall too
+much to use as the application default. Kizuna instead avoids repeated work by
+reusing the previous result when the newly encoded screenshot is byte-for-byte
+identical. A changed frame always goes through the worker normally.
 
 ### The screenshot must be PNG
 

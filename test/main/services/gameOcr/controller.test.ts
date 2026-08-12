@@ -432,6 +432,27 @@ describe('createGameOcrController', () => {
     expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
   })
 
+  it('reuses OCR for a byte-identical consecutive screenshot', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    const firstRequest = fake.recognitionRequests[0]
+    firstRequest.deferred.resolve(
+      result(firstRequest.request.sessionId, firstRequest.request.captureId, '日本語')
+    )
+    await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledOnce())
+
+    const frame = fake.windows[0]
+    frame.captureBytes.mockResolvedValue('image-1')
+    await fake.controller.capture()
+    await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledTimes(2))
+
+    expect(fake.ocr.recognize).toHaveBeenCalledOnce()
+    expect(fake.onResult).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sessionId: 2, captureId: 2 })
+    )
+  })
+
   it('passes the display source and freshness requirement to the frame', async () => {
     const fake = setup()
     await fake.controller.arm()
