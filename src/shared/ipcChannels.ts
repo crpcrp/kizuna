@@ -157,8 +157,15 @@ export const GAME_OCR_CHANNELS = {
   retry: 'gameOcr:retry',
   /** main→renderer push: current worker/coordinator status. */
   statusChanged: 'gameOcr:statusChanged',
-  /** main→renderer: replace the frozen screenshot and recognition state. */
-  present: 'gameOcr:present',
+  /**
+   * main→renderer: freeze the display the frame is streaming. The screenshot
+   * travels the other way; the renderer is the one holding the capture stream.
+   */
+  freeze: 'gameOcr:freeze',
+  /** renderer→main: the frozen frame is drawn and ready to be shown. */
+  frozen: 'gameOcr:frozen',
+  /** renderer→main: the encoded screenshot, for the OCR worker only. */
+  captureBytes: 'gameOcr:captureBytes',
   /** main→renderer: clear screenshot, boxes, selection, and indicator state. */
   discard: 'gameOcr:discard',
   /** main→renderer: update the processing indicator after OCR settles. */

@@ -18,7 +18,7 @@ export interface GameOcrPreferences {
 
 export interface GameOcrPreferencesBridge {
   playerSettings: Pick<KizunaApi['playerSettings'], 'getSettings'>
-  gameOcr: Pick<KizunaApi['gameOcr'], 'onPresentation'>
+  gameOcr: Pick<KizunaApi['gameOcr'], 'onFreeze'>
 }
 
 const DEFAULT_PREFERENCES: GameOcrPreferences = {
@@ -60,7 +60,9 @@ export function useGameOcrPreferences(bridge: GameOcrPreferencesBridge): GameOcr
       )
     }
     load()
-    const unsubscribe = gameOcr.onPresentation(load)
+    // Re-read at every frame boundary. The freeze request is that boundary
+    // now that the screenshot no longer travels from main to the renderer.
+    const unsubscribe = gameOcr.onFreeze(load)
     return () => {
       active = false
       unsubscribe()

@@ -45,8 +45,12 @@ import type {
   StoredTrackSelection
 } from './mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
-import type { GameOcrPresentation } from './gameOcr'
-import type { GameOcrRuntimeStatus } from './gameOcr'
+import type {
+  GameOcrCaptureBytes,
+  GameOcrFreezeRequest,
+  GameOcrFrozenFrame,
+  GameOcrRuntimeStatus
+} from './gameOcr'
 import type { GameOcrSettings } from './gameOcrSettings'
 import type { OcrResult } from './ocr'
 
@@ -123,7 +127,12 @@ export interface KizunaApi {
     stop(): Promise<GameOcrRuntimeStatus>
     retry(): Promise<GameOcrRuntimeStatus>
     onStatusChange(cb: (status: GameOcrRuntimeStatus) => void): () => void
-    onPresentation(cb: (value: GameOcrPresentation) => void): () => void
+    /** Freeze the display this frame streams; the screenshot goes the other way. */
+    onFreeze(cb: (request: GameOcrFreezeRequest) => void): () => void
+    /** The frame is drawn and can be shown. Sent before the encode. */
+    frozen(value: GameOcrFrozenFrame): void
+    /** The encoded screenshot, for the OCR worker only. */
+    captureBytes(value: GameOcrCaptureBytes): void
     onDiscard(cb: () => void): () => void
     onRecognitionState(cb: (recognizing: boolean) => void): () => void
     /** The accepted OCR regions for the screenshot currently presented. */

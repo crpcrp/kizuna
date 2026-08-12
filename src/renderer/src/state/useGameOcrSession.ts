@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GameOcrPresentation } from '../../../shared/gameOcr'
-import type { OcrResult } from '../../../shared/ocr'
+import type { OcrImageSize, OcrResult } from '../../../shared/ocr'
 import type { PopupSettings } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
@@ -26,6 +26,8 @@ export interface UseGameOcrSessionInput {
 }
 
 export interface UseGameOcrSessionResult {
+  /** Records the frame the capture hook has drawn, which reveals the canvas. */
+  onFrozen(imageSize: OcrImageSize): void
   presentation: GameOcrPresentation | undefined
   regions: GameOcrBoxRegion[]
   /** Identifies the frozen frame; changes invalidate popups and selections. */
@@ -86,11 +88,12 @@ export function useGameOcrSession({
   }, [invalidatePipeline])
 
   useEffect(() => {
-    const unsubscribePresentation = api.onPresentation((next) => {
-      // A new screenshot always arrives before its regions do; dropping the
-      // old ones here is what keeps stale boxes off a fresh frame.
+    const unsubscribeFreeze = api.onFreeze(() => {
+      // A freeze request always arrives before the regions of the frame it
+      // starts; dropping the old ones here is what keeps stale boxes off a
+      // fresh screenshot. The screenshot itself is drawn by the capture hook.
       clear()
-      setPresentation(next)
+      setPresentation(undefined)
     })
     const unsubscribeDiscard = api.onDiscard(() => {
       setPresentation(undefined)
@@ -115,7 +118,7 @@ export function useGameOcrSession({
     })
     api.rendererReady()
     return () => {
-      unsubscribePresentation()
+      unsubscribeFreeze()
       unsubscribeDiscard()
       unsubscribeRecognition()
       unsubscribeRegions()
@@ -148,6 +151,10 @@ export function useGameOcrSession({
     [result, text, viewportSize]
   )
 
+  const onFrozen = useCallback((imageSize: OcrImageSize): void => {
+    setPresentation({ imageSize, recognizing: true })
+  }, [])
+
   const close = useCallback((): void => {
     setPresentation(undefined)
     clear()
@@ -156,6 +163,7 @@ export function useGameOcrSession({
 
   return {
     presentation,
+    onFrozen,
     regions,
     captureKey: `${result?.sessionId ?? 0}:${result?.captureId ?? 0}`,
     close

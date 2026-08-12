@@ -5,6 +5,8 @@ import './GameOcrFrame.css'
 
 export interface GameOcrFrameProps {
   presentation?: GameOcrPresentation
+  /** The canvas the capture draws into; owned by the capture hook. */
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>
   onClose: () => void
   children?: ReactNode
 }
@@ -52,6 +54,7 @@ export function useGameOcrFrameClose(handler: GameOcrFrameCloseHandler): void {
  */
 export default function GameOcrFrame({
   presentation,
+  canvasRef,
   onClose,
   children
 }: GameOcrFrameProps): React.JSX.Element {
@@ -120,14 +123,18 @@ export default function GameOcrFrame({
             : undefined
         }
       >
-        {presentation && (
-          <img
-            className="game-ocr-frame__image"
-            src={`data:${presentation.imageMediaType};base64,${presentation.imageBase64}`}
-            alt="Frozen game frame"
-            draggable={false}
-          />
-        )}
+        {/* Always mounted, because the capture draws into it while the window
+            is still hidden — a canvas that only appeared with the presentation
+            would not exist yet at the moment there is something to draw. It is
+            hidden rather than unmounted between frames so the last screenshot
+            cannot flash back on the next capture. */}
+        <canvas
+          ref={canvasRef}
+          className="game-ocr-frame__image"
+          aria-label="Frozen game screenshot"
+          role="img"
+          hidden={!presentation}
+        />
         <div className="game-ocr-frame__content">{children}</div>
         {presentation?.recognizing && (
           <div className="game-ocr-frame__indicator" role="status" aria-live="polite">

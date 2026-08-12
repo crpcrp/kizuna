@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
-  DisplayCapture,
-  DisplayCaptureService
+  GameOcrDisplaySources,
+  GameOcrDisplayTarget
 } from '@src/main/services/gameOcr/displayCapture'
 import {
   createGameOcrController,
@@ -27,29 +27,14 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-function capture(id: number, onDispose?: () => void): DisplayCapture {
+function target(id: number): GameOcrDisplayTarget {
   const metadata: OcrDisplayCaptureMetadata = {
     displayId: id,
     displayBounds: { x: id * 100, y: 0, width: 640, height: 480 },
     scaleFactor: 1,
     imageSize: { width: 640, height: 480 }
   }
-  let imageBase64: string | undefined = `image-${id}`
-  return {
-    ...metadata,
-    metadata,
-    imageMediaType: 'image/png',
-    get imageBase64() {
-      return imageBase64
-    },
-    get disposed() {
-      return imageBase64 === undefined
-    },
-    dispose() {
-      imageBase64 = undefined
-      onDispose?.()
-    }
-  }
+  return { metadata, sourceId: `screen:${id}:0` }
 }
 
 function result(sessionId: number, captureId: number, text: string): OcrResult {
@@ -68,7 +53,9 @@ function result(sessionId: number, captureId: number, text: string): OcrResult {
   }
 }
 
-type FakeWindow = GameOcrWindow & {
+type FakeWindow = Omit<GameOcrWindow, 'freeze' | 'captureBytes'> & {
+  freeze: ReturnType<typeof vi.fn>
+  captureBytes: ReturnType<typeof vi.fn>
   triggerDismissed(): void
   triggerClosed(): void
   visible(): boolean
@@ -93,11 +80,28 @@ function makeWindow(
     if (options.discard) await options.discard()
     visible = false
   })
+  const bytes = new Map<number, { resolve(value: string): void; promise: Promise<string> }>()
   return {
-    present: vi.fn(async () => {
+    freeze: vi.fn(async (request) => {
       events.push(`present:${id}`)
       visible = true
+      return request.imageSize
     }),
+    captureBytes: vi.fn((captureId: number) => {
+      const existing = bytes.get(captureId)
+      if (existing) return existing.promise
+      let resolve!: (value: string) => void
+      const promise = new Promise<string>((r) => {
+        resolve = r
+      })
+      bytes.set(captureId, { promise, resolve })
+      // The renderer encodes after the frame is up; the fake answers on the
+      // next turn so the ordering the controller relies on is exercised.
+      queueMicrotask(() => resolve(`image-${captureId}`))
+      return promise
+    }),
+    reportFrozen: vi.fn(),
+    reportCaptureBytes: vi.fn(),
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
@@ -140,8 +144,8 @@ function setup(
 ) {
   const events: string[] = []
   const windows: FakeWindow[] = []
-  const captures = [capture(1), capture(2), capture(3)]
-  const usedCaptures: DisplayCapture[] = []
+  const targets = [target(1), target(2), target(3)]
+  const usedTargets: GameOcrDisplayTarget[] = []
   let shortcutCallback: (() => void) | undefined
   const shortcut: GameOcrShortcut = {
     register: vi.fn((_accelerator, callback) => {
@@ -150,15 +154,16 @@ function setup(
     }),
     unregister: vi.fn()
   }
-  const captureService: DisplayCaptureService = {
-    capture: vi.fn(async () => {
-      events.push(`capture:${captures[0]?.displayId}`)
-      const next = captures.shift()
-      if (!next) throw new Error('no fake capture')
+  const displays: GameOcrDisplaySources = {
+    cursorDisplay: vi.fn(async () => {
+      events.push(`capture:${targets[0]?.metadata.displayId}`)
+      const next = targets.shift()
+      if (!next) throw new Error('no fake display')
       if (windows.some((window) => window.visible())) throw new Error('captured a visible frame')
-      usedCaptures.push(next)
+      usedTargets.push(next)
       return next
-    })
+    }),
+    invalidate: vi.fn()
   }
   const recognitionRequests: Array<{
     request: { sessionId: number; captureId: number }
@@ -177,7 +182,7 @@ function setup(
   const base = {
     shortcut,
     accelerator: 'Control+Shift+G',
-    capture: captureService,
+    displays,
     settle: {
       settle: vi.fn(async () => {
         events.push('settle')
@@ -193,18 +198,21 @@ function setup(
     onResult: vi.fn(),
     onError: vi.fn()
   }
-  const controller = createGameOcrController({ ...base, ...overrides })
+  const controller = createGameOcrController({
+    ...base,
+    ...overrides
+  } as Parameters<typeof createGameOcrController>[0])
   return {
     controller,
     events,
     windows,
-    captures,
-    usedCaptures,
+    targets,
+    usedTargets,
     shortcut,
     get shortcutCallback() {
       return shortcutCallback
     },
-    captureService,
+    displays,
     createPresentation: base.createPresentation,
     ocr,
     recognitionRequests,
@@ -243,7 +251,7 @@ describe('createGameOcrController', () => {
     expect(fake.windows).toHaveLength(1)
     expect(fake.createPresentation).toHaveBeenCalledOnce()
     expect(fake.windows[0].visible()).toBe(true)
-    expect(fake.captures[0]).toBeDefined()
+    expect(fake.targets[0]).toBeDefined()
 
     const secondRequest = fake.recognitionRequests[1]
     firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
@@ -287,12 +295,12 @@ describe('createGameOcrController', () => {
 
     const second = fake.controller.capture()
     await Promise.resolve()
-    expect(fake.captureService.capture).toHaveBeenCalledOnce()
+    expect(fake.displays.cursorDisplay).toHaveBeenCalledOnce()
     expect(fake.windows[0]?.visible()).toBe(true)
 
     discardGate.resolve()
     await second
-    expect(fake.captureService.capture).toHaveBeenCalledTimes(2)
+    expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
     expect(fake.windows[0]?.visible()).toBe(true)
   })
 
@@ -302,7 +310,7 @@ describe('createGameOcrController', () => {
     await fake.controller.capture()
     await fake.controller.capture()
 
-    expect(fake.captureService.capture).toHaveBeenCalledOnce()
+    expect(fake.displays.cursorDisplay).toHaveBeenCalledOnce()
     expect(fake.onResult).not.toHaveBeenCalled()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'error' })
     expect(fake.onError).toHaveBeenCalledWith(
@@ -392,19 +400,45 @@ describe('createGameOcrController', () => {
     expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
   })
 
-  it('releases the encoded screenshot once recognition has finished with it', async () => {
+  it('asks the frame for its bytes only after that frame is on screen', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
-    const request = fake.recognitionRequests[0]
-    const used = fake.captures.length
+    const frame = fake.windows[0]
 
+    // The screenshot never reaches the main process until the renderer has
+    // already shown it, so the encode is off the path the user waits on.
+    expect(frame.freeze).toHaveBeenCalledOnce()
+    expect(frame.captureBytes).toHaveBeenCalledWith(1)
+    expect(frame.freeze.mock.invocationCallOrder[0]).toBeLessThan(
+      frame.captureBytes.mock.invocationCallOrder[0]
+    )
+
+    const request = fake.recognitionRequests[0]
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, '日本語'))
     await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledOnce())
-
     expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
-    expect(fake.usedCaptures[0]?.disposed).toBe(true)
-    expect(fake.captures.length).toBe(used)
+  })
+
+  it('passes the display source and freshness requirement to the frame', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    // The first capture of a run covered nothing of Kizuna's own, so the frame
+    // it already holds is the live game and no wait is needed.
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith({
+      sessionId: 1,
+      captureId: 1,
+      sourceId: 'screen:1:0',
+      imageSize: { width: 640, height: 480 },
+      requireFreshFrame: false
+    })
+
+    await fake.controller.capture()
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: 'screen:2:0', requireFreshFrame: true })
+    )
   })
 
   it('invalidates recognition when the user dismisses the frozen frame', async () => {
@@ -544,20 +578,17 @@ describe('createGameOcrController', () => {
     // own for the compositor to repaint and nothing to wait for.
     expect(fake.events).not.toContain('settle')
     expect(fake.settle.settle).not.toHaveBeenCalled()
-    expect(fake.captureService.capture).toHaveBeenCalledTimes(2)
+    expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
   })
 
-  it('presents the capture with its own media type rather than an assumed one', async () => {
+  it('freezes the display the pointer is on', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
 
-    expect(fake.windows[0].present).toHaveBeenCalledWith({
-      imageBase64: 'image-1',
-      imageMediaType: 'image/png',
-      imageSize: { width: 640, height: 480 },
-      recognizing: true
-    })
+    expect(fake.windows[0].freeze).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceId: 'screen:1:0', imageSize: { width: 640, height: 480 } })
+    )
   })
 
   it('reports the stage costs of one capture up to the visible screenshot', async () => {

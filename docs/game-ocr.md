@@ -32,10 +32,10 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
    leaves a tray icon behind.
 2. Move the mouse onto the display showing the game and press the shortcut
    (**Ctrl+Shift+O** by default; rebind it in the same tab).
-3. Kizuna captures **the whole display containing the mouse pointer** and
-   immediately covers that display with the captured screenshot. The frozen
-   screenshot appears before recognition starts, so the frame the user sees is
-   exactly the frame being read.
+3. Kizuna freezes **the whole display containing the mouse pointer** and
+   immediately covers that display with the frozen frame. The screenshot
+   appears before recognition starts, so the frame the user sees is exactly the
+   frame being read.
 4. A small **"Recognizing text…"** sign sits at a fixed inset in the
    screenshot's bottom-right corner. It is visible only while OCR is running
    and disappears when the boxes appear.
@@ -118,32 +118,49 @@ closes it, and the box text is still selectable.
 ### Capture latency
 
 Everything between the hotkey and the visible screenshot is latency the user
-feels. Measured on a 2560×1440 display, Ryzen 7 5800X3D:
+feels, so the screenshot is not taken on demand at all.
 
-| Step | Cost |
-|---|---:|
-| `desktopCapturer.getSources` | ~300 ms |
-| `nativeImage.toPNG()` | ~85 ms (448 KB) |
-| base64, IPC, `JSON.stringify` | under 1 ms each |
-| compositor settle, when paid | 32 ms |
+**The frozen frame holds an open desktop capture stream** for the display it
+covers, for as long as Game OCR is armed and its window is retained. A capture
+is then one `drawImage` from a frame the renderer already has. The expensive
+setup — enumerating capture sources, opening the stream — is paid at arm time
+and on the first capture for a display, not on the hotkey.
 
-**Electron's capture call is the cost, and it is not reducible from here.** It
-charges roughly the same ~300 ms whether the requested thumbnail is 1×1 or the
-full display, so there is nothing to win by asking for less; and it does not
-warm up, so calling it early to prime the pipeline just pays it twice. It also
-scales a full-size thumbnail for every attached display and discards all but
-the one under the pointer, which would need an API Electron does not expose.
+Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
-Two things the path does do:
+| Step | On demand (old) | From the stream |
+|---|---:|---:|
+| getting the pixels | ~300 ms | 12–44 ms |
+| encoding them | 85 ms | ~25 ms, *after* the frame is shown |
+| base64, IPC | under 1 ms | not on the path at all |
 
-- **The compositor settle is only paid when it buys something.** The bounded
-  repaint wait exists so a recapture cannot photograph Kizuna's own frozen
-  frame. The first capture of a run, and every capture taken after the user
-  returned to the game, reads pixels Kizuna never covered, so the step is
-  skipped there.
-- **One encode serves both consumers**, and it is PNG because the worker's
-  vendored OpenCV is built without a JPEG codec — see below. JPEG would save
-  ~70 ms of a ~400 ms path, which is not worth a vendor rebuild.
+`desktopCapturer.getSources` was ~75% of the old path and none of it was
+recoverable: it charges roughly the same ~300 ms whether the requested
+thumbnail is 1×1 or the full display, and it does not warm up, so calling it
+early to prime the pipeline only pays it twice. It is still used once per armed
+run — with a 1×1 thumbnail, for source ids only.
+
+The screenshot no longer crosses IPC to be displayed. The renderer draws into
+its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
+and sent to the main process then, so nothing the user is looking at a blank
+display for sits behind an encode.
+
+Two ordering properties this relies on:
+
+- **The frame is drawn while the window is still hidden**, which is why it
+  cannot appear in its own screenshot. That is a stronger guarantee than the
+  fixed 32 ms compositor-settle delay it replaces, which only assumed the
+  repaint had happened by then.
+- **A recapture additionally waits for a frame composited after the previous
+  frozen frame was hidden.** That wait is bounded at 120 ms, because a desktop
+  stream only produces frames when the screen *changes* — on a completely
+  static screen `requestVideoFrameCallback` can stall for seconds (measured
+  3.3 s and 14.4 s), and a screen full of unmoving visual-novel text is exactly
+  Kizuna's case. Hiding the frame is itself a change, so the frame normally
+  arrives within one refresh; the bound only covers the compositor disagreeing.
+
+The stream runs continuously while Game OCR is armed. It is local, like the
+rest of the feature, and stops with the window.
 
 To see the split on a real machine, start Kizuna with
 `KIZUNA_GAME_OCR_TIMING=1`; each capture then logs its dismiss, settle, capture,

@@ -6,36 +6,29 @@ import {
   type OcrImageSize
 } from '../../../shared/ocr'
 
-/** Maximum encoded image size retained by one in-memory display capture. */
-export const MAX_DISPLAY_CAPTURE_ENCODED_BYTES = 32 * 1024 * 1024
-
-/** Maximum number of physical pixels retained by one display capture. */
+/** Maximum number of physical pixels one display capture may cover. */
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
 
 /**
- * One encode serves both the frozen frame and the OCR worker, so the format has
- * to satisfy the stricter consumer, and that is the worker: the vendored OpenCV
- * inside `ppocr.exe` is built `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only
- * zlib and libpng, so `cv::imdecode` accepts PNG and nothing else. Handing it
- * JPEG yields an empty `Mat` and a rejected request — a failure that looks like
- * a recognition bug because the screenshot appears first and only the OCR step
- * fails. Changing this constant means rebuilding and republishing the vendor
- * payload with the matching codec.
+ * Encoding the frozen frame produces for the OCR worker.
  *
- * Measured on a 2560x1440 display (Ryzen 7 5800X3D): the encode is 85 ms and
- * produces 448 KB, against 14 ms and 427 KB for JPEG at quality 92. That 71 ms
- * is not where the latency is — `desktopCapturer.getSources` costs ~300 ms of
- * the same path, and it costs that regardless of the requested thumbnail size.
+ * PNG, and not by preference: the vendored OpenCV inside `ppocr.exe` is built
+ * `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only zlib and libpng, so
+ * `cv::imdecode` accepts PNG and nothing else. Confirmed against the staged
+ * worker — the same frame returns regions as PNG and `request failed:
+ * unsupported image format` as JPEG — and the failure is a nasty one, because
+ * the screenshot appears first and only recognition fails. Changing this means
+ * rebuilding and republishing the vendor payload with the matching codec.
  */
 export const DISPLAY_CAPTURE_MEDIA_TYPE = 'image/png'
 
-/** Minimal screen surface needed by the capture adapter. */
+/** Minimal screen surface needed to pick the display under the pointer. */
 export interface DisplayCaptureScreen {
   getCursorScreenPoint(): DisplayCapturePoint
   getDisplayNearestPoint(point: DisplayCapturePoint): DisplayCaptureDisplay
 }
 
-/** Minimal desktop-capture surface needed by the adapter. */
+/** Minimal desktop-capture surface needed to enumerate capture sources. */
 export interface DisplayCapturer {
   getSources(options: DisplayCaptureSourceOptions): Promise<DisplayCaptureSource[]>
 }
@@ -58,34 +51,30 @@ export interface DisplayCaptureDisplay {
 }
 
 export interface DisplayCaptureSource {
+  /** Electron's capture-source handle, which the renderer opens a stream on. */
+  id: string
   display_id: string
-  thumbnail: DisplayCaptureThumbnail
 }
 
-/** Native-image methods used by production and by fixture-backed tests. */
-export interface DisplayCaptureThumbnail {
-  isEmpty(): boolean
-  getSize(): OcrImageSize
-  toPNG(): Uint8Array
+/** The display under the pointer, and the stream source that shows it. */
+export interface GameOcrDisplayTarget {
+  metadata: OcrDisplayCaptureMetadata
+  sourceId: string
 }
 
-export interface DisplayCaptureService {
-  /** Captures the display containing the cursor at invocation time. */
-  capture(): Promise<DisplayCapture>
-}
-
-/**
- * A capture owns no file or native-image reference after construction. Its
- * encoded image is cleared by dispose(), while the immutable geometry remains
- * available for any caller that is still unwinding its presentation state.
- */
-export interface DisplayCapture extends OcrDisplayCaptureMetadata {
-  readonly metadata: OcrDisplayCaptureMetadata
-  readonly imageBase64: string | undefined
-  /** Media type of `imageBase64`, so no consumer has to assume the encoding. */
-  readonly imageMediaType: string
-  readonly disposed: boolean
-  dispose(): void
+export interface GameOcrDisplaySources {
+  /**
+   * Resolves the display containing the cursor and the capture source for it.
+   *
+   * Deliberately does **not** read any pixels. Reading them here would mean a
+   * `desktopCapturer.getSources` call with a real thumbnail size on every
+   * capture, which costs ~300 ms whatever size is asked for and never warms up;
+   * the frozen frame's renderer holds an open stream instead and draws from the
+   * frame it already has. Source ids are enumerated once and reused.
+   */
+  cursorDisplay(): Promise<GameOcrDisplayTarget>
+  /** Drops cached source ids after a display change invalidates them. */
+  invalidate(): void
 }
 
 export type DisplayCaptureErrorCode =
@@ -94,8 +83,6 @@ export type DisplayCaptureErrorCode =
   | 'invalid-display'
   | 'source-not-found'
   | 'capture-denied'
-  | 'empty-frame'
-  | 'dimension-mismatch'
   | 'image-too-large'
 
 const DISPLAY_CAPTURE_ERROR_MESSAGES: Record<DisplayCaptureErrorCode, string> = {
@@ -104,9 +91,7 @@ const DISPLAY_CAPTURE_ERROR_MESSAGES: Record<DisplayCaptureErrorCode, string> = 
   'invalid-display': 'The selected display has invalid bounds or scaling metadata.',
   'source-not-found': 'Windows did not return a capture source for the selected display.',
   'capture-denied': 'Windows denied display capture or the display is protected.',
-  'empty-frame': 'Windows returned an empty display frame.',
-  'dimension-mismatch': 'Windows returned a display frame with unexpected dimensions.',
-  'image-too-large': 'The display frame exceeds the safe in-memory capture limit.'
+  'image-too-large': 'The display exceeds the safe capture limit.'
 }
 
 export class DisplayCaptureError extends Error {
@@ -119,55 +104,15 @@ export class DisplayCaptureError extends Error {
   }
 }
 
-export interface DisplayCaptureDependencies {
+export interface DisplaySourcesDependencies {
   platform?: NodeJS.Platform
   screen: DisplayCaptureScreen
   desktopCapturer: DisplayCapturer
   maxImageDimension?: number
   maxImagePixels?: number
-  maxEncodedBytes?: number
 }
 
-interface DisplayCaptureLimits {
-  maxImageDimension: number
-  maxImagePixels: number
-  maxEncodedBytes: number
-}
-
-/**
- * Creates the injected Windows adapter. Electron APIs are accessed only from
- * this main-process boundary; tests provide screen, source, and thumbnail
- * fakes instead of capturing the developer's desktop.
- */
-export function createDisplayCaptureService(
-  deps: DisplayCaptureDependencies
-): DisplayCaptureService {
-  if ((deps.platform ?? process.platform) !== 'win32') return unsupportedService()
-
-  const limits = resolveLimits(deps)
-  return {
-    capture: () => captureDisplay(deps.screen, deps.desktopCapturer, limits)
-  }
-}
-
-/** Production factory. Non-Windows callers receive a clear unsupported error. */
-export function createProductionDisplayCapture(
-  platform: NodeJS.Platform = process.platform
-): DisplayCaptureService {
-  if (platform !== 'win32') return unsupportedService()
-  const electron = createRequire(import.meta.url)('electron') as {
-    screen?: DisplayCaptureScreen
-    desktopCapturer?: DisplayCapturer
-  }
-  if (!electron.screen || !electron.desktopCapturer) return deniedService()
-  return createDisplayCaptureService({
-    platform,
-    screen: electron.screen,
-    desktopCapturer: electron.desktopCapturer
-  })
-}
-
-/** Returns the physical thumbnail dimensions requested for one Electron display. */
+/** Returns the physical pixel dimensions of one Electron display. */
 export function displayCaptureImageSize(
   display: Pick<DisplayCaptureDisplay, 'bounds' | 'scaleFactor'>
 ): OcrImageSize {
@@ -177,84 +122,97 @@ export function displayCaptureImageSize(
   }
 }
 
-class InMemoryDisplayCapture implements DisplayCapture {
-  readonly metadata: OcrDisplayCaptureMetadata
-  readonly imageMediaType = DISPLAY_CAPTURE_MEDIA_TYPE
-  private encodedImage: string | undefined
+/**
+ * Creates the injected Windows adapter. Electron APIs are accessed only from
+ * this main-process boundary; tests provide screen and source fakes instead of
+ * enumerating the developer's desktop.
+ */
+export function createGameOcrDisplaySources(
+  deps: DisplaySourcesDependencies
+): GameOcrDisplaySources {
+  if ((deps.platform ?? process.platform) !== 'win32') return unsupportedSources()
 
-  constructor(metadata: OcrDisplayCaptureMetadata, imageBase64: string) {
-    this.metadata = freezeMetadata(metadata)
-    this.encodedImage = imageBase64
+  const maxImageDimension = positiveLimit(deps.maxImageDimension, MAX_OCR_IMAGE_DIMENSION)
+  const maxImagePixels = positiveLimit(deps.maxImagePixels, MAX_DISPLAY_CAPTURE_PIXELS)
+  // display_id -> source id. One enumeration serves every later capture, and
+  // the smallest legal thumbnail is requested because the pixels are unused.
+  let sources: Map<string, string> | undefined
+
+  const enumerate = async (): Promise<Map<string, string>> => {
+    if (sources) return sources
+    let listed: DisplayCaptureSource[]
+    try {
+      listed = await deps.desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1, height: 1 },
+        fetchWindowIcons: false
+      })
+    } catch (cause) {
+      throw new DisplayCaptureError('capture-denied', undefined, cause)
+    }
+    const resolved = new Map<string, string>()
+    for (const source of listed ?? []) {
+      if (source && typeof source.id === 'string' && typeof source.display_id === 'string') {
+        resolved.set(source.display_id, source.id)
+      }
+    }
+    sources = resolved
+    return resolved
   }
 
-  get displayId(): number {
-    return this.metadata.displayId
-  }
+  return {
+    async cursorDisplay(): Promise<GameOcrDisplayTarget> {
+      const display = resolveCursorDisplay(deps.screen)
+      validateDisplay(display, maxImageDimension, maxImagePixels)
 
-  get displayBounds(): Readonly<OcrDisplayBounds> {
-    return this.metadata.displayBounds
-  }
+      let known = await enumerate()
+      let sourceId = known.get(String(display.id))
+      if (!sourceId) {
+        // A display attached since the last enumeration is the ordinary reason
+        // to miss, so one refresh is tried before this is called a failure.
+        sources = undefined
+        known = await enumerate()
+        sourceId = known.get(String(display.id))
+      }
+      if (!sourceId) {
+        throw new DisplayCaptureError(
+          'source-not-found',
+          `Windows did not return a capture source for display ${display.id}.`
+        )
+      }
 
-  get scaleFactor(): number {
-    return this.metadata.scaleFactor
-  }
+      return {
+        sourceId,
+        metadata: freezeMetadata({
+          displayId: display.id,
+          displayBounds: display.bounds,
+          scaleFactor: display.scaleFactor,
+          imageSize: displayCaptureImageSize(display)
+        })
+      }
+    },
 
-  get imageSize(): Readonly<OcrImageSize> {
-    return this.metadata.imageSize
-  }
-
-  get imageBase64(): string | undefined {
-    return this.encodedImage
-  }
-
-  get disposed(): boolean {
-    return this.encodedImage === undefined
-  }
-
-  dispose(): void {
-    this.encodedImage = undefined
+    invalidate(): void {
+      sources = undefined
+    }
   }
 }
 
-async function captureDisplay(
-  screenApi: DisplayCaptureScreen,
-  desktopCapturerApi: DisplayCapturer,
-  limits: DisplayCaptureLimits
-): Promise<DisplayCapture> {
-  const display = resolveCursorDisplay(screenApi)
-  validateDisplay(display, limits.maxImageDimension)
-
-  const imageSize = displayCaptureImageSize(display)
-  validateImageSize(imageSize, limits)
-
-  let sources: DisplayCaptureSource[]
-  try {
-    sources = await desktopCapturerApi.getSources({
-      types: ['screen'],
-      thumbnailSize: imageSize,
-      fetchWindowIcons: false
-    })
-  } catch (cause) {
-    throw new DisplayCaptureError('capture-denied', undefined, cause)
+/** Production factory. Non-Windows callers receive a clear unsupported error. */
+export function createProductionDisplaySources(
+  platform: NodeJS.Platform = process.platform
+): GameOcrDisplaySources {
+  if (platform !== 'win32') return unsupportedSources()
+  const electron = createRequire(import.meta.url)('electron') as {
+    screen?: DisplayCaptureScreen
+    desktopCapturer?: DisplayCapturer
   }
-
-  const source = sources?.find((candidate) => candidate.display_id === String(display.id))
-  if (!source) {
-    throw new DisplayCaptureError(
-      'source-not-found',
-      `Windows did not return a capture source for display ${display.id}.`
-    )
-  }
-
-  if (!source.thumbnail) throw new DisplayCaptureError('capture-denied')
-  const imageBase64 = encodeThumbnail(source.thumbnail, imageSize, limits)
-  const metadata: OcrDisplayCaptureMetadata = {
-    displayId: display.id,
-    displayBounds: display.bounds,
-    scaleFactor: display.scaleFactor,
-    imageSize
-  }
-  return new InMemoryDisplayCapture(metadata, imageBase64)
+  if (!electron.screen || !electron.desktopCapturer) return deniedSources()
+  return createGameOcrDisplaySources({
+    platform,
+    screen: electron.screen,
+    desktopCapturer: electron.desktopCapturer
+  })
 }
 
 function resolveCursorDisplay(screenApi: DisplayCaptureScreen): DisplayCaptureDisplay {
@@ -266,7 +224,11 @@ function resolveCursorDisplay(screenApi: DisplayCaptureScreen): DisplayCaptureDi
   }
 }
 
-function validateDisplay(display: DisplayCaptureDisplay, maxImageDimension: number): void {
+function validateDisplay(
+  display: DisplayCaptureDisplay,
+  maxImageDimension: number,
+  maxImagePixels: number
+): void {
   if (
     !display ||
     typeof display !== 'object' ||
@@ -287,74 +249,10 @@ function validateDisplay(display: DisplayCaptureDisplay, maxImageDimension: numb
     !isPositiveInteger(imageSize.width) ||
     !isPositiveInteger(imageSize.height) ||
     imageSize.width > maxImageDimension ||
-    imageSize.height > maxImageDimension
+    imageSize.height > maxImageDimension ||
+    imageSize.width * imageSize.height > maxImagePixels
   ) {
     throw new DisplayCaptureError('image-too-large')
-  }
-}
-
-function validateImageSize(imageSize: OcrImageSize, limits: DisplayCaptureLimits): void {
-  if (
-    !isPositiveInteger(imageSize.width) ||
-    !isPositiveInteger(imageSize.height) ||
-    imageSize.width > limits.maxImageDimension ||
-    imageSize.height > limits.maxImageDimension ||
-    imageSize.width * imageSize.height > limits.maxImagePixels
-  ) {
-    throw new DisplayCaptureError('image-too-large')
-  }
-}
-
-function encodeThumbnail(
-  thumbnail: DisplayCaptureThumbnail,
-  expectedSize: OcrImageSize,
-  limits: DisplayCaptureLimits
-): string {
-  let actualSize: OcrImageSize
-  try {
-    if (thumbnail.isEmpty()) throw new DisplayCaptureError('empty-frame')
-    actualSize = thumbnail.getSize()
-  } catch (cause) {
-    if (cause instanceof DisplayCaptureError) throw cause
-    throw new DisplayCaptureError('capture-denied', undefined, cause)
-  }
-
-  if (!isPositiveInteger(actualSize.width) || !isPositiveInteger(actualSize.height)) {
-    throw new DisplayCaptureError('empty-frame')
-  }
-  if (actualSize.width !== expectedSize.width || actualSize.height !== expectedSize.height) {
-    throw new DisplayCaptureError(
-      'dimension-mismatch',
-      `Windows returned ${actualSize.width}×${actualSize.height}; expected ${expectedSize.width}×${expectedSize.height}.`
-    )
-  }
-
-  let encoded: Uint8Array
-  try {
-    encoded = thumbnail.toPNG()
-  } catch (cause) {
-    throw new DisplayCaptureError('capture-denied', undefined, cause)
-  }
-  if (!(encoded instanceof Uint8Array) || encoded.byteLength === 0) {
-    throw new DisplayCaptureError('empty-frame')
-  }
-
-  // A view rather than `Buffer.from(encoded)`, which would copy every encoded
-  // byte of a full display before the base64 pass even starts.
-  const imageBase64 = Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength).toString(
-    'base64'
-  )
-  if (Buffer.byteLength(imageBase64, 'utf8') > limits.maxEncodedBytes) {
-    throw new DisplayCaptureError('image-too-large')
-  }
-  return imageBase64
-}
-
-function resolveLimits(deps: DisplayCaptureDependencies): DisplayCaptureLimits {
-  return {
-    maxImageDimension: positiveLimit(deps.maxImageDimension, MAX_OCR_IMAGE_DIMENSION),
-    maxImagePixels: positiveLimit(deps.maxImagePixels, MAX_DISPLAY_CAPTURE_PIXELS),
-    maxEncodedBytes: positiveLimit(deps.maxEncodedBytes, MAX_DISPLAY_CAPTURE_ENCODED_BYTES)
   }
 }
 
@@ -370,19 +268,21 @@ function freezeMetadata(metadata: OcrDisplayCaptureMetadata): OcrDisplayCaptureM
   })
 }
 
-function unsupportedService(): DisplayCaptureService {
+function unsupportedSources(): GameOcrDisplaySources {
   return {
-    capture: async () => {
+    cursorDisplay: async () => {
       throw new DisplayCaptureError('unsupported')
-    }
+    },
+    invalidate: () => {}
   }
 }
 
-function deniedService(): DisplayCaptureService {
+function deniedSources(): GameOcrDisplaySources {
   return {
-    capture: async () => {
+    cursorDisplay: async () => {
       throw new DisplayCaptureError('capture-denied')
-    }
+    },
+    invalidate: () => {}
   }
 }
 

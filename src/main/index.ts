@@ -95,7 +95,7 @@ import { registerUpdateBridge } from './updateBridge'
 import { createUpdateService, type UpdateService } from './updateService'
 import { detectUpdateSupport } from './updateSupport'
 import { createGameOcrController, type GameOcrCaptureTimings } from './services/gameOcr/controller'
-import { createProductionDisplayCapture } from './services/gameOcr/displayCapture'
+import { createProductionDisplaySources } from './services/gameOcr/displayCapture'
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
 import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
@@ -574,11 +574,11 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     },
     onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
   })
-  const capture = createProductionDisplayCapture(process.platform)
+  const displays = createProductionDisplaySources(process.platform)
   const controller = createGameOcrController({
     shortcut: globalShortcut,
     accelerator: settings.get().gameOcr.captureShortcut,
-    capture,
+    displays,
     settle: {
       // The frozen window is closed before a recapture, but the desktop
       // compositor still has to repaint the region it covered before

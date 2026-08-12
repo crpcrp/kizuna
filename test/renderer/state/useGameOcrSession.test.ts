@@ -3,7 +3,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useGameOcrSession } from '@src/renderer/src/state/useGameOcrSession'
 import { DEFAULT_POPUP_SETTINGS } from '@src/shared/playerSettings'
-import type { GameOcrPresentation } from '@src/shared/gameOcr'
+import type { GameOcrFreezeRequest } from '@src/shared/gameOcr'
 import type { OcrResult } from '@src/shared/ocr'
 import type { KnowledgeDetails, KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
@@ -14,12 +14,15 @@ const tokens: Token[] = [
   { surface: '日本', reading: 'にほん', lemma: '日本', pos: '名詞', startOffset: 0 }
 ]
 
-function presentation(imageBase64: string): GameOcrPresentation {
+const IMAGE_SIZE = { width: 1920, height: 1080 }
+
+function freezeRequest(captureId: number): GameOcrFreezeRequest {
   return {
-    imageBase64,
-    imageMediaType: 'image/png',
-    imageSize: { width: 1920, height: 1080 },
-    recognizing: true
+    sessionId: captureId,
+    captureId,
+    sourceId: 'screen:0:0',
+    imageSize: IMAGE_SIZE,
+    requireFreshFrame: false
   }
 }
 
@@ -36,7 +39,7 @@ function result(sessionId: number, text: string): OcrResult {
 
 function setup() {
   const pushes: {
-    presentation?: (value: GameOcrPresentation) => void
+    freeze?: (value: GameOcrFreezeRequest) => void
     discard?: () => void
     recognition?: (recognizing: boolean) => void
     regions?: (value: OcrResult) => void
@@ -44,8 +47,8 @@ function setup() {
   } = {}
   const gameOcr = {
     supported: true,
-    onPresentation: vi.fn((cb: (value: GameOcrPresentation) => void) => {
-      pushes.presentation = cb
+    onFreeze: vi.fn((cb: (value: GameOcrFreezeRequest) => void) => {
+      pushes.freeze = cb
       return () => undefined
     }),
     onDiscard: vi.fn((cb: () => void) => {
@@ -88,7 +91,7 @@ function setup() {
 }
 
 describe('useGameOcrSession', () => {
-  it('reports itself ready so main can present the screenshot it queued', () => {
+  it('reports itself ready so main can ask it to freeze', () => {
     const { gameOcr } = setup()
     expect(gameOcr.rendererReady).toHaveBeenCalledOnce()
   })
@@ -96,8 +99,11 @@ describe('useGameOcrSession', () => {
   it('shows the screenshot immediately and adds boxes when regions arrive', async () => {
     const { hook, pushes } = setup()
 
-    act(() => pushes.presentation?.(presentation('frame-one')))
-    expect(hook.result.current.presentation?.imageBase64).toBe('frame-one')
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
+    expect(hook.result.current.presentation?.imageSize).toEqual(IMAGE_SIZE)
     expect(hook.result.current.regions).toEqual([])
 
     act(() => pushes.regions?.(result(1, '日本')))
@@ -110,7 +116,10 @@ describe('useGameOcrSession', () => {
 
   it('clears the recognition sign without disturbing the boxes', async () => {
     const { hook, pushes } = setup()
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '日本')))
     await waitFor(() => expect(hook.result.current.regions[0]?.tokens).toEqual(tokens))
 
@@ -121,13 +130,19 @@ describe('useGameOcrSession', () => {
 
   it('drops the previous frame’s boxes the moment a recapture is presented', async () => {
     const { hook, pushes } = setup()
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '古い')))
     await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
     const firstKey = hook.result.current.captureKey
 
-    act(() => pushes.presentation?.(presentation('frame-two')))
-    expect(hook.result.current.presentation?.imageBase64).toBe('frame-two')
+    act(() => {
+      pushes.freeze?.(freezeRequest(2))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
+    expect(hook.result.current.presentation?.imageSize).toEqual(IMAGE_SIZE)
     expect(hook.result.current.regions).toEqual([])
 
     act(() => pushes.regions?.(result(2, '新しい')))
@@ -137,7 +152,10 @@ describe('useGameOcrSession', () => {
 
   it('discards everything when main closes the frame', async () => {
     const { hook, pushes } = setup()
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '日本')))
     await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
 
@@ -148,7 +166,10 @@ describe('useGameOcrSession', () => {
 
   it('closing from the renderer clears local state and asks main to close', async () => {
     const { hook, pushes, gameOcr } = setup()
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '日本')))
     await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
 
@@ -167,10 +188,16 @@ describe('useGameOcrSession', () => {
 
     // The renderer survives every frame now, so a range left inside the boxes
     // of one screenshot must not reach the clipboard or translator of the next.
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     expect(removeAllRanges).toHaveBeenCalledTimes(1)
 
-    act(() => pushes.presentation?.(presentation('frame-two')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(2))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     expect(removeAllRanges).toHaveBeenCalledTimes(2)
 
     act(() => pushes.discard?.())
@@ -184,7 +211,10 @@ describe('useGameOcrSession', () => {
 
   it('copies the frame selection when main forwards the global Ctrl+C', async () => {
     const { hook, pushes, bridge } = setup()
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '日本')))
     await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
     const getSelection = vi
@@ -209,7 +239,10 @@ describe('useGameOcrSession', () => {
     const { hook, pushes, bridge } = setup()
     bridge.mecab.tokenizeBatch.mockRejectedValueOnce(new Error('mecab is unavailable'))
 
-    act(() => pushes.presentation?.(presentation('frame-one')))
+    act(() => {
+      pushes.freeze?.(freezeRequest(1))
+      hook.result.current.onFrozen(IMAGE_SIZE)
+    })
     act(() => pushes.regions?.(result(1, '日本')))
 
     await waitFor(() => expect(hook.result.current.regions[0]?.tokens).toEqual([]))

@@ -9,8 +9,6 @@ import type { GameOcrPresentation } from '@src/shared/gameOcr'
 afterEach(cleanup)
 
 const presentation: GameOcrPresentation = {
-  imageBase64: 'iVBORw0KGgo=',
-  imageMediaType: 'image/png',
   imageSize: { width: 2400, height: 1350 },
   recognizing: true
 }
@@ -19,11 +17,11 @@ describe('GameOcrFrame', () => {
   it('fits the captured screenshot to the complete client area without letterboxing', () => {
     render(<GameOcrFrame presentation={presentation} onClose={vi.fn()} />)
 
-    const image = screen.getByRole('img', { name: 'Frozen game frame' }) as HTMLImageElement
-    expect(image.src).toContain(
-      `data:${presentation.imageMediaType};base64,${presentation.imageBase64}`
-    )
-    expect(image.getAttribute('draggable')).toBe('false')
+    // A canvas, because the capture draws into it directly: no encode, no
+    // base64 and no IPC stand between the grab and the pixels.
+    const image = screen.getByRole('img', { name: 'Frozen game screenshot' })
+    expect(image.tagName).toBe('CANVAS')
+    expect(image.hasAttribute('hidden')).toBe(false)
 
     const css = readFileSync(
       join(
@@ -126,10 +124,12 @@ describe('GameOcrFrame', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('renders no screenshot or indicator after a discard state', () => {
+  it('hides the screenshot and indicator after a discard state', () => {
     render(<GameOcrFrame onClose={vi.fn()} />)
 
-    expect(screen.queryByRole('img')).toBeNull()
+    // The canvas stays mounted so the next capture has something to draw into
+    // while the window is still hidden, but nothing of the old frame shows.
+    expect(screen.getByLabelText('Frozen game screenshot').hasAttribute('hidden')).toBe(true)
     expect(screen.queryByRole('status')).toBeNull()
   })
 })

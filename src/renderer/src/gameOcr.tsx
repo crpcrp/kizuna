@@ -1,10 +1,11 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import GameOcrFrame from './components/GameOcrFrame'
 import GameOcrInteraction from './components/GameOcrInteraction'
 import type { GameOcrLayoutSize } from './state/gameOcrLayout'
 import { useAppearance } from './state/useAppearance'
 import { useGameOcrPreferences } from './state/useGameOcrPreferences'
+import { useGameOcrCapture } from './state/useGameOcrCapture'
 import { useGameOcrSession } from './state/useGameOcrSession'
 import './theme.css'
 import './gameOcr.css'
@@ -30,6 +31,7 @@ function useViewportSize(): GameOcrLayoutSize {
 
 function GameOcrApp(): React.JSX.Element {
   const kizuna = window.kizuna
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const viewportSize = useViewportSize()
   const { popup, translationEnabled, appearance, levelColors } = useGameOcrPreferences(kizuna)
   useAppearance({ appearance, levelColors })
@@ -45,8 +47,10 @@ function GameOcrApp(): React.JSX.Element {
     popupSettings: popup
   })
 
+  useGameOcrCapture({ api: kizuna.gameOcr, canvasRef, onFrozen: session.onFrozen })
+
   return (
-    <GameOcrFrame presentation={session.presentation} onClose={session.close}>
+    <GameOcrFrame presentation={session.presentation} canvasRef={canvasRef} onClose={session.close}>
       <GameOcrInteraction
         regions={session.regions}
         captureKey={session.captureKey}

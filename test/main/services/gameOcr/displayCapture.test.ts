@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  createDisplayCaptureService,
+  createGameOcrDisplaySources,
   displayCaptureImageSize,
   DISPLAY_CAPTURE_MEDIA_TYPE,
   type DisplayCaptureDisplay,
   type DisplayCaptureScreen,
-  type DisplayCaptureSource,
-  type DisplayCaptureThumbnail
+  type DisplayCaptureSource
 } from '@src/main/services/gameOcr/displayCapture'
 import {
   capturePixelToCssPoint,
@@ -23,19 +22,8 @@ function display(overrides: Partial<DisplayCaptureDisplay> = {}): DisplayCapture
   }
 }
 
-function thumbnail(
-  size: { width: number; height: number },
-  bytes: Uint8Array = Uint8Array.from([137, 80, 78, 71])
-): DisplayCaptureThumbnail {
-  return {
-    isEmpty: vi.fn(() => false),
-    getSize: vi.fn(() => size),
-    toPNG: vi.fn(() => bytes)
-  }
-}
-
-function source(displayId: number, image: DisplayCaptureThumbnail): DisplayCaptureSource {
-  return { display_id: String(displayId), thumbnail: image }
+function source(displayId: number): DisplayCaptureSource {
+  return { id: `screen:${displayId}:0`, display_id: String(displayId) }
 }
 
 function screenFor(
@@ -68,104 +56,86 @@ describe('displayCaptureImageSize', () => {
   })
 })
 
-describe('createDisplayCaptureService', () => {
-  it('selects the cursor display, captures full bounds, and matches its source ID', async () => {
+describe('createGameOcrDisplaySources', () => {
+  it('resolves the cursor display and its capture source without reading pixels', async () => {
     const selected = display()
-    const other = display({
-      id: 8,
-      bounds: { x: 0, y: 40, width: 1920, height: 1080 }
-    })
-    const image = thumbnail(displayCaptureImageSize(selected))
-    const otherImage = thumbnail(displayCaptureImageSize(other))
-    const getSources = vi.fn(async () => [source(8, otherImage), source(7, image)])
+    const other = display({ id: 8, bounds: { x: 0, y: 40, width: 1920, height: 1080 } })
+    const getSources = vi.fn(async () => [source(8), source(7)])
     const screenApi = screenFor([selected, other])
-    const service = createDisplayCaptureService({
+    const sources = createGameOcrDisplaySources({
       platform: 'win32',
       screen: screenApi,
       desktopCapturer: { getSources }
     })
 
-    const capture = await service.capture()
+    const target = await sources.cursorDisplay()
 
-    expect(screenApi.getCursorScreenPoint).toHaveBeenCalledOnce()
     expect(screenApi.getDisplayNearestPoint).toHaveBeenCalledWith({ x: -100, y: 100 })
+    // The smallest legal thumbnail: the pixels are never read here, because the
+    // frozen frame's own stream supplies them. Asking for a real size would
+    // cost ~300 ms per capture for an image nothing ever looks at.
     expect(getSources).toHaveBeenCalledWith({
       types: ['screen'],
-      thumbnailSize: { width: 2400, height: 1350 },
+      thumbnailSize: { width: 1, height: 1 },
       fetchWindowIcons: false
     })
-    expect(capture.metadata).toEqual({
+    expect(target.sourceId).toBe('screen:7:0')
+    expect(target.metadata).toEqual({
       displayId: 7,
       displayBounds: { x: -1920, y: 40, width: 1920, height: 1080 },
       scaleFactor: 1.25,
       imageSize: { width: 2400, height: 1350 }
     })
-    expect(capture.imageSize).toEqual({ width: 2400, height: 1350 })
-    expect(capture.imageBase64).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'))
-    // PNG, not merely "some image": the same bytes go to the OCR worker, whose
-    // vendored OpenCV is built without a JPEG codec and would reject anything
-    // else after the screenshot had already appeared.
-    expect(capture.imageMediaType).toBe('image/png')
-    expect(DISPLAY_CAPTURE_MEDIA_TYPE).toBe('image/png')
-    expect(image.toPNG).toHaveBeenCalledOnce()
   })
 
-  it('retains immutable metadata and releases the encoded image on disposal', async () => {
-    const selected = display({ id: 2, scaleFactor: 1 })
-    const image = thumbnail(displayCaptureImageSize(selected))
-    const service = createDisplayCaptureService({
+  it('enumerates sources once and reuses them across captures', async () => {
+    const getSources = vi.fn(async () => [source(7)])
+    const sources = createGameOcrDisplaySources({
       platform: 'win32',
-      screen: screenFor([selected]),
-      desktopCapturer: { getSources: async () => [source(2, image)] }
-    })
-
-    const capture = await service.capture()
-
-    expect(Object.isFrozen(capture.metadata)).toBe(true)
-    expect(Object.isFrozen(capture.metadata.displayBounds)).toBe(true)
-    expect(Object.isFrozen(capture.metadata.imageSize)).toBe(true)
-    expect(capture.disposed).toBe(false)
-
-    capture.dispose()
-    capture.dispose()
-
-    expect(capture.imageBase64).toBeUndefined()
-    expect(capture.disposed).toBe(true)
-    expect(capture.metadata.displayBounds).toEqual({ x: -1920, y: 40, width: 1920, height: 1080 })
-  })
-
-  it('reports unsupported on non-Windows without touching Electron boundaries', async () => {
-    const screenApi = screenFor([display()])
-    const getSources = vi.fn()
-    const service = createDisplayCaptureService({
-      platform: 'linux',
-      screen: screenApi,
+      screen: screenFor([display()]),
       desktopCapturer: { getSources }
     })
 
-    await expect(service.capture()).rejects.toMatchObject({ code: 'unsupported' })
-    expect(screenApi.getCursorScreenPoint).not.toHaveBeenCalled()
-    expect(getSources).not.toHaveBeenCalled()
+    await sources.cursorDisplay()
+    await sources.cursorDisplay()
+    await sources.cursorDisplay()
+    expect(getSources).toHaveBeenCalledOnce()
+
+    // A display change invalidates the ids, so the next capture re-enumerates.
+    sources.invalidate()
+    await sources.cursorDisplay()
+    expect(getSources).toHaveBeenCalledTimes(2)
   })
 
-  it('reports a missing source without retaining or writing a frame', async () => {
-    const selected = display()
-    const image = thumbnail(displayCaptureImageSize(selected))
-    const service = createDisplayCaptureService({
+  it('re-enumerates once for a display that appeared since the last listing', async () => {
+    let known: DisplayCaptureSource[] = []
+    const getSources = vi.fn(async () => known)
+    const sources = createGameOcrDisplaySources({
       platform: 'win32',
-      screen: screenFor([selected]),
-      desktopCapturer: { getSources: async () => [source(99, image)] }
+      screen: screenFor([display({ id: 9 })]),
+      desktopCapturer: { getSources }
     })
 
-    await expect(service.capture()).rejects.toMatchObject({ code: 'source-not-found' })
-    expect(image.toPNG).not.toHaveBeenCalled()
+    const pending = sources.cursorDisplay()
+    known = [source(9)]
+    await expect(pending).resolves.toMatchObject({ sourceId: 'screen:9:0' })
+    expect(getSources).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports a display with no capture source clearly', async () => {
+    const sources = createGameOcrDisplaySources({
+      platform: 'win32',
+      screen: screenFor([display()]),
+      desktopCapturer: { getSources: async () => [source(99)] }
+    })
+
+    await expect(sources.cursorDisplay()).rejects.toMatchObject({ code: 'source-not-found' })
   })
 
   it('reports a protected or denied desktop capture clearly', async () => {
-    const selected = display()
-    const service = createDisplayCaptureService({
+    const sources = createGameOcrDisplaySources({
       platform: 'win32',
-      screen: screenFor([selected]),
+      screen: screenFor([display()]),
       desktopCapturer: {
         getSources: async () => {
           throw new Error('protected display')
@@ -173,38 +143,45 @@ describe('createDisplayCaptureService', () => {
       }
     })
 
-    await expect(service.capture()).rejects.toMatchObject({ code: 'capture-denied' })
+    await expect(sources.cursorDisplay()).rejects.toMatchObject({ code: 'capture-denied' })
   })
 
   it.each([
+    ['invalid display', () => display({ scaleFactor: 0 }), 'invalid-display'],
     [
-      'empty frame',
-      () => thumbnail(displayCaptureImageSize(display()), Uint8Array.from([])),
-      'empty-frame'
-    ],
-    ['dimension mismatch', () => thumbnail({ width: 1, height: 1 }), 'dimension-mismatch'],
-    [
-      'encoded size limit',
-      () => thumbnail(displayCaptureImageSize(display()), Uint8Array.from([1, 2, 3, 4])),
+      'display beyond the capture limit',
+      () => display({ bounds: { x: 0, y: 0, width: 40000, height: 40000 }, scaleFactor: 1 }),
       'image-too-large'
     ]
-  ] as const)('%s fails with a clear error', async (_label, makeImage, code) => {
-    const selected = display()
-    const image = makeImage()
-    if (code === 'empty-frame') vi.mocked(image.isEmpty).mockReturnValue(true)
-    const service = createDisplayCaptureService({
+  ] as const)('%s fails with a clear error', async (_label, makeDisplay, code) => {
+    const sources = createGameOcrDisplaySources({
       platform: 'win32',
-      screen: screenFor([selected]),
-      desktopCapturer: { getSources: async () => [source(selected.id, image)] },
-      ...(code === 'image-too-large' ? { maxEncodedBytes: 1 } : {})
+      screen: screenFor([makeDisplay()]),
+      desktopCapturer: { getSources: async () => [source(7)] }
     })
 
-    await expect(service.capture()).rejects.toMatchObject({ code })
+    await expect(sources.cursorDisplay()).rejects.toMatchObject({ code })
+  })
+
+  it('refuses on any platform but Windows', async () => {
+    const sources = createGameOcrDisplaySources({
+      platform: 'linux',
+      screen: screenFor([display()]),
+      desktopCapturer: { getSources: async () => [source(7)] }
+    })
+
+    await expect(sources.cursorDisplay()).rejects.toMatchObject({ code: 'unsupported' })
+  })
+
+  it('pins the encoding the OCR worker can actually decode', () => {
+    // The worker's vendored OpenCV is built without a JPEG codec, and the
+    // failure it produces reads as a recognition bug: the screenshot appears
+    // and only OCR fails.
+    expect(DISPLAY_CAPTURE_MEDIA_TYPE).toBe('image/png')
   })
 
   it('maps capture pixels to CSS coordinates at every supported Windows scale', () => {
-    const scales = [1, 1.25, 1.5, 2]
-    for (const scaleFactor of scales) {
+    for (const scaleFactor of [1, 1.25, 1.5, 2]) {
       const metadata: OcrDisplayCaptureMetadata = {
         displayId: 7,
         displayBounds: { x: -1280, y: -40, width: 1280, height: 720 },
@@ -214,10 +191,7 @@ describe('createDisplayCaptureService', () => {
 
       expect(
         capturePixelToCssPoint(metadata, { x: 100 * scaleFactor, y: 80 * scaleFactor })
-      ).toEqual({
-        x: -1180,
-        y: 40
-      })
+      ).toEqual({ x: -1180, y: 40 })
       expect(
         capturePixelsToCssBounds(metadata, {
           x: 100 * scaleFactor,
@@ -225,12 +199,7 @@ describe('createDisplayCaptureService', () => {
           width: 200 * scaleFactor,
           height: 40 * scaleFactor
         })
-      ).toEqual({
-        x: -1180,
-        y: 40,
-        width: 200,
-        height: 40
-      })
+      ).toEqual({ x: -1180, y: 40, width: 200, height: 40 })
     }
   })
 })

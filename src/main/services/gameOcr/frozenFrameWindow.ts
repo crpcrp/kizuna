@@ -1,8 +1,12 @@
 import { createRequire } from 'node:module'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
-import type { GameOcrPresentation } from '../../../shared/gameOcr'
-import type { OcrDisplayBounds, OcrResult } from '../../../shared/ocr'
+import type {
+  GameOcrCaptureBytes,
+  GameOcrFreezeRequest,
+  GameOcrFrozenFrame
+} from '../../../shared/gameOcr'
+import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
 import {
   applyNavigationGuards,
   applyReloadGuard,
@@ -94,8 +98,22 @@ export interface GameOcrNativeWindow extends SendTarget {
 }
 
 export interface GameOcrWindow {
-  /** Queues and presents a new screenshot, with recognition initially active. */
-  present(presentation: GameOcrPresentation): Promise<void>
+  /**
+   * Asks the frame to freeze the display it is streaming, shows it once the
+   * renderer reports the frame drawn, and resolves with what was actually
+   * captured. The window stays hidden until then, so it cannot appear in its
+   * own screenshot.
+   */
+  freeze(request: GameOcrFreezeRequest): Promise<OcrImageSize>
+  /**
+   * The encoded screenshot for that capture, which the renderer produces after
+   * the frame is already on screen. Resolves whenever the encode lands.
+   */
+  captureBytes(captureId: number): Promise<string>
+  /** Renderer→main report that the frame is drawn. Bound by the IPC glue. */
+  reportFrozen(frozen: GameOcrFrozenFrame): void
+  /** Renderer→main report carrying the encoded screenshot. */
+  reportCaptureBytes(value: GameOcrCaptureBytes): void
   /** Updates the small renderer-owned recognition indicator. */
   setRecognizing(recognizing: boolean): void
   /**
@@ -170,7 +188,7 @@ export function createGameOcrWindowController({
 }: GameOcrWindowControllerOptions): GameOcrWindow {
   let rendererLoaded = loaded
   let rendererIsReady = loaded
-  let pending: GameOcrPresentation | undefined
+  let pending: GameOcrFreezeRequest | undefined
   let closed = false
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
@@ -179,6 +197,27 @@ export function createGameOcrWindowController({
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
   const hideWaiters = new Set<() => void>()
+  let frozenWaiter:
+    | {
+        captureId: number
+        resolve: (value: GameOcrFrozenFrame) => void
+        reject: (e: unknown) => void
+      }
+    | undefined
+  const bytesWaiters = new Map<
+    number,
+    { promise: Promise<string>; resolve: (value: string) => void; reject: (e: unknown) => void }
+  >()
+
+  /** Fails everything still waiting on a renderer that can no longer answer. */
+  const abandonWaiters = (reason: string): void => {
+    const frozen = frozenWaiter
+    frozenWaiter = undefined
+    frozen?.reject(new Error(reason))
+    const waiters = [...bytesWaiters.values()]
+    bytesWaiters.clear()
+    for (const waiter of waiters) waiter.reject(new Error(reason))
+  }
 
   /**
    * Only `present` awaits readiness. A load that fails while no presentation is
@@ -223,6 +262,7 @@ export function createGameOcrWindowController({
     // A destroyed window never emits `hide`, so anything waiting on one must
     // be released here or a pending discard would hang the capture queue.
     releaseHideWaiters()
+    abandonWaiters('The Game OCR window closed before its frame was captured.')
     for (const listener of closeListeners) listener()
   }
 
@@ -231,11 +271,18 @@ export function createGameOcrWindowController({
     sendToWindow(window, GAME_OCR_CHANNELS.discard)
   }
 
-  const showPending = (): void => {
+  const sendPending = (): void => {
     const next = pending
     if (!next || closed || !rendererLoaded) return
     pending = undefined
-    sendToWindow(window, GAME_OCR_CHANNELS.present, next)
+    // Only the request goes out here. The window is deliberately still hidden:
+    // the renderer draws the display it is streaming, and a window that is not
+    // on screen cannot be in the picture it is about to show.
+    sendToWindow(window, GAME_OCR_CHANNELS.freeze, next)
+  }
+
+  const showFrozen = (): void => {
+    if (closed) return
     // Shown, never focused. `focus()` on a non-focusable window is at best a
     // no-op and at worst an attempt to take a foreground Windows will refuse,
     // and taking it is precisely what stalls the game behind the frame.
@@ -298,21 +345,62 @@ export function createGameOcrWindowController({
     rendererLoaded = false
     rendererIsReady = false
     pending = undefined
+    abandonWaiters('The Game OCR renderer stopped before its frame was captured.')
     resetReadyPromise()
     void waitUntilClosed()
   })
 
   return {
-    async present(presentation): Promise<void> {
-      if (closed) return
-      validatePresentation(presentation)
-      pending = { ...presentation }
+    async freeze(request): Promise<OcrImageSize> {
+      if (closed) throw new Error('The Game OCR frame is gone.')
+      validateFreezeRequest(request)
+      pending = { ...request }
       if (!rendererIsReady) await ready
-      showPending()
+      const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
+        frozenWaiter = { captureId: request.captureId, resolve, reject }
+      })
+      sendPending()
+      const frozen = await settled
+      if (frozen.error) throw new Error(frozen.error)
+      showFrozen()
+      return frozen.imageSize
+    },
+
+    captureBytes(captureId): Promise<string> {
+      if (closed) return Promise.reject(new Error('The Game OCR frame is gone.'))
+      const existing = bytesWaiters.get(captureId)
+      if (existing) return existing.promise
+      let resolve!: (value: string) => void
+      let reject!: (error: unknown) => void
+      const promise = new Promise<string>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise
+        reject = rejectPromise
+      })
+      // Marked handled: a capture abandoned before its bytes arrive leaves this
+      // rejection with no reader, which Node would report as unhandled.
+      void promise.catch(() => undefined)
+      bytesWaiters.set(captureId, { promise, resolve, reject })
+      return promise
+    },
+
+    /** Called by the IPC binding when the renderer reports a drawn frame. */
+    reportFrozen(frozen): void {
+      const waiter = frozenWaiter
+      if (!waiter || waiter.captureId !== frozen.captureId) return
+      frozenWaiter = undefined
+      waiter.resolve(frozen)
+    },
+
+    /** Called by the IPC binding when the renderer finishes encoding. */
+    reportCaptureBytes(value): void {
+      const waiter = bytesWaiters.get(value.captureId)
+      if (!waiter) return
+      bytesWaiters.delete(value.captureId)
+      if (value.error) waiter.reject(new Error(value.error))
+      else waiter.resolve(value.imageBase64)
     },
 
     setRecognizing(recognizing): void {
-      if (pending) pending = { ...pending, recognizing }
       if (closed || !rendererLoaded) return
       sendToWindow(window, GAME_OCR_CHANNELS.recognitionState, recognizing)
     },
@@ -331,7 +419,7 @@ export function createGameOcrWindowController({
       readyResolve?.()
       readyResolve = undefined
       readyReject = undefined
-      showPending()
+      sendPending()
     },
 
     copySelection(): void {
@@ -348,6 +436,7 @@ export function createGameOcrWindowController({
 
     async discard(): Promise<void> {
       pending = undefined
+      abandonWaiters('The Game OCR frame was discarded before it was captured.')
       sendDiscard()
       await waitUntilHidden()
     },
@@ -489,10 +578,19 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
 export function registerGameOcrIpc(
   ipc: GameOcrIpcMain,
   window: GameOcrNativeWindow,
-  controller: Pick<GameOcrWindow, 'rendererReady' | 'dismiss'>
+  controller: Pick<
+    GameOcrWindow,
+    'rendererReady' | 'dismiss' | 'reportFrozen' | 'reportCaptureBytes'
+  >
 ): () => void {
   const onRendererReady = (event: { sender: unknown }): void => {
     if (event.sender === window.webContents) controller.rendererReady()
+  }
+  const onFrozen = (event: { sender: unknown }, value: GameOcrFrozenFrame): void => {
+    if (event.sender === window.webContents) controller.reportFrozen(value)
+  }
+  const onCaptureBytes = (event: { sender: unknown }, value: GameOcrCaptureBytes): void => {
+    if (event.sender === window.webContents) controller.reportCaptureBytes(value)
   }
   const onClose = (event: { sender: unknown }): void => {
     // The renderer returns the user to the live game; it does not tear the
@@ -505,17 +603,29 @@ export function registerGameOcrIpc(
   }
   ipc.on(GAME_OCR_CHANNELS.rendererReady, onRendererReady)
   ipc.on(GAME_OCR_CHANNELS.close, onClose)
+  ipc.on(GAME_OCR_CHANNELS.frozen, onFrozen as (event: { sender: unknown }) => void)
+  ipc.on(GAME_OCR_CHANNELS.captureBytes, onCaptureBytes as (event: { sender: unknown }) => void)
   return () => {
     ipc.removeListener(GAME_OCR_CHANNELS.rendererReady, onRendererReady)
     ipc.removeListener(GAME_OCR_CHANNELS.close, onClose)
+    ipc.removeListener(GAME_OCR_CHANNELS.frozen, onFrozen as (event: { sender: unknown }) => void)
+    ipc.removeListener(
+      GAME_OCR_CHANNELS.captureBytes,
+      onCaptureBytes as (event: { sender: unknown }) => void
+    )
   }
 }
 
 function unsupportedWindow(): GameOcrWindow {
   return {
-    present: async () => {
+    freeze: async () => {
       throw new Error('Game OCR frozen-frame presentation is only supported on Windows.')
     },
+    captureBytes: async () => {
+      throw new Error('Game OCR frozen-frame presentation is only supported on Windows.')
+    },
+    reportFrozen: () => {},
+    reportCaptureBytes: () => {},
     setRecognizing: () => {},
     setRegions: () => {},
     rendererReady: () => {},
@@ -530,18 +640,16 @@ function unsupportedWindow(): GameOcrWindow {
   }
 }
 
-function validatePresentation(presentation: GameOcrPresentation): void {
+function validateFreezeRequest(request: GameOcrFreezeRequest): void {
   if (
-    !presentation ||
-    typeof presentation.imageBase64 !== 'string' ||
-    presentation.imageBase64.length === 0 ||
-    typeof presentation.imageMediaType !== 'string' ||
-    presentation.imageMediaType.length === 0 ||
-    !isPositiveInteger(presentation.imageSize?.width) ||
-    !isPositiveInteger(presentation.imageSize?.height) ||
-    typeof presentation.recognizing !== 'boolean'
+    !request ||
+    typeof request.sourceId !== 'string' ||
+    request.sourceId.length === 0 ||
+    !isPositiveInteger(request.imageSize?.width) ||
+    !isPositiveInteger(request.imageSize?.height) ||
+    typeof request.requireFreshFrame !== 'boolean'
   ) {
-    throw new Error('Game OCR presentation is invalid.')
+    throw new Error('Game OCR freeze request is invalid.')
   }
 }
 
