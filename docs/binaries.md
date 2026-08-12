@@ -115,9 +115,10 @@ path, and `resources.lock.json` may only stage `ppocr/` under `win32-x64`.
 | `resources/ppocr/models/rec.onnx` | PP-OCRv5 text-recognition model |
 | `resources/ppocr/models/keys.txt` | Recognition dictionary extracted from model metadata |
 
-All three are checked before every Game OCR arm attempt. A missing or
-wrong-kind entry is reported in Options > Game OCR and clears on retry once the
-files are restored, so no capture is attempted against an incomplete runtime.
+The worker, runtime DLLs, models, and dictionary are checked before every Game
+OCR arm attempt. A missing or wrong-kind entry is reported in Options > Game
+OCR and clears on retry once the files are restored, so no capture is attempted
+against an incomplete runtime.
 The same paths are in `requiredPackagedResources`, so an installer built
 without the worker or a model file fails the packaged smoke check rather than
 the first capture.
