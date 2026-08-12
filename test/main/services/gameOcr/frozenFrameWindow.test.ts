@@ -42,6 +42,8 @@ function fakeWindow(): {
     }),
     hide: vi.fn(),
     focus: vi.fn(),
+    moveTop: vi.fn(),
+    setAlwaysOnTop: vi.fn(),
     close: vi.fn(),
     setBounds: vi.fn(),
     loadURL: vi.fn(async () => undefined),
@@ -222,6 +224,11 @@ describe('createGameOcrWindowController', () => {
     expect(fake.window.show).toHaveBeenCalledOnce()
     // Taking the foreground is what stalls the game behind the frame.
     expect(fake.window.focus).not.toHaveBeenCalled()
+    // But it still has to be raised: always-on-top is a band, and inside it a
+    // window that never activates loses to a game that is itself topmost, so
+    // the frame would be shown behind the game and appear not to open at all.
+    expect(fake.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver')
+    expect(fake.window.moveTop).toHaveBeenCalledOnce()
     expect(controller.isVisible()).toBe(true)
   })
 

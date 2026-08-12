@@ -79,6 +79,10 @@ export interface GameOcrNativeWindow extends SendTarget {
   show(): void
   hide(): void
   focus(): void
+  /** Raises the window in the z-order without activating it. */
+  moveTop?(): void
+  /** Re-asserts the always-on-top band; `screen-saver` outranks a game's own. */
+  setAlwaysOnTop?(flag: boolean, level?: string): void
   close(): void
   isVisible(): boolean
   setBounds(bounds: OcrDisplayBounds): void
@@ -287,6 +291,14 @@ export function createGameOcrWindowController({
     // no-op and at worst an attempt to take a foreground Windows will refuse,
     // and taking it is precisely what stalls the game behind the frame.
     if (!window.isVisible()) window.show()
+    // Raised without being activated. Always-on-top is a band, not a position:
+    // inside it Windows orders by which window was most recently activated, and
+    // a window that never activates therefore loses to a game that is itself
+    // topmost — the frame is shown, behind the game, and nothing appears to
+    // happen. `screen-saver` puts it in a higher band than an ordinary topmost
+    // window, and `moveTop` raises it there without asking for focus.
+    window.setAlwaysOnTop?.(true, 'screen-saver')
+    window.moveTop?.()
   }
 
   // One `hide` listener for the window's whole life, however many discards it

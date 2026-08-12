@@ -107,6 +107,14 @@ Never activating means there is no activation press to spend. It also means the
 game keeps rendering behind the frame instead of stalling until it is clicked
 back.
 
+Not activating has a second consequence that has to be handled explicitly:
+always-on-top is a *band*, not a position, and inside it Windows orders by
+which window was activated most recently. A window that never activates
+therefore loses to a game that is itself topmost — the frame is shown, behind
+the game, and nothing appears to happen at all while OCR runs normally on a
+correct screenshot. The frame is put in the higher `screen-saver` band and
+raised with `moveTop`, neither of which asks for focus.
+
 The cost is that the page has no keyboard focus and therefore receives no key
 events. **Escape** and **Ctrl+C** are registered as global shortcuts for exactly
 as long as a frame is visible, and released the moment it goes; Ctrl+C asks the
