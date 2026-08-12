@@ -369,11 +369,13 @@ describe('OptionsMenu Subtitles tab', () => {
   it('renders font-size and position inputs with the current values', () => {
     const html = renderWithSubtitleStyle({
       fontScale: 1.5,
+      outlineSizePx: 3,
       xPct: 30,
       yPct: 70,
       backgroundEnabled: false
     })
     expect(html).toMatch(/id="subtitle-font-scale-input"[^>]*value="150"/)
+    expect(html).toMatch(/id="subtitle-outline-size-input"[^>]*value="3"/)
     expect(html).toMatch(/id="subtitle-x-input"[^>]*value="30"/)
     expect(html).toMatch(/id="subtitle-y-input"[^>]*value="70"/)
   })
@@ -408,6 +410,7 @@ describe('OptionsMenu Subtitles tab', () => {
   it('falls back to DEFAULT_SUBTITLE_STYLE when subtitleStyle is omitted', () => {
     const html = renderMenu()
     expect(html).toMatch(/id="subtitle-font-scale-input"[^>]*value="100"/)
+    expect(html).toMatch(/id="subtitle-outline-size-input"[^>]*value="1"/)
     expect(html).toMatch(/id="subtitle-x-input"[^>]*value="50"/)
     expect(html).toMatch(/id="subtitle-y-input"[^>]*value="82"/)
   })
