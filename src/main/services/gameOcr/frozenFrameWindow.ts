@@ -64,7 +64,7 @@ export interface GameOcrNativeWindow extends SendTarget {
   isVisible(): boolean
   setBounds(bounds: OcrDisplayBounds): void
   loadURL(url: string): Promise<unknown> | unknown
-  loadFile(path: string): Promise<unknown> | unknown
+  loadFile(path: string, options?: { query?: Record<string, string> }): Promise<unknown> | unknown
   on(event: 'closed' | 'hide', listener: () => void): unknown
   webContents: SendTarget['webContents'] &
     NavigationGuardTarget &
@@ -74,6 +74,7 @@ export interface GameOcrNativeWindow extends SendTarget {
         listener: (...args: unknown[]) => void
       ): unknown
       send(channel: string, ...args: unknown[]): void
+      openDevTools?(options?: { mode?: string }): void
     }
 }
 
@@ -372,6 +373,13 @@ export interface CreateGameOcrWindowOptions extends GameOcrWindowConstructionOpt
   createWindow?: (options: BrowserWindowConstructorOptions) => BrowserWindow
   ipcMain?: GameOcrIpcMain
   displayEvents?: GameOcrDisplayEvents
+  /**
+   * Asks the frozen-frame renderer to narrate the input it receives, and opens
+   * its devtools detached so the log is readable while a frame covers the
+   * display. Whether a press reaches the page at all is the one question about
+   * this window that cannot be answered from inside the application.
+   */
+  traceInput?: boolean
 }
 
 /**
@@ -412,10 +420,18 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
   applyNavigationGuards(window.webContents)
   applyReloadGuard(window.webContents)
 
+  const query = options.traceInput ? '?trace=input' : ''
   if (options.devUrl) {
-    void window.loadURL(`${options.devUrl.replace(/\/$/, '')}/gameOcr.html`)
+    void window.loadURL(`${options.devUrl.replace(/\/$/, '')}/gameOcr.html${query}`)
   } else {
-    void window.loadFile(options.packagedHtmlPath)
+    // loadFile keeps the query out of the path, which a file:// URL would not.
+    void window.loadFile(
+      options.packagedHtmlPath,
+      options.traceInput ? { query: { trace: 'input' } } : {}
+    )
+  }
+  if (options.traceInput) {
+    window.webContents.openDevTools?.({ mode: 'detach' })
   }
 
   const controller = createGameOcrWindowController({
@@ -454,7 +470,11 @@ export function registerGameOcrIpc(
   const onClose = (event: { sender: unknown }): void => {
     // The renderer returns the user to the live game; it does not tear the
     // retained window down. Stopping Game OCR is what closes it for good.
-    if (event.sender === window.webContents) void controller.dismiss()
+    if (event.sender !== window.webContents) return
+    if (process.env['KIZUNA_GAME_OCR_TIMING']) {
+      console.log('[game-ocr] close request received from the frozen frame; hiding')
+    }
+    void controller.dismiss()
   }
   ipc.on(GAME_OCR_CHANNELS.rendererReady, onRendererReady)
   ipc.on(GAME_OCR_CHANNELS.close, onClose)

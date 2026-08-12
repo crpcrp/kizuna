@@ -54,6 +54,7 @@ function fakeWindow(): {
       on: vi.fn((event: string, listener: Listener) => on(rendererListeners, event, listener)),
       getURL: () => 'file:///gameOcr.html',
       setWindowOpenHandler: vi.fn(),
+      openDevTools: vi.fn(),
       fire: (
         event: 'did-finish-load' | 'render-process-gone' | 'did-fail-load',
         ...args: unknown[]
@@ -136,7 +137,35 @@ describe('createGameOcrWindow', () => {
     // area. Without this second assignment the frozen frame comes up a taskbar
     // short and leaves a live strip of the game showing below the screenshot.
     expect(fake.window.setBounds).toHaveBeenCalledWith(displayBounds)
-    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html')
+    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
+  })
+
+  it('asks the renderer to trace its input only when tracing is on', () => {
+    const off = fakeWindow()
+    createGameOcrWindow({
+      platform: 'win32',
+      preloadPath: '/fake/preload.js',
+      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
+      packagedHtmlPath: '/fake/gameOcr.html',
+      createWindow: () => off.window as unknown as BrowserWindow
+    })
+    expect(off.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
+    expect(off.window.webContents.openDevTools).not.toHaveBeenCalled()
+
+    const on = fakeWindow()
+    createGameOcrWindow({
+      platform: 'win32',
+      preloadPath: '/fake/preload.js',
+      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
+      packagedHtmlPath: '/fake/gameOcr.html',
+      createWindow: () => on.window as unknown as BrowserWindow,
+      traceInput: true
+    })
+    // Detached, because the frame covers the display it would otherwise share.
+    expect(on.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {
+      query: { trace: 'input' }
+    })
+    expect(on.window.webContents.openDevTools).toHaveBeenCalledWith({ mode: 'detach' })
   })
 })
 

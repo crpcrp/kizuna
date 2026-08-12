@@ -597,7 +597,8 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
         devUrl: process.env['ELECTRON_RENDERER_URL'],
         packagedHtmlPath: join(__dirname, '../renderer/gameOcr.html'),
         ipcMain,
-        displayEvents: screen
+        displayEvents: screen,
+        traceInput: Boolean(process.env['KIZUNA_GAME_OCR_TIMING'])
       }),
     ocr: worker,
     onError: (message) => gameOcr?.reportError(message),
