@@ -10,7 +10,7 @@ import {
   type OcrResult
 } from '../../../shared/ocr'
 
-/** Version of the newline-delimited protocol spoken by the Paddle worker. */
+/** Version of the newline-delimited protocol spoken by the PP-OCR worker. */
 export const PADDLE_OCR_PROTOCOL_VERSION = 1
 
 /** Conservative defaults; each can be lowered in tests or development tools. */
@@ -29,21 +29,23 @@ const WORKER_ARGS = {
   language: '--lang',
   detectionModel: '--det-model',
   recognitionModel: '--rec-model',
+  keys: '--keys',
   detectionSideLength: '--det-side-len'
 } as const
 
 /**
- * Preserve small game UI glyphs by asking the bundled sidecar to inspect the
- * complete captured frame. Its pipeline currently caps the long side at 4000
- * pixels, which keeps 1080p, 1440p, ultrawide, and 4K captures at their native
- * resolution instead of shrinking them to the sidecar's 960px default.
+ * Match the ONNX worker's measured detector input. Carrying the legacy Paddle
+ * value of 4000 into this runtime made the 1080p fixture roughly twenty times
+ * slower and introduced a false-positive region; 960 recognizes the five
+ * expected Japanese lines and remains within the worker's warm-path budget.
  */
-export const PADDLE_OCR_DETECTION_SIDE_LENGTH = 4000
+export const PADDLE_OCR_DETECTION_SIDE_LENGTH = 960
 
-/** The model directories are injected so packaging can own their locations. */
+/** The model and dictionary files are injected so packaging can own their locations. */
 export interface PaddleOcrModelPaths {
   detection: string
   recognition: string
+  keys: string
 }
 
 export interface PaddleOcrWorkerOptions {
@@ -87,16 +89,16 @@ export type PaddleOcrWorkerErrorCode =
   | 'shutdown-timeout'
 
 const ERROR_MESSAGES: Record<PaddleOcrWorkerErrorCode, string> = {
-  cancelled: 'PaddleOCR work was cancelled',
-  'invalid-input': 'PaddleOCR received invalid image input',
-  'startup-failed': 'PaddleOCR worker could not start',
-  'startup-timeout': 'PaddleOCR worker startup timed out',
-  'protocol-error': 'PaddleOCR worker returned an invalid response',
-  'worker-error': 'PaddleOCR worker rejected the request',
-  'worker-exited': 'PaddleOCR worker exited unexpectedly',
-  'recognition-timeout': 'PaddleOCR recognition timed out',
-  'output-limit': 'PaddleOCR worker output exceeded its limit',
-  'shutdown-timeout': 'PaddleOCR worker did not stop in time'
+  cancelled: 'PP-OCR work was cancelled',
+  'invalid-input': 'PP-OCR received invalid image input',
+  'startup-failed': 'PP-OCR worker could not start',
+  'startup-timeout': 'PP-OCR worker startup timed out',
+  'protocol-error': 'PP-OCR worker returned an invalid response',
+  'worker-error': 'PP-OCR worker rejected the request',
+  'worker-exited': 'PP-OCR worker exited unexpectedly',
+  'recognition-timeout': 'PP-OCR recognition timed out',
+  'output-limit': 'PP-OCR worker output exceeded its limit',
+  'shutdown-timeout': 'PP-OCR worker did not stop in time'
 }
 
 export class PaddleOcrWorkerError extends Error {
@@ -140,14 +142,14 @@ export type PaddleOcrSpawn = (
   options: PaddleOcrSpawnOptions
 ) => PaddleOcrWorkerProcess
 
-/** Production process factory. Tests inject a fake instead of starting PaddleOCR. */
+/** Production process factory. Tests inject a fake instead of starting PP-OCR. */
 export const spawnPaddleOcr: PaddleOcrSpawn = (executablePath, args, options) =>
   spawn(executablePath, args, options) as unknown as PaddleOcrWorkerProcess
 
 /**
- * Arguments understood by the small PaddleOCR sidecar. The sidecar owns the
- * Paddle API details; this adapter only supplies the Japanese model paths and
- * the protocol version. All paths are argv entries, never shell text.
+ * Arguments understood by the PP-OCR ONNX sidecar. The adapter supplies the
+ * model files, recognition dictionary and protocol version. All paths are argv
+ * entries, never shell text.
  */
 export function buildPaddleOcrWorkerArgs(modelPaths: PaddleOcrModelPaths): string[] {
   const args = [
@@ -159,6 +161,8 @@ export function buildPaddleOcrWorkerArgs(modelPaths: PaddleOcrModelPaths): strin
     modelPaths.detection,
     WORKER_ARGS.recognitionModel,
     modelPaths.recognition,
+    WORKER_ARGS.keys,
+    modelPaths.keys,
     WORKER_ARGS.detectionSideLength,
     String(PADDLE_OCR_DETECTION_SIDE_LENGTH)
   ]

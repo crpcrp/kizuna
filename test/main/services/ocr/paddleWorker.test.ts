@@ -65,7 +65,7 @@ function createService(process: FakePaddleProcess, overrides = {}) {
   const spawn: PaddleOcrSpawn = vi.fn(() => process)
   const service = createPaddleOcrWorkerService({
     executablePath: 'paddle-worker.exe',
-    modelPaths: { detection: 'det', recognition: 'rec' },
+    modelPaths: { detection: 'det', recognition: 'rec', keys: 'keys' },
     spawn,
     startupTimeoutMs: 100,
     recognitionTimeoutMs: 1_000,
@@ -96,7 +96,11 @@ const japaneseRegion = (x: number, text = '日本語') => ({
 describe('buildPaddleOcrWorkerArgs', () => {
   it('passes the Japanese model paths as separate argv entries', () => {
     expect(
-      buildPaddleOcrWorkerArgs({ detection: 'C:\\det model', recognition: 'C:\\rec model' })
+      buildPaddleOcrWorkerArgs({
+        detection: 'C:\\det model',
+        recognition: 'C:\\rec model',
+        keys: 'C:\\model keys.txt'
+      })
     ).toEqual([
       '--protocol-version',
       '1',
@@ -106,8 +110,10 @@ describe('buildPaddleOcrWorkerArgs', () => {
       'C:\\det model',
       '--rec-model',
       'C:\\rec model',
+      '--keys',
+      'C:\\model keys.txt',
       '--det-side-len',
-      '4000'
+      '960'
     ])
   })
 })

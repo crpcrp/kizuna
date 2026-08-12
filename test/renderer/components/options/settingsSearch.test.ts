@@ -55,7 +55,10 @@ describe('SETTING_ENTRIES', () => {
       category: 'playback'
     })
     expect(found('a-b')).toContainEqual({ label: 'A–B loop', category: 'keybindings' })
-    expect(found('paddle')).toContainEqual({ label: 'PaddleOCR status', category: 'gameOcr' })
+    expect(found('onnx')).toContainEqual({
+      label: 'PP-OCR / ONNX Runtime status',
+      category: 'gameOcr'
+    })
     expect(found('capture shortcut')).toContainEqual({
       label: 'Game OCR capture shortcut',
       category: 'gameOcr'

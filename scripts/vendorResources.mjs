@@ -23,7 +23,7 @@
 
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { chmod, copyFile, mkdir, readFile, stat, unlink } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, readFile, rm, stat, unlink } from 'node:fs/promises'
 import { dirname, join, posix, resolve } from 'node:path'
 
 /**
@@ -94,10 +94,13 @@ const supportedPlatformSet = new Set(SUPPORTED_PLATFORM_KEYS)
 
 /**
  * Resource roots that only one platform may stage. Game OCR runs on Windows
- * alone, and its PaddleOCR payload is large, so a lock entry that leaked it
+ * alone, and its PP-OCR payload is large, so a lock entry that leaked it
  * into the Linux tree would inflate those artifacts with an unusable runtime.
  */
-const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'paddleocr/': 'win32-x64' })
+const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'ppocr/': 'win32-x64' })
+
+/** Managed payload roots removed after a runtime migration. */
+const RETIRED_RESOURCE_ROOTS = Object.freeze(['paddleocr'])
 
 /**
  * Convert a Node platform/architecture pair into a validated lock key.
@@ -579,24 +582,33 @@ export async function verifyVendorFiles({ lock, platformKey, vendorDir }) {
     )
   } else {
     const lockedBySource = new Map(selected.files.map((file) => [file.from, file]))
-    const manifestFiles = []
     for (const component of payload.components ?? []) {
-      for (const file of component.files ?? []) manifestFiles.push(file)
-      for (const path of component.licenseFiles ?? []) manifestFiles.push({ path })
-    }
-    for (const manifestFile of manifestFiles) {
-      const locked = lockedBySource.get(manifestFile.path)
-      if (!locked) {
-        metadataProblems.push(
-          'manifest path ' + manifestFile.path + ' is not covered by resources.lock.json'
-        )
-      } else if (manifestFile.sha256 && manifestFile.sha256 !== locked.sha256) {
-        metadataProblems.push(
-          'manifest hash disagrees with lock for ' +
-            manifestFile.path +
-            ': expected ' +
-            locked.sha256
-        )
+      const componentFiles = [
+        ...(component.files ?? []),
+        ...(component.licenseFiles ?? []).map((path) => ({ path }))
+      ]
+      // A platform archive may temporarily contain a replacement and the
+      // runtime it supersedes. The lock selects a component by naming any of
+      // its files; once selected, it must name all of them so a partial runtime
+      // or incomplete licence set still fails closed.
+      if (!componentFiles.some((file) => lockedBySource.has(file.path))) continue
+      for (const manifestFile of componentFiles) {
+        const locked = lockedBySource.get(manifestFile.path)
+        if (!locked) {
+          metadataProblems.push(
+            'selected manifest component ' +
+              component.name +
+              ' has unlocked path ' +
+              manifestFile.path
+          )
+        } else if (manifestFile.sha256 && manifestFile.sha256 !== locked.sha256) {
+          metadataProblems.push(
+            'manifest hash disagrees with lock for ' +
+              manifestFile.path +
+              ': expected ' +
+              locked.sha256
+          )
+        }
       }
     }
   }
@@ -658,6 +670,14 @@ async function removeStalePlatformFiles({ lock, platformKey, resourcesDir }) {
     for (const file of selectPlatformLock(lock, key).files) allDestinations.add(file.to)
   }
   const removed = []
+  for (const retiredRoot of RETIRED_RESOURCE_ROOTS) {
+    const prefix = retiredRoot + '/'
+    if ([...selectedDestinations].some((path) => path.startsWith(prefix))) {
+      throw new Error('Selected platform still stages retired resource root ' + retiredRoot)
+    }
+    const destination = safePath(resourcesDir, retiredRoot, 'retired resource root')
+    await rm(destination, { recursive: true, force: true })
+  }
   for (const destinationPath of allDestinations) {
     if (selectedDestinations.has(destinationPath)) continue
     const destination = safePath(resourcesDir, destinationPath, 'file.to')

@@ -102,16 +102,18 @@ not, card creation continues without that audio clip.
 
 The experimental feature itself is documented in [Game OCR](game-ocr.md).
 
-Game OCR spawns a PaddleOCR sidecar, so its payload is staged under
-`resources/paddleocr/` and bundled from `win.extraResources` alone. Linux
+Game OCR spawns a PP-OCR sidecar backed by CPU-only ONNX Runtime, so its payload is staged under
+`resources/ppocr/` and bundled from `win.extraResources` alone. Linux
 artifacts never carry it, `resolveGameOcrPaths` refuses to produce a Linux
-path, and `resources.lock.json` may only stage `paddleocr/` under `win32-x64`.
+path, and `resources.lock.json` may only stage `ppocr/` under `win32-x64`.
 
 | Installed path | Purpose |
 |---|---|
-| `resources/paddleocr/paddleocr.exe` | PaddleOCR sidecar and its Paddle Inference runtime |
-| `resources/paddleocr/models/det` | Japanese text-detection model |
-| `resources/paddleocr/models/rec` | Japanese text-recognition model |
+| `resources/ppocr/ppocr.exe` | Protocol-v1 PP-OCR sidecar built from patched RapidOcrOnnx |
+| `resources/ppocr/onnxruntime.dll` | CPU-only ONNX Runtime 1.24.4 |
+| `resources/ppocr/models/det.onnx` | PP-OCRv5 text-detection model |
+| `resources/ppocr/models/rec.onnx` | PP-OCRv5 text-recognition model |
+| `resources/ppocr/models/keys.txt` | Recognition dictionary extracted from model metadata |
 
 All three are checked before every Game OCR arm attempt. A missing or
 wrong-kind entry is reported in Options > Game OCR and clears on retry once the
@@ -120,18 +122,15 @@ The same paths are in `requiredPackagedResources`, so an installer built
 without the worker or a model file fails the packaged smoke check rather than
 the first capture.
 
-The payload is 15 binaries and 6 model files, roughly 350 MB unpacked, and
-`resources/paddleocr/` is flat by design: the worker resolves its own DLLs from
-the directory it sits in. Everything those binaries import and the payload does
-not provide is a Windows system DLL, with one caveat —
-`opencv_world4100.dll` imports Media Foundation, which Windows N editions do
-not have until the Media Feature Pack is installed. AVX is required, and
-PaddleOCR gates oneDNN acceleration on an Intel CPU brand string, so AMD hosts
-fall back to the plain CPU backend.
+The payload is roughly 40.5 MB unpacked. `resources/ppocr/` is flat at its
+runtime root so the worker resolves ONNX Runtime and the four VC runtime DLLs
+from the directory it sits in. OpenCV, Clipper, zlib, and libpng are linked
+statically into the worker. DirectML, Paddle Inference, oneDNN, and Intel MKL
+are not shipped.
 
-`paddleocr.exe` is GPL-3.0-or-later: its worker entrypoint is first-party GPL
-source, so the whole executable is conveyed under GPLv3 even though everything
-it links is Apache-2.0 or permissive. The corresponding source and the script
+`ppocr.exe` is GPL-3.0-or-later: its worker entrypoint adapts the first-party GPL
+worker, so the whole executable is conveyed under GPLv3 even though its engine
+and statically linked libraries use compatible permissive terms. The corresponding source and the script
 that builds it live in the vendor mirror and are linked from the generated
 `CORRESPONDING_SOURCE.md`.
 

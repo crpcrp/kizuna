@@ -97,7 +97,7 @@ export const SOURCE_FILE = 'CORRESPONDING_SOURCE.md'
  * notices object. Components without an override retain the common metadata.
  *
  * A `platformExclusive` component is dropped everywhere else. Game OCR's
- * PaddleOCR payload ships on Windows alone — the same rule
+ * PP-OCR payload ships on Windows alone — the same rule
  * `PLATFORM_EXCLUSIVE_ROOTS` enforces on the lock — and a notice for a
  * component the Linux artifact does not contain would name licence texts that
  * platform never stages.
@@ -665,7 +665,7 @@ async function existingBundleFiles(outDir, prefix = '') {
  * bundle is per-platform, and generating one platform's after another's — a
  * local `npm run dist` then `npm run dist:linux` — otherwise leaves the first
  * platform's licence texts behind, so the Linux artifact would carry notices
- * for binaries it does not contain, PaddleOCR's GPLv3 text among them.
+ * for binaries it does not contain, PP-OCR's GPLv3 text among them.
  *
  * @param {object} options
  * @param {string} options.outDir

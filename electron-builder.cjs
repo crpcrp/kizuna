@@ -46,12 +46,12 @@ module.exports = {
   ],
   win: {
     target: 'nsis',
-    // Game OCR is Windows-only, and so is its PaddleOCR payload: the worker
-    // executable, the Paddle Inference runtime beside it, and the Japanese
+    // Game OCR is Windows-only, and so is its PP-OCR / ONNX Runtime payload: the worker
+    // executable, ONNX Runtime DLLs, recognition dictionary, and PP-OCRv5
     // detection/recognition models. Declared here rather than in the shared
     // `extraResources` above so the Linux AppImage and .deb never carry it.
     // electron-builder concatenates the platform list with the shared one.
-    extraResources: [{ from: 'resources/paddleocr', to: 'paddleocr' }],
+    extraResources: [{ from: 'resources/ppocr', to: 'ppocr' }],
     // Local builds remain unsigned when no certificate is provided.
     signtoolOptions: {
       // Sign releases with SHA-256 and an RFC 3161 timestamp.

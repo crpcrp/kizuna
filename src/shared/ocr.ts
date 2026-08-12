@@ -135,7 +135,7 @@ const BOUNDS_KEYS = ['x', 'y', 'width', 'height'] as const
  * Validates and normalizes an untrusted OCR result without touching any
  * Electron, native, filesystem, or OCR APIs.
  *
- * Unknown fields are rejected so PaddleOCR quadrilaterals, executable paths,
+ * Unknown fields are rejected so PP-OCR quadrilaterals, executable paths,
  * and backend options cannot cross this public contract accidentally.
  */
 export function normalizeOcrResult(value: unknown): OcrNormalizationResult {
