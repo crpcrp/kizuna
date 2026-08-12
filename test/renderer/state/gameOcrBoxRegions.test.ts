@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildGameOcrBoxRegions,
-  DEFAULT_GAME_OCR_BOX_METRICS,
-  estimateGameOcrTextWidth
+  fitGameOcrFontSize
 } from '@src/renderer/src/state/gameOcrBoxRegions'
 import type { GameOcrTextSnapshot } from '@src/renderer/src/state/gameOcrTextPipeline'
 import type { OcrResult } from '@src/shared/ocr'
@@ -51,10 +50,6 @@ function snapshot(overrides: Partial<GameOcrTextSnapshot> = {}): GameOcrTextSnap
 }
 
 describe('buildGameOcrBoxRegions', () => {
-  it('sizes replacement text with the larger overlay typography', () => {
-    expect(DEFAULT_GAME_OCR_BOX_METRICS).toMatchObject({ fontSize: 18, lineHeight: 23 })
-  })
-
   it('places each region at its captured location scaled into the viewport', () => {
     const [box] = buildGameOcrBoxRegions({
       result: result(),
@@ -66,6 +61,8 @@ describe('buildGameOcrBoxRegions', () => {
     expect(box.layout.originalBounds).toEqual({ x: 50, y: 100, width: 150, height: 30 })
     expect(box.layout.displayBounds.x).toBe(50)
     expect(box.layout.displayBounds.y).toBe(100)
+    expect(box.layout.displayBounds).toEqual(box.layout.originalBounds)
+    expect(box.fontSize).toBe(26)
   })
 
   it('attaches processed tokens once the pipeline resolves the same capture', () => {
@@ -92,7 +89,7 @@ describe('buildGameOcrBoxRegions', () => {
     expect(box.levels).toBeUndefined()
   })
 
-  it('grows a rectangle that is too narrow for its replacement text', () => {
+  it('keeps a narrow detector rectangle exact instead of growing it for replacement text', () => {
     const vertical = result({
       regions: [
         {
@@ -109,14 +106,16 @@ describe('buildGameOcrBoxRegions', () => {
       viewportSize: { width: 1920, height: 1080 }
     })
 
-    const expected =
-      estimateGameOcrTextWidth('日本語のテキスト', DEFAULT_GAME_OCR_BOX_METRICS.fontSize) +
-      DEFAULT_GAME_OCR_BOX_METRICS.paddingX * 2
-    expect(box.layout.displayBounds.width).toBe(expected)
-    expect(box.layout.displayBounds.width).toBeGreaterThan(box.layout.originalBounds.width)
+    expect(box.layout.displayBounds).toEqual(box.layout.originalBounds)
+    expect(box.layout.displayBounds.width).toBe(40)
   })
 
-  it('separates boxes whose captured rectangles sit on top of each other', () => {
+  it('shrinks long lines to fit both dimensions without wrapping', () => {
+    expect(fitGameOcrFontSize('チュートリアルのヒント', 150, 30)).toBe(12)
+    expect(fitGameOcrFontSize('時刻表示', 90, 30)).toBe(20)
+  })
+
+  it('does not move boxes away from overlapping detected text', () => {
     const overlapping = result({
       regions: [
         {
@@ -139,23 +138,10 @@ describe('buildGameOcrBoxRegions', () => {
       viewportSize: { width: 1920, height: 1080 }
     })
 
-    const [first, second] = boxes.map((box) => box.layout.displayBounds)
-    const separated =
-      first.x + first.width <= second.x ||
-      second.x + second.width <= first.x ||
-      first.y + first.height <= second.y ||
-      second.y + second.height <= first.y
     expect(boxes).toHaveLength(2)
-    expect(separated).toBe(true)
-  })
-
-  it('accepts an injected measurement so a real font can replace the estimate', () => {
-    const [box] = buildGameOcrBoxRegions({
-      result: result(),
-      viewportSize: { width: 1920, height: 1080 },
-      measureTextWidth: () => 800
-    })
-
-    expect(box.layout.displayBounds.width).toBe(800 + DEFAULT_GAME_OCR_BOX_METRICS.paddingX * 2)
+    expect(boxes.map((box) => box.layout.displayBounds)).toEqual([
+      { x: 100, y: 100, width: 200, height: 40 },
+      { x: 110, y: 110, width: 200, height: 40 }
+    ])
   })
 })

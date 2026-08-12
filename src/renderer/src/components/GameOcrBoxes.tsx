@@ -20,6 +20,8 @@ export interface GameOcrBoxRegion {
   id: string
   text: string
   layout: GameOcrLayoutResult
+  /** Typography fitted to the detected line without changing its bounds. */
+  fontSize?: number
   tokens?: Token[]
   highlightedTokens?: Token[]
   levels?: Record<string, KnowledgeLevel>
@@ -115,7 +117,8 @@ export default function GameOcrBoxes({
               left: `${bounds.x}px`,
               top: `${bounds.y}px`,
               width: `${bounds.width}px`,
-              height: `${bounds.height}px`
+              height: `${bounds.height}px`,
+              fontSize: region.fontSize ? `${region.fontSize}px` : undefined
             }}
             onPointerDown={stopPropagation}
             onMouseDown={stopPropagation}

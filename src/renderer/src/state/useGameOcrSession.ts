@@ -6,7 +6,6 @@ import type { KizunaApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
 import { buildGameOcrBoxRegions } from './gameOcrBoxRegions'
 import type { GameOcrLayoutSize } from './gameOcrLayout'
-import { mergeGameOcrParagraphs } from './gameOcrParagraphs'
 import { createGameOcrTextPipeline, type GameOcrTextSnapshot } from './gameOcrTextPipeline'
 import { useLatestCallback } from './useLatestRef'
 
@@ -95,11 +94,11 @@ export function useGameOcrSession({
     const unsubscribeRecognition = api.onRecognitionState((recognizing) =>
       setPresentation((current) => (current ? { ...current, recognizing } : current))
     )
-    // Lines are joined into blocks here rather than at either consumer: the
-    // boxes and the tokenization pass both read this result, and they have to
-    // agree on the text a region holds or the tokens would land at offsets
-    // into a string the box never renders.
-    const unsubscribeRegions = api.onRegions((next) => setResult(mergeGameOcrParagraphs(next)))
+    // Keep PP-OCR's line-level regions intact. Besides making each line an
+    // independent lookup target, this preserves the detector's tight bounds;
+    // merging nearby lines creates large paragraph rectangles that cover
+    // background pixels rather than recognized text.
+    const unsubscribeRegions = api.onRegions(setResult)
     api.rendererReady()
     return () => {
       unsubscribePresentation()
