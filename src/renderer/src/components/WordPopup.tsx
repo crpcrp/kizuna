@@ -1,4 +1,5 @@
 import './WordPopup.css'
+import type { WordPopupPosition } from '../state/wordLookup'
 import { Fragment } from 'react'
 import { pitchAccentValue, priorityWeight, type LookupResult } from '../../../shared/dictionary'
 import type { KnowledgeDetails } from '../../../shared/knowledge'
@@ -18,7 +19,7 @@ import type { Token } from '../../../shared/token'
 export interface WordPopupProps {
   results: LookupResult[]
   /** Anchor position (e.g. viewport px) near the token that was clicked/hovered. */
-  position: { x: number; y: number } | null
+  position: WordPopupPosition | null
   onClose?: () => void
   /** Max dictionary entries (rows) to render. Defaults to unlimited. */
   maxEntries?: number
@@ -257,6 +258,7 @@ export default function WordPopup({
       role="dialog"
       aria-label="Word lookup"
       aria-hidden={!open}
+      data-placement={position?.placement}
       style={position ? { left: position.x, top: position.y } : undefined}
       onClick={(event) => event.stopPropagation()}
     >

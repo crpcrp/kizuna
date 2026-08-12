@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   type DictLookupBridge,
   buildLongestMatchCandidates,
-  constrainWordPopupPosition,
+  gameOcrWordPopupPosition,
   lookupLinkedWord,
   lookupWordPopup,
   matchedTokenSpan,
@@ -16,12 +16,12 @@ import { makeToken } from '@test/harness/tokenFixtures'
 
 describe('wordPopupPosition', () => {
   it('anchors at the subtitle box’s horizontal center / top when a rect is given', () => {
-    const rect = { left: 100, top: 50, width: 40 }
+    const rect = { left: 100, top: 50, width: 40, height: 20 }
     expect(wordPopupPosition(rect)).toEqual({ x: 120, y: 50 })
   })
 
   it('prefers the subtitle rect over the event when both are given', () => {
-    const rect = { left: 100, top: 50, width: 40 }
+    const rect = { left: 100, top: 50, width: 40, height: 20 }
     const event = { clientX: 999, clientY: 999 }
     expect(wordPopupPosition(rect, event)).toEqual({ x: 120, y: 50 })
   })
@@ -35,15 +35,32 @@ describe('wordPopupPosition', () => {
     expect(wordPopupPosition(undefined)).toEqual({ x: 0, y: 0 })
   })
 
-  it('keeps an OCR popup anchor inside the viewport for edge regions', () => {
-    expect(constrainWordPopupPosition({ x: 0, y: 0 }, { width: 1000, height: 800 })).toMatchObject({
-      x: 220,
-      y: expect.closeTo(454)
-    })
-    expect(constrainWordPopupPosition({ x: 1000, y: 800 }, { width: 1000, height: 800 })).toEqual({
-      x: 780,
-      y: 800
-    })
+  it('places upper-screen OCR popups below the full text box', () => {
+    expect(
+      gameOcrWordPopupPosition({ left: 0, top: 40, width: 100, height: 60 }, undefined, {
+        width: 1000,
+        height: 800
+      })
+    ).toEqual({ x: 220, y: 100, placement: 'below' })
+  })
+
+  it('places lower-screen OCR popups above the full text box', () => {
+    expect(
+      gameOcrWordPopupPosition({ left: 900, top: 680, width: 100, height: 60 }, undefined, {
+        width: 1000,
+        height: 800
+      })
+    ).toEqual({ x: 780, y: 680, placement: 'above' })
+  })
+
+  it('uses the pointer half of the screen when a measurable OCR box is unavailable', () => {
+    expect(
+      gameOcrWordPopupPosition(
+        undefined,
+        { clientX: 500, clientY: 40 },
+        { width: 1000, height: 800 }
+      )
+    ).toEqual({ x: 500, y: 40, placement: 'below' })
   })
 })
 

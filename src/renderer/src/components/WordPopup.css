@@ -12,6 +12,9 @@
   display: block;
   pointer-events: auto;
 }
+#word-popup[data-placement='below'] {
+  transform: translate(-50%, 14px);
+}
 .word-popup-panel {
   width: 440px;
   max-width: 90vw;
@@ -25,6 +28,9 @@
   box-sizing: border-box;
   position: relative;
   font-size: 1.15rem;
+}
+#word-popup[data-placement] .word-popup-panel {
+  max-height: 28vh;
 }
 .word-popup-close {
   position: absolute;

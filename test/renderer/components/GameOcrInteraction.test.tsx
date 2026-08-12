@@ -81,7 +81,12 @@ describe('GameOcrInteraction', () => {
       </GameOcrFrame>
     )
 
-    fireEvent.click(container.querySelector('[data-region-id="first"] [data-token]')!, {
+    const firstToken = container.querySelector(
+      '[data-region-id="first"] [data-token]'
+    ) as HTMLElement
+    firstToken.getBoundingClientRect = () =>
+      ({ left: 40, top: 30, width: 80, height: 40 }) as DOMRect
+    fireEvent.click(firstToken, {
       clientX: 80,
       clientY: 60
     })
@@ -90,6 +95,7 @@ describe('GameOcrInteraction', () => {
     expect(lookup).toHaveBeenCalledWith('前', '前-reading', null, undefined, ['前'], '前')
     expect(container.querySelector('[data-region-id="first"] [data-highlighted]')).not.toBeNull()
     expect(container.querySelector('[data-region-id="second"] [data-highlighted]')).toBeNull()
+    expect(container.querySelector('#word-popup')?.getAttribute('data-placement')).toBe('below')
   })
 
   it('keeps popup use and close presses inside the frozen frame', async () => {

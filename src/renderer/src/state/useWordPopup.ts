@@ -16,7 +16,7 @@ import {
 } from './popupController'
 import { useLatestCallback } from './useLatestRef'
 import {
-  constrainWordPopupPosition,
+  gameOcrWordPopupPosition,
   wordPopupPosition,
   type WordPopupTextContext
 } from './wordLookup'
@@ -130,13 +130,12 @@ export function useWordPopup({
     const subtitleRect = textContext
       ? textContext.anchorRect
       : document.getElementById('subtitle')?.getBoundingClientRect()
-    const rawPosition = wordPopupPosition(subtitleRect, event)
     const position = textContext
-      ? constrainWordPopupPosition(rawPosition, {
+      ? gameOcrWordPopupPosition(textContext.anchorRect, event, {
           width: window.innerWidth,
           height: window.innerHeight
         })
-      : rawPosition
+      : wordPopupPosition(subtitleRect, event)
     await popupController.open(bridge.dict, bridge.anki, bridge.knowledge, {
       token,
       position,
