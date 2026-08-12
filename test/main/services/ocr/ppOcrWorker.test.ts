@@ -245,6 +245,47 @@ describe('createPpOcrWorkerService', () => {
     expect(timeoutProcess.killedWith).toEqual([undefined])
   })
 
+  it('carries the worker’s own reason for rejecting a request', async () => {
+    const process = new FakePpOcrProcess()
+    const { service } = createService(process)
+    const pending = service.recognize(request())
+    process.ready()
+    // The worker explains itself on stderr and reports the failure on stdout.
+    // Without the stderr line the caller can only say recognition failed, which
+    // is what made a PNG-only image decoder look like a recognition bug.
+    process.stderr.emit(
+      'data',
+      'total keys size(18385)\nrequest failed: invalid recognition request\n'
+    )
+    process.error(1)
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'worker-error',
+      detail: 'request failed: invalid recognition request',
+      message: 'PP-OCR worker rejected the request: request failed: invalid recognition request'
+    })
+  })
+
+  it('does not attribute one request’s stderr to a later unrelated failure', async () => {
+    const process = new FakePpOcrProcess()
+    const { service } = createService(process)
+    const first = service.recognize(request())
+    process.ready()
+    process.stderr.emit('data', 'request failed: invalid base64 character\n')
+    process.error(1)
+    await expect(first).rejects.toMatchObject({
+      detail: 'request failed: invalid base64 character'
+    })
+
+    const second = service.recognize(request())
+    process.error(2)
+    await expect(second).rejects.toMatchObject({
+      code: 'worker-error',
+      detail: undefined,
+      message: 'PP-OCR worker rejected the request'
+    })
+  })
+
   it('bounds stdout and stderr before accepting untrusted worker output', async () => {
     const stdoutProcess = new FakePpOcrProcess()
     const stdoutService = createService(stdoutProcess, { maxStdoutBytes: 8 }).service

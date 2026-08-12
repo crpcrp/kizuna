@@ -157,14 +157,27 @@ export const GAME_OCR_CHANNELS = {
   retry: 'gameOcr:retry',
   /** main→renderer push: current worker/coordinator status. */
   statusChanged: 'gameOcr:statusChanged',
-  /** main→renderer: replace the frozen screenshot and recognition state. */
-  present: 'gameOcr:present',
+  /**
+   * main→renderer: freeze the display the frame is streaming. The screenshot
+   * travels the other way; the renderer is the one holding the capture stream.
+   */
+  freeze: 'gameOcr:freeze',
+  /** renderer→main: the frozen frame is drawn and ready to be shown. */
+  frozen: 'gameOcr:frozen',
+  /** renderer→main: the encoded screenshot, for the OCR worker only. */
+  captureBytes: 'gameOcr:captureBytes',
   /** main→renderer: clear screenshot, boxes, selection, and indicator state. */
   discard: 'gameOcr:discard',
   /** main→renderer: update the processing indicator after OCR settles. */
   recognitionState: 'gameOcr:recognitionState',
   /** main→renderer: the accepted OCR regions for the presented screenshot. */
   regions: 'gameOcr:regions',
+  /**
+   * main→renderer: copy the frame's current text selection. The frozen frame
+   * never holds keyboard focus, so Ctrl+C reaches it as a global shortcut
+   * rather than as a key event the page could handle itself.
+   */
+  copySelection: 'gameOcr:copySelection',
   /** renderer→main: close the whole frozen frame. */
   close: 'gameOcr:close',
   /** renderer→main: the dedicated page has subscribed to presentation pushes. */

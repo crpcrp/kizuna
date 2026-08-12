@@ -92,7 +92,7 @@ describe('GameOcrInteraction', () => {
     expect(container.querySelector('[data-region-id="second"] [data-highlighted]')).toBeNull()
   })
 
-  it('keeps popup use and close clicks inside the frozen frame', async () => {
+  it('keeps popup use and close presses inside the frozen frame', async () => {
     const onClose = vi.fn()
     const lookup = vi.fn().mockResolvedValue([makeLookupResult()])
     const { container } = render(
@@ -108,10 +108,13 @@ describe('GameOcrInteraction', () => {
     fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
     await waitFor(() => expect(container.querySelector('#word-popup.open')).not.toBeNull())
 
+    // The frame ends on a background press, so a press anywhere in the popup —
+    // its close button included — must not reach that path.
+    fireEvent.pointerDown(container.querySelector('.word-popup-close')!, { button: 0 })
     fireEvent.click(container.querySelector('.word-popup-close')!)
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.click(container.querySelector('main')!)
+    fireEvent.pointerDown(container.querySelector('main')!, { button: 0 })
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -359,7 +362,7 @@ describe('GameOcrInteraction', () => {
     selection.addRange(range)
     fireEvent.contextMenu(box)
 
-    fireEvent.click(screen.getByRole('main', { name: 'Frozen game frame' }))
+    fireEvent.pointerDown(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
     expect(onClose).toHaveBeenCalledOnce()
     expect(cancel).toHaveBeenCalledWith('close-me')
 

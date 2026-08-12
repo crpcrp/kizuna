@@ -1,11 +1,10 @@
-import type { GameOcrPresentation } from '../../../shared/gameOcr'
 import {
   MAX_OCR_IDENTIFIER,
   type OcrCaptureIdentity,
   type OcrDisplayCaptureMetadata,
   type OcrResult
 } from '../../../shared/ocr'
-import type { DisplayCapture, DisplayCaptureService } from './displayCapture'
+import type { GameOcrDisplaySources } from './displayCapture'
 import type { GameOcrWindow } from './frozenFrameWindow'
 
 /** Electron's globalShortcut surface used by the Game OCR coordinator. */
@@ -25,7 +24,7 @@ export interface GameOcrRecognitionAdapter {
   recognize(request: {
     sessionId: number
     captureId: number
-    imageSize: DisplayCapture['imageSize']
+    imageSize: OcrDisplayCaptureMetadata['imageSize']
     imageBase64: string
   }): Promise<OcrResult>
   stop(): Promise<void>
@@ -40,10 +39,30 @@ export interface GameOcrStatus {
   error?: string
 }
 
+/**
+ * Wall-clock cost of one capture, in milliseconds, split at the boundaries a
+ * change can actually move. Reported once the screenshot is on screen, because
+ * that is the latency the user feels; `recognizeMs` follows on the same record
+ * only when recognition resolves for the same session.
+ */
+export interface GameOcrCaptureTimings {
+  sessionId: number
+  /** Waiting for a previous frozen frame to stop being visible. */
+  dismissMs: number
+  /** The bounded compositor-settle step, zero when it was skipped. */
+  settleMs: number
+  /** Windows display capture, including the JPEG encode and base64 pass. */
+  captureMs: number
+  /** Handing the screenshot to the frozen-frame renderer and showing it. */
+  presentMs: number
+  /** Hotkey to visible screenshot: the sum of the four steps above. */
+  totalMs: number
+}
+
 export interface GameOcrControllerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
-  capture: DisplayCaptureService
+  displays: GameOcrDisplaySources
   settle: GameOcrSettleBoundary
   /**
    * Builds the frozen-frame window. Called once per armed run rather than once
@@ -57,6 +76,10 @@ export interface GameOcrControllerOptions {
   onResult?: (result: OcrResult) => void
   onStateChange?: (status: GameOcrStatus) => void
   onError?: (message: string, error: unknown) => void
+  /** Per-capture stage costs, for the development latency log. */
+  onTimings?: (timings: GameOcrCaptureTimings) => void
+  /** Injected so timing assertions do not depend on a real clock. */
+  now?: () => number
 }
 
 export interface GameOcrController {
@@ -71,9 +94,45 @@ export interface GameOcrController {
   shutdown(): Promise<void>
 }
 
+/** Longest failure detail carried into a status message. */
+const MAX_FAILURE_DETAIL_LENGTH = 200
+
+/**
+ * Accelerators the frozen frame needs while it is on screen. The window never
+ * takes the Windows foreground — deliberately, so the game keeps rendering and
+ * so no first mouse press is spent activating it — which also means its page
+ * receives no key events at all. These are registered when a frame appears and
+ * released the moment it goes, so Escape and Ctrl+C belong to the game again
+ * for as long as the user is playing it.
+ */
+const FRAME_ACCELERATORS = Object.freeze({
+  dismiss: 'Escape',
+  copySelection: 'CommandOrControl+C'
+})
+
+/**
+ * Joins a stage label to whatever the failing boundary said, so the Options
+ * surface reports a cause rather than only the stage that hit it.
+ */
+function describeFailure(stage: string, error: unknown): string {
+  const message = error instanceof Error ? error.message.trim() : ''
+  if (message === '') return `${stage}.`
+  const detail =
+    message.length > MAX_FAILURE_DETAIL_LENGTH
+      ? `${message.slice(0, MAX_FAILURE_DETAIL_LENGTH)}…`
+      : message
+  return `${stage}: ${detail}`
+}
+
 interface Session extends OcrCaptureIdentity {
   valid: boolean
   dismissBeforeCapture: Promise<void>
+  /**
+   * Whether a frozen frame of Kizuna's own was on screen when this session
+   * began. Only then does the compositor have anything of ours to repaint, so
+   * only then is the settle step worth its delay.
+   */
+  settleBeforeCapture: boolean
 }
 
 /**
@@ -92,7 +151,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let status: GameOcrStatus = { state: 'off', sessionId: 0 }
   const listeners = new Set<(next: GameOcrStatus) => void>()
   let activeSession: Session | undefined
-  let activeCapture: DisplayCapture | undefined
   let presentation: GameOcrWindow | undefined
   let presentationDismiss: Promise<void> | undefined
   let presentationDismissTarget: GameOcrWindow | undefined
@@ -104,6 +162,17 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let captureQueue = Promise.resolve()
   let armPromise: Promise<boolean> | undefined
   let stopping = false
+  let frameShortcutsHeld = false
+
+  const now = options.now ?? (() => Date.now())
+
+  const reportTimings = (timings: GameOcrCaptureTimings): void => {
+    try {
+      options.onTimings?.(timings)
+    } catch {
+      // Measurement must never affect the pipeline it measures.
+    }
+  }
 
   const notify = (next: GameOcrStatus): void => {
     status = next
@@ -128,20 +197,54 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     }
   }
 
-  const disposeCapture = (): void => {
-    activeCapture?.dispose()
-    activeCapture = undefined
+  const releaseFrameShortcuts = (): void => {
+    if (!frameShortcutsHeld) return
+    frameShortcutsHeld = false
+    for (const accelerator of Object.values(FRAME_ACCELERATORS)) {
+      try {
+        options.shortcut.unregister(accelerator)
+      } catch (error) {
+        reportError('Game OCR frame shortcut cleanup failed.', error)
+      }
+    }
   }
 
   /**
-   * Frees one screenshot's encoded bytes as soon as recognition is done with
-   * them. The renderer already holds the pixels it presents, so keeping the
-   * main-process copy alive for the whole inspection would pin up to
-   * `MAX_DISPLAY_CAPTURE_ENCODED_BYTES` per frozen frame for no reader.
+   * Claimed only while a frame is visible. A refusal is not fatal: another
+   * application already owns the accelerator, and the frame stays usable
+   * without it — background press still dismisses, and the box text can still
+   * be selected — so this reports and carries on rather than failing a capture
+   * the user can see.
    */
-  const releaseCapture = (capture: DisplayCapture): void => {
-    capture.dispose()
-    if (activeCapture === capture) activeCapture = undefined
+  const holdFrameShortcuts = (frame: GameOcrWindow): void => {
+    if (frameShortcutsHeld) return
+    frameShortcutsHeld = true
+    try {
+      if (!options.shortcut.register(FRAME_ACCELERATORS.dismiss, () => void dismissFrame(frame))) {
+        reportError(
+          `The Game OCR frame could not claim ${FRAME_ACCELERATORS.dismiss}; press the screenshot background to close it.`,
+          new Error('Shortcut conflict.')
+        )
+      }
+      if (
+        !options.shortcut.register(FRAME_ACCELERATORS.copySelection, () => frame.copySelection())
+      ) {
+        reportError(
+          `The Game OCR frame could not claim ${FRAME_ACCELERATORS.copySelection}; copying selected text is unavailable.`,
+          new Error('Shortcut conflict.')
+        )
+      }
+    } catch (error) {
+      reportError('Game OCR frame shortcut registration failed.', error)
+    }
+  }
+
+  /** Ends the visible frame the way the renderer's own close request does. */
+  const dismissFrame = (frame: GameOcrWindow): Promise<void> => {
+    if (presentation !== frame) return Promise.resolve()
+    return Promise.resolve(frame.dismiss()).catch((error) => {
+      reportError('Game OCR frame dismissal failed.', error)
+    })
   }
 
   const isCurrent = (session: Session): boolean =>
@@ -201,7 +304,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     if (activeSession) activeSession.valid = false
     activeSession = undefined
     lifecycle++
-    disposeCapture()
     invalidateResults()
   }
 
@@ -212,7 +314,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       activeSession = undefined
       lifecycle++
     }
-    disposeCapture()
+    releaseFrameShortcuts()
     unregisterShortcut()
     reportError(message, error)
     notify({ state: 'error', sessionId: session?.sessionId ?? status.sessionId, error: message })
@@ -226,12 +328,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
    */
   const handleFrameEnded = (target: GameOcrWindow, destroyed: boolean): void => {
     if (presentation !== target) return
+    releaseFrameShortcuts()
     if (destroyed) {
       presentation = undefined
       presentationDismissTarget = undefined
       presentationDismiss = undefined
     }
-    disposeCapture()
     invalidateResults()
     if (activeSession) activeSession.valid = false
     activeSession = undefined
@@ -262,11 +364,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     nextSessionId = allocateIdentifier(nextSessionId)
     nextCaptureId = allocateIdentifier(nextCaptureId)
     invalidateSession()
+    // Read before the dismissal is requested: afterwards the window is on its
+    // way to hidden and cannot say whether it had been covering the game.
+    const settleBeforeCapture = presentation?.isVisible() ?? false
     const session: Session = {
       sessionId: nextSessionId,
       captureId: nextCaptureId,
       valid: true,
-      dismissBeforeCapture: dismissPresentation()
+      dismissBeforeCapture: dismissPresentation(),
+      settleBeforeCapture
     }
     activeSession = session
     notify({ state: 'capturing', sessionId: session.sessionId })
@@ -275,18 +381,21 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const recognize = async (
     session: Session,
-    capture: DisplayCapture,
+    metadata: OcrDisplayCaptureMetadata,
     frame: GameOcrWindow
   ): Promise<void> => {
     if (!isCurrent(session)) return
     notify({ state: 'recognizing', sessionId: session.sessionId })
     try {
-      const imageBase64 = capture.imageBase64
-      if (!imageBase64) throw new Error('The Game OCR capture was disposed before recognition.')
+      // Encoded by the renderer after its frame was already on screen, so this
+      // wait is never something the user is looking at a blank display for.
+      const imageBase64 = await frame.captureBytes(session.captureId)
+      if (!isCurrent(session)) return
+      if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
       const result = await options.ocr.recognize({
         sessionId: session.sessionId,
         captureId: session.captureId,
-        imageSize: capture.imageSize,
+        imageSize: metadata.imageSize,
         imageBase64
       })
       if (
@@ -310,53 +419,78 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     } catch (error) {
       if (!isCurrent(session)) return
       frame.setRecognizing(false)
-      fail(session, 'Game OCR recognition failed.', error)
-    } finally {
-      releaseCapture(capture)
+      // The reason travels with the message. "Recognition failed." on its own
+      // sends the user to a console that never had the worker's stderr in it.
+      fail(session, describeFailure('Game OCR recognition failed', error), error)
     }
   }
 
   const runCapture = async (session: Session): Promise<void> => {
+    const startedAt = now()
     try {
       await session.dismissBeforeCapture
       if (!isCurrent(session)) return
       if (presentation?.isVisible()) {
         throw new Error('The previous Game OCR presentation is still visible.')
       }
+      const dismissedAt = now()
 
-      await options.settle.settle()
+      // The compositor only has to repaint the region a frozen frame covered
+      // when there actually was one. The first capture of a run, and every
+      // capture taken after the user returned to the game, reads pixels
+      // Kizuna never drew over, so the delay would buy nothing and the whole
+      // step sits between the hotkey and the screenshot.
+      let settledAt = dismissedAt
+      if (session.settleBeforeCapture) {
+        await options.settle.settle()
+        if (!isCurrent(session)) return
+        if (presentation?.isVisible()) {
+          throw new Error('The previous Game OCR presentation became visible again.')
+        }
+        settledAt = now()
+      }
+
+      // Geometry only. The pixels come from the stream the frame already
+      // holds, so nothing here reads the screen.
+      const target = await options.displays.cursorDisplay()
       if (!isCurrent(session)) return
-      if (presentation?.isVisible()) {
-        throw new Error('The previous Game OCR presentation became visible again.')
-      }
+      const capturedAt = now()
 
-      const capture = await options.capture.capture()
-      if (!isCurrent(session)) {
-        capture.dispose()
-        return
-      }
-      activeCapture = capture
-      const imageBase64 = capture.imageBase64
-      if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
-
-      const frame = ensurePresentation(capture.metadata)
-      await frame.present({
-        imageBase64,
-        imageSize: capture.imageSize,
-        recognizing: true
-      } satisfies GameOcrPresentation)
+      const frame = ensurePresentation(target.metadata)
+      const imageSize = await frame.freeze({
+        sessionId: session.sessionId,
+        captureId: session.captureId,
+        sourceId: target.sourceId,
+        imageSize: target.metadata.imageSize,
+        // The frame is drawn while this window is still hidden, so it cannot be
+        // in its own screenshot. A recapture additionally waits for a frame
+        // composited after the previous one stopped covering the display.
+        requireFreshFrame: session.settleBeforeCapture
+      })
       if (!isCurrent(session)) {
         await frame.discard()
         return
       }
+      // Claimed only once the frame is actually up, so a capture that failed
+      // on its way here never leaves Escape taken away from the game.
+      holdFrameShortcuts(frame)
+      const presentedAt = now()
+      reportTimings({
+        sessionId: session.sessionId,
+        dismissMs: dismissedAt - startedAt,
+        settleMs: settledAt - dismissedAt,
+        captureMs: capturedAt - settledAt,
+        presentMs: presentedAt - capturedAt,
+        totalMs: presentedAt - startedAt
+      })
 
-      void recognize(session, capture, frame)
+      void recognize(session, { ...target.metadata, imageSize }, frame)
     } catch (error) {
       if (!isCurrent(session)) return
       await dismissPresentation().catch((dismissError) => {
         reportError('Game OCR presentation cleanup failed.', dismissError)
       })
-      fail(session, 'Game OCR capture failed.', error)
+      fail(session, describeFailure('Game OCR capture failed', error), error)
     }
   }
 
@@ -467,6 +601,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     stopping = true
     lifecycle++
     invalidateSession()
+    releaseFrameShortcuts()
     unregisterShortcut()
     const close = closePresentation()
     await Promise.allSettled([close, options.ocr.stop(), armPromise])

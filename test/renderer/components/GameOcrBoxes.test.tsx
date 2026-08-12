@@ -131,7 +131,7 @@ describe('GameOcrBoxes', () => {
     expect(selection?.toString()).toBe(selectedText)
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('main', { name: 'Frozen game frame' }))
+    fireEvent.pointerDown(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

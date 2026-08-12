@@ -56,7 +56,12 @@ export interface PpOcrWorkerOptions {
   onStateChange?: (status: PpOcrWorkerStatus) => void
 }
 
-/** Raw PNG/JPEG data is passed as base64; it never crosses the public OCR contract. */
+/**
+ * Raw PNG data is passed as base64; it never crosses the public OCR contract.
+ * PNG specifically: the worker's OpenCV is built without the JPEG codec, so
+ * anything else decodes to an empty `Mat` and the request is rejected. See
+ * `DISPLAY_CAPTURE_MEDIA_TYPE`.
+ */
 export interface PpOcrRequest {
   sessionId: number
   captureId: number
@@ -96,13 +101,24 @@ const ERROR_MESSAGES: Record<PpOcrWorkerErrorCode, string> = {
   'shutdown-timeout': 'PP-OCR worker did not stop in time'
 }
 
+/**
+ * How much of the worker's most recent stderr is retained to explain a failure.
+ * The worker reports why it rejected a request there — an undecodable image, a
+ * bad protocol version — and without it a caller can only say that recognition
+ * failed, which is what made a PNG-only decoder look like a recognition bug.
+ */
+export const PP_OCR_STDERR_TAIL_CHARS = 400
+
 export class PpOcrWorkerError extends Error {
   readonly code: PpOcrWorkerErrorCode
+  /** The worker's own explanation, when it gave one on stderr. */
+  readonly detail: string | undefined
 
-  constructor(code: PpOcrWorkerErrorCode, cause?: unknown) {
-    super(ERROR_MESSAGES[code], { cause })
+  constructor(code: PpOcrWorkerErrorCode, cause?: unknown, detail?: string) {
+    super(detail ? `${ERROR_MESSAGES[code]}: ${detail}` : ERROR_MESSAGES[code], { cause })
     this.name = 'PpOcrWorkerError'
     this.code = code
+    this.detail = detail
   }
 }
 
@@ -229,6 +245,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   private stdoutBuffer = ''
   private stdoutBytes = 0
   private stderrBytes = 0
+  private stderrTail = ''
   private stopRequested = false
 
   constructor(options: PpOcrWorkerOptions) {
@@ -466,9 +483,24 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     if (record !== this.processRecord || record.exited || this.stoppingRecord === record) return
     const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     this.stderrBytes += Buffer.byteLength(text, 'utf8')
+    this.stderrTail = (this.stderrTail + text).slice(-PP_OCR_STDERR_TAIL_CHARS)
     if (this.stderrBytes > this.options.maxStderrBytes) {
       this.fail(new PpOcrWorkerError('output-limit'), record)
     }
+  }
+
+  /**
+   * The worker's last words, as one line. Consumed rather than read, so a later
+   * unrelated failure cannot inherit an explanation that belonged to this one.
+   */
+  private takeStderrTail(): string | undefined {
+    const tail = this.stderrTail
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+      .pop()
+    this.stderrTail = ''
+    return tail
   }
 
   private handleMessage(record: ProcessRecord, value: unknown): void {
@@ -502,7 +534,10 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       const pending = this.active
       this.active = undefined
       this.clearPendingTimer(pending)
-      this.rejectPending(pending, new PpOcrWorkerError('worker-error'))
+      this.rejectPending(
+        pending,
+        new PpOcrWorkerError('worker-error', undefined, this.takeStderrTail())
+      )
       this.setStatus({ state: 'ready' })
       this.dispatchQueued()
       return
@@ -546,7 +581,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     this.processRecord = undefined
     if (this.stoppingRecord === record || this.stopRequested) return
 
-    const failure = new PpOcrWorkerError('worker-exited', { code, signal })
+    const failure = new PpOcrWorkerError('worker-exited', { code, signal }, this.takeStderrTail())
     this.fail(failure, record)
   }
 

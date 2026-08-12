@@ -57,7 +57,11 @@ import type {
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
-import type { GameOcrPresentation } from '../shared/gameOcr'
+import type {
+  GameOcrCaptureBytes,
+  GameOcrFreezeRequest,
+  GameOcrFrozenFrame
+} from '../shared/gameOcr'
 import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
 import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { OcrResult } from '../shared/ocr'
@@ -174,13 +178,18 @@ const api = {
     retry: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.retry),
     onStatusChange: (cb: (status: GameOcrRuntimeStatus) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.statusChanged, cb),
-    onPresentation: (cb: (value: GameOcrPresentation) => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.present, cb),
+    onFreeze: (cb: (value: GameOcrFreezeRequest) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.freeze, cb),
+    frozen: (value: GameOcrFrozenFrame): void => ipcRenderer.send(GAME_OCR_CHANNELS.frozen, value),
+    captureBytes: (value: GameOcrCaptureBytes): void =>
+      ipcRenderer.send(GAME_OCR_CHANNELS.captureBytes, value),
     onDiscard: (cb: () => void): (() => void) => subscribe(GAME_OCR_CHANNELS.discard, cb),
     onRecognitionState: (cb: (recognizing: boolean) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
     onRegions: (cb: (result: OcrResult) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.regions, cb),
+    onCopySelection: (cb: () => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.copySelection, cb),
     rendererReady: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
     close: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.close)
   },

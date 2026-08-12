@@ -32,10 +32,10 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
    leaves a tray icon behind.
 2. Move the mouse onto the display showing the game and press the shortcut
    (**Ctrl+Shift+O** by default; rebind it in the same tab).
-3. Kizuna captures **the whole display containing the mouse pointer** and
-   immediately covers that display with the captured screenshot. The frozen
-   screenshot appears before recognition starts, so the frame the user sees is
-   exactly the frame being read.
+3. Kizuna freezes **the whole display containing the mouse pointer** and
+   immediately covers that display with the frozen frame. The screenshot
+   appears before recognition starts, so the frame the user sees is exactly the
+   frame being read.
 4. A small **"Recognizing text…"** sign sits at a fixed inset in the
    screenshot's bottom-right corner. It is visible only while OCR is running
    and disappears when the boxes appear.
@@ -50,8 +50,8 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 | Hover or click a word | The usual dictionary popup, with knowledge coloring and Anki mining |
 | Click inside a box | Native text selection; **Ctrl+C** copies it |
 | Right-click a selection | Translation popup, when experimental translation is enabled |
-| Click the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. A press that started on a box or popup and ended on the background is a selection drag, not a close |
-| Escape | The same, and Game OCR stays armed |
+| Press the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. One press is enough: the frame ends on pointer-down, not on the click it would become. A press that started on a box or popup is a selection drag, not a close, and a right-click closes nothing |
+| Escape | The same, and Game OCR stays armed. Registered as a global shortcut for exactly as long as a frame is visible (see below), so it is the game's own Escape again the moment the frame closes |
 | Press the shortcut again | Recapture (see below) |
 
 Mining a word from a frozen frame uses the existing **text-only** Anki path.
@@ -90,6 +90,112 @@ theme, and translation preferences for every screenshot, and clears any leftover
 text selection at each frame boundary. The dictionary and knowledge caches it
 built are deliberately kept: they are what makes a second frame's lookups
 faster than the first's.
+
+### The frame never takes focus
+
+The frozen-frame window is created `focusable: false`, so Windows never
+activates it and the game keeps the foreground the whole time a frame is up.
+
+That is not a preference. Windows refuses a cross-process foreground steal, and
+Electron does not report the refusal: measured against an external application
+holding the foreground, it kept the real foreground window for the entire time
+the frame was shown while Electron's own `isFocused()` returned `true`. A window
+the system has not activated spends the user's first mouse press on activation
+rather than delivering it to the page — which is why dismissing a frame took two
+presses, and why moving the dismissal from `click` to pointer-down did not help.
+Never activating means there is no activation press to spend. It also means the
+game keeps rendering behind the frame instead of stalling until it is clicked
+back.
+
+Not activating has a second consequence that has to be handled explicitly:
+always-on-top is a *band*, not a position, and inside it Windows orders by
+which window was activated most recently. A window that never activates
+therefore loses to a game that is itself topmost — the frame is shown, behind
+the game, and nothing appears to happen at all while OCR runs normally on a
+correct screenshot. The frame is put in the higher `screen-saver` band and
+raised with `moveTop`, neither of which asks for focus.
+
+The cost is that the page has no keyboard focus and therefore receives no key
+events. **Escape** and **Ctrl+C** are registered as global shortcuts for exactly
+as long as a frame is visible, and released the moment it goes; Ctrl+C asks the
+frame to put its current text selection on the clipboard, and does nothing when
+nothing is selected. If another application already owns one of them the
+conflict is reported and the frame stays usable — a background press still
+closes it, and the box text is still selectable.
+
+### Capture latency
+
+Everything between the hotkey and the visible screenshot is latency the user
+feels, so the screenshot is not taken on demand at all.
+
+**The frozen frame holds an open desktop capture stream** for the display it
+covers, for as long as Game OCR is armed and its window is retained. A capture
+is then one `drawImage` from a frame the renderer already has. The expensive
+setup — enumerating capture sources, opening the stream — is paid at arm time
+and on the first capture for a display, not on the hotkey.
+
+Measured on a 2560×1440 display, Ryzen 7 5800X3D:
+
+| Step | On demand (old) | From the stream |
+|---|---:|---:|
+| getting the pixels | ~300 ms | 12–44 ms |
+| encoding them | 85 ms | ~25 ms, *after* the frame is shown |
+| base64, IPC | under 1 ms | not on the path at all |
+
+`desktopCapturer.getSources` was ~75% of the old path and none of it was
+recoverable: it charges roughly the same ~300 ms whether the requested
+thumbnail is 1×1 or the full display, and it does not warm up, so calling it
+early to prime the pipeline only pays it twice. It is still used once per armed
+run — with a 1×1 thumbnail, for source ids only.
+
+The screenshot no longer crosses IPC to be displayed. The renderer draws into
+its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
+and sent to the main process then, so nothing the user is looking at a blank
+display for sits behind an encode.
+
+Two ordering properties this relies on:
+
+- **The frame is drawn while the window is still hidden**, which is why it
+  cannot appear in its own screenshot. That is a stronger guarantee than the
+  fixed 32 ms compositor-settle delay it replaces, which only assumed the
+  repaint had happened by then.
+- **A recapture additionally waits for a frame composited after the previous
+  frozen frame was hidden.** That wait is bounded at 120 ms, because a desktop
+  stream only produces frames when the screen *changes* — on a completely
+  static screen `requestVideoFrameCallback` can stall for seconds (measured
+  3.3 s and 14.4 s), and a screen full of unmoving visual-novel text is exactly
+  Kizuna's case. Hiding the frame is itself a change, so the frame normally
+  arrives within one refresh; the bound only covers the compositor disagreeing.
+
+The stream runs continuously while Game OCR is armed. It is local, like the
+rest of the feature, and stops with the window.
+
+To see the split on a real machine, start Kizuna with
+`KIZUNA_GAME_OCR_TIMING=1`; each capture then logs its dismiss, settle, capture,
+and present costs.
+
+### The screenshot must be PNG
+
+`ppocr.exe` links a minimal static OpenCV built `WITH_JPEG=OFF` /
+`BUILD_JPEG=OFF`, with only zlib and libpng, so `cv::imdecode` accepts PNG and
+nothing else. Confirmed against the staged worker: the same 1920×1080 frame as
+PNG returns six regions, and as JPEG returns `request failed: unsupported image
+format`. That presents as a recognition failure *after* the screenshot has
+already appeared — the frozen frame comes up looking correct and only OCR fails.
+PNG is not even the larger payload for game-like content: that frame is 62 KB of
+base64 as PNG against 93 KB as JPEG at quality 92.
+
+`DISPLAY_CAPTURE_MEDIA_TYPE` is the single place the format is decided, and
+`imageMediaType` travels with the presentation so the renderer's data URL
+follows it rather than hardcoding a prefix. Changing it means rebuilding and
+republishing the vendor payload with the matching codec first.
+
+When the worker does reject a request it says why on stderr. That line is now
+carried into the error the Options tab shows, so a failure reads
+"Game OCR recognition failed: PP-OCR worker rejected the request: request
+failed: unsupported image format" rather than stopping at the stage name — the
+worker's stderr was previously counted against a byte budget and then dropped,
+so nothing reached the console either.
 
 ### Tray
 
@@ -151,7 +257,7 @@ given environment.
 | 5 | Single monitor | The display under the pointer is captured |
 | 6 | Two monitors | Only the display under the pointer is captured and covered |
 | 7 | Display at negative desktop coordinates | Frozen window lands on the correct display |
-| 8 | Click screenshot background | Whole frame closes; live game visible; still armed |
+| 8 | Press screenshot background once | Whole frame closes on that one press; live game visible; still armed |
 | 9 | Escape | Same as row 8 |
 | 10 | Rapid recapture with changing game content | The second screenshot shows newer live-game content, never Kizuna's previous frozen frame |
 | 11 | Recognition indicator | Appears with the screenshot, disappears when boxes appear |

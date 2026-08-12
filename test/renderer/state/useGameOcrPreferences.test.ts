@@ -23,7 +23,7 @@ function setup() {
   const bridge = {
     playerSettings: { getSettings },
     gameOcr: {
-      onPresentation: vi.fn((cb: () => void) => {
+      onFreeze: vi.fn((cb: () => void) => {
         present = cb
         return () => {
           present = undefined
