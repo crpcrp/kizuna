@@ -10,6 +10,7 @@ import { type Token } from '../../../shared/token'
 export interface WordPopupPosition {
   x: number
   y: number
+  placement?: 'above' | 'below'
 }
 
 /** The part of a DOMRect needed to anchor a popup to interactive text. */
@@ -17,6 +18,7 @@ export interface WordPopupAnchorRect {
   left: number
   top: number
   width: number
+  height: number
 }
 
 /** Optional cue-independent context supplied by surfaces such as Game OCR. */
@@ -36,7 +38,7 @@ export interface WordPopupTextContext {
  * inside the viewport also keeps a short result inside it.
  */
 const WORD_POPUP_MAX_WIDTH = 440
-const WORD_POPUP_MAX_HEIGHT_RATIO = 0.55
+const GAME_OCR_WORD_POPUP_MAX_HEIGHT_RATIO = 0.28
 const WORD_POPUP_GAP = 14
 
 /**
@@ -56,26 +58,39 @@ export function wordPopupPosition(
 }
 
 /**
- * Keeps a popup anchored above its target while reserving the maximum space
- * the fixed popup can occupy. This is used for OCR boxes, whose anchors can
- * be at any display edge; the existing subtitle position remains unchanged.
+ * Places a Game OCR popup on the side of the complete text box with enough
+ * room, preferring below upper-screen text and above lower-screen text. The
+ * anchor is clamped for edge boxes; ordinary subtitle placement is unchanged.
  */
-export function constrainWordPopupPosition(
-  position: WordPopupPosition,
+export function gameOcrWordPopupPosition(
+  anchorRect: WordPopupAnchorRect | undefined,
+  event: { clientX: number; clientY: number } | undefined,
   viewport: { width: number; height: number }
 ): WordPopupPosition {
   const width = Math.min(WORD_POPUP_MAX_WIDTH, Math.max(0, viewport.width * 0.9))
-  const height = Math.min(
+  const popupHeight = Math.min(
     Math.max(0, viewport.height),
-    Math.max(0, viewport.height * WORD_POPUP_MAX_HEIGHT_RATIO)
+    Math.max(0, viewport.height * GAME_OCR_WORD_POPUP_MAX_HEIGHT_RATIO)
   )
   const xMin = width / 2
   const xMax = Math.max(xMin, viewport.width - width / 2)
-  const yMin = Math.min(viewport.height, height + WORD_POPUP_GAP)
-  const yMax = Math.max(yMin, viewport.height)
+  const fallback = wordPopupPosition(undefined, event)
+  const x = anchorRect ? anchorRect.left + anchorRect.width / 2 : fallback.x
+  const anchorTop = anchorRect?.top ?? fallback.y
+  const anchorBottom = anchorRect ? anchorRect.top + anchorRect.height : fallback.y
+  const spaceAbove = anchorTop - WORD_POPUP_GAP
+  const spaceBelow = viewport.height - anchorBottom - WORD_POPUP_GAP
+  const placement =
+    spaceBelow >= popupHeight || spaceBelow >= spaceAbove ? ('below' as const) : ('above' as const)
+
+  const y =
+    placement === 'below'
+      ? clamp(anchorBottom, 0, Math.max(0, viewport.height - popupHeight - WORD_POPUP_GAP))
+      : clamp(anchorTop, Math.min(viewport.height, popupHeight + WORD_POPUP_GAP), viewport.height)
   return {
-    x: clamp(position.x, xMin, xMax),
-    y: clamp(position.y, yMin, yMax)
+    x: clamp(x, xMin, xMax),
+    y,
+    placement
   }
 }
 

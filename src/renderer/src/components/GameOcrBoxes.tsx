@@ -165,7 +165,7 @@ function popupContextFor(region: GameOcrBoxRegion, event?: React.MouseEvent): Wo
   const rect = target?.getBoundingClientRect()
   const anchorRect =
     rect && (rect.width > 0 || rect.height > 0)
-      ? { left: rect.left, top: rect.top, width: rect.width }
+      ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height }
       : undefined
   return {
     textId: region.id,

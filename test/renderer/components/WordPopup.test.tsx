@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import WordPopup, {
   splitSenses,
   isHighPriority,
@@ -12,6 +14,7 @@ import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
+import { REPO_ROOT } from '@test/paths'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy,
 // mirroring test/optionsMenu.test.tsx exactly.
@@ -154,6 +157,25 @@ describe('WordPopup markup', () => {
       <WordPopup results={sampleResults} position={{ x: 123, y: 456 }} onClose={noop} />
     )
     expect(html).toMatch(/id="word-popup"[^>]*style="left:123px;top:456px"/)
+  })
+
+  it('marks OCR placement so CSS can render an upper-screen box below its text', () => {
+    const html = renderToStaticMarkup(
+      <WordPopup
+        results={sampleResults}
+        position={{ x: 123, y: 456, placement: 'below' }}
+        onClose={noop}
+      />
+    )
+    expect(html).toContain('data-placement="below"')
+  })
+
+  it('limits the OCR popup to about half its former height', () => {
+    const css = readFileSync(
+      join(REPO_ROOT, 'src', 'renderer', 'src', 'components', 'WordPopup.css'),
+      'utf-8'
+    )
+    expect(css).toMatch(/#word-popup\[data-placement\][^{]*\{[^}]*max-height:\s*28vh;/s)
   })
 
   it('renders the close button as a sibling of the scrollable panel, not nested inside it', () => {
