@@ -73,9 +73,12 @@ Display capture, the global shortcut, the native window, the tray, and the
 PP-OCR subprocess live in the main process behind injected interfaces;
 PP-OCR itself is a spawned sidecar speaking a newline-delimited JSON
 protocol over stdio, never a linked library. Only validated, serializable data
-crosses the preload: a base64 screenshot, its dimensions, and normalized OCR
-regions. Executable paths, native image handles, and raw worker output stay in
-main.
+crosses the preload: a base64 screenshot with its media type, its dimensions,
+and normalized OCR regions. Executable paths, native image handles, and raw
+worker output stay in main. The screenshot is encoded once, as JPEG, and those
+bytes serve both the frozen frame and the OCR worker: the encode sits directly
+between the hotkey and the pixels the user sees, and a lossless full-display
+encode costs more on every step that follows it than PP-OCR can resolve.
 
 The frozen frame is its own renderer entry point (`src/renderer/gameOcr.html`),
 loaded into a dedicated opaque, always-on-top, full-display BrowserWindow
@@ -99,7 +102,9 @@ text selection, while keeping the lookup caches that make later frames faster.
 One session ID orders everything. A capture invalidates the previous session,
 hides the previous frozen frame, waits for confirmation that it is no longer
 visible, allows one bounded compositor-settle step, and only then captures — so
-a recapture can never read Kizuna's own screenshot. Capture, OCR,
+a recapture can never read Kizuna's own screenshot. The settle step is skipped
+when no frozen frame of Kizuna's own was visible when the session began, since
+the compositor then has nothing of ours to repaint. Capture, OCR,
 tokenization, lookup, and translation results are accepted only for the current
 session; a failed recapture leaves the live game visible rather than restoring
 a stale frame.

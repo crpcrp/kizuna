@@ -222,8 +222,13 @@ export function createGameOcrWindowController({
   // One `hide` listener for the window's whole life, however many discards it
   // serves. The window is reused across frames, so registering per call would
   // grow a listener list for as long as Game OCR stays armed.
+  //
+  // `hide` is issued whenever the window still exists, without first asking
+  // whether it is visible: a frozen frame left on screen because `isVisible()`
+  // disagreed with what the user can see is the one failure this path must not
+  // have, and hiding an already-hidden window is free.
   const waitUntilHidden = (): Promise<void> => {
-    if (closed || window.isDestroyed() || !window.isVisible()) return Promise.resolve()
+    if (closed || window.isDestroyed()) return Promise.resolve()
     return new Promise<void>((resolve) => {
       hideWaiters.add(resolve)
       window.hide()
@@ -482,6 +487,8 @@ function validatePresentation(presentation: GameOcrPresentation): void {
     !presentation ||
     typeof presentation.imageBase64 !== 'string' ||
     presentation.imageBase64.length === 0 ||
+    typeof presentation.imageMediaType !== 'string' ||
+    presentation.imageMediaType.length === 0 ||
     !isPositiveInteger(presentation.imageSize?.width) ||
     !isPositiveInteger(presentation.imageSize?.height) ||
     typeof presentation.recognizing !== 'boolean'

@@ -40,6 +40,26 @@ export interface GameOcrStatus {
   error?: string
 }
 
+/**
+ * Wall-clock cost of one capture, in milliseconds, split at the boundaries a
+ * change can actually move. Reported once the screenshot is on screen, because
+ * that is the latency the user feels; `recognizeMs` follows on the same record
+ * only when recognition resolves for the same session.
+ */
+export interface GameOcrCaptureTimings {
+  sessionId: number
+  /** Waiting for a previous frozen frame to stop being visible. */
+  dismissMs: number
+  /** The bounded compositor-settle step, zero when it was skipped. */
+  settleMs: number
+  /** Windows display capture, including the JPEG encode and base64 pass. */
+  captureMs: number
+  /** Handing the screenshot to the frozen-frame renderer and showing it. */
+  presentMs: number
+  /** Hotkey to visible screenshot: the sum of the four steps above. */
+  totalMs: number
+}
+
 export interface GameOcrControllerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
@@ -57,6 +77,10 @@ export interface GameOcrControllerOptions {
   onResult?: (result: OcrResult) => void
   onStateChange?: (status: GameOcrStatus) => void
   onError?: (message: string, error: unknown) => void
+  /** Per-capture stage costs, for the development latency log. */
+  onTimings?: (timings: GameOcrCaptureTimings) => void
+  /** Injected so timing assertions do not depend on a real clock. */
+  now?: () => number
 }
 
 export interface GameOcrController {
@@ -74,6 +98,12 @@ export interface GameOcrController {
 interface Session extends OcrCaptureIdentity {
   valid: boolean
   dismissBeforeCapture: Promise<void>
+  /**
+   * Whether a frozen frame of Kizuna's own was on screen when this session
+   * began. Only then does the compositor have anything of ours to repaint, so
+   * only then is the settle step worth its delay.
+   */
+  settleBeforeCapture: boolean
 }
 
 /**
@@ -104,6 +134,16 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let captureQueue = Promise.resolve()
   let armPromise: Promise<boolean> | undefined
   let stopping = false
+
+  const now = options.now ?? (() => Date.now())
+
+  const reportTimings = (timings: GameOcrCaptureTimings): void => {
+    try {
+      options.onTimings?.(timings)
+    } catch {
+      // Measurement must never affect the pipeline it measures.
+    }
+  }
 
   const notify = (next: GameOcrStatus): void => {
     status = next
@@ -262,11 +302,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     nextSessionId = allocateIdentifier(nextSessionId)
     nextCaptureId = allocateIdentifier(nextCaptureId)
     invalidateSession()
+    // Read before the dismissal is requested: afterwards the window is on its
+    // way to hidden and cannot say whether it had been covering the game.
+    const settleBeforeCapture = presentation?.isVisible() ?? false
     const session: Session = {
       sessionId: nextSessionId,
       captureId: nextCaptureId,
       valid: true,
-      dismissBeforeCapture: dismissPresentation()
+      dismissBeforeCapture: dismissPresentation(),
+      settleBeforeCapture
     }
     activeSession = session
     notify({ state: 'capturing', sessionId: session.sessionId })
@@ -317,17 +361,28 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   }
 
   const runCapture = async (session: Session): Promise<void> => {
+    const startedAt = now()
     try {
       await session.dismissBeforeCapture
       if (!isCurrent(session)) return
       if (presentation?.isVisible()) {
         throw new Error('The previous Game OCR presentation is still visible.')
       }
+      const dismissedAt = now()
 
-      await options.settle.settle()
-      if (!isCurrent(session)) return
-      if (presentation?.isVisible()) {
-        throw new Error('The previous Game OCR presentation became visible again.')
+      // The compositor only has to repaint the region a frozen frame covered
+      // when there actually was one. The first capture of a run, and every
+      // capture taken after the user returned to the game, reads pixels
+      // Kizuna never drew over, so the delay would buy nothing and the whole
+      // step sits between the hotkey and the screenshot.
+      let settledAt = dismissedAt
+      if (session.settleBeforeCapture) {
+        await options.settle.settle()
+        if (!isCurrent(session)) return
+        if (presentation?.isVisible()) {
+          throw new Error('The previous Game OCR presentation became visible again.')
+        }
+        settledAt = now()
       }
 
       const capture = await options.capture.capture()
@@ -338,10 +393,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       activeCapture = capture
       const imageBase64 = capture.imageBase64
       if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
+      const capturedAt = now()
 
       const frame = ensurePresentation(capture.metadata)
       await frame.present({
         imageBase64,
+        imageMediaType: capture.imageMediaType,
         imageSize: capture.imageSize,
         recognizing: true
       } satisfies GameOcrPresentation)
@@ -349,6 +406,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         await frame.discard()
         return
       }
+      const presentedAt = now()
+      reportTimings({
+        sessionId: session.sessionId,
+        dismissMs: dismissedAt - startedAt,
+        settleMs: settledAt - dismissedAt,
+        captureMs: capturedAt - settledAt,
+        presentMs: presentedAt - capturedAt,
+        totalMs: presentedAt - startedAt
+      })
 
       void recognize(session, capture, frame)
     } catch (error) {

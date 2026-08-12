@@ -1,12 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  type ReactNode,
-  type SyntheticEvent
-} from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, type ReactNode } from 'react'
 import type { GameOcrPresentation } from '../../../shared/gameOcr'
 
 import './GameOcrFrame.css'
@@ -59,22 +51,26 @@ export default function GameOcrFrame({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [close])
 
-  const stopBackgroundClose = (event: SyntheticEvent): void => event.stopPropagation()
-
   /**
-   * A press that starts on a box or a popup and ends on the screenshot fires
-   * its click on their common ancestor — this element — which would close the
-   * frame out from under the selection the user was dragging. Recording where
-   * the press started separates that drag from a real background click; the
-   * capture phase sees it before a box stops the event bubbling.
+   * The press itself ends the frame, rather than the click it would become.
+   * `click` only fires once the pointer is released and only when the browser
+   * still considers the press and the release one gesture on a shared
+   * ancestor, so a release that lands elsewhere, a popup unmounting in
+   * between, or the activation of a window the game still held focus over can
+   * all swallow it — and a swallowed click leaves the screenshot up until the
+   * user presses a second time. Pointer-down is the moment the user asked for
+   * the game back, it cannot be lost the same way, and the capture phase
+   * reaches it before a box or popup stops the event bubbling.
+   *
+   * A press that starts on a box or popup is a content press: it may be the
+   * start of a selection drag out onto the screenshot, so it never closes
+   * anything. Only the primary button counts, which leaves a right-click on
+   * the screenshot free to do nothing rather than dismiss the frame.
    */
-  const startedOnContentRef = useRef(false)
   const onPointerDownCapture = (event: React.PointerEvent<HTMLElement>): void => {
+    if (event.button !== 0) return
     const target = event.target as Element | null
-    startedOnContentRef.current = Boolean(target?.closest?.('.game-ocr-frame__content'))
-  }
-  const onBackgroundClick = (): void => {
-    if (startedOnContentRef.current) return
+    if (target?.closest?.('.game-ocr-frame__content')) return
     close()
   }
 
@@ -84,7 +80,6 @@ export default function GameOcrFrame({
         className="game-ocr-frame"
         aria-label="Frozen game frame"
         onPointerDownCapture={onPointerDownCapture}
-        onClick={onBackgroundClick}
         data-image-size={
           presentation
             ? `${presentation.imageSize.width}x${presentation.imageSize.height}`
@@ -94,14 +89,12 @@ export default function GameOcrFrame({
         {presentation && (
           <img
             className="game-ocr-frame__image"
-            src={`data:image/png;base64,${presentation.imageBase64}`}
+            src={`data:${presentation.imageMediaType};base64,${presentation.imageBase64}`}
             alt="Frozen game frame"
             draggable={false}
           />
         )}
-        <div className="game-ocr-frame__content" onClick={stopBackgroundClose}>
-          {children}
-        </div>
+        <div className="game-ocr-frame__content">{children}</div>
         {presentation?.recognizing && (
           <div className="game-ocr-frame__indicator" role="status" aria-live="polite">
             <span className="game-ocr-frame__spinner" aria-hidden="true">

@@ -12,6 +12,22 @@ export const MAX_DISPLAY_CAPTURE_ENCODED_BYTES = 32 * 1024 * 1024
 /** Maximum number of physical pixels retained by one display capture. */
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
 
+/**
+ * One encode serves both the frozen frame and the OCR worker, and it sits
+ * directly between the hotkey and the pixels the user sees, so the format is
+ * chosen for latency. Lossless PNG of a full display costs hundreds of
+ * milliseconds of libpng time on the main process' own thread and produces
+ * several megabytes to base64, hand across IPC, decode in the renderer, and
+ * push down the worker's stdin. JPEG at this quality is roughly an order of
+ * magnitude cheaper on every one of those steps, and its artefacts stay well
+ * below what PP-OCR's detector and recognizer resolve — the models themselves
+ * were trained and evaluated on JPEG imagery.
+ */
+export const DISPLAY_CAPTURE_JPEG_QUALITY = 92
+
+/** Media type of the encoded bytes every capture carries. */
+export const DISPLAY_CAPTURE_MEDIA_TYPE = 'image/jpeg'
+
 /** Minimal screen surface needed by the capture adapter. */
 export interface DisplayCaptureScreen {
   getCursorScreenPoint(): DisplayCapturePoint
@@ -49,7 +65,7 @@ export interface DisplayCaptureSource {
 export interface DisplayCaptureThumbnail {
   isEmpty(): boolean
   getSize(): OcrImageSize
-  toPNG(): Uint8Array
+  toJPEG(quality: number): Uint8Array
 }
 
 export interface DisplayCaptureService {
@@ -65,6 +81,8 @@ export interface DisplayCaptureService {
 export interface DisplayCapture extends OcrDisplayCaptureMetadata {
   readonly metadata: OcrDisplayCaptureMetadata
   readonly imageBase64: string | undefined
+  /** Media type of `imageBase64`, so no consumer has to assume the encoding. */
+  readonly imageMediaType: string
   readonly disposed: boolean
   dispose(): void
 }
@@ -160,6 +178,7 @@ export function displayCaptureImageSize(
 
 class InMemoryDisplayCapture implements DisplayCapture {
   readonly metadata: OcrDisplayCaptureMetadata
+  readonly imageMediaType = DISPLAY_CAPTURE_MEDIA_TYPE
   private encodedImage: string | undefined
 
   constructor(metadata: OcrDisplayCaptureMetadata, imageBase64: string) {
@@ -309,17 +328,21 @@ function encodeThumbnail(
     )
   }
 
-  let png: Uint8Array
+  let encoded: Uint8Array
   try {
-    png = thumbnail.toPNG()
+    encoded = thumbnail.toJPEG(DISPLAY_CAPTURE_JPEG_QUALITY)
   } catch (cause) {
     throw new DisplayCaptureError('capture-denied', undefined, cause)
   }
-  if (!(png instanceof Uint8Array) || png.byteLength === 0) {
+  if (!(encoded instanceof Uint8Array) || encoded.byteLength === 0) {
     throw new DisplayCaptureError('empty-frame')
   }
 
-  const imageBase64 = Buffer.from(png).toString('base64')
+  // A view rather than `Buffer.from(encoded)`, which would copy every encoded
+  // byte of a full display before the base64 pass even starts.
+  const imageBase64 = Buffer.from(encoded.buffer, encoded.byteOffset, encoded.byteLength).toString(
+    'base64'
+  )
   if (Buffer.byteLength(imageBase64, 'utf8') > limits.maxEncodedBytes) {
     throw new DisplayCaptureError('image-too-large')
   }

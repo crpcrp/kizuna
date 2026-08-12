@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createDisplayCaptureService,
   displayCaptureImageSize,
+  DISPLAY_CAPTURE_JPEG_QUALITY,
+  DISPLAY_CAPTURE_MEDIA_TYPE,
   type DisplayCaptureDisplay,
   type DisplayCaptureScreen,
   type DisplayCaptureSource,
@@ -24,12 +26,12 @@ function display(overrides: Partial<DisplayCaptureDisplay> = {}): DisplayCapture
 
 function thumbnail(
   size: { width: number; height: number },
-  bytes: Uint8Array = Uint8Array.from([137, 80, 78, 71])
+  bytes: Uint8Array = Uint8Array.from([255, 216, 255, 224])
 ): DisplayCaptureThumbnail {
   return {
     isEmpty: vi.fn(() => false),
     getSize: vi.fn(() => size),
-    toPNG: vi.fn(() => bytes)
+    toJPEG: vi.fn(() => bytes)
   }
 }
 
@@ -100,8 +102,12 @@ describe('createDisplayCaptureService', () => {
       imageSize: { width: 2400, height: 1350 }
     })
     expect(capture.imageSize).toEqual({ width: 2400, height: 1350 })
-    expect(capture.imageBase64).toBe(Buffer.from([137, 80, 78, 71]).toString('base64'))
-    expect(image.toPNG).toHaveBeenCalledOnce()
+    expect(capture.imageBase64).toBe(Buffer.from([255, 216, 255, 224]).toString('base64'))
+    expect(capture.imageMediaType).toBe(DISPLAY_CAPTURE_MEDIA_TYPE)
+    // One encode, and a lossy one: the same bytes serve the frozen frame and
+    // the OCR worker, and a full-display PNG costs the user visible latency.
+    expect(image.toJPEG).toHaveBeenCalledOnce()
+    expect(image.toJPEG).toHaveBeenCalledWith(DISPLAY_CAPTURE_JPEG_QUALITY)
   })
 
   it('retains immutable metadata and releases the encoded image on disposal', async () => {
@@ -152,7 +158,7 @@ describe('createDisplayCaptureService', () => {
     })
 
     await expect(service.capture()).rejects.toMatchObject({ code: 'source-not-found' })
-    expect(image.toPNG).not.toHaveBeenCalled()
+    expect(image.toJPEG).not.toHaveBeenCalled()
   })
 
   it('reports a protected or denied desktop capture clearly', async () => {

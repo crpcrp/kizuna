@@ -78,7 +78,8 @@ function windowListenerCount(window: GameOcrNativeWindow, event: 'closed' | 'hid
 }
 
 const presentation: GameOcrPresentation = {
-  imageBase64: 'iVBORw0KGgo=',
+  imageBase64: '/9j/4AAQ',
+  imageMediaType: 'image/jpeg',
   imageSize: { width: 1920, height: 1080 },
   recognizing: true
 }
@@ -381,6 +382,20 @@ describe('createGameOcrWindowController', () => {
     expect(fake.window.close).toHaveBeenCalledOnce()
   })
 
+  it('hides the window on dismissal even when it reports itself invisible', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await controller.present(presentation)
+    // The one failure this path must not have is a frozen frame left covering
+    // the game because `isVisible()` disagreed with what the user can see, so
+    // the hide is issued without consulting it.
+    vi.spyOn(fake.window, 'isVisible').mockReturnValue(false)
+
+    await controller.dismiss()
+
+    expect(fake.window.hide).toHaveBeenCalledOnce()
+  })
+
   it('rejects malformed presentation data before it reaches the renderer', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
@@ -391,6 +406,10 @@ describe('createGameOcrWindowController', () => {
         imageSize: { width: 0, height: 1080 }
       })
     ).rejects.toThrow('presentation is invalid')
+    // Without a media type the renderer could only guess at the data URL.
+    await expect(controller.present({ ...presentation, imageMediaType: '' })).rejects.toThrow(
+      'presentation is invalid'
+    )
     expect(fake.window.webContents.send).not.toHaveBeenCalled()
   })
 

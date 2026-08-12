@@ -38,6 +38,7 @@ function capture(id: number, onDispose?: () => void): DisplayCapture {
   return {
     ...metadata,
     metadata,
+    imageMediaType: 'image/jpeg',
     get imageBase64() {
       return imageBase64
     },
@@ -224,9 +225,10 @@ describe('createGameOcrController', () => {
     await secondCapture
 
     // One window serves both frames: the second capture moves it onto the
-    // newly captured display instead of building a replacement.
+    // newly captured display instead of building a replacement. Only that
+    // second capture settles — the first had no frame of Kizuna's own on
+    // screen for the compositor to repaint.
     expect(fake.events).toEqual([
-      'settle',
       'capture:1',
       'present:1',
       'recognize:1',
@@ -414,6 +416,64 @@ describe('createGameOcrController', () => {
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'closed'))
     await Promise.resolve()
     expect(fake.onResult).not.toHaveBeenCalled()
+  })
+
+  it('skips the compositor settle when the user had already returned to the game', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+    fake.windows[0].triggerDismissed()
+    fake.events.length = 0
+
+    await fake.controller.capture()
+
+    // The live game was already on screen, so there is no frame of Kizuna's
+    // own for the compositor to repaint and nothing to wait for.
+    expect(fake.events).not.toContain('settle')
+    expect(fake.settle.settle).not.toHaveBeenCalled()
+    expect(fake.captureService.capture).toHaveBeenCalledTimes(2)
+  })
+
+  it('presents the capture with its own media type rather than an assumed one', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(fake.windows[0].present).toHaveBeenCalledWith({
+      imageBase64: 'image-1',
+      imageMediaType: 'image/jpeg',
+      imageSize: { width: 640, height: 480 },
+      recognizing: true
+    })
+  })
+
+  it('reports the stage costs of one capture up to the visible screenshot', async () => {
+    let clock = 0
+    const onTimings = vi.fn()
+    // 2 ms per step: dismiss, capture, present, and the timings read itself.
+    const fake = setup({ now: () => (clock += 2), onTimings })
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(onTimings).toHaveBeenCalledOnce()
+    expect(onTimings.mock.calls[0][0]).toMatchObject({
+      sessionId: 1,
+      settleMs: 0,
+      totalMs: expect.any(Number)
+    })
+  })
+
+  it('keeps capturing when the timing observer throws', async () => {
+    const fake = setup({
+      onTimings: () => {
+        throw new Error('logging failed')
+      }
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'recognizing' })
+    expect(fake.onError).not.toHaveBeenCalled()
   })
 
   it('reuses the retained window across frames and rebuilds it after one is destroyed', async () => {

@@ -50,7 +50,7 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 | Hover or click a word | The usual dictionary popup, with knowledge coloring and Anki mining |
 | Click inside a box | Native text selection; **Ctrl+C** copies it |
 | Right-click a selection | Translation popup, when experimental translation is enabled |
-| Click the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. A press that started on a box or popup and ended on the background is a selection drag, not a close |
+| Press the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. One press is enough: the frame ends on pointer-down, not on the click it would become. A press that started on a box or popup is a selection drag, not a close, and a right-click closes nothing |
 | Escape | The same, and Game OCR stays armed |
 | Press the shortcut again | Recapture (see below) |
 
@@ -90,6 +90,33 @@ theme, and translation preferences for every screenshot, and clears any leftover
 text selection at each frame boundary. The dictionary and knowledge caches it
 built are deliberately kept: they are what makes a second frame's lookups
 faster than the first's.
+
+### Capture latency
+
+Everything between the hotkey and the visible screenshot is latency the user
+feels, so the path is deliberately short:
+
+- **One lossy encode serves both consumers.** The capture is encoded once, as
+  JPEG at quality 92, and those same bytes become the frozen frame's image and
+  the OCR worker's input. A lossless full-display PNG costs hundreds of
+  milliseconds of encode time on the main process' own thread and produces
+  several megabytes to base64, hand over IPC, decode in the renderer, and push
+  down the worker's stdin — every one of which JPEG makes roughly an order of
+  magnitude cheaper. The artefacts stay below what PP-OCR's detector and
+  recognizer resolve; the models were trained and evaluated on JPEG imagery.
+  `imageMediaType` travels with the presentation, so no consumer assumes a
+  format.
+- **The compositor settle is only paid when it buys something.** The bounded
+  repaint wait exists so a recapture cannot photograph Kizuna's own frozen
+  frame. The first capture of a run, and every capture taken after the user
+  returned to the game, reads pixels Kizuna never covered, so the step is
+  skipped there.
+
+What remains is dominated by Windows' own `desktopCapturer` read, which also
+scales a full-size thumbnail for every attached display and discards all but
+the one under the pointer. To see the split on a real machine, start Kizuna with
+`KIZUNA_GAME_OCR_TIMING=1`; each capture then logs its dismiss, settle, capture,
+and present costs.
 
 ### Tray
 
@@ -151,7 +178,7 @@ given environment.
 | 5 | Single monitor | The display under the pointer is captured |
 | 6 | Two monitors | Only the display under the pointer is captured and covered |
 | 7 | Display at negative desktop coordinates | Frozen window lands on the correct display |
-| 8 | Click screenshot background | Whole frame closes; live game visible; still armed |
+| 8 | Press screenshot background once | Whole frame closes on that one press; live game visible; still armed |
 | 9 | Escape | Same as row 8 |
 | 10 | Rapid recapture with changing game content | The second screenshot shows newer live-game content, never Kizuna's previous frozen frame |
 | 11 | Recognition indicator | Appears with the screenshot, disappears when boxes appear |

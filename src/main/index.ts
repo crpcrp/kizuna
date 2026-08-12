@@ -94,7 +94,7 @@ import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
 import { registerUpdateBridge } from './updateBridge'
 import { createUpdateService, type UpdateService } from './updateService'
 import { detectUpdateSupport } from './updateSupport'
-import { createGameOcrController } from './services/gameOcr/controller'
+import { createGameOcrController, type GameOcrCaptureTimings } from './services/gameOcr/controller'
 import { createProductionDisplayCapture } from './services/gameOcr/displayCapture'
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
 import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
@@ -600,7 +600,20 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
         displayEvents: screen
       }),
     ocr: worker,
-    onError: (message) => gameOcr?.reportError(message)
+    onError: (message) => gameOcr?.reportError(message),
+    // Off unless asked for. Windows display capture, DPI, and the game itself
+    // are what dominate this path, and none of them can be measured from a
+    // test, so the stage split has to be observable on a real machine.
+    ...(process.env['KIZUNA_GAME_OCR_TIMING']
+      ? {
+          onTimings: (timings: GameOcrCaptureTimings) =>
+            console.log(
+              `[game-ocr] session ${timings.sessionId}: dismiss ${timings.dismissMs}ms, ` +
+                `settle ${timings.settleMs}ms, capture ${timings.captureMs}ms, ` +
+                `present ${timings.presentMs}ms, total ${timings.totalMs}ms`
+            )
+        }
+      : {})
   })
   const runtime = createGameOcrRuntimeService({
     settings,
