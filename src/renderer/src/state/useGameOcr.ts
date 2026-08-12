@@ -6,7 +6,7 @@ import { errorMessage } from '../util/errorMessage'
 
 const DEFAULT_STATUS: GameOcrRuntimeStatus = {
   shortcut: DEFAULT_GAME_OCR_SETTINGS.captureShortcut,
-  paddle: { state: 'not-started' },
+  ocr: { state: 'not-started' },
   game: { state: 'stopped' }
 }
 

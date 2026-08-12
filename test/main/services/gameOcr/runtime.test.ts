@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createGameOcrRuntimeService } from '@src/main/services/gameOcr/runtime'
 import type { GameOcrController, GameOcrStatus } from '@src/main/services/gameOcr/controller'
-import type {
-  PaddleOcrWorkerService,
-  PaddleOcrWorkerStatus
-} from '@src/main/services/ocr/paddleWorker'
+import type { PpOcrWorkerService, PpOcrWorkerStatus } from '@src/main/services/ocr/ppOcrWorker'
 import { createSettingsStore } from '@src/main/services/settings'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 
@@ -35,8 +32,8 @@ function setup(
     }),
     shutdown: vi.fn(async () => undefined)
   }
-  let workerStatus: PaddleOcrWorkerStatus = { state: 'stopped' }
-  const worker: Pick<PaddleOcrWorkerService, 'getStatus'> = {
+  let workerStatus: PpOcrWorkerStatus = { state: 'stopped' }
+  const worker: Pick<PpOcrWorkerService, 'getStatus'> = {
     getStatus: vi.fn(() => workerStatus)
   }
   const settings = createSettingsStore(fakeIo(undefined))
@@ -49,7 +46,7 @@ function setup(
   return {
     runtime,
     controller,
-    setWorkerStatus: (status: PaddleOcrWorkerStatus) => {
+    setWorkerStatus: (status: PpOcrWorkerStatus) => {
       workerStatus = status
       runtime.updateWorkerStatus(status)
     }
@@ -64,13 +61,13 @@ describe('Game OCR runtime service', () => {
 
     fake.setWorkerStatus({ state: 'starting' })
     expect(fake.runtime.getStatus()).toMatchObject({
-      paddle: { state: 'starting' },
+      ocr: { state: 'starting' },
       game: { state: 'stopped' }
     })
 
     await fake.runtime.start()
     expect(fake.runtime.getStatus()).toMatchObject({
-      paddle: { state: 'starting' },
+      ocr: { state: 'starting' },
       game: { state: 'armed' }
     })
 

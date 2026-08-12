@@ -7,7 +7,7 @@ import type { GameOcrRuntimeService } from '@src/main/services/gameOcr/runtime'
 
 const status: GameOcrRuntimeStatus = {
   shortcut: 'Ctrl+Shift+O',
-  paddle: { state: 'ready' },
+  ocr: { state: 'ready' },
   game: { state: 'stopped' }
 }
 

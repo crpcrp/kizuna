@@ -3,19 +3,19 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  buildPaddleOcrWorkerArgs,
-  createPaddleOcrWorkerService,
-  type PaddleOcrSpawn,
-  type PaddleOcrWorkerProcess
-} from '@src/main/services/ocr/paddleWorker'
+  buildPpOcrWorkerArgs,
+  createPpOcrWorkerService,
+  type PpOcrSpawn,
+  type PpOcrWorkerProcess
+} from '@src/main/services/ocr/ppOcrWorker'
 import { fixture, REPO_ROOT } from '@test/paths'
 
-const JAPANESE_WORKER_FIXTURE = readFileSync(fixture('ocr', 'paddle-worker-japanese.jsonl'), 'utf8')
+const JAPANESE_WORKER_FIXTURE = readFileSync(fixture('ocr', 'ppocr-worker-japanese.jsonl'), 'utf8')
 const JAPANESE_SCREENSHOT_BASE64 = readFileSync(join(REPO_ROOT, 'build', 'player.jpg')).toString(
   'base64'
 )
 
-class FakePaddleProcess extends EventEmitter implements PaddleOcrWorkerProcess {
+class FakePpOcrProcess extends EventEmitter implements PpOcrWorkerProcess {
   readonly writes: string[] = []
   readonly killedWith: Array<NodeJS.Signals | undefined> = []
   readonly stdin = {
@@ -61,10 +61,10 @@ class FakePaddleProcess extends EventEmitter implements PaddleOcrWorkerProcess {
   }
 }
 
-function createService(process: FakePaddleProcess, overrides = {}) {
-  const spawn: PaddleOcrSpawn = vi.fn(() => process)
-  const service = createPaddleOcrWorkerService({
-    executablePath: 'paddle-worker.exe',
+function createService(process: FakePpOcrProcess, overrides = {}) {
+  const spawn: PpOcrSpawn = vi.fn(() => process)
+  const service = createPpOcrWorkerService({
+    executablePath: 'ppocr-worker.exe',
     modelPaths: { detection: 'det', recognition: 'rec', keys: 'keys' },
     spawn,
     startupTimeoutMs: 100,
@@ -93,10 +93,10 @@ const japaneseRegion = (x: number, text = '日本語') => ({
   ]
 })
 
-describe('buildPaddleOcrWorkerArgs', () => {
+describe('buildPpOcrWorkerArgs', () => {
   it('passes the Japanese model paths as separate argv entries', () => {
     expect(
-      buildPaddleOcrWorkerArgs({
+      buildPpOcrWorkerArgs({
         detection: 'C:\\det model',
         recognition: 'C:\\rec model',
         keys: 'C:\\model keys.txt'
@@ -113,14 +113,14 @@ describe('buildPaddleOcrWorkerArgs', () => {
       '--keys',
       'C:\\model keys.txt',
       '--det-side-len',
-      '960'
+      '4000'
     ])
   })
 })
 
-describe('createPaddleOcrWorkerService', () => {
+describe('createPpOcrWorkerService', () => {
   it('keeps one worker warm and converts quadrilaterals through the shared contract', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service, spawn } = createService(process)
 
     const first = service.recognize(request())
@@ -135,13 +135,13 @@ describe('createPaddleOcrWorkerService', () => {
       imageSize: { width: 640, height: 480 },
       regions: [
         {
-          id: 'paddle-2',
+          id: 'ppocr-2',
           text: '猫',
           bounds: { x: 28, y: 20, width: 102, height: 32 },
           confidence: 0.98
         },
         {
-          id: 'paddle-1',
+          id: 'ppocr-1',
           text: '日本語',
           bounds: { x: 218, y: 20, width: 102, height: 32 },
           confidence: 0.98
@@ -159,7 +159,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('accepts zero-valued session and capture counters from the shared OCR contract', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service } = createService(process)
     const pending = service.recognize({ ...request(0), sessionId: 0 })
     process.ready()
@@ -170,7 +170,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('runs the adapter against the committed Japanese screenshot fixture', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service } = createService(process)
     const pending = service.recognize({
       ...request(),
@@ -191,7 +191,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('rejects an older request and accepts the latest response', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service } = createService(process)
     const first = service.recognize(request(1))
     process.ready()
@@ -207,7 +207,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('stops and releases the process while recognition is pending', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service } = createService(process)
     const pending = service.recognize(request())
     process.ready()
@@ -220,7 +220,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('reports malformed protocol output and cleans up the worker', async () => {
-    const process = new FakePaddleProcess()
+    const process = new FakePpOcrProcess()
     const { service } = createService(process)
     const pending = service.recognize(request())
     process.stdout.emit('data', '{not-json}\n')
@@ -231,13 +231,13 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('reports worker exits and recognition timeouts as recoverable failures', async () => {
-    const exitedProcess = new FakePaddleProcess()
+    const exitedProcess = new FakePpOcrProcess()
     const exited = createService(exitedProcess).service
     const exitedRequest = exited.recognize(request())
     exitedProcess.exit(2)
     await expect(exitedRequest).rejects.toMatchObject({ code: 'worker-exited' })
 
-    const timeoutProcess = new FakePaddleProcess()
+    const timeoutProcess = new FakePpOcrProcess()
     const timeout = createService(timeoutProcess, { recognitionTimeoutMs: 5 }).service
     const timeoutRequest = timeout.recognize(request())
     timeoutProcess.ready()
@@ -246,13 +246,13 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('bounds stdout and stderr before accepting untrusted worker output', async () => {
-    const stdoutProcess = new FakePaddleProcess()
+    const stdoutProcess = new FakePpOcrProcess()
     const stdoutService = createService(stdoutProcess, { maxStdoutBytes: 8 }).service
     const stdoutRequest = stdoutService.recognize(request())
     stdoutProcess.stdout.emit('data', '123456789')
     await expect(stdoutRequest).rejects.toMatchObject({ code: 'output-limit' })
 
-    const stderrProcess = new FakePaddleProcess()
+    const stderrProcess = new FakePpOcrProcess()
     const stderrService = createService(stderrProcess, { maxStderrBytes: 8 }).service
     const stderrRequest = stderrService.recognize(request())
     stderrProcess.stderr.emit('data', '123456789')
@@ -260,7 +260,7 @@ describe('createPaddleOcrWorkerService', () => {
   })
 
   it('bounds shutdown when a child process refuses to exit', async () => {
-    const process = new FakePaddleProcess(false)
+    const process = new FakePpOcrProcess(false)
     const { service } = createService(process, { shutdownTimeoutMs: 5 })
     const pending = service.recognize(request())
     process.ready()

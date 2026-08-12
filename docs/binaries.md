@@ -126,8 +126,8 @@ the first capture.
 The payload is roughly 40.5 MB unpacked. `resources/ppocr/` is flat at its
 runtime root so the worker resolves ONNX Runtime and the four VC runtime DLLs
 from the directory it sits in. OpenCV, Clipper, zlib, and libpng are linked
-statically into the worker. DirectML, Paddle Inference, oneDNN, and Intel MKL
-are not shipped.
+statically into the worker. DirectML and the former inference runtime are not
+shipped.
 
 `ppocr.exe` is GPL-3.0-or-later: its worker entrypoint adapts the first-party GPL
 worker, so the whole executable is conveyed under GPLv3 even though its engine

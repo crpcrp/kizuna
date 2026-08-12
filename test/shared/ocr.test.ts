@@ -223,7 +223,7 @@ describe('normalizeOcrResult', () => {
       'ocr',
       validResult({ imageSize: [] }),
       validResult({ regions: {} }),
-      validResult({ executablePath: 'paddle.exe' }),
+      validResult({ executablePath: 'ppocr.exe' }),
       validResult({ regions: [{ ...baseRegion, points: [] }] })
     ]
 

@@ -1,11 +1,11 @@
 import type {
   GameOcrRuntimeStatus,
-  GameOcrPaddleState,
+  GameOcrWorkerState,
   GameOcrUiState
 } from '../../../shared/gameOcr'
 import { normalizeGameOcrShortcut, type GameOcrSettings } from '../../../shared/gameOcrSettings'
 import type { GameOcrController, GameOcrStatus as ControllerStatus } from './controller'
-import type { PaddleOcrWorkerService, PaddleOcrWorkerStatus } from '../ocr/paddleWorker'
+import type { PpOcrWorkerService, PpOcrWorkerStatus } from '../ocr/ppOcrWorker'
 import type { SettingsStore } from '../settings'
 
 export interface GameOcrRuntimeService {
@@ -17,7 +17,7 @@ export interface GameOcrRuntimeService {
   stop(): Promise<GameOcrRuntimeStatus>
   retry(): Promise<GameOcrRuntimeStatus>
   /** Records a worker transition so the Options surface can show progress. */
-  updateWorkerStatus(status: PaddleOcrWorkerStatus): void
+  updateWorkerStatus(status: PpOcrWorkerStatus): void
   /** Records a non-fatal command/configuration error without disarming. */
   reportError(message: string): void
 }
@@ -25,7 +25,7 @@ export interface GameOcrRuntimeService {
 export interface GameOcrRuntimeOptions {
   settings: SettingsStore
   controller: GameOcrController
-  worker: Pick<PaddleOcrWorkerService, 'getStatus'>
+  worker: Pick<PpOcrWorkerService, 'getStatus'>
   /**
    * Checked before every arm attempt. Returning a message keeps the runtime
    * stopped and reports that message instead of spawning a worker that would
@@ -35,7 +35,7 @@ export interface GameOcrRuntimeOptions {
   preflight?: () => string | undefined
 }
 
-const DEFAULT_WORKER_STATUS: PaddleOcrWorkerStatus = { state: 'stopped' }
+const DEFAULT_WORKER_STATUS: PpOcrWorkerStatus = { state: 'stopped' }
 
 /**
  * Joins the persisted shortcut, PP-OCR worker, and coordinator into the
@@ -48,7 +48,7 @@ export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): Gam
 
   const currentSettings = (): GameOcrSettings => options.settings.get().gameOcr
 
-  const workerState = (status: PaddleOcrWorkerStatus): GameOcrPaddleState => {
+  const workerState = (status: PpOcrWorkerStatus): GameOcrWorkerState => {
     if (status.state === 'stopped') return 'not-started'
     return status.state === 'recognizing' ? 'ready' : status.state
   }
@@ -63,7 +63,7 @@ export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): Gam
     const worker = workerStatus
     return {
       shortcut: currentSettings().captureShortcut,
-      paddle: {
+      ocr: {
         state: workerState(worker),
         ...(worker.error ? { error: worker.error } : {})
       },

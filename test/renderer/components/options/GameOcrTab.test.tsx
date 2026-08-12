@@ -11,7 +11,7 @@ afterEach(() => {
 
 const stoppedStatus: GameOcrTabProps['status'] = {
   shortcut: 'Ctrl+Shift+O',
-  paddle: { state: 'not-started' },
+  ocr: { state: 'not-started' },
   game: { state: 'stopped' }
 }
 
@@ -57,7 +57,7 @@ describe('GameOcrTab', () => {
       onRetry,
       status: {
         ...stoppedStatus,
-        paddle: { state: 'error', error: 'PP-OCR model is missing.' },
+        ocr: { state: 'error', error: 'PP-OCR model is missing.' },
         game: { state: 'armed' }
       }
     })
@@ -74,7 +74,7 @@ describe('GameOcrTab', () => {
         active
         open
         settings={DEFAULT_GAME_OCR_SETTINGS}
-        status={{ ...stoppedStatus, paddle: { state: 'starting' }, game: { state: 'capturing' } }}
+        status={{ ...stoppedStatus, ocr: { state: 'starting' }, game: { state: 'capturing' } }}
         onChangeShortcut={vi.fn()}
         onStart={onStart}
         onStop={onStop}

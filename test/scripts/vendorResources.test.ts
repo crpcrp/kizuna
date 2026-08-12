@@ -388,7 +388,7 @@ describe('resource staging', () => {
     ).toEqual([])
   })
 
-  it('removes the retired Paddle runtime while preserving first-party resources', async () => {
+  it('removes the retired OCR runtime while preserving first-party resources', async () => {
     const { vendorDir, resourcesDir } = await makeMirror()
     await mkdir(join(resourcesDir, 'paddleocr'), { recursive: true })
     await writeFile(join(resourcesDir, 'paddleocr/paddleocr.exe'), 'retired')

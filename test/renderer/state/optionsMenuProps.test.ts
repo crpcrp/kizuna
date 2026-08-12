@@ -82,7 +82,7 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
       settings: { captureShortcut: 'Ctrl+Shift+O' },
       status: {
         shortcut: 'Ctrl+Shift+O',
-        paddle: { state: 'not-started' },
+        ocr: { state: 'not-started' },
         game: { state: 'stopped' }
       },
       onChangeShortcut: vi.fn(),
