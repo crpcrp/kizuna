@@ -71,13 +71,13 @@ export function getGameOcrWindowOptions(
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      // The window is hidden between frames, and Chromium throttles a hidden
-      // renderer's timers and frame callbacks to roughly one per second. This
-      // renderer is not idle while hidden: it holds the desktop capture
-      // streams every capture draws from, and opening a stream for a
-      // newly-focused window has to complete on the shortcut path.
-      backgroundThrottling: false
+      sandbox: true
+      // `backgroundThrottling: false` deliberately absent. Electron implements
+      // it by setting Chromium's `disable_hidden_`, so the widget never makes
+      // the hidden→shown transition this window makes on every frame, and
+      // nothing on the capture path is throttled anyway: opening a stream and
+      // encoding a canvas are promises, not timers. It bought nothing and is
+      // the prime suspect for a frame that draws but does not take clicks.
     }
   }
 }

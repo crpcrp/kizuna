@@ -230,11 +230,13 @@ evicted when it says so, not on the next capture that would have drawn from it.
 
 Switching to a window Kizuna has not captured before therefore costs one stream
 open, measured at ~430 ms, before that frame appears; returning to a window it
-already holds does not. The hidden retained renderer runs with
-`backgroundThrottling: false`, because Chromium otherwise throttles a hidden
-renderer's timers and frame callbacks to roughly one per second — and this
-renderer is not idle while hidden, it is holding those streams and opening new
-ones on the shortcut path.
+already holds does not.
+
+The retained renderer deliberately does **not** set `backgroundThrottling:
+false`. Electron implements that by setting Chromium's `disable_hidden_`, so
+the widget never makes the hidden→shown transition this window performs on
+every frame, and nothing on the capture path is throttled regardless: opening a
+stream and encoding a canvas are promises, not timers.
 
 Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
