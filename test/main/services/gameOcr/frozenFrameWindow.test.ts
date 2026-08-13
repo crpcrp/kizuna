@@ -56,6 +56,7 @@ function fakeWindow(): {
     webContents: {
       isDestroyed: () => destroyed,
       send: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
       on: vi.fn((event: string, listener: Listener) => on(rendererListeners, event, listener)),
       getURL: () => 'file:///gameOcr.html',
       setWindowOpenHandler: vi.fn(),
@@ -275,6 +276,7 @@ describe('createGameOcrWindowController', () => {
 
     const freezing = controller.freeze(request)
     await Promise.resolve()
+    expect(fake.window.webContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
     expect(scheduleFallback).toHaveBeenCalledWith(
       expect.any(Function),
       GAME_OCR_FRESH_FRAME_TIMEOUT_MS
@@ -292,6 +294,7 @@ describe('createGameOcrWindowController', () => {
     })
     await freezing
     expect(cancelFallback).toHaveBeenCalledWith('fallback-timer')
+    expect(fake.window.webContents.setBackgroundThrottling).toHaveBeenLastCalledWith(true)
   })
 
   it('surfaces a renderer that could not freeze or encode the frame', async () => {

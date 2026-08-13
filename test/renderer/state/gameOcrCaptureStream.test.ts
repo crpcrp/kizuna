@@ -117,6 +117,39 @@ describe('freezeCurrentFrame', () => {
     expect(surface.drawn).toBe(0)
   })
 
+  it('reopens the desktop stream instead of drawing stale pixels at the deadline', async () => {
+    const stale = surfaceFor({ requestVideoFrameCallback: vi.fn(() => 1) })
+    const refreshed = surfaceFor({ videoWidth: 1920, videoHeight: 1080 })
+    const refreshSurface = vi.fn(async () => refreshed)
+
+    const outcome = await freezeCurrentFrame({
+      surface: stale,
+      imageSize: { width: 2560, height: 1440 },
+      requireFreshFrame: true,
+      freshFrameFallback: Promise.resolve(),
+      refreshSurface
+    })
+
+    expect(refreshSurface).toHaveBeenCalledOnce()
+    expect(stale.drawn).toBe(0)
+    expect(refreshed.drawn).toBe(1)
+    expect(outcome).toEqual({ imageSize: { width: 1920, height: 1080 }, fresh: false })
+  })
+
+  it('fails closed rather than drawing stale pixels when the stream cannot be reopened', async () => {
+    const stale = surfaceFor({ requestVideoFrameCallback: vi.fn(() => 1) })
+
+    await expect(
+      freezeCurrentFrame({
+        surface: stale,
+        imageSize: { width: 2560, height: 1440 },
+        requireFreshFrame: true,
+        freshFrameFallback: Promise.resolve()
+      })
+    ).rejects.toThrow('cannot be used without reopening')
+    expect(stale.drawn).toBe(0)
+  })
+
   it('sizes the canvas to the stream rather than to the requested geometry', async () => {
     const surface = surfaceFor({ videoWidth: 1920, videoHeight: 1080 })
 

@@ -89,12 +89,14 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
 
     /** Opens the display's stream, or reuses the one already running for it. */
     const acquire = async (
-      sourceId: string
+      sourceId: string,
+      forceRefresh = false
     ): Promise<{ stream: MediaStream; video: HTMLVideoElement }> => {
       const existing = streams.get(sourceId)
       // A track the user revoked, or a display that went away, leaves a stream
       // that will never produce another frame; reopening is the only recovery.
       if (
+        !forceRefresh &&
         existing &&
         existing.stream
           .getVideoTracks()
@@ -135,20 +137,25 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           const context = canvas.getContext('2d')
           if (!context) throw new Error('The frozen frame canvas has no 2D context.')
 
-          const surface: GameOcrCaptureSurface = {
-            video: video as unknown as GameOcrCaptureSurface['video'],
+          const surfaceFor = (source: HTMLVideoElement): GameOcrCaptureSurface => ({
+            video: source as unknown as GameOcrCaptureSurface['video'],
             context: context as unknown as GameOcrCaptureSurface['context'],
             resize: (size) => {
               const target = canvas as HTMLCanvasElement
               if (target.width !== size.width) target.width = size.width
               if (target.height !== size.height) target.height = size.height
             }
-          }
+          })
+          const surface = surfaceFor(video)
           const { imageSize } = await freezeCurrentFrame({
             surface,
             imageSize: request.imageSize,
             requireFreshFrame: request.requireFreshFrame,
-            freshFrameFallback
+            freshFrameFallback,
+            refreshSurface: async () => {
+              const refreshed = await acquire(request.sourceId, true)
+              return surfaceFor(refreshed.video)
+            }
           })
 
           // Main shows the window on this message, so it is sent before the

@@ -48,6 +48,8 @@ export interface FreezeOptions {
   requireFreshFrame: boolean
   /** Main-process deadline, unaffected by hidden-renderer timer throttling. */
   freshFrameFallback?: Promise<void>
+  /** Reopens the desktop stream when its hidden video never advances. */
+  refreshSurface?: () => Promise<GameOcrCaptureSurface>
 }
 
 export interface FreezeOutcome {
@@ -65,17 +67,27 @@ export interface FreezeOutcome {
  * replaces — that one only assumed the repaint had happened by then.
  */
 export async function freezeCurrentFrame({
-  surface,
+  surface: initialSurface,
   imageSize,
   requireFreshFrame,
-  freshFrameFallback
+  freshFrameFallback,
+  refreshSurface
 }: FreezeOptions): Promise<FreezeOutcome> {
   if (requireFreshFrame && !freshFrameFallback) {
     throw new Error('A fresh-frame capture requires a main-process fallback signal.')
   }
   const fresh = requireFreshFrame
-    ? await waitForFreshFrame(surface.video, freshFrameFallback as Promise<void>)
+    ? await waitForFreshFrame(initialSurface.video, freshFrameFallback as Promise<void>)
     : true
+  let surface = initialSurface
+  if (requireFreshFrame && !fresh) {
+    if (!refreshSurface) {
+      throw new Error('The stale desktop stream cannot be used without reopening it.')
+    }
+    // Never draw the stale frame, even while hidden. Reopening creates a new
+    // desktop-capture pipeline after the overlay's native hide command.
+    surface = await refreshSurface()
+  }
   const size = {
     width: surface.video.videoWidth || imageSize.width,
     height: surface.video.videoHeight || imageSize.height

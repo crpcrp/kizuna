@@ -165,7 +165,8 @@ Two ordering properties this relies on:
   static screen `requestVideoFrameCallback` can stall for seconds (measured
   3.3 s and 14.4 s), and a screen full of unmoving visual-novel text is exactly
   Kizuna's case. Hiding the frame is itself a change, so the frame normally
-  arrives within one refresh; the bound only covers the compositor disagreeing.
+  arrives within one refresh. If it does not arrive by the deadline, Kizuna
+  closes and reopens that display's stream rather than drawing its stale frame.
 
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
@@ -173,13 +174,15 @@ rest of the feature, and stops with the window.
 The fresh-frame deadline is owned by the main process. When it expires, main
 sends an explicit fallback signal to the hidden renderer; the renderer itself
 does not schedule the timeout, because Chromium can stretch a hidden page's
-120 ms timer to roughly one second. Native dismissal and capture safety are
+120 ms timer to roughly one second. Main temporarily unthrottles only the
+hidden fresh-frame wait and restores normal throttling before showing the
+overlay. If even that produces no callback, the fallback signal rebuilds the
+desktop stream; stale pixels are never drawn. Native dismissal and capture safety are
 tracked separately: a click issues one hide command immediately and does not
 wait for Electron's native `hide` event, while the next capture still waits for
 a desktop-stream frame produced after the old overlay left the screen. This
 avoids both a lagging native-event wait and recursively recognizing Kizuna's
-own previous boxes without changing the renderer's normal throttling or input
-behavior.
+own previous boxes without changing the renderer's visible input behavior.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
 acknowledges a browser paint. The same line splits dismissal, capture-queue

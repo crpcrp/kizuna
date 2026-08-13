@@ -100,6 +100,7 @@ export interface GameOcrNativeWindow extends SendTarget {
         listener: (...args: unknown[]) => void
       ): unknown
       send(channel: string, ...args: unknown[]): void
+      setBackgroundThrottling?(allowed: boolean): void
       openDevTools?(options?: { mode?: string }): void
     }
 }
@@ -364,6 +365,10 @@ export function createGameOcrWindowController({
     async freeze(request): Promise<OcrImageSize> {
       if (closed) throw new Error('The Game OCR frame is gone.')
       validateFreezeRequest(request)
+      // Only the hidden recapture wait needs unthrottled video callbacks.
+      // Restore the renderer's normal policy before the overlay is shown so
+      // background input/lifecycle behavior is unchanged while inspecting.
+      if (request.requireFreshFrame) window.webContents.setBackgroundThrottling?.(false)
       pending = { ...request }
       if (!rendererIsReady) await ready
       const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
@@ -381,6 +386,7 @@ export function createGameOcrWindowController({
         frozen = await settled
       } finally {
         if (fallbackTimer !== undefined) cancelFallback(fallbackTimer)
+        if (request.requireFreshFrame) window.webContents.setBackgroundThrottling?.(true)
       }
       if (frozen.error) throw new Error(frozen.error)
       showFrozen()

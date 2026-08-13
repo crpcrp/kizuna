@@ -111,8 +111,10 @@ compositor-settle step, and only then captures. It does not await Electron's
 native `hide` event, which can lag the hide command by seconds on Windows.
 Instead, a recapture waits for the desktop stream's next composited frame; an
 explicit main-process deadline releases that wait because hidden-renderer
-timers are throttled. The frame is drawn while its window is still hidden.
-Capture, OCR,
+timers are throttled. Main temporarily unthrottles only that hidden wait and
+restores normal throttling before presentation. If the deadline still wins,
+the renderer reopens the desktop stream and never draws the stale one. The
+frame is drawn while its window is still hidden. Capture, OCR,
 tokenization, lookup, and translation results are accepted only for the current
 session; a failed recapture leaves the live game visible rather than restoring
 a stale frame.
