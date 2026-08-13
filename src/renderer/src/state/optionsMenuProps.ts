@@ -21,6 +21,7 @@ export type OptionsSettingsState = Pick<
   | 'rightClickTogglePause'
   | 'screenshotFolder'
   | 'skipSeconds'
+  | 'startupBehavior'
   | 'subtitleDragEnabled'
   | 'subtitleStyle'
   | 'translationEnabled'
@@ -94,6 +95,8 @@ export function buildOptionsMenuProps({
       heldModifiers,
       onChangeKeyBinding: (action, binding) => dispatch({ type: 'setKeyBinding', action, binding })
     },
+    startupBehavior: settings.startupBehavior,
+    onChangeStartupBehavior: (value) => dispatch({ type: 'setStartupBehavior', value }),
     playback: {
       ...playback,
       skipSeconds: settings.skipSeconds,

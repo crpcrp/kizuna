@@ -21,6 +21,7 @@ import {
  * until it is covered here too. */
 const CHANGED_SETTINGS: RendererSettings = {
   keyBindings: { ...DEFAULT_KEY_BINDINGS, togglePause: 'KeyK' },
+  startupBehavior: 'video-player',
   skipSeconds: 15,
   popupSettings: { ...DEFAULT_POPUP_SETTINGS, maxEntries: 9 },
   subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, fontScale: 1.4 },

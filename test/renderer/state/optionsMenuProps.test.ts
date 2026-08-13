@@ -94,6 +94,19 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
 }
 
 describe('buildOptionsMenuProps', () => {
+  it('routes startup selection through the reducer lifecycle', () => {
+    const input = buildInput()
+    const props = buildOptionsMenuProps(input)
+
+    props.onChangeStartupBehavior('video-player')
+
+    expect(input.dispatch).toHaveBeenCalledWith({
+      type: 'setStartupBehavior',
+      value: 'video-player'
+    })
+    expect(input.actions.persist).not.toHaveBeenCalled()
+  })
+
   it('dispatches a reducer-only row without scheduling a settings write', () => {
     const input = buildInput()
     buildOptionsMenuProps(input).playback.onChangeSkipSeconds(15)

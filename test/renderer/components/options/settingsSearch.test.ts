@@ -63,6 +63,22 @@ describe('SETTING_ENTRIES', () => {
       label: 'Game OCR capture shortcut',
       category: 'gameOcr'
     })
+    expect(found('startup')).toContainEqual({
+      label: 'When Kizuna starts',
+      category: 'startup'
+    })
+    expect(found('splash')).toContainEqual({
+      label: 'When Kizuna starts',
+      category: 'startup'
+    })
+    expect(found('Game OCR')).toContainEqual({
+      label: 'When Kizuna starts',
+      category: 'startup'
+    })
+    expect(found('video player')).toContainEqual({
+      label: 'When Kizuna starts',
+      category: 'startup'
+    })
   })
 
   it('has unique entry ids', () => {

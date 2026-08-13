@@ -36,6 +36,8 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       keyBindings: DEFAULT_KEY_BINDINGS,
       onChangeKeyBinding: noop
     },
+    startupBehavior: 'splash',
+    onChangeStartupBehavior: noop,
     playback: {
       skipSeconds: 5,
       rightClickTogglePause: true,

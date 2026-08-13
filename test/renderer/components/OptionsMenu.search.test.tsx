@@ -64,6 +64,16 @@ describe('OptionsMenu setting search', () => {
     expect(screen.getByLabelText('Personal access token')).toBeTruthy()
   })
 
+  it('reaches the Startup selector from search', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} />)
+
+    fireEvent.change(searchBox(), { target: { value: 'video player' } })
+    fireEvent.click(screen.getByRole('option', { name: /When Kizuna starts/ }))
+
+    expect(tab('Startup').getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Splash screen' })).toBeTruthy()
+  })
+
   it('flashes the row the picked result points at', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
 
