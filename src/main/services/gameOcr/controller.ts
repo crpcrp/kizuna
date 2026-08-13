@@ -488,7 +488,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
       // Geometry only. The pixels come from the stream the frame already
       // holds, so nothing here reads the screen.
-      const target = await options.displays.cursorDisplay()
+      const targetOrPromise = options.displays.cursorDisplay()
+      // A warm target is deliberately synchronous. Awaiting an already-known
+      // value here would return control to Electron's global-shortcut dispatch,
+      // which can postpone the Promise continuation by seconds on Windows.
+      const target = isPromiseLike(targetOrPromise) ? await targetOrPromise : targetOrPromise
       if (!isCurrent(session)) return
       const capturedAt = now()
       const displayDiagnostics = target.diagnostics ?? {
@@ -695,4 +699,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     stop,
     shutdown: stop
   }
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Partial<Promise<T>>).then === 'function'
 }

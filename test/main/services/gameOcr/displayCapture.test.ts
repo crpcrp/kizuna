@@ -97,8 +97,12 @@ describe('createGameOcrDisplaySources', () => {
       desktopCapturer: { getSources }
     })
 
-    const first = await sources.cursorDisplay()
-    const second = await sources.cursorDisplay()
+    const coldTarget = sources.cursorDisplay()
+    expect(coldTarget).toBeInstanceOf(Promise)
+    const first = await coldTarget
+    const warmTarget = sources.cursorDisplay()
+    expect(warmTarget).not.toBeInstanceOf(Promise)
+    const second = await warmTarget
     await sources.cursorDisplay()
     expect(getSources).toHaveBeenCalledOnce()
     expect(screenApi.getCursorScreenPoint).toHaveBeenCalledTimes(3)

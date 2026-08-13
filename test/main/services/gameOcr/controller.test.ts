@@ -242,6 +242,22 @@ function setup(
 }
 
 describe('createGameOcrController', () => {
+  it('sends a cached capture to the renderer before yielding the shortcut callback', async () => {
+    const displays: GameOcrDisplaySources = {
+      cursorDisplay: vi.fn(() => target(1)),
+      invalidate: vi.fn()
+    }
+    const fake = setup({ displays })
+    await fake.controller.arm()
+
+    const capture = fake.controller.capture()
+
+    // No Promise boundary exists before freeze sends its renderer IPC.
+    expect(fake.createPresentation).toHaveBeenCalledOnce()
+    expect(fake.windows[0].freeze).toHaveBeenCalledOnce()
+    await capture
+  })
+
   it('recaptures in place without hiding the retained frame', async () => {
     const fake = setup()
     await expect(fake.controller.arm()).resolves.toBe(true)

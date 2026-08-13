@@ -148,8 +148,11 @@ thumbnail is 1×1 or the full display, and it does not warm up, so calling it
 early to prime the pipeline only pays it twice. It is still used once per armed
 run — with a 1×1 thumbnail, for source ids only. The current display target is
 also cached while the pointer remains inside its bounds, avoiding Electron's
-display lookup on the hot path. Both caches are cleared when Game OCR stops or
-the application shuts down; neither contains screenshot pixels.
+display lookup on the hot path. A warm target is returned synchronously, so the
+freeze IPC reaches the renderer before the global-shortcut callback yields to
+Electron. Only real source enumeration uses a Promise. Both caches are cleared
+when Game OCR stops or the application shuts down; neither contains screenshot
+pixels.
 
 The screenshot no longer crosses IPC to be displayed. The renderer draws into
 its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
@@ -192,7 +195,9 @@ The capture field is split further into `cursor`, `display`, `source`, and
 `event-loop`: `display` is zero on a cached target, `source` says whether ids
 were cached or enumerated, and `event-loop` exposes time lost between the
 adapter's measured work and the controller continuation. The accompanying
-`target cached/resolved` label makes warm and cold paths distinguishable.
+`target cached/resolved` label makes warm and cold paths distinguishable. Warm
+targets do not cross an asynchronous boundary, so their `event-loop` remainder
+should stay effectively zero; cold source enumeration can still yield.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 

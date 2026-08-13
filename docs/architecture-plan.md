@@ -129,8 +129,10 @@ immediately while renderer cleanup finishes in the background.
 Display source ids and small immutable display targets are cached independently
 of screenshot data. Each capture still reads the cursor position, but while it
 remains inside the last display bounds no Electron display lookup or source
-enumeration is needed. Stopping or shutting down Game OCR explicitly clears
-both caches.
+enumeration is needed. That cache hit is returned synchronously, so the first
+freeze IPC is sent from inside the global-shortcut callback instead of yielding
+to an already-resolved Promise first. Stopping or shutting down Game OCR
+explicitly clears both caches.
 
 While Game OCR is armed the player window hides behind a tray icon, and
 stopping or quitting releases the shortcut, the worker process, the frozen
