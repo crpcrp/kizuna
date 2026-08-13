@@ -20,7 +20,9 @@ renderer-facing contract is defined in `src/shared/preloadApi.ts`.
 ## Playback and subtitles
 
 On Windows, mpv renders into Kizuna's single transparent frameless window and
-is controlled through JSON IPC over a named pipe. On Linux, Electron uses X11
+is controlled through JSON IPC over a named pipe. Linux uses the same JSON IPC
+over a unix socket under the platform temp directory; `mpv/ipcEndpoint.ts` owns
+both endpoint forms and the Linux-only socket cleanup. On Linux, Electron uses X11
 and owns an opaque `videoHost` plus a transparent child `uiOverlay`: mpv's
 `--wid` targets only the host, while the renderer, preload, controls, and DOM
 subtitles live only in the overlay. The renderer measures every DOM surface
