@@ -179,9 +179,7 @@ input trace.
 
 Detection runs at the screenshot's native size on ordinary displays. A
 960-pixel limit was faster on one benchmark, but reduced real-game recall too
-much to use as the application default. Kizuna instead avoids repeated work by
-reusing the previous result when the newly encoded screenshot is byte-for-byte
-identical. A changed frame always goes through the worker normally.
+much to use as the application default.
 
 ### The screenshot must be PNG
 

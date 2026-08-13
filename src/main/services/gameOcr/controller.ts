@@ -161,11 +161,6 @@ interface Session extends OcrCaptureIdentity {
   }
 }
 
-interface CachedRecognition {
-  imageBase64: string
-  result: Pick<OcrResult, 'imageSize' | 'regions'>
-}
-
 /**
  * Coordinates Game OCR without owning Electron, renderer, or subprocess
  * details. A hotkey starts one serialized capture pipeline; newer sessions
@@ -194,7 +189,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let armPromise: Promise<boolean> | undefined
   let stopping = false
   let frameShortcutsHeld = false
-  let cachedRecognition: CachedRecognition | undefined
 
   const now = options.now ?? (() => Date.now())
 
@@ -454,24 +448,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       const imageBase64 = await frame.captureBytes(session.captureId)
       if (!isCurrent(session)) return
       if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
-      const cached = cachedRecognition
-      const result: OcrResult =
-        cached?.imageBase64 === imageBase64
-          ? {
-              sessionId: session.sessionId,
-              captureId: session.captureId,
-              imageSize: { ...cached.result.imageSize },
-              regions: cached.result.regions.map((region) => ({
-                ...region,
-                bounds: { ...region.bounds }
-              }))
-            }
-          : await options.ocr.recognize({
-              sessionId: session.sessionId,
-              captureId: session.captureId,
-              imageSize: metadata.imageSize,
-              imageBase64
-            })
+      const result = await options.ocr.recognize({
+        sessionId: session.sessionId,
+        captureId: session.captureId,
+        imageSize: metadata.imageSize,
+        imageBase64
+      })
       if (
         !isCurrent(session) ||
         result.sessionId !== session.sessionId ||
@@ -479,7 +461,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       ) {
         return
       }
-      cachedRecognition = { imageBase64, result }
       // Boxes and indicator swap together: the sign is only meaningful while
       // OCR runs, and the regions belong to the screenshot already presented.
       if (session.timings) session.timings.regionsSentAt = now()
@@ -676,7 +657,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const stop = async (): Promise<void> => {
     stopping = true
-    cachedRecognition = undefined
     lifecycle++
     invalidateSession()
     releaseFrameShortcuts()
