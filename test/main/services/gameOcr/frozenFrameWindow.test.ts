@@ -143,7 +143,8 @@ describe('getGameOcrWindowOptions', () => {
       preload: '/fake/preload.js',
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      backgroundThrottling: false
     })
   })
 })

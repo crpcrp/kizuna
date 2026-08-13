@@ -587,9 +587,11 @@ describe('createGameOcrController', () => {
     await fake.controller.capture()
 
     // The live game was already on screen, so there is no frame of Kizuna's
-    // own for the compositor to repaint and nothing to wait for.
+    // own for the compositor to repaint and nothing to wait for. The retained
+    // hidden renderer also needs no second discard/hide round trip.
     expect(fake.events).not.toContain('settle')
     expect(fake.settle.settle).not.toHaveBeenCalled()
+    expect(fake.windows[0].discard).not.toHaveBeenCalled()
     expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
   })
 

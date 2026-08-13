@@ -290,6 +290,16 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const dismissPresentation = (): Promise<void> => {
     const target = presentation
     if (!target) return presentationDismiss ?? Promise.resolve()
+    // A renderer-requested dismissal hides the retained native window before
+    // the next hotkey press, but deliberately leaves the renderer alive. Do
+    // not send that already-hidden window through another discard/hide cycle:
+    // Electron can leave the redundant hide promise waiting on a native event
+    // for seconds even though isVisible() already reports the frame gone.
+    if (!target.isVisible()) {
+      presentationDismissTarget = undefined
+      presentationDismiss = undefined
+      return Promise.resolve()
+    }
     if (presentationDismissTarget === target && presentationDismiss) return presentationDismiss
 
     let discard: Promise<void>

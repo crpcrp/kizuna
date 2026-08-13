@@ -170,6 +170,13 @@ Two ordering properties this relies on:
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
+The retained capture renderer opts out of Chromium's hidden-page timer
+throttling. Recapture freezes while that renderer is hidden, and throttling
+would stretch its deliberately bounded 120 ms fresh-frame timeout to roughly
+one second. A frame that the user already dismissed is also reused directly;
+the next hotkey does not send the already-hidden native window through another
+discard/hide round trip.
+
 Development runs log the complete shortcut-to-word-box time after the renderer
 acknowledges a browser paint. The same line splits dismissal, capture-queue
 waiting, compositor settle, capture, presentation, recognition, and rendering

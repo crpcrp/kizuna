@@ -70,7 +70,11 @@ export function getGameOcrWindowOptions(
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // Recapture deliberately freezes while this retained renderer is hidden.
+      // Chromium otherwise clamps its 120 ms fresh-frame timeout to roughly
+      // one second, putting that whole throttle delay on the presentation path.
+      backgroundThrottling: false
     }
   }
 }
