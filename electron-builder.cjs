@@ -32,6 +32,13 @@ module.exports = {
   // below overrides this because Linux emits two artifacts per architecture.
   artifactName: '${name}-${version}-setup.${ext}',
   files: ['out/**/*'],
+  // Koffi loads its prebuilt binary with `require()` on an absolute path, and
+  // a `.node` cannot be loaded from inside an asar archive. electron-builder's
+  // smart unpacking generally notices native modules on its own; this is
+  // declared anyway because the failure it prevents is invisible until Game
+  // OCR is armed on an installed build, where it would look like a broken
+  // feature rather than a packaging mistake.
+  asarUnpack: ['**/node_modules/@koromix/**'],
   extraResources: [
     { from: 'resources/mpv', to: 'mpv' },
     { from: 'resources/ffmpeg', to: 'ffmpeg' },

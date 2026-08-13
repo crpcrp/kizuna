@@ -21,6 +21,7 @@ function freezeRequest(captureId: number): GameOcrFreezeRequest {
     sessionId: captureId,
     captureId,
     sourceId: 'screen:0:0',
+    targetKind: 'display',
     imageSize: IMAGE_SIZE
   }
 }

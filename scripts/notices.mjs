@@ -351,17 +351,49 @@ export function lockAgreementProblems(notices, lock, platformKey) {
 }
 
 /**
+ * Does an npm `os`/`cpu` constraint admit this host? Entries may be negated
+ * (`!win32`), and an absent or empty list means "any".
+ *
+ * @param {string[] | undefined} allowed
+ * @param {string} actual
+ * @returns {boolean}
+ */
+function matchesHostConstraint(allowed, actual) {
+  if (!Array.isArray(allowed) || allowed.length === 0) return true
+  const negated = allowed.filter((value) => value.startsWith('!'))
+  if (negated.length > 0) return !negated.some((value) => value.slice(1) === actual)
+  return allowed.includes(actual)
+}
+
+/**
  * Production npm dependencies from a lockfileVersion-3 `package-lock.json`:
  * everything electron-builder keeps in the installed app, transitive deps
  * included. Dev-only packages and the root project entry are dropped.
  *
- * @param {{ packages?: Record<string, { version?: string, license?: string, dev?: boolean }> }} packageLock
+ * Optional dependencies restricted to a foreign platform are dropped too.
+ * A package shipping one prebuilt binary per platform lists every one of them
+ * in the lock while npm installs only the matching one, so keeping them would
+ * demand licence texts for directories that do not exist on this host — and
+ * would put licences for binaries this artifact does not contain into its
+ * notices. Non-optional packages are never filtered, so a genuinely missing
+ * licence is still a failure.
+ *
+ * @param {{ packages?: Record<string, { version?: string, license?: string, dev?: boolean, optional?: boolean, os?: string[], cpu?: string[] }> }} packageLock
+ * @param {{ platform?: string, arch?: string }} [host]
  * @returns {NpmPackage[]} Sorted by package path.
  */
-export function productionPackages(packageLock) {
+export function productionPackages(packageLock, host = {}) {
+  const platform = host.platform ?? process.platform
+  const arch = host.arch ?? process.arch
   const packages = []
   for (const [path, entry] of Object.entries(packageLock.packages ?? {})) {
     if (!path.startsWith('node_modules/') || entry.dev) continue
+    if (
+      entry.optional &&
+      (!matchesHostConstraint(entry.os, platform) || !matchesHostConstraint(entry.cpu, arch))
+    ) {
+      continue
+    }
     packages.push({
       name: path.slice(path.lastIndexOf('node_modules/') + 'node_modules/'.length),
       version: entry.version ?? 'unknown',

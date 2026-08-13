@@ -36,7 +36,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Subtitle sidebar | `components/SubtitleSidebar.tsx` (cue rows and search), `components/SubtitleTranslationPopup.tsx`, `state/sidebarSearch.ts`, `state/subtitleSearchDebounce.ts`, `state/sidebarTranslation.ts`, `state/useSidebarTranslation.ts` | — |
 | Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
-| Game OCR (Windows, experimental) | `gameOcr.tsx` and `gameOcr.html` (the second renderer entry), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (sessions, hotkey, recapture order), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameWindow.ts`, `services/gameOcr/runtime.ts`, `services/gameOcr/backgroundLifecycle.ts`, `services/gameOcr/tray.ts`, `services/ocr/ppOcrWorker.ts`, `resourcePaths.ts` (bundled payload) |
+| Game OCR (Windows, experimental) | `gameOcr.tsx` and `gameOcr.html` (the second renderer entry), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrCaptureStream.ts` (retained capture streams), `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (sessions, hotkey, recapture order), `services/gameOcr/captureTarget.ts` (focused window or display fallback), `services/gameOcr/foregroundWindow.ts` (the Win32 boundary), `services/gameOcr/windowCapture.ts` (source ids, physical-to-logical geometry), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameWindow.ts`, `services/gameOcr/runtime.ts`, `services/gameOcr/backgroundLifecycle.ts`, `services/gameOcr/tray.ts`, `services/ocr/ppOcrWorker.ts`, `resourcePaths.ts` (bundled payload) |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `startupProbe.ts`, `electron-builder.cjs`, `scripts/linuxPackaging.mjs`, `scripts/smoke-linux-package.mjs` |
 | Application updates | `shared/update.ts`, typed `preloadApi.ts` surface | `updateSupport.ts`, `electronUpdaterAdapter.ts`, `updaterErrors.ts`, `updateService.ts`, `updateBridge.ts`, lifecycle composition in `index.ts` |
 
@@ -127,8 +127,19 @@ window for the whole armed run, so a frame ends by hiding rather than closing;
 that only stopping, a display change, or a dead renderer performs. Work that
 must not survive a recapture belongs behind the session ID, not behind a
 renderer-side guard, and anything a fresh renderer used to pick up at boot has
-to be refreshed per frame instead. See [Game OCR](game-ocr.md) for the
-user-visible behavior and the manual verification matrix.
+to be refreshed per frame instead.
+
+What a shortcut captures is decided in `services/gameOcr/captureTarget.ts`,
+which composes the Win32 foreground query
+(`services/gameOcr/foregroundWindow.ts`), the physical-to-logical geometry
+(`services/gameOcr/windowCapture.ts`), and the display-under-pointer fallback
+(`services/gameOcr/displayCapture.ts`) into one discriminated target. Add a new
+reason a window cannot be used to `GameOcrFallbackReason` and its text table;
+every one of them has to end in a display capture rather than a failure, and
+nothing on that path may throw. Native calls belong behind
+`ForegroundWindowNative`, never in the rules above it, so tests keep running on
+Linux. See [Game OCR](game-ocr.md) for the user-visible behavior, the measured
+runtime facts the design rests on, and the manual verification matrix.
 
 ### Update runtime binaries
 

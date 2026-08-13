@@ -8,6 +8,7 @@ import type {
   GameOcrRegionsRendered
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
+import { parseWindowSourceHandle } from './windowCapture'
 import {
   applyNavigationGuards,
   applyReloadGuard,
@@ -70,7 +71,13 @@ export function getGameOcrWindowOptions(
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      // The window is hidden between frames, and Chromium throttles a hidden
+      // renderer's timers and frame callbacks to roughly one per second. This
+      // renderer is not idle while hidden: it holds the desktop capture
+      // streams every capture draws from, and opening a stream for a
+      // newly-focused window has to complete on the shortcut path.
+      backgroundThrottling: false
     }
   }
 }
@@ -673,10 +680,17 @@ function validateFreezeRequest(request: GameOcrFreezeRequest): void {
     !request ||
     typeof request.sourceId !== 'string' ||
     request.sourceId.length === 0 ||
+    (request.targetKind !== 'window' && request.targetKind !== 'display') ||
     !isPositiveInteger(request.imageSize?.width) ||
     !isPositiveInteger(request.imageSize?.height)
   ) {
     throw new Error('Game OCR freeze request is invalid.')
+  }
+  // A window request's source id *is* its window handle. Checking the shape
+  // here fails the capture in main, where it falls back to display capture,
+  // rather than in the renderer as an opaque `getUserMedia` rejection.
+  if (request.targetKind === 'window' && parseWindowSourceHandle(request.sourceId) === undefined) {
+    throw new Error(`Game OCR freeze request names no window handle: ${request.sourceId}`)
   }
 }
 

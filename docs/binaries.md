@@ -129,6 +129,16 @@ from the directory it sits in. OpenCV, Clipper, zlib, and libpng are linked
 statically into the worker. DirectML and the former inference runtime are not
 shipped.
 
+Game OCR's other native dependency is **not** a staged binary and is not in
+this lock. Selecting the foreground window calls Win32 APIs through Koffi, an
+MIT npm package that ships a prebuilt Node-API binary per platform, so there is
+nothing to download, hash-pin, or rebuild per Electron version. It is unpacked
+from the asar by `asarUnpack` because a `.node` cannot be loaded from inside
+one, and its licence reaches the notices bundle through the npm dependency
+path like any other package. See
+[architecture](architecture-plan.md#the-one-in-process-native-boundary) for why
+this boundary is linked rather than spawned.
+
 `ppocr.exe` is GPL-3.0-or-later: its worker entrypoint adapts the first-party GPL
 worker, so the whole executable is conveyed under GPLv3 even though its engine
 and statically linked libraries use compatible permissive terms. The corresponding source and the script

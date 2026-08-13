@@ -2,7 +2,9 @@
   "schemaVersion": 1,
   "vendorCommit": "95125cd46c3b40ce041ccd9b9324866a705d9edb",
   "npmLicenseFallbacks": {
-    "lazy-val": "licenses/lazy-val/LICENSE"
+    "lazy-val": "licenses/lazy-val/LICENSE",
+    "@koromix/koffi-win32-x64": "licenses/koffi/LICENSE",
+    "@koromix/koffi-linux-x64": "licenses/koffi/LICENSE"
   },
   "components": [
     {

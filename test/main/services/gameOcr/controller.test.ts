@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
-  GameOcrDisplaySources,
-  GameOcrDisplayTarget
-} from '@src/main/services/gameOcr/displayCapture'
+  GameOcrCaptureTarget,
+  GameOcrCaptureTargets,
+  GameOcrDisplayCaptureTarget,
+  GameOcrWindowCaptureTarget
+} from '@src/main/services/gameOcr/captureTarget'
 import {
   createGameOcrController,
   type GameOcrRecognitionAdapter,
   type GameOcrShortcut
 } from '@src/main/services/gameOcr/controller'
 import type { GameOcrWindow } from '@src/main/services/gameOcr/frozenFrameWindow'
-import type { OcrDisplayBounds, OcrDisplayCaptureMetadata, OcrResult } from '@src/shared/ocr'
+import type { OcrDisplayBounds, OcrResult } from '@src/shared/ocr'
 
 type Deferred<T> = {
   promise: Promise<T>
@@ -27,14 +29,35 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-function target(id: number): GameOcrDisplayTarget {
-  const metadata: OcrDisplayCaptureMetadata = {
-    displayId: id,
-    displayBounds: { x: id * 100, y: 0, width: 640, height: 480 },
-    scaleFactor: 1,
-    imageSize: { width: 640, height: 480 }
+function target(id: number): GameOcrDisplayCaptureTarget {
+  return {
+    kind: 'display',
+    sourceId: `screen:${id}:0`,
+    bounds: { x: id * 100, y: 0, width: 640, height: 480 },
+    expectedImageSize: { width: 640, height: 480 }
   }
-  return { metadata, sourceId: `screen:${id}:0` }
+}
+
+/** `capture:<hwnd>` for a window, `capture:<display number>` for a display. */
+function captureLabel(target: GameOcrCaptureTarget): string {
+  return target.kind === 'window' ? target.hwnd : String(target.bounds.x / 100)
+}
+
+function windowTarget(
+  hwnd: string,
+  bounds: OcrDisplayBounds,
+  overrides: Partial<GameOcrWindowCaptureTarget> = {}
+): GameOcrWindowCaptureTarget {
+  return {
+    kind: 'window',
+    sourceId: `window:${hwnd}:0`,
+    hwnd,
+    pid: 4321,
+    executableName: 'game.exe',
+    bounds,
+    expectedImageSize: { width: bounds.width, height: bounds.height },
+    ...overrides
+  }
 }
 
 function result(sessionId: number, captureId: number, text: string): OcrResult {
@@ -163,14 +186,19 @@ function makeWindow(
   }
 }
 
+type SetupOverrides = Partial<Parameters<typeof createGameOcrController>[0]> & {
+  /** Targets handed out in order, one per capture. */
+  queue?: GameOcrCaptureTarget[]
+}
+
 function setup(
-  overrides: Partial<Parameters<typeof createGameOcrController>[0]> = {},
+  overrides: SetupOverrides = {},
   windowOptions: Parameters<typeof makeWindow>[2] = {}
 ) {
   const events: string[] = []
   const windows: FakeWindow[] = []
-  const targets = [target(1), target(2), target(3)]
-  const usedTargets: GameOcrDisplayTarget[] = []
+  const queue: GameOcrCaptureTarget[] = overrides.queue ?? [target(1), target(2), target(3)]
+  const usedTargets: GameOcrCaptureTarget[] = []
   let shortcutCallback: (() => void) | undefined
   const shortcut: GameOcrShortcut = {
     register: vi.fn((accelerator, callback) => {
@@ -179,15 +207,21 @@ function setup(
     }),
     unregister: vi.fn()
   }
-  const displays: GameOcrDisplaySources = {
-    cursorDisplay: vi.fn(async () => {
-      events.push(`capture:${targets[0]?.metadata.displayId}`)
-      const next = targets.shift()
-      if (!next) throw new Error('no fake display')
+  const targets: GameOcrCaptureTargets = {
+    resolve: vi.fn(async (resolveOptions) => {
+      const head = queue[0]
+      events.push(`capture:${head ? captureLabel(head) : 'none'}`)
+      // A retry after a failed window capture must not be served a window.
+      const index = resolveOptions?.excludeWindow
+        ? queue.findIndex((candidate) => candidate.kind === 'display')
+        : 0
+      const next = index >= 0 ? queue.splice(index, 1)[0] : undefined
+      if (!next) throw new Error('no fake capture target')
       usedTargets.push(next)
       return next
     }),
-    invalidate: vi.fn()
+    invalidate: vi.fn(),
+    dispose: vi.fn()
   }
   const recognitionRequests: Array<{
     request: { sessionId: number; captureId: number }
@@ -206,7 +240,7 @@ function setup(
   const base = {
     shortcut,
     accelerator: 'Control+Shift+G',
-    displays,
+    targets,
     createPresentation: vi.fn(() => {
       const window = makeWindow(windows.length + 1, events, windowOptions)
       windows.push(window)
@@ -225,13 +259,13 @@ function setup(
     controller,
     events,
     windows,
-    targets,
+    queue,
     usedTargets,
     shortcut,
     get shortcutCallback() {
       return shortcutCallback
     },
-    displays,
+    targets,
     createPresentation: base.createPresentation,
     ocr,
     recognitionRequests,
@@ -243,11 +277,12 @@ function setup(
 
 describe('createGameOcrController', () => {
   it('sends a cached capture to the renderer before yielding the shortcut callback', async () => {
-    const displays: GameOcrDisplaySources = {
-      cursorDisplay: vi.fn(() => target(1)),
-      invalidate: vi.fn()
+    const targets: GameOcrCaptureTargets = {
+      resolve: vi.fn(() => target(1)),
+      invalidate: vi.fn(),
+      dispose: vi.fn()
     }
-    const fake = setup({ displays })
+    const fake = setup({ targets })
     await fake.controller.arm()
 
     const capture = fake.controller.capture()
@@ -282,7 +317,7 @@ describe('createGameOcrController', () => {
     expect(fake.windows).toHaveLength(1)
     expect(fake.createPresentation).toHaveBeenCalledOnce()
     expect(fake.windows[0].visible()).toBe(true)
-    expect(fake.targets[0]).toBeDefined()
+    expect(fake.queue[0]).toBeDefined()
 
     const secondRequest = fake.recognitionRequests[1]
     firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
@@ -326,7 +361,7 @@ describe('createGameOcrController', () => {
 
     const second = fake.controller.capture()
     await second
-    expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
+    expect(fake.targets.resolve).toHaveBeenCalledTimes(2)
     expect(fake.windows[0].discard).not.toHaveBeenCalled()
     expect(fake.windows[0]?.visible()).toBe(true)
     discardGate.resolve()
@@ -496,6 +531,7 @@ describe('createGameOcrController', () => {
       sessionId: 1,
       captureId: 1,
       sourceId: 'screen:1:0',
+      targetKind: 'display',
       imageSize: { width: 640, height: 480 }
     })
 
@@ -639,7 +675,7 @@ describe('createGameOcrController', () => {
     await fake.controller.capture()
 
     expect(fake.events).toEqual(['capture:2', 'moveTo:1:200', 'present:1', 'recognize:2'])
-    expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
+    expect(fake.targets.resolve).toHaveBeenCalledTimes(2)
   })
 
   it('freezes the display the pointer is on', async () => {
@@ -715,7 +751,7 @@ describe('createGameOcrController', () => {
     // capture must build a replacement instead of reusing a dead one.
     fake.windows[0].triggerClosed()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
-    expect(fake.displays.invalidate).toHaveBeenCalledOnce()
+    expect(fake.targets.invalidate).toHaveBeenCalledOnce()
 
     await fake.controller.capture()
     expect(fake.createPresentation).toHaveBeenCalledTimes(2)
@@ -731,11 +767,206 @@ describe('createGameOcrController', () => {
     await fake.controller.stop()
     expect(fake.windows[0].close).toHaveBeenCalledOnce()
     expect(fake.windows[0].visible()).toBe(false)
-    expect(fake.displays.invalidate).toHaveBeenCalledOnce()
+    expect(fake.targets.invalidate).toHaveBeenCalledOnce()
 
     // A later run gets a fresh window rather than the closed one.
     await fake.controller.arm()
     await fake.controller.capture()
     expect(fake.createPresentation).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the native boundary loaded across a stop, and releases it on shutdown', async () => {
+    const fake = setup()
+    await fake.controller.arm()
+
+    // Arming again is the ordinary next thing to happen, and reloading the
+    // native boundary is not free.
+    await fake.controller.stop()
+    expect(fake.targets.dispose).not.toHaveBeenCalled()
+
+    await fake.controller.shutdown()
+    expect(fake.targets.dispose).toHaveBeenCalledOnce()
+  })
+})
+
+describe('createGameOcrController focused-window capture', () => {
+  it('covers only the window, and sends only its pixels to OCR', async () => {
+    // The acceptance criterion: a 1024x768 game on a 2560x1440 display.
+    const fake = setup({
+      queue: [windowTarget('1902762', { x: 120, y: 80, width: 1024, height: 768 })]
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(fake.createPresentation).toHaveBeenCalledWith({
+      x: 120,
+      y: 80,
+      width: 1024,
+      height: 768
+    })
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith({
+      sessionId: 1,
+      captureId: 1,
+      sourceId: 'window:1902762:0',
+      targetKind: 'window',
+      imageSize: { width: 1024, height: 768 }
+    })
+    expect(fake.recognitionRequests[0]?.request).toMatchObject({
+      imageSize: { width: 1024, height: 768 }
+    })
+  })
+
+  it('moves and resizes the retained overlay when the user alt-tabs', async () => {
+    const fake = setup({
+      queue: [
+        windowTarget('111', { x: 120, y: 80, width: 1024, height: 768 }),
+        windowTarget('222', { x: -1500, y: 40, width: 800, height: 600 })
+      ]
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+    await fake.controller.capture()
+
+    // One retained window serves both games; only its rectangle changes.
+    expect(fake.createPresentation).toHaveBeenCalledOnce()
+    expect(fake.windows[0].boundsHistory).toEqual([{ x: -1500, y: 40, width: 800, height: 600 }])
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: 'window:222:0' })
+    )
+  })
+
+  it('reports what it captured, without a full executable path', async () => {
+    const diagnostics: string[] = []
+    const fake = setup({
+      onDiagnostic: (message: string) => diagnostics.push(message),
+      queue: [windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 })]
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(diagnostics).toEqual(['[game-ocr] target window game.exe (pid 4321) 1024x768'])
+  })
+
+  it('falls back to display capture when the window will not freeze', async () => {
+    // Exclusive fullscreen, a protected surface, and a handle Chromium
+    // declines all arrive here as a freeze failure.
+    const fake = setup(
+      {
+        queue: [windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 }), target(2)]
+      },
+      {
+        freeze: async (request) => {
+          if (request.captureId === 1) throw new Error('capture is not available for this window')
+          return request.imageSize
+        }
+      }
+    )
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    // Game OCR stays armed and a frame still appears: the user sees a display
+    // capture, not an error.
+    expect(fake.controller.getStatus().state).toBe('recognizing')
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: 'screen:2:0', targetKind: 'display' })
+    )
+    expect(fake.onError).not.toHaveBeenCalled()
+  })
+
+  it('retries a failed window capture under a fresh capture identity', async () => {
+    const fake = setup(
+      {
+        queue: [windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 }), target(2)]
+      },
+      {
+        freeze: async (request) => {
+          if (request.captureId === 1) throw new Error('capture is not available for this window')
+          return request.imageSize
+        }
+      }
+    )
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    // The abandoned window capture's late reply must not be mistaken for the
+    // display capture that replaced it.
+    expect(fake.recognitionRequests).toHaveLength(1)
+    expect(fake.recognitionRequests[0]?.request.captureId).toBe(2)
+  })
+
+  it('still fails a display capture that cannot freeze, so the user is told', async () => {
+    const fake = setup(
+      { queue: [target(1)] },
+      {
+        freeze: async () => {
+          throw new Error('display capture denied')
+        }
+      }
+    )
+    await fake.controller.arm()
+    await fake.controller.capture()
+
+    expect(fake.controller.getStatus()).toMatchObject({ state: 'error' })
+    expect(fake.onError).toHaveBeenCalledWith(
+      expect.stringContaining('display capture denied'),
+      expect.anything()
+    )
+  })
+
+  it('drops an in-flight capture whose target the user has already left', async () => {
+    const freezeGate = deferred<{ width: number; height: number }>()
+    const fake = setup(
+      {
+        queue: [
+          windowTarget('111', { x: 0, y: 0, width: 1024, height: 768 }),
+          windowTarget('222', { x: 0, y: 0, width: 800, height: 600 })
+        ]
+      },
+      {
+        freeze: async (request) =>
+          request.captureId === 1 ? freezeGate.promise : request.imageSize
+      }
+    )
+    await fake.controller.arm()
+
+    const first = fake.controller.capture()
+    const second = fake.controller.capture()
+    freezeGate.resolve({ width: 1024, height: 768 })
+    await Promise.all([first, second])
+
+    // Only the window the user is actually looking at is recognized.
+    expect(fake.recognitionRequests).toHaveLength(1)
+    expect(fake.recognitionRequests[0]?.request).toMatchObject({
+      captureId: 2,
+      imageSize: { width: 800, height: 600 }
+    })
+  })
+
+  it('records the target kind and foreground cost in the latency report', async () => {
+    const timings: Array<{ targetKind: string; foregroundMs: number }> = []
+    const fake = setup({
+      onTimings: (value: { targetKind: string; foregroundMs: number }) => timings.push(value),
+      queue: [
+        {
+          ...windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 }),
+          diagnostics: {
+            cursorMs: 0,
+            displayMs: 0,
+            sourceMs: 0,
+            foregroundMs: 3,
+            targetCacheHit: false,
+            sourceCacheHit: false
+          }
+        }
+      ]
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+    fake.recognitionRequests[0]?.deferred.resolve(result(1, 1, '日本語'))
+    await Promise.resolve()
+    await Promise.resolve()
+    fake.windows[0].triggerRegionsRendered({ sessionId: 1, captureId: 1 })
+
+    expect(timings[0]).toMatchObject({ targetKind: 'window', foregroundMs: 3 })
   })
 })

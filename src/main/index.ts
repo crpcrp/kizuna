@@ -96,6 +96,8 @@ import { createUpdateService, type UpdateService } from './updateService'
 import { detectUpdateSupport } from './updateSupport'
 import { createGameOcrController, writeGameOcrTotalTime } from './services/gameOcr/controller'
 import { createProductionDisplaySources } from './services/gameOcr/displayCapture'
+import { createGameOcrCaptureTargets } from './services/gameOcr/captureTarget'
+import { createProductionForegroundWindowSource } from './services/gameOcr/foregroundWindow'
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
 import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
@@ -571,16 +573,20 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     },
     onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
   })
-  const displays = createProductionDisplaySources(process.platform)
+  const targets = createGameOcrCaptureTargets({
+    foreground: createProductionForegroundWindowSource(process.platform),
+    displays: createProductionDisplaySources(process.platform),
+    screen
+  })
   const controller = createGameOcrController({
     shortcut: globalShortcut,
     accelerator: settings.get().gameOcr.captureShortcut,
-    displays,
-    createPresentation: (metadata) =>
+    targets,
+    createPresentation: (bounds) =>
       createGameOcrWindow({
         platform: process.platform,
         preloadPath: join(__dirname, '../preload/index.js'),
-        displayBounds: metadata.displayBounds,
+        displayBounds: bounds,
         devUrl: process.env['ELECTRON_RENDERER_URL'],
         packagedHtmlPath: join(__dirname, '../renderer/gameOcr.html'),
         ipcMain,
@@ -593,7 +599,8 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     // boxes, so this is the complete delay the person at the shortcut feels.
     ...(!app.isPackaged
       ? {
-          onTimings: writeGameOcrTotalTime
+          onTimings: writeGameOcrTotalTime,
+          onDiagnostic: (message: string) => console.log(message)
         }
       : {})
   })

@@ -17,18 +17,29 @@ export interface GameOcrRuntimeStatus {
   }
 }
 
+/** Whether a capture covers one focused window or a whole display. */
+export type GameOcrTargetKind = 'window' | 'display'
+
 /**
- * Asks the frozen-frame renderer to freeze the display it is already
- * streaming. The screenshot is not sent to it, because the renderer is what
- * takes it: it holds a desktop capture stream for as long as Game OCR is
- * armed, so a capture is one `drawImage` from the frame it already has rather
- * than a fresh `desktopCapturer.getSources` read costing ~300 ms.
+ * Asks the frozen-frame renderer to freeze what it is already streaming. The
+ * screenshot is not sent to it, because the renderer is what takes it: it
+ * holds a desktop capture stream for as long as Game OCR is armed, so a
+ * capture is one `drawImage` from the frame it already has rather than a
+ * fresh `desktopCapturer.getSources` read.
  */
 export interface GameOcrFreezeRequest {
   sessionId: number
   captureId: number
-  /** The Electron desktop-capture source for the display being frozen. */
+  /** The Electron desktop-capture source for the window or display frozen. */
   sourceId: string
+  /**
+   * Carried so the renderer can bound what it retains without inferring
+   * meaning from the source id's shape. Display streams stay open because
+   * there are few of them and reopening one is the expensive path; window
+   * streams do not, because a user who alt-tabs through ten programs must not
+   * leave Kizuna holding capture access to all ten.
+   */
+  targetKind: GameOcrTargetKind
   imageSize: OcrImageSize
 }
 

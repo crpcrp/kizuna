@@ -88,8 +88,45 @@ const freezeRequest: GameOcrFreezeRequest = {
   sessionId: 1,
   captureId: 1,
   sourceId: 'screen:0:0',
+  targetKind: 'display',
   imageSize: { width: 1920, height: 1080 }
 }
+
+describe('freeze request validation', () => {
+  it('accepts a window request whose source id carries a handle', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    controller.rendererReady()
+
+    const settled = controller.freeze({
+      ...freezeRequest,
+      sourceId: 'window:1902762:0',
+      targetKind: 'window'
+    })
+    controller.reportFrozen({
+      sessionId: 1,
+      captureId: 1,
+      imageSize: { width: 1024, height: 768 }
+    })
+
+    await expect(settled).resolves.toEqual({ width: 1024, height: 768 })
+  })
+
+  it.each([
+    ['a screen id on a window target', { sourceId: 'screen:0:0', targetKind: 'window' as const }],
+    ['a null handle', { sourceId: 'window:0:0', targetKind: 'window' as const }],
+    ['a malformed id', { sourceId: 'window:abc:0', targetKind: 'window' as const }],
+    ['an unknown target kind', { targetKind: 'monitor' as unknown as 'window' }]
+  ])('rejects %s in main, where it can still fall back', async (_label, overrides) => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    controller.rendererReady()
+
+    await expect(controller.freeze({ ...freezeRequest, ...overrides })).rejects.toThrow()
+    // Nothing reached the renderer, so no stream open was attempted.
+    expect(fake.window.webContents.send).not.toHaveBeenCalled()
+  })
+})
 
 /** Drives one freeze the way the renderer would: draw, report, then encode. */
 async function freezeWith(
