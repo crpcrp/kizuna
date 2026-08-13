@@ -18,6 +18,7 @@ import {
   type KeyBindings,
   type LevelColors,
   type PopupSettings,
+  type StartupBehavior,
   type SubtitleStyleSettings,
   type UnderlineLevel,
   type VideoAdjustments
@@ -67,6 +68,8 @@ export interface PlayerState {
   externalSubtitlePath?: string
   /** Keyboard shortcut -> action map, user-editable via the Options menu. */
   keyBindings: KeyBindings
+  /** Surface to open on the next process launch. */
+  startupBehavior: StartupBehavior
   /** Seconds the skip-back/skip-ahead buttons and shortcuts jump. */
   skipSeconds: number
   /** MeCab tokens for the currently-active cue only; empty until tokenized. */
@@ -146,6 +149,7 @@ export const initialPlayerState: PlayerState = {
   selectedSubtitleId: null,
   externalSubtitlePath: undefined,
   keyBindings: DEFAULT_KEY_BINDINGS,
+  startupBehavior: 'splash',
   skipSeconds: DEFAULT_SKIP_SECONDS,
   activeTokens: [],
   allCueTokens: {},
@@ -216,6 +220,7 @@ export type PlayerAction =
       encoding: SubtitleEncoding
     }
   | { type: 'setKeyBinding'; action: keyof KeyBindings; binding: KeyBinding }
+  | { type: 'setStartupBehavior'; value: StartupBehavior }
   | { type: 'setSkipSeconds'; value: number }
   | { type: 'setSubtitleDragEnabled'; value: boolean }
   | { type: 'setExternalSubtitleEncoding'; value: SubtitleEncoding }
@@ -350,6 +355,8 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       }
     case 'setKeyBinding':
       return { ...state, keyBindings: { ...state.keyBindings, [action.action]: action.binding } }
+    case 'setStartupBehavior':
+      return { ...state, startupBehavior: action.value }
     case 'setSkipSeconds':
       return { ...state, skipSeconds: action.value }
     case 'setSubtitleDragEnabled':

@@ -14,6 +14,7 @@ import type { PlayerSettings } from '../../../shared/playerSettings'
  */
 export const SYNCED_SETTING_KEYS = [
   'keyBindings',
+  'startupBehavior',
   'skipSeconds',
   'popupSettings',
   'subtitleStyle',
@@ -41,13 +42,11 @@ export const SYNCED_SETTING_KEYS = [
  *   `useState` and scheduled by `usePlaybackWindow`'s toggles.
  * - `translationEnabled`: reducer-backed, but scheduled by the Options row in
  *   `optionsMenuProps.ts` so the toggle writes on the spot.
- * - `startupBehavior`: read by the main process before the renderer starts.
  *
  * Listed so every `PlayerSettings` field has one named owner; the settings
  * test asserts the two lists together cover the whole type.
  */
 export const EXTERNALLY_PERSISTED_SETTING_KEYS = [
-  'startupBehavior',
   'subtitleOffsets',
   'folderSubtitleOffsets',
   'audioDelays',

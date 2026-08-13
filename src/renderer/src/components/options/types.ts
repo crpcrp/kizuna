@@ -1,5 +1,6 @@
 export type OptionsCategory =
   | 'keybindings'
+  | 'startup'
   | 'gameOcr'
   | 'playback'
   | 'appearance'
@@ -12,6 +13,7 @@ export type OptionsCategory =
 /** Sidebar order and display label for each options category. */
 export const CATEGORY_ROWS: { id: OptionsCategory; label: string }[] = [
   { id: 'keybindings', label: 'Keybindings' },
+  { id: 'startup', label: 'Startup' },
   { id: 'gameOcr', label: 'Game OCR' },
   { id: 'playback', label: 'Playback' },
   { id: 'appearance', label: 'Appearance' },

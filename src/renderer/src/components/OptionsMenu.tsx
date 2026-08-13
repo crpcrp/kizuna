@@ -24,6 +24,7 @@ import KnowledgeTab, {
 } from './options/KnowledgeTab'
 import SetupTab, { SETUP_SETTING_ENTRIES, type SetupTabProps } from './options/SetupTab'
 import GameOcrTab, { GAME_OCR_SETTING_ENTRIES, type GameOcrTabProps } from './options/GameOcrTab'
+import StartupTab, { STARTUP_SETTING_ENTRIES, type StartupTabProps } from './options/StartupTab'
 import {
   CATEGORY_ROWS,
   categoryLabel,
@@ -44,6 +45,8 @@ export interface OptionsMenuProps {
   anki: Omit<AnkiTabProps, 'active'>
   knowledge: Omit<KnowledgeTabProps, 'active'>
   setup: Omit<SetupTabProps, 'active' | 'nowMs' | 'onGoToCategory' | 'categoryLabel'>
+  startupBehavior: StartupTabProps['startupBehavior']
+  onChangeStartupBehavior: StartupTabProps['onChangeStartupBehavior']
   supportsGameOcr: boolean
   gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
@@ -59,6 +62,7 @@ export const SETTING_ENTRIES: SettingEntry[] = [
   ...ANKI_SETTING_ENTRIES,
   ...KNOWLEDGE_SETTING_ENTRIES,
   ...SETUP_SETTING_ENTRIES,
+  ...STARTUP_SETTING_ENTRIES,
   ...GAME_OCR_SETTING_ENTRIES
 ]
 
@@ -77,6 +81,8 @@ export default function OptionsMenu({
   anki,
   knowledge,
   setup,
+  startupBehavior,
+  onChangeStartupBehavior,
   supportsGameOcr,
   gameOcr
 }: OptionsMenuProps): React.JSX.Element {
@@ -214,6 +220,15 @@ export default function OptionsMenu({
             <PlaybackTab {...playback} open={open} active={activeCategory === 'playback'} />
             <AppearanceTab {...appearance} active={activeCategory === 'appearance'} />
             <SubtitlesTab {...subtitles} active={activeCategory === 'subtitles'} />
+
+            {activeCategory === 'startup' && (
+              <StartupTab
+                active
+                startupBehavior={startupBehavior}
+                onChangeStartupBehavior={onChangeStartupBehavior}
+                supportsGameOcr={supportsGameOcr}
+              />
+            )}
 
             {supportsGameOcr && activeCategory === 'gameOcr' && (
               <GameOcrTab {...gameOcr} open={open} active />
