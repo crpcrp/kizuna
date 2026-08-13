@@ -150,11 +150,13 @@ interface Session extends OcrCaptureIdentity {
   startedAt: number
   dismissBeforeCapture: Promise<number>
   /**
-   * Whether a frozen frame of Kizuna's own was on screen when this session
-   * began. Only then does the compositor have anything of ours to repaint, so
-   * only then is the settle step worth its delay.
+   * Whether Kizuna presented a frozen frame before this capture. Native
+   * visibility is not enough: it can turn false before the desktop stream has
+   * received the compositor's replacement pixels.
    */
   settleBeforeCapture: boolean
+  /** A prior overlay was presented, even if Electron now reports it hidden. */
+  requireFreshFrame: boolean
   timings?: Omit<GameOcrCaptureTimings, 'recognizeMs' | 'renderMs' | 'totalMs'> & {
     presentedAt: number
     regionsSentAt?: number
@@ -189,6 +191,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let armPromise: Promise<boolean> | undefined
   let stopping = false
   let frameShortcutsHeld = false
+  // Native visibility changes before the desktop stream necessarily contains
+  // the repainted game. Keep that capture-safety state separate from
+  // BrowserWindow.isVisible(), or a click followed by the hotkey can OCR our
+  // own previous boxes.
+  let presentationRequiresFreshFrame = false
 
   const now = options.now ?? (() => Date.now())
 
@@ -290,16 +297,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const dismissPresentation = (): Promise<void> => {
     const target = presentation
     if (!target) return presentationDismiss ?? Promise.resolve()
-    // A renderer-requested dismissal hides the retained native window before
-    // the next hotkey press, but deliberately leaves the renderer alive. Do
-    // not send that already-hidden window through another discard/hide cycle:
-    // Electron can leave the redundant hide promise waiting on a native event
-    // for seconds even though isVisible() already reports the frame gone.
-    if (!target.isVisible()) {
-      presentationDismissTarget = undefined
-      presentationDismiss = undefined
-      return Promise.resolve()
-    }
     if (presentationDismissTarget === target && presentationDismiss) return presentationDismiss
 
     let discard: Promise<void>
@@ -428,9 +425,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     nextSessionId = allocateIdentifier(nextSessionId)
     nextCaptureId = allocateIdentifier(nextCaptureId)
     invalidateSession()
-    // Read before the dismissal is requested: afterwards the window is on its
-    // way to hidden and cannot say whether it had been covering the game.
-    const settleBeforeCapture = presentation?.isVisible() ?? false
+    // Snapshot capture-safety state before this session presents anything new.
+    const settleBeforeCapture = presentationRequiresFreshFrame
     const startedAt = now()
     const session: Session = {
       sessionId: nextSessionId,
@@ -438,7 +434,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       valid: true,
       startedAt,
       dismissBeforeCapture: dismissPresentation().then(() => now()),
-      settleBeforeCapture
+      settleBeforeCapture,
+      requireFreshFrame: presentationRequiresFreshFrame
     }
     activeSession = session
     notify({ state: 'capturing', sessionId: session.sessionId })
@@ -496,23 +493,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     try {
       const dismissedAt = await session.dismissBeforeCapture
       if (!isCurrent(session)) return
-      if (presentation?.isVisible()) {
-        throw new Error('The previous Game OCR presentation is still visible.')
-      }
       const dequeuedAt = now()
 
-      // The compositor only has to repaint the region a frozen frame covered
-      // when there actually was one. The first capture of a run, and every
-      // capture taken after the user returned to the game, reads pixels
-      // Kizuna never drew over, so the delay would buy nothing and the whole
-      // step sits between the hotkey and the screenshot.
+      // Once Kizuna has presented a frame, native hide completion alone is not
+      // proof that its pixels left the desktop capture stream. Yield to the
+      // compositor before asking that stream for a post-hide frame.
       let settledAt = dequeuedAt
       if (session.settleBeforeCapture) {
         await options.settle.settle()
         if (!isCurrent(session)) return
-        if (presentation?.isVisible()) {
-          throw new Error('The previous Game OCR presentation became visible again.')
-        }
         settledAt = now()
       }
 
@@ -531,8 +520,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         // The frame is drawn while this window is still hidden, so it cannot be
         // in its own screenshot. A recapture additionally waits for a frame
         // composited after the previous one stopped covering the display.
-        requireFreshFrame: session.settleBeforeCapture
+        requireFreshFrame: session.requireFreshFrame
       })
+      // freeze() resolves only after the renderer drew and the native overlay
+      // was shown. From this point every later capture needs a stream frame
+      // produced after that overlay is hidden, regardless of isVisible().
+      presentationRequiresFreshFrame = true
       if (!isCurrent(session)) {
         await frame.discard()
         return

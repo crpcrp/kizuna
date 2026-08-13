@@ -173,9 +173,11 @@ rest of the feature, and stops with the window.
 The retained capture renderer opts out of Chromium's hidden-page timer
 throttling. Recapture freezes while that renderer is hidden, and throttling
 would stretch its deliberately bounded 120 ms fresh-frame timeout to roughly
-one second. A frame that the user already dismissed is also reused directly;
-the next hotkey does not send the already-hidden native window through another
-discard/hide round trip.
+one second. Native dismissal and capture safety are tracked separately: a click
+issues one hide command immediately, while the next capture still waits for a
+desktop-stream frame produced after the old overlay left the screen. This
+avoids both a redundant native hide wait and recursively recognizing Kizuna's
+own previous boxes.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
 acknowledges a browser paint. The same line splits dismissal, capture-queue

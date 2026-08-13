@@ -577,7 +577,7 @@ describe('createGameOcrController', () => {
     )
   })
 
-  it('skips the compositor settle when the user had already returned to the game', async () => {
+  it('waits for post-overlay pixels after dismissal even when the window reports hidden', async () => {
     const fake = setup()
     await fake.controller.arm()
     await fake.controller.capture()
@@ -586,12 +586,14 @@ describe('createGameOcrController', () => {
 
     await fake.controller.capture()
 
-    // The live game was already on screen, so there is no frame of Kizuna's
-    // own for the compositor to repaint and nothing to wait for. The retained
-    // hidden renderer also needs no second discard/hide round trip.
-    expect(fake.events).not.toContain('settle')
-    expect(fake.settle.settle).not.toHaveBeenCalled()
-    expect(fake.windows[0].discard).not.toHaveBeenCalled()
+    // Native visibility can turn false before the desktop stream contains the
+    // repainted game. The next freeze must still wait for post-overlay pixels
+    // or it can recognize Kizuna's previous boxes recursively.
+    expect(fake.events).toContain('settle')
+    expect(fake.settle.settle).toHaveBeenCalledOnce()
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ requireFreshFrame: true })
+    )
     expect(fake.displays.cursorDisplay).toHaveBeenCalledTimes(2)
   })
 

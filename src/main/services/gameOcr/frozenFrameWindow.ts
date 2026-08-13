@@ -206,6 +206,10 @@ export function createGameOcrWindowController({
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
   let closePromise: Promise<void> | undefined
+  // False from the start of each freeze until its one discard/hide command.
+  // Renderer dismissal and a following shortcut can otherwise both wait on
+  // the same slow native hide even though the command was already issued.
+  let frameDiscarded = true
   let bounds: OcrDisplayBounds | undefined = displayBounds ? { ...displayBounds } : undefined
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
@@ -376,6 +380,7 @@ export function createGameOcrWindowController({
     async freeze(request): Promise<OcrImageSize> {
       if (closed) throw new Error('The Game OCR frame is gone.')
       validateFreezeRequest(request)
+      frameDiscarded = false
       pending = { ...request }
       if (!rendererIsReady) await ready
       const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
@@ -464,18 +469,28 @@ export function createGameOcrWindowController({
     async discard(): Promise<void> {
       pending = undefined
       abandonWaiters('The Game OCR frame was discarded before it was captured.')
+      if (frameDiscarded) return
+      frameDiscarded = true
+      // Hide is the user-visible operation. Issue it before renderer cleanup,
+      // then let the capture coordinator wait for a post-hide desktop frame.
+      const hidden = waitUntilHidden()
       sendDiscard()
-      await waitUntilHidden()
+      await hidden
     },
 
     async dismiss(): Promise<void> {
       pending = undefined
+      if (frameDiscarded) return
+      frameDiscarded = true
+      // The native window goes first so one background press returns to the
+      // game even if renderer cleanup is delayed.
+      const hidden = waitUntilHidden()
       sendDiscard()
       // Listeners learn the frame is gone before the hide settles: the
       // coordinator has to invalidate the session's results either way, and
       // the user already sees the live game.
       for (const listener of [...dismissListeners]) listener()
-      await waitUntilHidden()
+      await hidden
     },
 
     async close(): Promise<void> {

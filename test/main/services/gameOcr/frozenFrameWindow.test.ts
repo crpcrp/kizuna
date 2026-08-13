@@ -448,16 +448,35 @@ describe('createGameOcrWindowController', () => {
 
     const dismissing = controller.dismiss()
     expect(onDismissed).toHaveBeenCalledOnce()
+    expect(vi.mocked(fake.window.hide).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(fake.window.webContents.send).mock.invocationCallOrder.at(-1) as number
+    )
     fake.fireWindow('hide')
     await dismissing
 
     expect(onClosed).not.toHaveBeenCalled()
     expect(fake.window.close).not.toHaveBeenCalled()
-    // A coordinator-driven discard is not a dismissal.
-    const discarding = controller.discard()
-    fake.fireWindow('hide')
-    await discarding
+    // A following coordinator discard is idempotent: the click already issued
+    // the native hide and renderer cleanup, so it must not wait on another
+    // native event before capture can continue.
+    await controller.discard()
+    expect(fake.window.hide).toHaveBeenCalledOnce()
     expect(onDismissed).toHaveBeenCalledOnce()
+  })
+
+  it('does not repeat or await a hide already requested by a background press', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await freezeWith(controller)
+
+    const dismissing = controller.dismiss()
+    const redundantDiscard = controller.discard()
+    await expect(redundantDiscard).resolves.toBeUndefined()
+    expect(fake.window.hide).toHaveBeenCalledOnce()
+    expect(fake.window.webContents.send).toHaveBeenCalledTimes(2)
+
+    fake.fireWindow('hide')
+    await dismissing
   })
 
   it('releases a pending discard when the window is destroyed instead', async () => {
