@@ -1,11 +1,13 @@
 import { createRequire } from 'node:module'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
-import type {
-  GameOcrCaptureBytes,
-  GameOcrFreezeRequest,
-  GameOcrFrozenFrame,
-  GameOcrRegionsRendered
+import {
+  GAME_OCR_FRESH_FRAME_TIMEOUT_MS,
+  type GameOcrFreezeFallback,
+  type GameOcrCaptureBytes,
+  type GameOcrFreezeRequest,
+  type GameOcrFrozenFrame,
+  type GameOcrRegionsRendered
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
 import {
@@ -70,11 +72,7 @@ export function getGameOcrWindowOptions(
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      // Recapture deliberately freezes while this retained renderer is hidden.
-      // Chromium otherwise clamps its 120 ms fresh-frame timeout to roughly
-      // one second, putting that whole throttle delay on the presentation path.
-      backgroundThrottling: false
+      sandbox: true
     }
   }
 }
@@ -148,9 +146,9 @@ export interface GameOcrWindow {
    */
   moveTo(displayBounds: OcrDisplayBounds): void
   /**
-   * Drops the screenshot and boxes, hides the window, and resolves once it is
-   * no longer visible. The renderer survives, so the next frame skips the
-   * whole load-and-handshake cost.
+   * Issues one native hide, drops the screenshot and boxes, and resolves
+   * without waiting for Electron's lagging native `hide` event. The renderer
+   * survives, so the next frame skips the load-and-handshake cost.
    */
   discard(): Promise<void>
   /** The renderer asked for the live game back: discards, then notifies. */
@@ -187,17 +185,21 @@ export interface GameOcrWindowControllerOptions {
   /** The bounds the native window was constructed with, so the first capture
    * on that same display does not move a window that is already there. */
   displayBounds?: OcrDisplayBounds
+  scheduleFallback?: (callback: () => void, delayMs: number) => unknown
+  cancelFallback?: (handle: unknown) => void
 }
 
 /**
  * Creates the lifecycle around an already-created native window. Keeping this
- * separate from Electron construction lets the recapture coordinator inject
- * the same awaitable discard boundary in tests and in production.
+ * separate from Electron construction keeps native lifecycle and the
+ * main-owned fresh-frame deadline independently testable.
  */
 export function createGameOcrWindowController({
   window,
   loaded = false,
-  displayBounds
+  displayBounds,
+  scheduleFallback = (callback, delayMs) => setTimeout(callback, delayMs),
+  cancelFallback = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
 }: GameOcrWindowControllerOptions): GameOcrWindow {
   let rendererLoaded = loaded
   let rendererIsReady = loaded
@@ -206,15 +208,10 @@ export function createGameOcrWindowController({
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
   let closePromise: Promise<void> | undefined
-  // False from the start of each freeze until its one discard/hide command.
-  // Renderer dismissal and a following shortcut can otherwise both wait on
-  // the same slow native hide even though the command was already issued.
-  let frameDiscarded = true
   let bounds: OcrDisplayBounds | undefined = displayBounds ? { ...displayBounds } : undefined
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
   const regionsRenderedListeners = new Set<(value: GameOcrRegionsRendered) => void>()
-  const hideWaiters = new Set<() => void>()
   let frozenWaiter:
     | {
         captureId: number
@@ -259,12 +256,6 @@ export function createGameOcrWindowController({
     ready = createReadyPromise()
   }
 
-  const releaseHideWaiters = (): void => {
-    const waiters = [...hideWaiters]
-    hideWaiters.clear()
-    for (const waiter of waiters) waiter()
-  }
-
   const notifyClosed = (): void => {
     if (closed) return
     closed = true
@@ -277,9 +268,6 @@ export function createGameOcrWindowController({
     }
     readyReject = undefined
     readyResolve = undefined
-    // A destroyed window never emits `hide`, so anything waiting on one must
-    // be released here or a pending discard would hang the capture queue.
-    releaseHideWaiters()
     abandonWaiters('The Game OCR window closed before its frame was captured.')
     for (const listener of closeListeners) listener()
   }
@@ -287,6 +275,11 @@ export function createGameOcrWindowController({
   const sendDiscard = (): void => {
     if (closed || window.isDestroyed() || window.webContents.isDestroyed()) return
     sendToWindow(window, GAME_OCR_CHANNELS.discard)
+  }
+
+  const sendFreezeFallback = (identity: GameOcrFreezeFallback): void => {
+    if (closed || window.isDestroyed() || window.webContents.isDestroyed()) return
+    sendToWindow(window, GAME_OCR_CHANNELS.freezeFallback, identity)
   }
 
   const sendPending = (): void => {
@@ -315,21 +308,13 @@ export function createGameOcrWindowController({
     window.moveTop?.()
   }
 
-  // One `hide` listener for the window's whole life, however many discards it
-  // serves. The window is reused across frames, so registering per call would
-  // grow a listener list for as long as Game OCR stays armed.
-  //
-  // `hide` is issued whenever the window still exists, without first asking
-  // whether it is visible: a frozen frame left on screen because `isVisible()`
-  // disagreed with what the user can see is the one failure this path must not
-  // have, and hiding an already-hidden window is free.
-  const waitUntilHidden = (): Promise<void> => {
-    if (closed || window.isDestroyed()) return Promise.resolve()
-    return new Promise<void>((resolve) => {
-      hideWaiters.add(resolve)
-      window.hide()
-      if (!window.isVisible() && hideWaiters.delete(resolve)) resolve()
-    })
+  const requestHide = (): void => {
+    if (closed || window.isDestroyed()) return
+    // BrowserWindow.hide() issues the native command synchronously, but its
+    // `hide` event can lag by seconds on Windows. Capture safety is provided by
+    // the compositor yield plus desktop-stream frame acknowledgement, so the
+    // shortcut path must not wait on that unrelated event.
+    window.hide()
   }
 
   // Both the renderer's close request and a display change can ask for the
@@ -353,7 +338,6 @@ export function createGameOcrWindowController({
   }
 
   window.on('closed', notifyClosed)
-  window.on('hide', releaseHideWaiters)
   window.webContents.on('did-finish-load', () => {
     rendererLoaded = true
   })
@@ -380,14 +364,24 @@ export function createGameOcrWindowController({
     async freeze(request): Promise<OcrImageSize> {
       if (closed) throw new Error('The Game OCR frame is gone.')
       validateFreezeRequest(request)
-      frameDiscarded = false
       pending = { ...request }
       if (!rendererIsReady) await ready
       const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
         frozenWaiter = { captureId: request.captureId, resolve, reject }
       })
+      const fallbackTimer = request.requireFreshFrame
+        ? scheduleFallback(() => {
+            if (frozenWaiter?.captureId !== request.captureId) return
+            sendFreezeFallback({ sessionId: request.sessionId, captureId: request.captureId })
+          }, GAME_OCR_FRESH_FRAME_TIMEOUT_MS)
+        : undefined
       sendPending()
-      const frozen = await settled
+      let frozen: GameOcrFrozenFrame
+      try {
+        frozen = await settled
+      } finally {
+        if (fallbackTimer !== undefined) cancelFallback(fallbackTimer)
+      }
       if (frozen.error) throw new Error(frozen.error)
       showFrozen()
       return frozen.imageSize
@@ -469,28 +463,22 @@ export function createGameOcrWindowController({
     async discard(): Promise<void> {
       pending = undefined
       abandonWaiters('The Game OCR frame was discarded before it was captured.')
-      if (frameDiscarded) return
-      frameDiscarded = true
       // Hide is the user-visible operation. Issue it before renderer cleanup,
       // then let the capture coordinator wait for a post-hide desktop frame.
-      const hidden = waitUntilHidden()
+      requestHide()
       sendDiscard()
-      await hidden
     },
 
     async dismiss(): Promise<void> {
       pending = undefined
-      if (frameDiscarded) return
-      frameDiscarded = true
       // The native window goes first so one background press returns to the
       // game even if renderer cleanup is delayed.
-      const hidden = waitUntilHidden()
+      requestHide()
       sendDiscard()
       // Listeners learn the frame is gone before the hide settles: the
       // coordinator has to invalidate the session's results either way, and
       // the user already sees the live game.
       for (const listener of [...dismissListeners]) listener()
-      await hidden
     },
 
     async close(): Promise<void> {

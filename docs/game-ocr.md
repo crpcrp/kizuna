@@ -170,14 +170,16 @@ Two ordering properties this relies on:
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
-The retained capture renderer opts out of Chromium's hidden-page timer
-throttling. Recapture freezes while that renderer is hidden, and throttling
-would stretch its deliberately bounded 120 ms fresh-frame timeout to roughly
-one second. Native dismissal and capture safety are tracked separately: a click
-issues one hide command immediately, while the next capture still waits for a
-desktop-stream frame produced after the old overlay left the screen. This
-avoids both a redundant native hide wait and recursively recognizing Kizuna's
-own previous boxes.
+The fresh-frame deadline is owned by the main process. When it expires, main
+sends an explicit fallback signal to the hidden renderer; the renderer itself
+does not schedule the timeout, because Chromium can stretch a hidden page's
+120 ms timer to roughly one second. Native dismissal and capture safety are
+tracked separately: a click issues one hide command immediately and does not
+wait for Electron's native `hide` event, while the next capture still waits for
+a desktop-stream frame produced after the old overlay left the screen. This
+avoids both a lagging native-event wait and recursively recognizing Kizuna's
+own previous boxes without changing the renderer's normal throttling or input
+behavior.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
 acknowledges a browser paint. The same line splits dismissal, capture-queue

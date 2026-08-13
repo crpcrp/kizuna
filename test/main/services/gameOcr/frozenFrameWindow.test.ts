@@ -9,7 +9,7 @@ import {
   type GameOcrWindow
 } from '@src/main/services/gameOcr/frozenFrameWindow'
 import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
-import type { GameOcrFreezeRequest } from '@src/shared/gameOcr'
+import { GAME_OCR_FRESH_FRAME_TIMEOUT_MS, type GameOcrFreezeRequest } from '@src/shared/gameOcr'
 
 type Listener = (...args: unknown[]) => void
 
@@ -40,7 +40,9 @@ function fakeWindow(): {
     show: vi.fn(() => {
       visible = true
     }),
-    hide: vi.fn(),
+    hide: vi.fn(() => {
+      visible = false
+    }),
     focus: vi.fn(),
     moveTop: vi.fn(),
     setAlwaysOnTop: vi.fn(),
@@ -143,8 +145,7 @@ describe('getGameOcrWindowOptions', () => {
       preload: '/fake/preload.js',
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
-      backgroundThrottling: false
+      sandbox: true
     })
   })
 })
@@ -254,6 +255,43 @@ describe('createGameOcrWindowController', () => {
       imageSize: freezeRequest.imageSize
     })
     await expect(bytes).resolves.toBe('iVBORw0KGgo=')
+  })
+
+  it('drives the fresh-frame fallback from an unthrottled main-process timer', async () => {
+    const fake = fakeWindow()
+    let fallback: (() => void) | undefined
+    const cancelFallback = vi.fn()
+    const scheduleFallback = vi.fn((callback: () => void) => {
+      fallback = callback
+      return 'fallback-timer'
+    })
+    const controller = createGameOcrWindowController({
+      window: fake.window,
+      loaded: true,
+      scheduleFallback,
+      cancelFallback
+    })
+    const request = { ...freezeRequest, requireFreshFrame: true }
+
+    const freezing = controller.freeze(request)
+    await Promise.resolve()
+    expect(scheduleFallback).toHaveBeenCalledWith(
+      expect.any(Function),
+      GAME_OCR_FRESH_FRAME_TIMEOUT_MS
+    )
+    fallback?.()
+    expect(fake.window.webContents.send).toHaveBeenCalledWith(GAME_OCR_CHANNELS.freezeFallback, {
+      sessionId: request.sessionId,
+      captureId: request.captureId
+    })
+
+    controller.reportFrozen({
+      sessionId: request.sessionId,
+      captureId: request.captureId,
+      imageSize: request.imageSize
+    })
+    await freezing
+    expect(cancelFallback).toHaveBeenCalledWith('fallback-timer')
   })
 
   it('surfaces a renderer that could not freeze or encode the frame', async () => {
@@ -380,15 +418,10 @@ describe('createGameOcrWindowController', () => {
     expect(fake.window.hide).toHaveBeenCalledOnce()
     expect(fake.window.close).not.toHaveBeenCalled()
 
-    let settled = false
-    void discarding.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
-
-    fake.fireWindow('hide')
     await discarding
+    // The native hide event is not a capture-safety boundary: on Windows it
+    // can lag for seconds after hide() issued the command. Recapture instead
+    // waits for a compositor yield and a desktop-stream frame.
     expect(controller.isVisible()).toBe(false)
     expect(onClosed).not.toHaveBeenCalled()
 
@@ -400,18 +433,18 @@ describe('createGameOcrWindowController', () => {
     expect(controller.isVisible()).toBe(true)
   })
 
-  it('serves many discards from one native hide listener', async () => {
+  it('serves many discards without waiting on native hide events', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     for (let frame = 0; frame < 5; frame++) {
       await freezeWith(controller)
       const discarding = controller.discard()
-      fake.fireWindow('hide')
       await discarding
     }
 
-    expect(windowListenerCount(fake.window, 'hide')).toBe(1)
+    expect(windowListenerCount(fake.window, 'hide')).toBe(0)
+    expect(fake.window.hide).toHaveBeenCalledTimes(5)
   })
 
   it('moves the retained window onto the next captured display only when it changes', () => {
@@ -456,15 +489,14 @@ describe('createGameOcrWindowController', () => {
 
     expect(onClosed).not.toHaveBeenCalled()
     expect(fake.window.close).not.toHaveBeenCalled()
-    // A following coordinator discard is idempotent: the click already issued
-    // the native hide and renderer cleanup, so it must not wait on another
-    // native event before capture can continue.
+    // A following coordinator discard may defensively issue hide again, but it
+    // must not wait on a native event before capture can continue.
     await controller.discard()
-    expect(fake.window.hide).toHaveBeenCalledOnce()
+    expect(fake.window.hide).toHaveBeenCalledTimes(2)
     expect(onDismissed).toHaveBeenCalledOnce()
   })
 
-  it('does not repeat or await a hide already requested by a background press', async () => {
+  it('does not await a native hide event after a background press', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
@@ -472,10 +504,8 @@ describe('createGameOcrWindowController', () => {
     const dismissing = controller.dismiss()
     const redundantDiscard = controller.discard()
     await expect(redundantDiscard).resolves.toBeUndefined()
-    expect(fake.window.hide).toHaveBeenCalledOnce()
-    expect(fake.window.webContents.send).toHaveBeenCalledTimes(2)
-
-    fake.fireWindow('hide')
+    expect(fake.window.hide).toHaveBeenCalledTimes(2)
+    expect(fake.window.webContents.send).toHaveBeenCalledTimes(3)
     await dismissing
   })
 

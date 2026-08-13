@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { GameOcrFreezeRequest } from '../../../shared/gameOcr'
+import type { GameOcrFreezeFallback, GameOcrFreezeRequest } from '../../../shared/gameOcr'
 import type { OcrImageSize } from '../../../shared/ocr'
 import { useLatestCallback } from './useLatestRef'
 import {
@@ -13,6 +13,7 @@ export const CAPTURE_MEDIA_TYPE = 'image/png'
 
 export interface GameOcrCaptureBridge {
   onFreeze(cb: (request: GameOcrFreezeRequest) => void): () => void
+  onFreezeFallback(cb: (identity: GameOcrFreezeFallback) => void): () => void
   frozen(value: {
     sessionId: number
     captureId: number
@@ -61,6 +62,30 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     // Created here rather than in the initial ref value, so the map belongs to
     // the effect that opens the streams and tears them down again.
     const streams = (streamsRef.current ??= new Map())
+    const activeCaptures = new Set<string>()
+    const allowedFallbacks = new Set<string>()
+    const fallbackWaiters = new Map<string, () => void>()
+    const captureKey = (value: { sessionId: number; captureId: number }): string =>
+      `${value.sessionId}:${value.captureId}`
+
+    const fallbackFor = (request: GameOcrFreezeRequest): Promise<void> => {
+      const key = captureKey(request)
+      activeCaptures.add(key)
+      if (allowedFallbacks.delete(key)) return Promise.resolve()
+      return new Promise<void>((resolve) => fallbackWaiters.set(key, resolve))
+    }
+
+    const unsubscribeFallback = api.onFreezeFallback((identity) => {
+      const key = captureKey(identity)
+      if (!activeCaptures.has(key)) return
+      const resolve = fallbackWaiters.get(key)
+      if (resolve) {
+        fallbackWaiters.delete(key)
+        resolve()
+      } else {
+        allowedFallbacks.add(key)
+      }
+    })
 
     /** Opens the display's stream, or reuses the one already running for it. */
     const acquire = async (
@@ -98,6 +123,10 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     const unsubscribe = api.onFreeze((request) => {
       void (async () => {
         const identity = { sessionId: request.sessionId, captureId: request.captureId }
+        const key = captureKey(request)
+        const freshFrameFallback = request.requireFreshFrame
+          ? fallbackFor(request)
+          : Promise.resolve()
         let canvas: HTMLCanvasElement | null = null
         try {
           const { video } = await acquire(request.sourceId)
@@ -118,7 +147,8 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           const { imageSize } = await freezeCurrentFrame({
             surface,
             imageSize: request.imageSize,
-            requireFreshFrame: request.requireFreshFrame
+            requireFreshFrame: request.requireFreshFrame,
+            freshFrameFallback
           })
 
           // Main shows the window on this message, so it is sent before the
@@ -149,12 +179,21 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
             imageSize: request.imageSize,
             error: message
           })
+        } finally {
+          activeCaptures.delete(key)
+          allowedFallbacks.delete(key)
+          fallbackWaiters.delete(key)
         }
       })()
     })
 
     return () => {
       unsubscribe()
+      unsubscribeFallback()
+      activeCaptures.clear()
+      allowedFallbacks.clear()
+      for (const resolve of fallbackWaiters.values()) resolve()
+      fallbackWaiters.clear()
       for (const { stream } of streams.values()) {
         stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
       }

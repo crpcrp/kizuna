@@ -47,6 +47,7 @@ import type {
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from './update'
 import type {
   GameOcrCaptureBytes,
+  GameOcrFreezeFallback,
   GameOcrFreezeRequest,
   GameOcrFrozenFrame,
   GameOcrRegionsRendered,
@@ -130,6 +131,8 @@ export interface KizunaApi {
     onStatusChange(cb: (status: GameOcrRuntimeStatus) => void): () => void
     /** Freeze the display this frame streams; the screenshot goes the other way. */
     onFreeze(cb: (request: GameOcrFreezeRequest) => void): () => void
+    /** Main's unthrottled deadline allows a recapture to use its current stream frame. */
+    onFreezeFallback(cb: (identity: GameOcrFreezeFallback) => void): () => void
     /** The frame is drawn and can be shown. Sent before the encode. */
     frozen(value: GameOcrFrozenFrame): void
     /** The encoded screenshot, for the OCR worker only. */

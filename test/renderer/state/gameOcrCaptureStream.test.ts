@@ -37,7 +37,7 @@ describe('waitForFreshFrame', () => {
       }
     }
 
-    await expect(waitForFreshFrame(video, 50)).resolves.toBe(true)
+    await expect(waitForFreshFrame(video, new Promise<void>(() => undefined))).resolves.toBe(true)
   })
 
   it('gives up rather than hanging on a screen that never changes', async () => {
@@ -49,19 +49,20 @@ describe('waitForFreshFrame', () => {
       videoHeight: 1,
       requestVideoFrameCallback: () => 1
     }
-    let fire: (() => void) | undefined
-    const schedule = (callback: () => void): unknown => {
-      fire = callback
-      return 'timer'
-    }
+    let allowFallback!: () => void
+    const fallback = new Promise<void>((resolve) => {
+      allowFallback = resolve
+    })
 
-    const waiting = waitForFreshFrame(video, 120, schedule, vi.fn())
-    fire?.()
+    const waiting = waitForFreshFrame(video, fallback)
+    allowFallback()
     await expect(waiting).resolves.toBe(false)
   })
 
   it('does not wait at all where the browser cannot report frames', async () => {
-    await expect(waitForFreshFrame({ videoWidth: 1, videoHeight: 1 }, 50)).resolves.toBe(false)
+    await expect(
+      waitForFreshFrame({ videoWidth: 1, videoHeight: 1 }, Promise.resolve())
+    ).resolves.toBe(false)
   })
 })
 
@@ -94,12 +95,26 @@ describe('freezeCurrentFrame', () => {
     const outcome = await freezeCurrentFrame({
       surface,
       imageSize: { width: 2560, height: 1440 },
-      requireFreshFrame: true
+      requireFreshFrame: true,
+      freshFrameFallback: new Promise<void>(() => undefined)
     })
 
     expect(requestVideoFrameCallback).toHaveBeenCalledOnce()
     expect(outcome.fresh).toBe(true)
     expect(surface.drawn).toBe(1)
+  })
+
+  it('refuses an unsafe recapture without the main-process fallback boundary', async () => {
+    const surface = surfaceFor({ requestVideoFrameCallback: vi.fn(() => 1) })
+
+    await expect(
+      freezeCurrentFrame({
+        surface,
+        imageSize: { width: 2560, height: 1440 },
+        requireFreshFrame: true
+      })
+    ).rejects.toThrow('requires a main-process fallback')
+    expect(surface.drawn).toBe(0)
   })
 
   it('sizes the canvas to the stream rather than to the requested geometry', async () => {

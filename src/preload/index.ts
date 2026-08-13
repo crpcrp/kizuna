@@ -59,6 +59,7 @@ import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/me
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
 import type {
   GameOcrCaptureBytes,
+  GameOcrFreezeFallback,
   GameOcrFreezeRequest,
   GameOcrFrozenFrame
 } from '../shared/gameOcr'
@@ -180,6 +181,8 @@ const api = {
       subscribe(GAME_OCR_CHANNELS.statusChanged, cb),
     onFreeze: (cb: (value: GameOcrFreezeRequest) => void): (() => void) =>
       subscribe(GAME_OCR_CHANNELS.freeze, cb),
+    onFreezeFallback: (cb: (value: GameOcrFreezeFallback) => void): (() => void) =>
+      subscribe(GAME_OCR_CHANNELS.freezeFallback, cb),
     frozen: (value: GameOcrFrozenFrame): void => ipcRenderer.send(GAME_OCR_CHANNELS.frozen, value),
     captureBytes: (value: GameOcrCaptureBytes): void =>
       ipcRenderer.send(GAME_OCR_CHANNELS.captureBytes, value),

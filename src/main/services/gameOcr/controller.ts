@@ -47,7 +47,7 @@ export interface GameOcrStatus {
 export interface GameOcrCaptureTimings {
   sessionId: number
   captureId: number
-  /** Waiting for a previous frozen frame to stop being visible. */
+  /** Issuing the previous frame's native hide and renderer discard. */
   dismissMs: number
   /** Time after dismissal spent waiting for an older capture task to finish. */
   queueMs: number

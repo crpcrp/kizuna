@@ -1,18 +1,5 @@
 import type { OcrImageSize } from '../../../shared/ocr'
 
-/**
- * How long a recapture waits for a frame composited after Kizuna's own frozen
- * frame stopped covering the display.
- *
- * A desktop capture stream only produces frames when the screen changes, so on
- * a static screen `requestVideoFrameCallback` can wait indefinitely — measured
- * stalls of 3.3 s and 14.4 s on a still desktop. Hiding the frozen frame *is* a
- * change, so the frame normally arrives within one refresh; this bound only
- * covers the case where the compositor disagrees, and falling back to the frame
- * already in hand is far better than hanging a capture the user is waiting for.
- */
-export const FRESH_FRAME_TIMEOUT_MS = 120
-
 /** The subset of `<video>` this module needs, so tests need no media stack. */
 export interface CaptureVideo {
   videoWidth: number
@@ -36,32 +23,22 @@ export interface GameOcrCaptureSurface {
 /**
  * Waits for the stream's next composited frame, or gives up.
  *
- * Resolves `true` when a genuinely new frame arrived and `false` when the wait
- * timed out, so the caller can record which of the two it drew — the difference
- * matters only for a recapture, where a timeout means the frame drawn may still
- * be the one Kizuna's own window was in.
+ * Resolves `true` when a genuinely new frame arrived and `false` when main's
+ * deadline allows the current frame. Main owns the deadline because Chromium
+ * throttles timers in hidden renderers.
  */
-export function waitForFreshFrame(
-  video: CaptureVideo,
-  timeoutMs: number = FRESH_FRAME_TIMEOUT_MS,
-  schedule: (callback: () => void, ms: number) => unknown = setTimeout,
-  cancel: (handle: unknown) => void = (handle) => clearTimeout(handle as never)
-): Promise<boolean> {
+export function waitForFreshFrame(video: CaptureVideo, fallback: Promise<void>): Promise<boolean> {
   const request = video.requestVideoFrameCallback
   if (typeof request !== 'function') return Promise.resolve(false)
   return new Promise<boolean>((resolve) => {
     let settled = false
-    const timer = schedule(() => {
+    const finish = (fresh: boolean): void => {
       if (settled) return
       settled = true
-      resolve(false)
-    }, timeoutMs)
-    request.call(video, () => {
-      if (settled) return
-      settled = true
-      cancel(timer)
-      resolve(true)
-    })
+      resolve(fresh)
+    }
+    void fallback.then(() => finish(false))
+    request.call(video, () => finish(true))
   })
 }
 
@@ -69,7 +46,8 @@ export interface FreezeOptions {
   surface: GameOcrCaptureSurface
   imageSize: OcrImageSize
   requireFreshFrame: boolean
-  timeoutMs?: number
+  /** Main-process deadline, unaffected by hidden-renderer timer throttling. */
+  freshFrameFallback?: Promise<void>
 }
 
 export interface FreezeOutcome {
@@ -90,9 +68,14 @@ export async function freezeCurrentFrame({
   surface,
   imageSize,
   requireFreshFrame,
-  timeoutMs
+  freshFrameFallback
 }: FreezeOptions): Promise<FreezeOutcome> {
-  const fresh = requireFreshFrame ? await waitForFreshFrame(surface.video, timeoutMs) : true
+  if (requireFreshFrame && !freshFrameFallback) {
+    throw new Error('A fresh-frame capture requires a main-process fallback signal.')
+  }
+  const fresh = requireFreshFrame
+    ? await waitForFreshFrame(surface.video, freshFrameFallback as Promise<void>)
+    : true
   const size = {
     width: surface.video.videoWidth || imageSize.width,
     height: surface.video.videoHeight || imageSize.height

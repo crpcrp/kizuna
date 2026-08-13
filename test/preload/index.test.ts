@@ -3,6 +3,7 @@ import {
   ANKI_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
+  GAME_OCR_CHANNELS,
   LAUNCH_CHANNELS,
   MEDIA_CHANNELS,
   MEDIA_HISTORY_CHANNELS,
@@ -36,6 +37,33 @@ vi.mock('electron', () => ({
 
 import '@src/preload/index'
 import { windowShapeApi } from '@src/preload/index'
+
+describe('preload Game OCR contract', () => {
+  beforeEach(() => {
+    electron.on.mockReset()
+    electron.removeListener.mockReset()
+  })
+
+  it('forwards the main-owned fresh-frame deadline to the capture renderer', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      gameOcr: {
+        onFreezeFallback(
+          cb: (identity: { sessionId: number; captureId: number }) => void
+        ): () => void
+      }
+    }
+    const cb = vi.fn()
+
+    const off = api.gameOcr.onFreezeFallback(cb)
+    const listener = electron.on.mock.calls[0][1]
+    listener({}, { sessionId: 4, captureId: 9 })
+    off()
+
+    expect(electron.on).toHaveBeenCalledWith(GAME_OCR_CHANNELS.freezeFallback, expect.any(Function))
+    expect(cb).toHaveBeenCalledWith({ sessionId: 4, captureId: 9 })
+    expect(electron.removeListener).toHaveBeenCalledWith(GAME_OCR_CHANNELS.freezeFallback, listener)
+  })
+})
 
 describe('preload launch contract', () => {
   beforeEach(() => {

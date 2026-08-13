@@ -1,5 +1,8 @@
 import type { OcrCaptureIdentity, OcrImageSize } from './ocr'
 
+/** Main-process deadline for a post-hide desktop-stream frame. */
+export const GAME_OCR_FRESH_FRAME_TIMEOUT_MS = 120
+
 export type GameOcrWorkerState = 'not-started' | 'starting' | 'ready' | 'error'
 
 export type GameOcrUiState =
@@ -39,6 +42,9 @@ export interface GameOcrFreezeRequest {
    */
   requireFreshFrame: boolean
 }
+
+/** Main→renderer permission to use the current stream frame after the deadline. */
+export type GameOcrFreezeFallback = OcrCaptureIdentity
 
 /**
  * The renderer has drawn the frozen frame and is showing it. Sent before the

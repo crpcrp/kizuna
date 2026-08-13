@@ -106,12 +106,13 @@ screenshot as a boundary: it re-reads the player's preferences and clears the
 text selection, while keeping the lookup caches that make later frames faster.
 
 One session ID orders everything. A capture invalidates the previous session,
-hides the previous frozen frame, waits for confirmation that it is no longer
-visible, allows one bounded compositor-settle step, and only then captures — so
-a recapture can never read Kizuna's own screenshot. The frame is drawn while its
-window is still hidden, which is what makes that guarantee structural rather
-than a timing assumption; a recapture additionally waits, with a bound, for a
-frame composited after the previous one was hidden. Capture, OCR,
+issues one native hide for the previous frozen frame, allows one bounded
+compositor-settle step, and only then captures. It does not await Electron's
+native `hide` event, which can lag the hide command by seconds on Windows.
+Instead, a recapture waits for the desktop stream's next composited frame; an
+explicit main-process deadline releases that wait because hidden-renderer
+timers are throttled. The frame is drawn while its window is still hidden.
+Capture, OCR,
 tokenization, lookup, and translation results are accepted only for the current
 session; a failed recapture leaves the live game visible rather than restoring
 a stale frame.
