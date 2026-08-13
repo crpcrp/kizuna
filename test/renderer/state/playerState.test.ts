@@ -612,30 +612,32 @@ describe('playerReducer', () => {
     const levelColors = { unknown: '#112233' }
     const next = playerReducer(initialPlayerState, {
       type: 'loadSettings',
-      keyBindings,
-      skipSeconds: 20,
-      popupSettings,
-      subtitleStyle,
-      subtitleDragEnabled: false,
-      rightClickTogglePause: false,
-      autoPlayNext: false,
-      translationEnabled: true,
-      appearance: 'light',
-      levelColors,
-      screenshotFolder: 'D:\\Shots',
-      mpvUserConfig: true,
-      mpvExtraArgs: ['--hwdec=auto'],
-      videoAdjustments: {
-        brightness: 15,
-        contrast: 0,
-        saturation: 0,
-        gamma: 0,
-        hue: 0,
-        rotate: 180,
-        deinterlace: true
-      },
-      audioDevice: 'coreaudio/2',
-      loudnessNormalization: true
+      settings: {
+        keyBindings,
+        skipSeconds: 20,
+        popupSettings,
+        subtitleStyle,
+        subtitleDragEnabled: false,
+        rightClickTogglePause: false,
+        autoPlayNext: false,
+        translationEnabled: true,
+        appearance: 'light',
+        levelColors,
+        screenshotFolder: 'D:\\Shots',
+        mpvUserConfig: true,
+        mpvExtraArgs: ['--hwdec=auto'],
+        videoAdjustments: {
+          brightness: 15,
+          contrast: 0,
+          saturation: 0,
+          gamma: 0,
+          hue: 0,
+          rotate: 180,
+          deinterlace: true
+        },
+        audioDevice: 'coreaudio/2',
+        loudnessNormalization: true
+      }
     })
     expect(next.keyBindings).toBe(keyBindings)
     expect(next.skipSeconds).toBe(20)
