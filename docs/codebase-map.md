@@ -36,7 +36,7 @@ The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
 | Subtitle sidebar | `components/SubtitleSidebar.tsx` (cue rows and search), `components/SubtitleTranslationPopup.tsx`, `state/sidebarSearch.ts`, `state/subtitleSearchDebounce.ts`, `state/sidebarTranslation.ts`, `state/useSidebarTranslation.ts` | — |
 | Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/` |
 | Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `components/OptionsMenu.tsx`, `state/optionsData.ts`, `state/playerState.ts`, `state/rendererSettings.ts` (which persisted fields the renderer syncs, and who owns the rest), `state/useSettingsLifecycle.ts`, `state/settingsPersistence.ts`, `state/useAppearance.ts`, `state/themeController.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
-| Game OCR (Windows, experimental) | `gameOcr.tsx` and `gameOcr.html` (the second renderer entry), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrCaptureStream.ts` (retained capture streams), `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (sessions, hotkey, recapture order), `services/gameOcr/captureTarget.ts` (focused window or display fallback), `services/gameOcr/foregroundWindow.ts` (the Win32 boundary), `services/gameOcr/windowCapture.ts` (source ids, physical-to-logical geometry), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameWindow.ts`, `services/gameOcr/runtime.ts`, `services/gameOcr/backgroundLifecycle.ts`, `services/gameOcr/tray.ts`, `services/ocr/ppOcrWorker.ts` (process lifecycle), `services/ocr/ppOcrProtocol.ts` (JSONL protocol), `resourcePaths.ts` (bundled payload) |
+| Game OCR (Windows, experimental) | `gameOcr.tsx` and `gameOcr.html` (the second renderer entry), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrCaptureStream.ts` (retained capture streams), `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (lifecycle facade: arm, stop, status), `services/gameOcr/shortcuts.ts` (accelerator ownership and repeat guard), `services/gameOcr/captureSession.ts` (sessions, recapture order, recognition), `services/gameOcr/captureTimings.ts` (per-capture stage timings and the latency log), `services/gameOcr/captureTarget.ts` (focused window or display fallback), `services/gameOcr/foregroundWindow.ts` (the Win32 boundary), `services/gameOcr/windowCapture.ts` (source ids, physical-to-logical geometry), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameWindow.ts`, `services/gameOcr/runtime.ts`, `services/gameOcr/backgroundLifecycle.ts`, `services/gameOcr/tray.ts`, `services/ocr/ppOcrWorker.ts` (process lifecycle), `services/ocr/ppOcrProtocol.ts` (JSONL protocol), `resourcePaths.ts` (bundled payload) |
 | Packaging and identity | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `resourcePaths.ts`, `startupProbe.ts`, `electron-builder.cjs`, `scripts/linuxPackaging.mjs`, `scripts/smoke-linux-package.mjs` |
 | Application updates | `shared/update.ts`, typed `preloadApi.ts` surface | `updateSupport.ts`, `electronUpdaterAdapter.ts`, `updaterErrors.ts`, `updateService.ts`, `updateBridge.ts`, lifecycle composition in `index.ts` |
 
@@ -124,11 +124,19 @@ separate entry point (`src/renderer/gameOcr.html` →
 to the player's React tree does not reach it. Anything renderer-facing has to be
 declared in `electron.vite.config.ts`'s renderer inputs to be built.
 
-`services/gameOcr/controller.ts` owns session identity and the
-invalidate → capture → move → replace canvas → recognize order. The native
-window is excluded from Windows desktop capture, which keeps a recapture off
-Kizuna's own frozen screenshot without hiding it first. The controller retains one frozen-frame
-window for the whole armed run, so a frame ends by hiding rather than closing;
+`services/gameOcr/controller.ts` is the lifecycle facade: arming, stopping, and
+the published status. It composes three owners, and a change usually belongs to
+exactly one of them. `services/gameOcr/shortcuts.ts` owns every global shortcut
+— the capture accelerator, its key-repeat guard, and the Escape/Ctrl+C pair held
+only while a frame is up. `services/gameOcr/captureSession.ts` owns session
+identity and the invalidate → capture → move → replace canvas → recognize order,
+including the window-to-display fallback and stale-result rejection.
+`services/gameOcr/captureTimings.ts` owns per-capture stage accumulation and the
+latency log's wording; nothing in the capture path formats timings itself. The
+native window is excluded from Windows desktop capture, which keeps a recapture
+off Kizuna's own frozen screenshot without hiding it first. The capture
+coordinator retains one frozen-frame window for the whole armed run, so a frame
+ends by hiding rather than closing;
 `services/gameOcr/frozenFrameWindow.ts` separates that discard from the close
 that only stopping, a display change, or a dead renderer performs. Work that
 must not survive a recapture belongs behind the session ID, not behind a
