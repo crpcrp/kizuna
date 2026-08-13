@@ -9,7 +9,7 @@ import {
   type GameOcrWindow
 } from '@src/main/services/gameOcr/frozenFrameWindow'
 import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
-import { GAME_OCR_FRESH_FRAME_TIMEOUT_MS, type GameOcrFreezeRequest } from '@src/shared/gameOcr'
+import type { GameOcrFreezeRequest } from '@src/shared/gameOcr'
 
 type Listener = (...args: unknown[]) => void
 
@@ -48,6 +48,7 @@ function fakeWindow(): {
     setAlwaysOnTop: vi.fn(),
     close: vi.fn(),
     setBounds: vi.fn(),
+    setContentProtection: vi.fn(),
     loadURL: vi.fn(async () => undefined),
     loadFile: vi.fn(async () => undefined),
     on: vi.fn((event: 'closed' | 'hide', listener: () => void) =>
@@ -56,7 +57,6 @@ function fakeWindow(): {
     webContents: {
       isDestroyed: () => destroyed,
       send: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
       on: vi.fn((event: string, listener: Listener) => on(rendererListeners, event, listener)),
       getURL: () => 'file:///gameOcr.html',
       setWindowOpenHandler: vi.fn(),
@@ -88,8 +88,7 @@ const freezeRequest: GameOcrFreezeRequest = {
   sessionId: 1,
   captureId: 1,
   sourceId: 'screen:0:0',
-  imageSize: { width: 1920, height: 1080 },
-  requireFreshFrame: false
+  imageSize: { width: 1920, height: 1080 }
 }
 
 /** Drives one freeze the way the renderer would: draw, report, then encode. */
@@ -170,6 +169,7 @@ describe('createGameOcrWindow', () => {
     // area. Without this second assignment the frozen frame comes up a taskbar
     // short and leaves a live strip of the game showing below the screenshot.
     expect(fake.window.setBounds).toHaveBeenCalledWith(displayBounds)
+    expect(fake.window.setContentProtection).toHaveBeenCalledWith(true)
     expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
   })
 
@@ -218,8 +218,9 @@ describe('createGameOcrWindowController', () => {
       GAME_OCR_CHANNELS.freeze,
       freezeRequest
     )
-    // Still hidden while the renderer draws: a window that is not on screen
-    // cannot be in the picture it is about to show.
+    // First presentation is still hidden while the renderer draws. Later
+    // presentations may remain visible because content protection excludes
+    // this window from the desktop stream.
     expect(fake.window.show).not.toHaveBeenCalled()
 
     controller.reportFrozen({ sessionId: 1, captureId: 1, imageSize: freezeRequest.imageSize })
@@ -256,45 +257,6 @@ describe('createGameOcrWindowController', () => {
       imageSize: freezeRequest.imageSize
     })
     await expect(bytes).resolves.toBe('iVBORw0KGgo=')
-  })
-
-  it('drives the fresh-frame fallback from an unthrottled main-process timer', async () => {
-    const fake = fakeWindow()
-    let fallback: (() => void) | undefined
-    const cancelFallback = vi.fn()
-    const scheduleFallback = vi.fn((callback: () => void) => {
-      fallback = callback
-      return 'fallback-timer'
-    })
-    const controller = createGameOcrWindowController({
-      window: fake.window,
-      loaded: true,
-      scheduleFallback,
-      cancelFallback
-    })
-    const request = { ...freezeRequest, requireFreshFrame: true }
-
-    const freezing = controller.freeze(request)
-    await Promise.resolve()
-    expect(fake.window.webContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
-    expect(scheduleFallback).toHaveBeenCalledWith(
-      expect.any(Function),
-      GAME_OCR_FRESH_FRAME_TIMEOUT_MS
-    )
-    fallback?.()
-    expect(fake.window.webContents.send).toHaveBeenCalledWith(GAME_OCR_CHANNELS.freezeFallback, {
-      sessionId: request.sessionId,
-      captureId: request.captureId
-    })
-
-    controller.reportFrozen({
-      sessionId: request.sessionId,
-      captureId: request.captureId,
-      imageSize: request.imageSize
-    })
-    await freezing
-    expect(cancelFallback).toHaveBeenCalledWith('fallback-timer')
-    expect(fake.window.webContents.setBackgroundThrottling).toHaveBeenLastCalledWith(true)
   })
 
   it('surfaces a renderer that could not freeze or encode the frame', async () => {

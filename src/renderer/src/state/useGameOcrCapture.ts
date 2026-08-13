@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { GameOcrFreezeFallback, GameOcrFreezeRequest } from '../../../shared/gameOcr'
+import type { GameOcrFreezeRequest } from '../../../shared/gameOcr'
 import type { OcrImageSize } from '../../../shared/ocr'
 import { useLatestCallback } from './useLatestRef'
 import {
@@ -13,7 +13,6 @@ export const CAPTURE_MEDIA_TYPE = 'image/png'
 
 export interface GameOcrCaptureBridge {
   onFreeze(cb: (request: GameOcrFreezeRequest) => void): () => void
-  onFreezeFallback(cb: (identity: GameOcrFreezeFallback) => void): () => void
   frozen(value: {
     sessionId: number
     captureId: number
@@ -46,9 +45,9 @@ export interface UseGameOcrCaptureInput {
  * ~300 ms `desktopCapturer.getSources` round trip. Opening it is the expensive
  * part and happens on the first capture for a display, not on every one.
  *
- * The frame is drawn while the window is still hidden and the encode runs after
- * it is shown, so nothing the user waits for is behind either the PNG encode or
- * the transfer to the main process.
+ * The overlay is excluded from Windows desktop capture. A recapture can
+ * therefore replace its canvas in place without hiding, waiting for a native
+ * event, or allowing the old text boxes into the captured pixels.
  */
 export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptureInput): void {
   const streamsRef = useRef<
@@ -62,41 +61,15 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     // Created here rather than in the initial ref value, so the map belongs to
     // the effect that opens the streams and tears them down again.
     const streams = (streamsRef.current ??= new Map())
-    const activeCaptures = new Set<string>()
-    const allowedFallbacks = new Set<string>()
-    const fallbackWaiters = new Map<string, () => void>()
-    const captureKey = (value: { sessionId: number; captureId: number }): string =>
-      `${value.sessionId}:${value.captureId}`
-
-    const fallbackFor = (request: GameOcrFreezeRequest): Promise<void> => {
-      const key = captureKey(request)
-      activeCaptures.add(key)
-      if (allowedFallbacks.delete(key)) return Promise.resolve()
-      return new Promise<void>((resolve) => fallbackWaiters.set(key, resolve))
-    }
-
-    const unsubscribeFallback = api.onFreezeFallback((identity) => {
-      const key = captureKey(identity)
-      if (!activeCaptures.has(key)) return
-      const resolve = fallbackWaiters.get(key)
-      if (resolve) {
-        fallbackWaiters.delete(key)
-        resolve()
-      } else {
-        allowedFallbacks.add(key)
-      }
-    })
 
     /** Opens the display's stream, or reuses the one already running for it. */
     const acquire = async (
-      sourceId: string,
-      forceRefresh = false
+      sourceId: string
     ): Promise<{ stream: MediaStream; video: HTMLVideoElement }> => {
       const existing = streams.get(sourceId)
       // A track the user revoked, or a display that went away, leaves a stream
       // that will never produce another frame; reopening is the only recovery.
       if (
-        !forceRefresh &&
         existing &&
         existing.stream
           .getVideoTracks()
@@ -125,10 +98,6 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     const unsubscribe = api.onFreeze((request) => {
       void (async () => {
         const identity = { sessionId: request.sessionId, captureId: request.captureId }
-        const key = captureKey(request)
-        const freshFrameFallback = request.requireFreshFrame
-          ? fallbackFor(request)
-          : Promise.resolve()
         let canvas: HTMLCanvasElement | null = null
         try {
           const { video } = await acquire(request.sourceId)
@@ -137,25 +106,18 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           const context = canvas.getContext('2d')
           if (!context) throw new Error('The frozen frame canvas has no 2D context.')
 
-          const surfaceFor = (source: HTMLVideoElement): GameOcrCaptureSurface => ({
-            video: source as unknown as GameOcrCaptureSurface['video'],
+          const surface: GameOcrCaptureSurface = {
+            video: video as unknown as GameOcrCaptureSurface['video'],
             context: context as unknown as GameOcrCaptureSurface['context'],
             resize: (size) => {
               const target = canvas as HTMLCanvasElement
               if (target.width !== size.width) target.width = size.width
               if (target.height !== size.height) target.height = size.height
             }
-          })
-          const surface = surfaceFor(video)
+          }
           const { imageSize } = await freezeCurrentFrame({
             surface,
-            imageSize: request.imageSize,
-            requireFreshFrame: request.requireFreshFrame,
-            freshFrameFallback,
-            refreshSurface: async () => {
-              const refreshed = await acquire(request.sourceId, true)
-              return surfaceFor(refreshed.video)
-            }
+            imageSize: request.imageSize
           })
 
           // Main shows the window on this message, so it is sent before the
@@ -186,21 +148,12 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
             imageSize: request.imageSize,
             error: message
           })
-        } finally {
-          activeCaptures.delete(key)
-          allowedFallbacks.delete(key)
-          fallbackWaiters.delete(key)
         }
       })()
     })
 
     return () => {
       unsubscribe()
-      unsubscribeFallback()
-      activeCaptures.clear()
-      allowedFallbacks.clear()
-      for (const resolve of fallbackWaiters.values()) resolve()
-      fallbackWaiters.clear()
       for (const { stream } of streams.values()) {
         stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
       }

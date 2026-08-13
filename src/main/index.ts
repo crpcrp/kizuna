@@ -546,9 +546,6 @@ function probeResourceKind(path: string): 'file' | 'directory' | 'missing' {
   }
 }
 
-/** Compositor repaint budget between closing a frozen frame and recapturing. */
-const GAME_OCR_COMPOSITOR_SETTLE_MS = 32
-
 /**
  * Wires the Windows-only Game OCR runtime to the main-window bridge. The
  * PP-OCR ONNX payload is bundled by `win.extraResources`, so the paths resolve
@@ -579,16 +576,6 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     shortcut: globalShortcut,
     accelerator: settings.get().gameOcr.captureShortcut,
     displays,
-    settle: {
-      // The frozen window is closed before a recapture, but the desktop
-      // compositor still has to repaint the region it covered before
-      // `desktopCapturer` reads pixels back — otherwise a recapture can
-      // photograph Kizuna's own previous frame. A zero-delay timer yields to
-      // the event loop, not to the compositor, so wait roughly two 60 Hz
-      // frames instead. Bounded, and imperceptible next to the capture itself.
-      settle: () =>
-        new Promise<void>((resolve) => setTimeout(resolve, GAME_OCR_COMPOSITOR_SETTLE_MS))
-    },
     createPresentation: (metadata) =>
       createGameOcrWindow({
         platform: process.platform,

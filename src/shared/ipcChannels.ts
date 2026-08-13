@@ -162,8 +162,6 @@ export const GAME_OCR_CHANNELS = {
    * travels the other way; the renderer is the one holding the capture stream.
    */
   freeze: 'gameOcr:freeze',
-  /** main→renderer: the post-hide frame deadline elapsed; draw without waiting longer. */
-  freezeFallback: 'gameOcr:freezeFallback',
   /** renderer→main: the frozen frame is drawn and ready to be shown. */
   frozen: 'gameOcr:frozen',
   /** renderer→main: the encoded screenshot, for the OCR worker only. */

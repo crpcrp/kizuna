@@ -1,13 +1,11 @@
 import { createRequire } from 'node:module'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
-import {
-  GAME_OCR_FRESH_FRAME_TIMEOUT_MS,
-  type GameOcrFreezeFallback,
-  type GameOcrCaptureBytes,
-  type GameOcrFreezeRequest,
-  type GameOcrFrozenFrame,
-  type GameOcrRegionsRendered
+import type {
+  GameOcrCaptureBytes,
+  GameOcrFreezeRequest,
+  GameOcrFrozenFrame,
+  GameOcrRegionsRendered
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
 import {
@@ -89,6 +87,8 @@ export interface GameOcrNativeWindow extends SendTarget {
   close(): void
   isVisible(): boolean
   setBounds(bounds: OcrDisplayBounds): void
+  /** Excludes this overlay from Windows desktop capture. */
+  setContentProtection(enable: boolean): void
   loadURL(url: string): Promise<unknown> | unknown
   loadFile(path: string, options?: { query?: Record<string, string> }): Promise<unknown> | unknown
   on(event: 'closed' | 'hide', listener: () => void): unknown
@@ -100,7 +100,6 @@ export interface GameOcrNativeWindow extends SendTarget {
         listener: (...args: unknown[]) => void
       ): unknown
       send(channel: string, ...args: unknown[]): void
-      setBackgroundThrottling?(allowed: boolean): void
       openDevTools?(options?: { mode?: string }): void
     }
 }
@@ -109,8 +108,8 @@ export interface GameOcrWindow {
   /**
    * Asks the frame to freeze the display it is streaming, shows it once the
    * renderer reports the frame drawn, and resolves with what was actually
-   * captured. The window stays hidden until then, so it cannot appear in its
-   * own screenshot.
+   * captured. On recapture the old canvas may remain visible; native content
+   * protection keeps this window out of the desktop stream.
    */
   freeze(request: GameOcrFreezeRequest): Promise<OcrImageSize>
   /**
@@ -140,11 +139,7 @@ export interface GameOcrWindow {
    * window is never focused, so the copy arrives from a global shortcut.
    */
   copySelection(): void
-  /**
-   * Places the retained window on the display the next frame was captured
-   * from. Only meaningful while hidden; the coordinator calls it between a
-   * discard and the following present.
-   */
+  /** Places the retained window on the display being captured. */
   moveTo(displayBounds: OcrDisplayBounds): void
   /**
    * Issues one native hide, drops the screenshot and boxes, and resolves
@@ -186,21 +181,16 @@ export interface GameOcrWindowControllerOptions {
   /** The bounds the native window was constructed with, so the first capture
    * on that same display does not move a window that is already there. */
   displayBounds?: OcrDisplayBounds
-  scheduleFallback?: (callback: () => void, delayMs: number) => unknown
-  cancelFallback?: (handle: unknown) => void
 }
 
 /**
  * Creates the lifecycle around an already-created native window. Keeping this
- * separate from Electron construction keeps native lifecycle and the
- * main-owned fresh-frame deadline independently testable.
+ * separate from Electron construction keeps native lifecycle testable.
  */
 export function createGameOcrWindowController({
   window,
   loaded = false,
-  displayBounds,
-  scheduleFallback = (callback, delayMs) => setTimeout(callback, delayMs),
-  cancelFallback = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
+  displayBounds
 }: GameOcrWindowControllerOptions): GameOcrWindow {
   let rendererLoaded = loaded
   let rendererIsReady = loaded
@@ -278,18 +268,12 @@ export function createGameOcrWindowController({
     sendToWindow(window, GAME_OCR_CHANNELS.discard)
   }
 
-  const sendFreezeFallback = (identity: GameOcrFreezeFallback): void => {
-    if (closed || window.isDestroyed() || window.webContents.isDestroyed()) return
-    sendToWindow(window, GAME_OCR_CHANNELS.freezeFallback, identity)
-  }
-
   const sendPending = (): void => {
     const next = pending
     if (!next || closed || !rendererLoaded) return
     pending = undefined
-    // Only the request goes out here. The window is deliberately still hidden:
-    // the renderer draws the display it is streaming, and a window that is not
-    // on screen cannot be in the picture it is about to show.
+    // Only the request goes out here. Content protection excludes this window
+    // from the desktop stream, so a retained visible canvas is safe to replace.
     sendToWindow(window, GAME_OCR_CHANNELS.freeze, next)
   }
 
@@ -365,29 +349,13 @@ export function createGameOcrWindowController({
     async freeze(request): Promise<OcrImageSize> {
       if (closed) throw new Error('The Game OCR frame is gone.')
       validateFreezeRequest(request)
-      // Only the hidden recapture wait needs unthrottled video callbacks.
-      // Restore the renderer's normal policy before the overlay is shown so
-      // background input/lifecycle behavior is unchanged while inspecting.
-      if (request.requireFreshFrame) window.webContents.setBackgroundThrottling?.(false)
       pending = { ...request }
       if (!rendererIsReady) await ready
       const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
         frozenWaiter = { captureId: request.captureId, resolve, reject }
       })
-      const fallbackTimer = request.requireFreshFrame
-        ? scheduleFallback(() => {
-            if (frozenWaiter?.captureId !== request.captureId) return
-            sendFreezeFallback({ sessionId: request.sessionId, captureId: request.captureId })
-          }, GAME_OCR_FRESH_FRAME_TIMEOUT_MS)
-        : undefined
       sendPending()
-      let frozen: GameOcrFrozenFrame
-      try {
-        frozen = await settled
-      } finally {
-        if (fallbackTimer !== undefined) cancelFallback(fallbackTimer)
-        if (request.requireFreshFrame) window.webContents.setBackgroundThrottling?.(true)
-      }
+      const frozen = await settled
       if (frozen.error) throw new Error(frozen.error)
       showFrozen()
       return frozen.imageSize
@@ -574,6 +542,10 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
   // frame. Re-asserting the same rectangle is not clamped, and applying it
   // while the window is still hidden means the first frame is already exact.
   window.setBounds({ ...options.displayBounds })
+  // This is the capture-safety invariant. On Windows Electron maps it to
+  // WDA_EXCLUDEFROMCAPTURE, so desktopCapturer receives the game beneath this
+  // overlay even while the old frozen frame and its boxes remain visible.
+  window.setContentProtection(true)
   applyNavigationGuards(window.webContents)
   applyReloadGuard(window.webContents)
 
@@ -700,8 +672,7 @@ function validateFreezeRequest(request: GameOcrFreezeRequest): void {
     typeof request.sourceId !== 'string' ||
     request.sourceId.length === 0 ||
     !isPositiveInteger(request.imageSize?.width) ||
-    !isPositiveInteger(request.imageSize?.height) ||
-    typeof request.requireFreshFrame !== 'boolean'
+    !isPositiveInteger(request.imageSize?.height)
   ) {
     throw new Error('Game OCR freeze request is invalid.')
   }

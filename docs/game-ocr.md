@@ -60,21 +60,21 @@ Game OCR adds no screenshot, audio, or timestamp to a card.
 ### Recapture
 
 Pressing the shortcut while a frozen frame is open must never re-read Kizuna's
-own screenshot. The coordinator therefore always:
+own screenshot. The frozen-frame window is marked with Electron content
+protection, which maps to `WDA_EXCLUDEFROMCAPTURE` on current Windows. Desktop
+capture therefore sees the game beneath the overlay, even while the previous
+screenshot and its boxes remain visible. The coordinator:
 
-1. invalidates the old session and drops its boxes, popups, selection,
-   indicator, and screenshot references;
-2. drops the screenshot from the frozen window and hides it, then waits for
-   confirmation that it is no longer visible;
-3. allows one bounded compositor-settle step;
-4. captures the now-visible live game;
-5. moves the window onto the captured display and presents the new screenshot
-   immediately;
-6. accepts OCR, tokenization, lookup, and translation results only for the new
+1. invalidates the old session and drops its boxes, popups, and selection;
+2. captures the game directly while leaving the old canvas visible;
+3. moves the retained window when necessary and replaces that canvas in place;
+4. starts PNG encoding and OCR as soon as the new pixels are drawn; and
+5. accepts OCR, tokenization, lookup, and translation results only for the new
    session ID.
 
-If a recapture fails after the old frame is gone, the live game stays visible.
-The stale screenshot is never restored.
+There is no native hide event, compositor delay, fresh-frame callback, or stream
+reopen on the shortcut path. If recapture fails, the overlay is hidden and the
+live game remains visible.
 
 ### One retained window
 
@@ -131,8 +131,8 @@ feels, so the screenshot is not taken on demand at all.
 **The frozen frame holds an open desktop capture stream** for the display it
 covers, for as long as Game OCR is armed and its window is retained. A capture
 is then one `drawImage` from a frame the renderer already has. The expensive
-setup — enumerating capture sources, opening the stream — is paid at arm time
-and on the first capture for a display, not on the hotkey.
+setup — enumerating capture sources, opening the stream — is paid on the first
+capture for a display and reused afterwards.
 
 Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
@@ -153,36 +153,25 @@ its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
 and sent to the main process then, so nothing the user is looking at a blank
 display for sits behind an encode.
 
-Two ordering properties this relies on:
+Three ordering properties this relies on:
 
-- **The frame is drawn while the window is still hidden**, which is why it
-  cannot appear in its own screenshot. That is a stronger guarantee than the
-  fixed 32 ms compositor-settle delay it replaces, which only assumed the
-  repaint had happened by then.
-- **A recapture additionally waits for a frame composited after the previous
-  frozen frame was hidden.** That wait is bounded at 120 ms, because a desktop
-  stream only produces frames when the screen *changes* — on a completely
-  static screen `requestVideoFrameCallback` can stall for seconds (measured
-  3.3 s and 14.4 s), and a screen full of unmoving visual-novel text is exactly
-  Kizuna's case. Hiding the frame is itself a change, so the frame normally
-  arrives within one refresh. If it does not arrive by the deadline, Kizuna
-  closes and reopens that display's stream rather than drawing its stale frame.
+- **The native overlay is excluded from desktop capture.** Self-capture safety
+  is a property of the window, not an inference from delayed hide events or
+  compositor timing.
+- **The previous canvas stays visible until `drawImage` replaces it.** The old
+  boxes are removed at the freeze boundary, so recapture neither flashes a
+  blank overlay nor mixes text from two sessions.
+- **Main registers the screenshot-byte waiter before requesting the draw.** PNG
+  encoding still starts after the pixels are displayed, but a fast encode can
+  no longer arrive before main is ready to hand it to the OCR worker.
 
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
-The fresh-frame deadline is owned by the main process. When it expires, main
-sends an explicit fallback signal to the hidden renderer; the renderer itself
-does not schedule the timeout, because Chromium can stretch a hidden page's
-120 ms timer to roughly one second. Main temporarily unthrottles only the
-hidden fresh-frame wait and restores normal throttling before showing the
-overlay. If even that produces no callback, the fallback signal rebuilds the
-desktop stream; stale pixels are never drawn. Native dismissal and capture safety are
-tracked separately: a click issues one hide command immediately and does not
-wait for Electron's native `hide` event, while the next capture still waits for
-a desktop-stream frame produced after the old overlay left the screen. This
-avoids both a lagging native-event wait and recursively recognizing Kizuna's
-own previous boxes without changing the renderer's visible input behavior.
+Outside-click dismissal sends the main-process close request first. Main issues
+the native `hide()` immediately and lets renderer state, selection, and pending
+lookup cleanup finish afterwards. It never waits for Electron's `hide` event,
+which can lag the visible transition by seconds on Windows.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
 acknowledges a browser paint. The same line splits dismissal, capture-queue

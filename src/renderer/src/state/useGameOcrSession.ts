@@ -107,9 +107,9 @@ export function useGameOcrSession({
     const unsubscribeFreeze = api.onFreeze(() => {
       // A freeze request always arrives before the regions of the frame it
       // starts; dropping the old ones here is what keeps stale boxes off a
-      // fresh screenshot. The screenshot itself is drawn by the capture hook.
+      // fresh screenshot. Keep the old canvas visible until the capture hook
+      // replaces it in place, so recapture has no blank-frame flash.
       clear()
-      setPresentation(undefined)
     })
     const unsubscribeDiscard = api.onDiscard(() => {
       setPresentation(undefined)
@@ -172,9 +172,11 @@ export function useGameOcrSession({
   }, [])
 
   const close = useCallback((): void => {
+    // Native hide is the user-visible operation. Send it before React cleanup
+    // and pipeline invalidation so background work cannot delay the game.
+    api.close()
     setPresentation(undefined)
     clear()
-    api.close()
   }, [api, clear])
 
   return {

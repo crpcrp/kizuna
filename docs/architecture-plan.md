@@ -105,19 +105,18 @@ display the newest capture came from. The renderer therefore treats every
 screenshot as a boundary: it re-reads the player's preferences and clears the
 text selection, while keeping the lookup caches that make later frames faster.
 
-One session ID orders everything. A capture invalidates the previous session,
-issues one native hide for the previous frozen frame, allows one bounded
-compositor-settle step, and only then captures. It does not await Electron's
-native `hide` event, which can lag the hide command by seconds on Windows.
-Instead, a recapture waits for the desktop stream's next composited frame; an
-explicit main-process deadline releases that wait because hidden-renderer
-timers are throttled. Main temporarily unthrottles only that hidden wait and
-restores normal throttling before presentation. If the deadline still wins,
-the renderer reopens the desktop stream and never draws the stale one. The
-frame is drawn while its window is still hidden. Capture, OCR,
-tokenization, lookup, and translation results are accepted only for the current
-session; a failed recapture leaves the live game visible rather than restoring
-a stale frame.
+One session ID orders everything. The native frozen-frame window uses content
+protection (`WDA_EXCLUDEFROMCAPTURE` on current Windows), so the desktop stream
+sees the game beneath it even while the retained canvas is visible. A recapture
+invalidates the previous session and removes its interactive boxes, then draws
+the new stream frame directly over the old canvas. It does not hide the window,
+wait for a native event, guess at compositor timing, or rebuild the stream.
+Main registers the encoded-byte waiter before requesting the draw; the renderer
+publishes the drawn frame first and starts PNG encoding immediately afterwards,
+so presentation and OCR input preparation overlap. Capture, OCR, tokenization,
+lookup, and translation results are accepted only for the current session. An
+outside click sends the close IPC first; main hides the native window
+immediately while renderer cleanup finishes in the background.
 
 While Game OCR is armed the player window hides behind a tray icon, and
 stopping or quitting releases the shortcut, the worker process, the frozen

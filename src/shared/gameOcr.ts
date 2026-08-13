@@ -1,8 +1,5 @@
 import type { OcrCaptureIdentity, OcrImageSize } from './ocr'
 
-/** Main-process deadline for a post-hide desktop-stream frame. */
-export const GAME_OCR_FRESH_FRAME_TIMEOUT_MS = 120
-
 export type GameOcrWorkerState = 'not-started' | 'starting' | 'ready' | 'error'
 
 export type GameOcrUiState =
@@ -33,18 +30,7 @@ export interface GameOcrFreezeRequest {
   /** The Electron desktop-capture source for the display being frozen. */
   sourceId: string
   imageSize: OcrImageSize
-  /**
-   * Whether to wait for a frame composited after Kizuna's own frame stopped
-   * covering the display, so a recapture cannot photograph the previous frozen
-   * frame. Bounded: a completely static screen produces no new frames at all —
-   * measured stalls of 3.3 s and 14.4 s — so the wait falls back to the frame
-   * already in hand rather than hanging the capture.
-   */
-  requireFreshFrame: boolean
 }
-
-/** Main→renderer permission to use the current stream frame after the deadline. */
-export type GameOcrFreezeFallback = OcrCaptureIdentity
 
 /**
  * The renderer has drawn the frozen frame and is showing it. Sent before the

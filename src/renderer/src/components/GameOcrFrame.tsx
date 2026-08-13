@@ -123,9 +123,9 @@ export default function GameOcrFrame({
             : undefined
         }
       >
-        {/* Always mounted, because the capture draws into it while the window
-            is still hidden — a canvas that only appeared with the presentation
-            would not exist yet at the moment there is something to draw. It is
+        {/* Always mounted, because capture draws before the first presentation;
+            a canvas that only appeared with presentation state would not exist
+            yet at the moment there is something to draw. It is
             hidden rather than unmounted between frames so the last screenshot
             cannot flash back on the next capture. */}
         <canvas

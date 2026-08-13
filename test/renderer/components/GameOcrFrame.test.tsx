@@ -127,8 +127,8 @@ describe('GameOcrFrame', () => {
   it('hides the screenshot and indicator after a discard state', () => {
     render(<GameOcrFrame onClose={vi.fn()} />)
 
-    // The canvas stays mounted so the next capture has something to draw into
-    // while the window is still hidden, but nothing of the old frame shows.
+    // The canvas stays mounted so the next capture has something to draw into,
+    // but nothing of the old frame shows after an actual discard.
     expect(screen.getByLabelText('Frozen game screenshot').hasAttribute('hidden')).toBe(true)
     expect(screen.queryByRole('status')).toBeNull()
   })
