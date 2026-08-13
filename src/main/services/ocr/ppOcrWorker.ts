@@ -33,11 +33,8 @@ const WORKER_ARGS = {
   detectionSideLength: '--det-side-len'
 } as const
 
-/**
- * Tuned detector size. The vendored 1080p benchmark keeps all expected lines
- * at 960 while cutting warm inference from ~253 ms at 1920 to ~83 ms.
- */
-export const PP_OCR_DETECTION_SIDE_LENGTH = 960
+/** Keep ordinary desktop captures at their native size for reliable detection. */
+export const PP_OCR_DETECTION_SIDE_LENGTH = 4000
 
 /** The model and dictionary files are injected so packaging can own their locations. */
 export interface PpOcrModelPaths {

@@ -49,6 +49,8 @@ export interface GameOcrCaptureTimings {
   captureId: number
   /** Waiting for a previous frozen frame to stop being visible. */
   dismissMs: number
+  /** Time after dismissal spent waiting for an older capture task to finish. */
+  queueMs: number
   /** The bounded compositor-settle step, zero when it was skipped. */
   settleMs: number
   /** Locating the display whose pixels are already streaming in the renderer. */
@@ -70,7 +72,8 @@ export function writeGameOcrTotalTime(
 ): void {
   write(
     `[game-ocr] shortcut to word boxes: ${timings.totalMs}ms ` +
-      `(dismiss ${timings.dismissMs}ms, settle ${timings.settleMs}ms, ` +
+      `(dismiss ${timings.dismissMs}ms, queue ${timings.queueMs}ms, ` +
+      `settle ${timings.settleMs}ms, ` +
       `capture ${timings.captureMs}ms, present ${timings.presentMs}ms, ` +
       `recognize ${timings.recognizeMs}ms, render ${timings.renderMs}ms)`
   )
@@ -145,7 +148,7 @@ interface Session extends OcrCaptureIdentity {
   valid: boolean
   /** Read synchronously in the shortcut callback, before any queued work. */
   startedAt: number
-  dismissBeforeCapture: Promise<void>
+  dismissBeforeCapture: Promise<number>
   /**
    * Whether a frozen frame of Kizuna's own was on screen when this session
    * began. Only then does the compositor have anything of ours to repaint, so
@@ -399,6 +402,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         sessionId: session.sessionId,
         captureId: session.captureId,
         dismissMs: timings.dismissMs,
+        queueMs: timings.queueMs,
         settleMs: timings.settleMs,
         captureMs: timings.captureMs,
         presentMs: timings.presentMs,
@@ -417,12 +421,13 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     // Read before the dismissal is requested: afterwards the window is on its
     // way to hidden and cannot say whether it had been covering the game.
     const settleBeforeCapture = presentation?.isVisible() ?? false
+    const startedAt = now()
     const session: Session = {
       sessionId: nextSessionId,
       captureId: nextCaptureId,
       valid: true,
-      startedAt: now(),
-      dismissBeforeCapture: dismissPresentation(),
+      startedAt,
+      dismissBeforeCapture: dismissPresentation().then(() => now()),
       settleBeforeCapture
     }
     activeSession = session
@@ -479,19 +484,19 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const runCapture = async (session: Session): Promise<void> => {
     try {
-      await session.dismissBeforeCapture
+      const dismissedAt = await session.dismissBeforeCapture
       if (!isCurrent(session)) return
       if (presentation?.isVisible()) {
         throw new Error('The previous Game OCR presentation is still visible.')
       }
-      const dismissedAt = now()
+      const dequeuedAt = now()
 
       // The compositor only has to repaint the region a frozen frame covered
       // when there actually was one. The first capture of a run, and every
       // capture taken after the user returned to the game, reads pixels
       // Kizuna never drew over, so the delay would buy nothing and the whole
       // step sits between the hotkey and the screenshot.
-      let settledAt = dismissedAt
+      let settledAt = dequeuedAt
       if (session.settleBeforeCapture) {
         await options.settle.settle()
         if (!isCurrent(session)) return
@@ -530,7 +535,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         sessionId: session.sessionId,
         captureId: session.captureId,
         dismissMs: dismissedAt - session.startedAt,
-        settleMs: settledAt - dismissedAt,
+        queueMs: dequeuedAt - dismissedAt,
+        settleMs: settledAt - dequeuedAt,
         captureMs: capturedAt - settledAt,
         presentMs: presentedAt - capturedAt,
         presentedAt

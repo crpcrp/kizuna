@@ -113,7 +113,7 @@ describe('buildPpOcrWorkerArgs', () => {
       '--keys',
       'C:\\model keys.txt',
       '--det-side-len',
-      '960'
+      '4000'
     ])
   })
 })
