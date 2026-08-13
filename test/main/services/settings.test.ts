@@ -278,6 +278,22 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     expect(mergeSettings({ player: 42 }).player).toEqual(DEFAULT_PLAYER_SETTINGS)
   })
 
+  it.each(['splash', 'game-ocr', 'video-player'] as const)(
+    'preserves the valid startup behavior %s',
+    (startupBehavior) => {
+      expect(mergeSettings({ player: { startupBehavior } }).player.startupBehavior).toBe(
+        startupBehavior
+      )
+    }
+  )
+
+  it.each([undefined, 'ocr', '', 42, {}, null])(
+    'defaults malformed startup behavior %j to splash',
+    (startupBehavior) => {
+      expect(mergeSettings({ player: { startupBehavior } }).player.startupBehavior).toBe('splash')
+    }
+  )
+
   it('fills a partial keyBindings with defaults for the missing actions', () => {
     const merged = mergeSettings({ player: { keyBindings: { togglePause: 'KeyK' } } })
     expect(merged.player.keyBindings).toEqual({
@@ -402,6 +418,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
 
   it('round-trips a full player block unchanged when every field is already valid', () => {
     const player = {
+      startupBehavior: 'video-player' as const,
       keyBindings: { ...DEFAULT_PLAYER_SETTINGS.keyBindings, skipForward: 'KeyL' },
       skipSeconds: 15,
       popupSettings: {
@@ -731,6 +748,17 @@ describe('createSettingsStore', () => {
       wellKnown: '#ffffff'
     })
   })
+
+  it.each(['splash', 'game-ocr', 'video-player'] as const)(
+    'round-trips startup behavior %s across a reopen',
+    (startupBehavior) => {
+      const io = fakeIo(undefined)
+      const store = createSettingsStore(io)
+      store.set({ player: { ...store.get().player, startupBehavior } })
+
+      expect(createSettingsStore(io).get().player.startupBehavior).toBe(startupBehavior)
+    }
+  )
 
   it('parses+merges whatever was persisted at construction', () => {
     const store = createSettingsStore(fakeIo(JSON.stringify({ mecabDictId: 'unidic' })))

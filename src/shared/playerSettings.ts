@@ -308,8 +308,17 @@ export const SPEED_STEP = 0.25
 /** Default skip amount for transport buttons and keyboard shortcuts. */
 export const DEFAULT_SKIP_SECONDS = 5
 
+/** Persisted behavior selected before the renderer starts. */
+export type StartupBehavior = 'splash' | 'game-ocr' | 'video-player'
+
+/** Validates an untrusted startup behavior, defaulting to the chooser. */
+export function normalizeStartupBehavior(raw: unknown): StartupBehavior {
+  return raw === 'splash' || raw === 'game-ocr' || raw === 'video-player' ? raw : 'splash'
+}
+
 /** Persisted Options-menu settings. */
 export interface PlayerSettings {
+  startupBehavior: StartupBehavior
   keyBindings: KeyBindings
   skipSeconds: number
   popupSettings: PopupSettings
@@ -362,6 +371,7 @@ export interface PlayerSettings {
 }
 
 export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
+  startupBehavior: 'splash',
   keyBindings: DEFAULT_KEY_BINDINGS,
   skipSeconds: DEFAULT_SKIP_SECONDS,
   popupSettings: DEFAULT_POPUP_SETTINGS,

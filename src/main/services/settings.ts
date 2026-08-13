@@ -11,6 +11,7 @@ import {
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePopupSettings,
+  normalizeStartupBehavior,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
   subtitleOffsetKey,
@@ -121,6 +122,7 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
 
   return {
+    startupBehavior: normalizeStartupBehavior(obj.startupBehavior),
     keyBindings: normalizeKeyBindings(obj.keyBindings),
     skipSeconds: positiveNumberOr(obj.skipSeconds, DEFAULT_PLAYER_SETTINGS.skipSeconds),
     popupSettings: normalizePopupSettings(obj.popupSettings, DEFAULT_PLAYER_SETTINGS.popupSettings),
