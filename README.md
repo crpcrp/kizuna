@@ -251,6 +251,7 @@ and are currently unsigned. See
 - [Architecture](docs/architecture-plan.md)
 - [Codebase map](docs/codebase-map.md)
 - [Binary setup](docs/binaries.md)
+- [Game OCR (Windows, experimental)](docs/game-ocr.md)
 - [Licensing and notices](docs/licensing.md)
 - [Releasing](docs/releasing.md)
 
