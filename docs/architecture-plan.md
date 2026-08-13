@@ -111,6 +111,11 @@ sees the game beneath it even while the retained canvas is visible. A recapture
 invalidates the previous session and removes its interactive boxes, then draws
 the new stream frame directly over the old canvas. It does not hide the window,
 wait for a native event, guess at compositor timing, or rebuild the stream.
+Captures are latest-request-wins rather than serialized: a new shortcut enters
+capture immediately even if an obsolete renderer freeze has not completed, and
+per-capture IPC waiters prevent overlapping replies from being mixed.
+Repeated keydown callbacks from one held shortcut chord are coalesced before
+they can create redundant captures.
 Main registers the encoded-byte waiter before requesting the draw; the renderer
 publishes the drawn frame first and starts PNG encoding immediately afterwards,
 so presentation and OCR input preparation overlap. Capture, OCR, tokenization,

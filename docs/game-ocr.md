@@ -174,9 +174,11 @@ lookup cleanup finish afterwards. It never waits for Electron's `hide` event,
 which can lag the visible transition by seconds on Windows.
 
 Development runs log the complete shortcut-to-word-box time after the renderer
-acknowledges a browser paint. The same line splits dismissal, capture-queue
-waiting, compositor settle, capture, presentation, recognition, and rendering
-so a slow machine can be profiled without guessing which boundary dominates.
+acknowledges a browser paint. The historical `dismiss`, `queue`, and `settle`
+fields remain, but are no longer work stages: dismissal and settle are zero,
+while queue measures only synchronous shortcut dispatch into capture and should
+also be effectively zero. Capture, presentation, recognition, and rendering
+remain real stage costs.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 

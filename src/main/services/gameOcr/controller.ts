@@ -42,9 +42,9 @@ export interface GameOcrStatus {
 export interface GameOcrCaptureTimings {
   sessionId: number
   captureId: number
-  /** Synchronous session invalidation before entering the capture queue. */
+  /** Reserved for backwards-compatible timing output; now always zero. */
   dismissMs: number
-  /** Time spent waiting for an older capture task to finish. */
+  /** Shortcut dispatch to capture entry; no longer waits on another capture. */
   queueMs: number
   /** Reserved for backwards-compatible timing output; now always zero. */
   settleMs: number
@@ -124,6 +124,9 @@ const FRAME_ACCELERATORS = Object.freeze({
   copySelection: 'CommandOrControl+C'
 })
 
+/** Suppresses key-repeat callbacks from one held global-shortcut chord. */
+const SHORTCUT_REPEAT_GUARD_MS = 250
+
 /**
  * Joins a stage label to whatever the failing boundary said, so the Options
  * surface reports a cause rather than only the stage that hit it.
@@ -140,7 +143,7 @@ function describeFailure(stage: string, error: unknown): string {
 
 interface Session extends OcrCaptureIdentity {
   valid: boolean
-  /** Read synchronously in the shortcut callback, before any queued work. */
+  /** Read synchronously at the start of the shortcut callback. */
   startedAt: number
   timings?: Omit<GameOcrCaptureTimings, 'recognizeMs' | 'renderMs' | 'totalMs'> & {
     presentedAt: number
@@ -150,15 +153,12 @@ interface Session extends OcrCaptureIdentity {
 
 /**
  * Coordinates Game OCR without owning Electron, renderer, or subprocess
- * details. A hotkey starts one serialized capture pipeline; newer sessions
- * invalidate older work immediately, while the pipeline itself prevents two
- * display captures from racing each other.
+ * details. A hotkey starts capture immediately. Newer sessions invalidate
+ * older work, while capture identities keep overlapping replies ordered.
  *
- * One frozen-frame window serves every capture in an armed run. A frame ends
- * by dropping its screenshot and hiding, not by destroying the window, so the
- * next capture pays neither a renderer boot nor a readiness handshake. The
- * window is destroyed only when Game OCR stops, when a display change
- * invalidates its placement, or when its renderer becomes unusable.
+ * One frozen-frame window serves every capture in an armed run. New captures
+ * start immediately and supersede older sessions; per-capture identities keep
+ * overlapping presentation and OCR replies from being accepted out of order.
  */
 export function createGameOcrController(options: GameOcrControllerOptions): GameOcrController {
   let status: GameOcrStatus = { state: 'off', sessionId: 0 }
@@ -170,10 +170,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let lifecycle = 0
   let nextSessionId = 0
   let nextCaptureId = 0
-  let captureQueue = Promise.resolve()
   let armPromise: Promise<boolean> | undefined
   let stopping = false
   let frameShortcutsHeld = false
+  let lastShortcutCaptureAt = Number.NEGATIVE_INFINITY
+  let shortcutCaptureInFlight = false
   const now = options.now ?? (() => Date.now())
 
   const reportTimings = (timings: GameOcrCaptureTimings): void => {
@@ -377,11 +378,10 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     return created
   }
 
-  const beginSession = (): Session => {
+  const beginSession = (startedAt: number = now()): Session => {
     nextSessionId = allocateIdentifier(nextSessionId)
     nextCaptureId = allocateIdentifier(nextCaptureId)
     invalidateSession()
-    const startedAt = now()
     const session: Session = {
       sessionId: nextSessionId,
       captureId: nextCaptureId,
@@ -492,22 +492,35 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     }
   }
 
-  const requestCapture = (): Promise<void> => {
+  const requestCapture = (startedAt?: number): Promise<void> => {
     if (status.state === 'off' || status.state === 'starting' || status.state === 'error') {
       return Promise.resolve()
     }
-    const session = beginSession()
-    const next = captureQueue.then(() => runCapture(session))
-    captureQueue = next.catch(() => undefined)
-    return next
+    const session = beginSession(startedAt)
+    // Capture exclusion makes recapture safe while the retained overlay is
+    // visible. Do not serialize behind an obsolete freeze: session identity
+    // already makes this latest-request-wins, and the screenshot must begin in
+    // the shortcut callback rather than on the tail of a promise queue.
+    return runCapture(session)
+  }
+
+  const requestShortcutCapture = (): void => {
+    if (shortcutCaptureInFlight) return
+    const pressedAt = now()
+    if (pressedAt - lastShortcutCaptureAt < SHORTCUT_REPEAT_GUARD_MS) return
+    lastShortcutCaptureAt = pressedAt
+    shortcutCaptureInFlight = true
+    void requestCapture(pressedAt).finally(() => {
+      shortcutCaptureInFlight = false
+    })
   }
 
   const registerShortcut = (): boolean => {
     if (shortcutRegistered) return true
-    const registered = options.shortcut.register(accelerator, () => {
-      void requestCapture()
-    })
+    const registered = options.shortcut.register(accelerator, requestShortcutCapture)
     if (!registered) return false
+    lastShortcutCaptureAt = Number.NEGATIVE_INFINITY
+    shortcutCaptureInFlight = false
     shortcutRegistered = true
     return true
   }
@@ -515,6 +528,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const unregisterShortcut = (): void => {
     if (!shortcutRegistered) return
     shortcutRegistered = false
+    shortcutCaptureInFlight = false
     try {
       options.shortcut.unregister(accelerator)
     } catch (error) {
@@ -574,9 +588,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     // Register the replacement first. If Electron reports a conflict, the
     // existing shortcut remains active and the caller can keep persisted
     // settings aligned with that usable state.
-    const registered = options.shortcut.register(next, () => {
-      void requestCapture()
-    })
+    const registered = options.shortcut.register(next, requestShortcutCapture)
     if (!registered) {
       reportError(
         `The Game OCR shortcut is already in use: ${next}`,
@@ -584,6 +596,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       )
       return false
     }
+    lastShortcutCaptureAt = Number.NEGATIVE_INFINITY
 
     const previous = accelerator
     accelerator = next

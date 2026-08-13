@@ -66,7 +66,16 @@ type FakeWindow = Omit<GameOcrWindow, 'freeze' | 'captureBytes'> & {
 function makeWindow(
   id: number,
   events: string[],
-  options: { discard?: () => Promise<void> } = {}
+  options: {
+    discard?: () => Promise<void>
+    freeze?: (request: {
+      captureId: number
+      imageSize: { width: number; height: number }
+    }) => Promise<{
+      width: number
+      height: number
+    }>
+  } = {}
 ): FakeWindow {
   let visible = false
   const closedListeners = new Set<() => void>()
@@ -88,8 +97,9 @@ function makeWindow(
   return {
     freeze: vi.fn(async (request) => {
       events.push(`present:${id}`)
+      const imageSize = options.freeze ? await options.freeze(request) : request.imageSize
       visible = true
-      return request.imageSize
+      return imageSize
     }),
     captureBytes: vi.fn((captureId: number) => {
       const existing = bytes.get(captureId)
@@ -152,7 +162,7 @@ function makeWindow(
 
 function setup(
   overrides: Partial<Parameters<typeof createGameOcrController>[0]> = {},
-  windowOptions: { discard?: () => Promise<void> } = {}
+  windowOptions: Parameters<typeof makeWindow>[2] = {}
 ) {
   const events: string[] = []
   const windows: FakeWindow[] = []
@@ -160,8 +170,8 @@ function setup(
   const usedTargets: GameOcrDisplayTarget[] = []
   let shortcutCallback: (() => void) | undefined
   const shortcut: GameOcrShortcut = {
-    register: vi.fn((_accelerator, callback) => {
-      shortcutCallback = callback
+    register: vi.fn((accelerator, callback) => {
+      if (accelerator === 'Control+Shift+G') shortcutCallback = callback
       return true
     }),
     unregister: vi.fn()
@@ -301,6 +311,60 @@ describe('createGameOcrController', () => {
     expect(fake.windows[0].discard).not.toHaveBeenCalled()
     expect(fake.windows[0]?.visible()).toBe(true)
     discardGate.resolve()
+  })
+
+  it('starts a newer capture without waiting for an obsolete freeze', async () => {
+    const firstFreeze = deferred<{ width: number; height: number }>()
+    const fake = setup(
+      {},
+      {
+        freeze: (request) =>
+          request.captureId === 1 ? firstFreeze.promise : Promise.resolve(request.imageSize)
+      }
+    )
+    await fake.controller.arm()
+
+    const first = fake.controller.capture()
+    await vi.waitFor(() => expect(fake.windows[0]?.freeze).toHaveBeenCalledOnce())
+    const second = fake.controller.capture()
+
+    await second
+    expect(fake.windows[0].freeze).toHaveBeenCalledTimes(2)
+    expect(fake.recognitionRequests[0]?.request.captureId).toBe(2)
+
+    firstFreeze.resolve({ width: 640, height: 480 })
+    await first
+    expect(fake.recognitionRequests).toHaveLength(1)
+  })
+
+  it('coalesces key-repeat callbacks from one held shortcut chord', async () => {
+    let clock = 1_000
+    const firstFreeze = deferred<{ width: number; height: number }>()
+    const fake = setup(
+      { now: () => clock },
+      {
+        freeze: (request) =>
+          request.captureId === 1 ? firstFreeze.promise : Promise.resolve(request.imageSize)
+      }
+    )
+    await fake.controller.arm()
+
+    fake.shortcutCallback?.()
+    await vi.waitFor(() => expect(fake.windows[0]?.freeze).toHaveBeenCalledOnce())
+
+    // Even a repeat outside the time guard is ignored while this physical
+    // press's first presentation is still opening its stream.
+    clock += 1_000
+    fake.shortcutCallback?.()
+    await Promise.resolve()
+    expect(fake.windows[0].freeze).toHaveBeenCalledOnce()
+
+    firstFreeze.resolve({ width: 640, height: 480 })
+    await vi.waitFor(() => expect(fake.recognitionRequests).toHaveLength(1))
+
+    clock += 1_000
+    fake.shortcutCallback?.()
+    await vi.waitFor(() => expect(fake.windows[0].freeze).toHaveBeenCalledTimes(2))
   })
 
   it('rejects a shortcut conflict without claiming that Game OCR is armed', async () => {

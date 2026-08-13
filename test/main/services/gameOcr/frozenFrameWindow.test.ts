@@ -259,6 +259,31 @@ describe('createGameOcrWindowController', () => {
     await expect(bytes).resolves.toBe('iVBORw0KGgo=')
   })
 
+  it('matches overlapping frozen replies to their own capture', async () => {
+    const fake = fakeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const firstRequest = { ...freezeRequest, sessionId: 1, captureId: 1 }
+    const secondRequest = { ...freezeRequest, sessionId: 2, captureId: 2 }
+
+    const first = controller.freeze(firstRequest)
+    const second = controller.freeze(secondRequest)
+    await Promise.resolve()
+
+    controller.reportFrozen({
+      sessionId: 2,
+      captureId: 2,
+      imageSize: { width: 1280, height: 720 }
+    })
+    await expect(second).resolves.toEqual({ width: 1280, height: 720 })
+
+    controller.reportFrozen({
+      sessionId: 1,
+      captureId: 1,
+      imageSize: firstRequest.imageSize
+    })
+    await expect(first).resolves.toEqual(firstRequest.imageSize)
+  })
+
   it('surfaces a renderer that could not freeze or encode the frame', async () => {
     const fake = fakeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })

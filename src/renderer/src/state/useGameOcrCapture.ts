@@ -61,6 +61,8 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     // Created here rather than in the initial ref value, so the map belongs to
     // the effect that opens the streams and tears them down again.
     const streams = (streamsRef.current ??= new Map())
+    const openings = new Map<string, Promise<{ stream: MediaStream; video: HTMLVideoElement }>>()
+    let latestCaptureKey = ''
 
     /** Opens the display's stream, or reuses the one already running for it. */
     const acquire = async (
@@ -77,30 +79,48 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
       ) {
         return existing
       }
+      const opening = openings.get(sourceId)
+      if (opening) return opening
       existing?.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
 
-      const stream = await navigator.mediaDevices.getUserMedia(desktopStreamConstraints(sourceId))
-      const video = document.createElement('video')
-      video.srcObject = stream
-      video.muted = true
-      video.playsInline = true
-      await video.play()
-      if (!video.videoWidth) {
-        await new Promise<void>((resolve) => {
-          video.onloadedmetadata = () => resolve()
-        })
+      const operation = (async (): Promise<{
+        stream: MediaStream
+        video: HTMLVideoElement
+      }> => {
+        const stream = await navigator.mediaDevices.getUserMedia(desktopStreamConstraints(sourceId))
+        const video = document.createElement('video')
+        video.srcObject = stream
+        video.muted = true
+        video.playsInline = true
+        await video.play()
+        if (!video.videoWidth) {
+          await new Promise<void>((resolve) => {
+            video.onloadedmetadata = () => resolve()
+          })
+        }
+        const entry = { stream, video }
+        streams.set(sourceId, entry)
+        return entry
+      })()
+      openings.set(sourceId, operation)
+      try {
+        return await operation
+      } finally {
+        if (openings.get(sourceId) === operation) openings.delete(sourceId)
       }
-      const entry = { stream, video }
-      streams.set(sourceId, entry)
-      return entry
     }
 
     const unsubscribe = api.onFreeze((request) => {
+      const captureKey = `${request.sessionId}:${request.captureId}`
+      latestCaptureKey = captureKey
       void (async () => {
         const identity = { sessionId: request.sessionId, captureId: request.captureId }
         let canvas: HTMLCanvasElement | null = null
         try {
           const { video } = await acquire(request.sourceId)
+          if (latestCaptureKey !== captureKey) {
+            throw new Error('The Game OCR capture was superseded by a newer shortcut.')
+          }
           canvas = canvasRef.current
           if (!canvas) throw new Error('The frozen frame has no canvas to draw into.')
           const context = canvas.getContext('2d')
@@ -119,6 +139,9 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
             surface,
             imageSize: request.imageSize
           })
+          if (latestCaptureKey !== captureKey) {
+            throw new Error('The Game OCR capture was superseded by a newer shortcut.')
+          }
 
           // Main shows the window on this message, so it is sent before the
           // encode rather than after it.
@@ -154,6 +177,8 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
 
     return () => {
       unsubscribe()
+      latestCaptureKey = ''
+      openings.clear()
       for (const { stream } of streams.values()) {
         stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
       }

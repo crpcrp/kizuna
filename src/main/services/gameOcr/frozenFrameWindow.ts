@@ -194,7 +194,7 @@ export function createGameOcrWindowController({
 }: GameOcrWindowControllerOptions): GameOcrWindow {
   let rendererLoaded = loaded
   let rendererIsReady = loaded
-  let pending: GameOcrFreezeRequest | undefined
+  let presentationEpoch = 0
   let closed = false
   let readyResolve: (() => void) | undefined
   let readyReject: ((error: Error) => void) | undefined
@@ -203,13 +203,13 @@ export function createGameOcrWindowController({
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
   const regionsRenderedListeners = new Set<(value: GameOcrRegionsRendered) => void>()
-  let frozenWaiter:
-    | {
-        captureId: number
-        resolve: (value: GameOcrFrozenFrame) => void
-        reject: (e: unknown) => void
-      }
-    | undefined
+  const frozenWaiters = new Map<
+    number,
+    {
+      resolve: (value: GameOcrFrozenFrame) => void
+      reject: (e: unknown) => void
+    }
+  >()
   const bytesWaiters = new Map<
     number,
     { promise: Promise<string>; resolve: (value: string) => void; reject: (e: unknown) => void }
@@ -217,9 +217,9 @@ export function createGameOcrWindowController({
 
   /** Fails everything still waiting on a renderer that can no longer answer. */
   const abandonWaiters = (reason: string): void => {
-    const frozen = frozenWaiter
-    frozenWaiter = undefined
-    frozen?.reject(new Error(reason))
+    const frozen = [...frozenWaiters.values()]
+    frozenWaiters.clear()
+    for (const waiter of frozen) waiter.reject(new Error(reason))
     const waiters = [...bytesWaiters.values()]
     bytesWaiters.clear()
     for (const waiter of waiters) waiter.reject(new Error(reason))
@@ -252,11 +252,8 @@ export function createGameOcrWindowController({
     closed = true
     rendererLoaded = false
     rendererIsReady = false
-    const hadPendingPresentation = pending !== undefined
-    pending = undefined
-    if (hadPendingPresentation) {
-      readyReject?.(new Error('Game OCR window closed before its renderer loaded.'))
-    }
+    presentationEpoch++
+    readyReject?.(new Error('Game OCR window closed before its renderer loaded.'))
     readyReject = undefined
     readyResolve = undefined
     abandonWaiters('The Game OCR window closed before its frame was captured.')
@@ -268,13 +265,11 @@ export function createGameOcrWindowController({
     sendToWindow(window, GAME_OCR_CHANNELS.discard)
   }
 
-  const sendPending = (): void => {
-    const next = pending
-    if (!next || closed || !rendererLoaded) return
-    pending = undefined
+  const sendFreeze = (request: GameOcrFreezeRequest): void => {
+    if (closed || !rendererLoaded) return
     // Only the request goes out here. Content protection excludes this window
     // from the desktop stream, so a retained visible canvas is safe to replace.
-    sendToWindow(window, GAME_OCR_CHANNELS.freeze, next)
+    sendToWindow(window, GAME_OCR_CHANNELS.freeze, request)
   }
 
   const showFrozen = (): void => {
@@ -339,7 +334,7 @@ export function createGameOcrWindowController({
   window.webContents.on('render-process-gone', () => {
     rendererLoaded = false
     rendererIsReady = false
-    pending = undefined
+    presentationEpoch++
     abandonWaiters('The Game OCR renderer stopped before its frame was captured.')
     resetReadyPromise()
     void waitUntilClosed()
@@ -349,12 +344,15 @@ export function createGameOcrWindowController({
     async freeze(request): Promise<OcrImageSize> {
       if (closed) throw new Error('The Game OCR frame is gone.')
       validateFreezeRequest(request)
-      pending = { ...request }
+      const epoch = presentationEpoch
       if (!rendererIsReady) await ready
+      if (closed || epoch !== presentationEpoch) {
+        throw new Error('The Game OCR frame was discarded before it was captured.')
+      }
       const settled = new Promise<GameOcrFrozenFrame>((resolve, reject) => {
-        frozenWaiter = { captureId: request.captureId, resolve, reject }
+        frozenWaiters.set(request.captureId, { resolve, reject })
       })
-      sendPending()
+      sendFreeze(request)
       const frozen = await settled
       if (frozen.error) throw new Error(frozen.error)
       showFrozen()
@@ -380,9 +378,9 @@ export function createGameOcrWindowController({
 
     /** Called by the IPC binding when the renderer reports a drawn frame. */
     reportFrozen(frozen): void {
-      const waiter = frozenWaiter
-      if (!waiter || waiter.captureId !== frozen.captureId) return
-      frozenWaiter = undefined
+      const waiter = frozenWaiters.get(frozen.captureId)
+      if (!waiter) return
+      frozenWaiters.delete(frozen.captureId)
       waiter.resolve(frozen)
     },
 
@@ -419,7 +417,6 @@ export function createGameOcrWindowController({
       readyResolve?.()
       readyResolve = undefined
       readyReject = undefined
-      sendPending()
     },
 
     copySelection(): void {
@@ -435,16 +432,16 @@ export function createGameOcrWindowController({
     },
 
     async discard(): Promise<void> {
-      pending = undefined
+      presentationEpoch++
       abandonWaiters('The Game OCR frame was discarded before it was captured.')
-      // Hide is the user-visible operation. Issue it before renderer cleanup,
-      // then let the capture coordinator wait for a post-hide desktop frame.
+      // Hide is the user-visible operation. Issue it before renderer cleanup.
       requestHide()
       sendDiscard()
     },
 
     async dismiss(): Promise<void> {
-      pending = undefined
+      presentationEpoch++
+      abandonWaiters('The Game OCR frame was dismissed before it was captured.')
       // The native window goes first so one background press returns to the
       // game even if renderer cleanup is delayed.
       requestHide()
@@ -456,7 +453,8 @@ export function createGameOcrWindowController({
     },
 
     async close(): Promise<void> {
-      pending = undefined
+      presentationEpoch++
+      abandonWaiters('The Game OCR frame closed before it was captured.')
       sendDiscard()
       await waitUntilClosed()
     },
