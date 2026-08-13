@@ -4,7 +4,9 @@ import {
   attachPairCloseHandlers,
   createAppWindowSet,
   loadRendererWindow,
+  preparePlayerAppWindowSet,
   presentAppWindowSet,
+  presentOverlayAppWindowSet,
   syncInitialWindowBounds,
   type WindowCloseEvent
 } from '@src/main/windowPair'
@@ -189,6 +191,47 @@ describe('createAppWindowSet', () => {
 })
 
 describe('Linux window pair presentation and shutdown', () => {
+  it('maps only the video host when preparing the player', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+
+    preparePlayerAppWindowSet(windows)
+
+    expect(host.show).toHaveBeenCalledOnce()
+    expect(overlay.show).not.toHaveBeenCalled()
+  })
+
+  it('presents only the Linux renderer overlay for splash', () => {
+    const callbacks: Array<() => void> = []
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+
+    presentOverlayAppWindowSet(
+      windows,
+      (callback) => callbacks.push(callback),
+      vi.fn(() => undefined),
+      vi.fn()
+    )
+    expect(host.show).not.toHaveBeenCalled()
+    expect(overlay.show).not.toHaveBeenCalled()
+
+    callbacks[0]()
+
+    expect(host.show).not.toHaveBeenCalled()
+    expect(overlay.show).toHaveBeenCalledOnce()
+    expect(overlay.focus).toHaveBeenCalledOnce()
+  })
+
   it('keeps Windows operations on its single BrowserWindow', () => {
     const factory = makeWindowFactory()
     const windows = createAppWindowSet({

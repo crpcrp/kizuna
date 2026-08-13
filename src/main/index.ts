@@ -25,7 +25,12 @@ import {
   registerWindowControls,
   sendToWindow
 } from './windowOptions'
-import { LAUNCH_CHANNELS, UPDATE_CHANNELS, WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
+import {
+  APP_SHELL_CHANNELS,
+  LAUNCH_CHANNELS,
+  UPDATE_CHANNELS,
+  WINDOW_CONTROL_CHANNELS
+} from '../shared/ipcChannels'
 import { COPYRIGHT } from '../shared/appIdentity'
 import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
@@ -85,10 +90,14 @@ import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
 import { createStartupProbe, STARTUP_PROBE_ENV } from './startupProbe'
 import { createPlayerRuntime, type PlayerRuntime } from './playerRuntime'
+import { registerAppShellBridge } from './appShellBridge'
+import { createAppShellCoordinator } from './services/appShell'
 import {
   createAppWindowSet,
   loadRendererWindow,
+  preparePlayerAppWindowSet,
   presentAppWindowSet,
+  presentOverlayAppWindowSet,
   type AppWindowSet
 } from './windowPair'
 import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
@@ -195,11 +204,6 @@ function createWindow(
     sendToWindow(uiOverlay, WINDOW_CONTROL_CHANNELS.fullscreenChanged, fullscreen)
   })
 
-  // mpv's X11 --wid target must already be mapped while it initializes. Keep
-  // only the opaque host visible during startup; the transparent renderer
-  // overlay waits until the IPC bridge and renderer are ready.
-  if (videoHost !== uiOverlay) videoHost.show()
-
   startGameOcr(settings, windows)
 
   // Do not let renderer effects invoke player channels before their handlers
@@ -208,11 +212,33 @@ function createWindow(
   const runtime =
     playerRuntime ??
     (playerRuntime = createPlayerRuntimeForWindow(videoHost, uiOverlay, mpvPath, history, settings))
-  void runtime.ensureStarted().then(() => {
+  let initialPlayerPresentation = true
+  const shell = createAppShellCoordinator({
+    initialSurface: 'player',
+    ensurePlayerStarted: () => {
+      // mpv's X11 --wid target must already be mapped while it initializes.
+      if (runtime.getState() === 'not-started') preparePlayerAppWindowSet(windows)
+      return runtime.ensureStarted()
+    },
+    presentSplash: () => presentOverlayAppWindowSet(windows),
+    presentPlayer: () => {
+      if (initialPlayerPresentation) {
+        initialPlayerPresentation = false
+        presentAppWindowSet(windows)
+      } else {
+        windows.activate()
+      }
+    },
+    presentOptions: () => windows.activate(),
+    sendSurfaceChanged: (surface) =>
+      sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
+    // app.quit() enters the existing before-quit lifecycle coordinator below.
+    quit: () => app.quit()
+  })
+  registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)
+
+  void shell.showPlayer().then(() => {
     if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
-    // Linux keeps the transparent overlay hidden until the renderer has
-    // finished its first document load. Windows retains eager presentation.
-    presentAppWindowSet(windows)
     startupProbe.mark('window')
     loadRendererWindow(uiOverlay, {
       devUrl,

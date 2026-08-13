@@ -54,6 +54,7 @@ import type {
 } from './gameOcr'
 import type { GameOcrSettings } from './gameOcrSettings'
 import type { OcrResult } from './ocr'
+import type { AppSurface } from './appShell'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -117,6 +118,13 @@ export interface KizunaApi {
     onOpenPath(cb: (path: string) => void): () => void
     onError(cb: (message: string) => void): () => void
     rendererReady(): void
+  }
+  appShell: {
+    getSurface(): Promise<AppSurface>
+    showPlayer(): Promise<AppSurface>
+    showOptions(): Promise<AppSurface>
+    quit(): void
+    onSurfaceChanged(cb: (surface: AppSurface) => void): () => void
   }
   gameOcr: {
     /** True only on the Windows runtime where the experimental feature exists. */

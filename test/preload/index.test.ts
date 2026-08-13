@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ANKI_CHANNELS,
+  APP_SHELL_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   LAUNCH_CHANNELS,
@@ -78,6 +79,47 @@ describe('preload launch contract', () => {
       'Playback engine failed to start; the file could not be opened.'
     )
     expect(electron.removeListener).toHaveBeenCalledWith(LAUNCH_CHANNELS.error, listener)
+  })
+})
+
+describe('preload app-shell contract', () => {
+  beforeEach(() => {
+    electron.invoke.mockReset()
+    electron.send.mockReset()
+    electron.on.mockReset()
+    electron.removeListener.mockReset()
+  })
+
+  it('routes surface commands and unsubscribes surface changes', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      appShell: {
+        getSurface(): Promise<unknown>
+        showPlayer(): Promise<unknown>
+        showOptions(): Promise<unknown>
+        quit(): void
+        onSurfaceChanged(cb: (surface: string) => void): () => void
+      }
+    }
+    const callback = vi.fn()
+
+    api.appShell.getSurface()
+    api.appShell.showPlayer()
+    api.appShell.showOptions()
+    api.appShell.quit()
+    const off = api.appShell.onSurfaceChanged(callback)
+    const listener = electron.on.mock.calls.at(-1)![1]
+    listener({}, 'options')
+    off()
+
+    expect(electron.invoke).toHaveBeenNthCalledWith(1, APP_SHELL_CHANNELS.getSurface)
+    expect(electron.invoke).toHaveBeenNthCalledWith(2, APP_SHELL_CHANNELS.showPlayer)
+    expect(electron.invoke).toHaveBeenNthCalledWith(3, APP_SHELL_CHANNELS.showOptions)
+    expect(electron.send).toHaveBeenCalledWith(APP_SHELL_CHANNELS.quit)
+    expect(callback).toHaveBeenCalledWith('options')
+    expect(electron.removeListener).toHaveBeenCalledWith(
+      APP_SHELL_CHANNELS.surfaceChanged,
+      listener
+    )
   })
 })
 
