@@ -63,7 +63,8 @@ appropriate.
 ## Game OCR (Windows only, experimental)
 
 Game OCR is a second, self-contained surface: a global shortcut freezes the
-display under the mouse pointer, PP-OCR reads it locally through ONNX Runtime, and interactive
+foreground application's window — or the display under the mouse pointer when
+that window cannot be captured safely — PP-OCR reads it locally through ONNX Runtime, and interactive
 text boxes are drawn over the detected regions. It is Windows only. The capture
 service, the frozen-frame window, and the preload's `supported` flag all refuse
 any other platform, so no Linux or macOS behavior is implied or claimed.
@@ -73,15 +74,53 @@ Display capture, the global shortcut, the native window, the tray, and the
 PP-OCR subprocess live in the main process behind injected interfaces;
 PP-OCR itself is a spawned sidecar speaking a newline-delimited JSON
 protocol over stdio, never a linked library. Only validated, serializable data
-crosses the preload: a freeze request naming a capture source, encoded PNG
-bytes with their media type and dimensions, and normalized OCR regions.
-Executable paths, native image handles, and raw worker output stay in main.
+crosses the preload: a freeze request naming a capture source and its target
+kind, encoded PNG bytes with their media type and dimensions, and normalized
+OCR regions. Executable paths, native image handles, and raw worker output stay
+in main.
+
+### The one in-process native boundary
+
+Selecting the foreground window is the single exception to "spawned
+subprocess, never a linked library", and it is deliberately narrow.
+
+Electron enumerates capturable windows but does not expose the Win32
+foreground window of another process, and window titles are not identities.
+`src/main/services/gameOcr/foregroundWindow.ts` therefore calls
+`GetForegroundWindow`, `GetAncestor`, `IsIconic`, `IsWindowVisible`,
+`GetWindowThreadProcessId`, `OpenProcess`/`QueryFullProcessImageNameW`, and
+`DwmGetWindowAttribute` through Koffi, an FFI module that ships a prebuilt
+Node-API binary per platform. Nothing else — no window title is read at all,
+which is what makes "never identify a window by its title" a property of the
+code rather than a rule to remember.
+
+The rule the subprocess boundary exists to protect is untouched, because it is
+a licensing rule as much as an architectural one: what is linked here is
+`user32.dll`, `kernel32.dll`, and `dwmapi.dll`, operating-system APIs that
+carry no redistribution terms and are not bundled. No third-party engine,
+codec, or player library is linked into Kizuna's process by this. Koffi itself
+is MIT and appears in the generated notices like any other npm dependency.
+
+A helper executable would have honoured the letter of the rule, but it costs
+tens of milliseconds per shortcut to spawn against ~40 microseconds for the
+in-process query, on the one path whose latency the user directly feels, and
+it would have to be built and published through the vendor mirror for a
+first-party file with no third-party content in it.
+
+The boundary stays narrow by construction. Everything native lives behind
+`ForegroundWindowNative`, a faithful mirror of those calls and nothing else;
+every rejection, validation, and normalization rule sits in a pure layer above
+it, and tests inject fakes rather than loading the module. Failure is not
+fatal at any point: a boundary that cannot load, cannot answer, or answers
+with an unusable window falls back to display capture.
 
 The screenshot travels renderer→main, not the other way. The frozen frame holds
-an open desktop capture stream for the display it covers, so a capture is one
-`drawImage` from a frame it already has rather than a ~300 ms
-`desktopCapturer.getSources` read that costs the same at any requested size and
-never warms up. Main resolves geometry and the capture source; the renderer
+open desktop capture streams for what it covers, so a capture is one
+`drawImage` from a frame it already has rather than a stream open, and a
+display capture never pays the ~300 ms `desktopCapturer.getSources` read that
+costs the same at any requested size and never warms up. Window sources are
+never enumerated: that call measured ~3.2 s on the pinned runtime, so the
+source id is constructed from the handle instead. Main resolves geometry and the capture source; the renderer
 draws, shows itself, and only then encodes the PNG the worker needs. PNG because
 the worker's vendored OpenCV has no JPEG codec, and the media type travels with
 the bytes rather than being assumed at either end. Those bytes stay binary

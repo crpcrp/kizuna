@@ -1,10 +1,15 @@
 import {
   MAX_OCR_IDENTIFIER,
   type OcrCaptureIdentity,
-  type OcrDisplayCaptureMetadata,
+  type OcrDisplayBounds,
+  type OcrImageSize,
   type OcrResult
 } from '../../../shared/ocr'
-import type { GameOcrDisplaySources } from './displayCapture'
+import {
+  describeCaptureTarget,
+  type GameOcrCaptureTarget,
+  type GameOcrCaptureTargets
+} from './captureTarget'
 import type { GameOcrWindow } from './frozenFrameWindow'
 
 /** Electron's globalShortcut surface used by the Game OCR coordinator. */
@@ -19,7 +24,7 @@ export interface GameOcrRecognitionAdapter {
   recognize(request: {
     sessionId: number
     captureId: number
-    imageSize: OcrDisplayCaptureMetadata['imageSize']
+    imageSize: OcrImageSize
     imageBytes: Uint8Array
   }): Promise<OcrResult>
   stop(): Promise<void>
@@ -48,14 +53,18 @@ export interface GameOcrCaptureTimings {
   queueMs: number
   /** Reserved for backwards-compatible timing output; now always zero. */
   settleMs: number
-  /** Locating the display whose pixels are already streaming in the renderer. */
+  /** Locating what the renderer is already streaming, display or window. */
   captureMs: number
+  /** The native foreground-window query. Zero when it was not consulted. */
+  foregroundMs: number
   cursorMs: number
   displayMs: number
   sourceMs: number
   captureEventLoopMs: number
   targetCacheHit: boolean
   sourceCacheHit: boolean
+  /** What was captured, so warm window and display paths stay distinguishable. */
+  targetKind: GameOcrCaptureTarget['kind']
   /** Handing the screenshot to the frozen-frame renderer and showing it. */
   presentMs: number
   /** Visible screenshot through PNG encode, OCR inference, and region IPC. */
@@ -71,15 +80,21 @@ export function writeGameOcrTotalTime(
   timings: GameOcrCaptureTimings,
   write: (message: string) => void = (message) => console.log(message)
 ): void {
+  // A window capture consults neither the cursor, the display lookup, nor
+  // source enumeration, so reporting those fields would claim work — and
+  // specifically a source enumeration — that never happened.
+  const targetDetail =
+    timings.targetKind === 'window'
+      ? `window, foreground ${timings.foregroundMs}ms, source constructed`
+      : `display, cursor ${timings.cursorMs}ms, display ${timings.displayMs}ms, ` +
+        `source ${timings.sourceMs}ms ${timings.sourceCacheHit ? 'cached' : 'enumerated'}, ` +
+        `target ${timings.targetCacheHit ? 'cached' : 'resolved'}`
   write(
     `[game-ocr] shortcut to word boxes: ${timings.totalMs}ms ` +
       `(dismiss ${timings.dismissMs}ms, queue ${timings.queueMs}ms, ` +
       `settle ${timings.settleMs}ms, ` +
       `capture ${timings.captureMs}ms ` +
-      `(cursor ${timings.cursorMs}ms, display ${timings.displayMs}ms, ` +
-      `source ${timings.sourceMs}ms ${timings.sourceCacheHit ? 'cached' : 'enumerated'}, ` +
-      `event-loop ${timings.captureEventLoopMs}ms, ` +
-      `target ${timings.targetCacheHit ? 'cached' : 'resolved'}), ` +
+      `(${targetDetail}, event-loop ${timings.captureEventLoopMs}ms), ` +
       `present ${timings.presentMs}ms, ` +
       `recognize ${timings.recognizeMs}ms, render ${timings.renderMs}ms)`
   )
@@ -88,13 +103,15 @@ export function writeGameOcrTotalTime(
 export interface GameOcrControllerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
-  displays: GameOcrDisplaySources
+  /** Resolves the focused window, or the display under the pointer. */
+  targets: GameOcrCaptureTargets
   /**
-   * Builds the frozen-frame window. Called once per armed run rather than once
-   * per capture: the coordinator retains the window between frames and only
-   * asks for a new one after the old one is gone.
+   * Builds the frozen-frame window over the given logical desktop rectangle.
+   * Called once per armed run rather than once per capture: the coordinator
+   * retains the window between frames and only asks for a new one after the
+   * old one is gone, moving and resizing it onto each new target.
    */
-  createPresentation: (metadata: OcrDisplayCaptureMetadata) => GameOcrWindow
+  createPresentation: (bounds: OcrDisplayBounds) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
   /** Clears renderer-side token, lookup, popup, and translation work. */
   invalidateResults?: () => void
@@ -103,6 +120,12 @@ export interface GameOcrControllerOptions {
   onError?: (message: string, error: unknown) => void
   /** Per-capture stage costs, for the development latency log. */
   onTimings?: (timings: GameOcrCaptureTimings) => void
+  /**
+   * One line per capture describing what was targeted and, when the focused
+   * window was not usable, why. Development only; it carries the executable
+   * basename and PID, never a full path.
+   */
+  onDiagnostic?: (message: string) => void
   /** Injected so timing assertions do not depend on a real clock. */
   now?: () => number
 }
@@ -224,9 +247,17 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const invalidateDisplayCache = (): void => {
     try {
-      options.displays.invalidate()
+      options.targets.invalidate()
     } catch (error) {
       reportError('Game OCR display cache cleanup failed.', error)
+    }
+  }
+
+  const reportDiagnostic = (message: string): void => {
+    try {
+      options.onDiagnostic?.(message)
+    } catch {
+      // Diagnostics must never affect the capture they describe.
     }
   }
 
@@ -358,14 +389,18 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       notify({ state: 'armed', sessionId: status.sessionId })
   }
 
-  /** Reuses the retained window, moved onto the newly captured display. */
-  const ensurePresentation = (metadata: OcrDisplayCaptureMetadata): GameOcrWindow => {
+  /**
+   * Reuses the retained window, moved and resized onto the new target. A
+   * window target changes the rectangle on almost every alt-tab, so this is
+   * no longer only a multi-monitor case.
+   */
+  const ensurePresentation = (bounds: OcrDisplayBounds): GameOcrWindow => {
     const retained = presentation
     if (retained) {
-      retained.moveTo(metadata.displayBounds)
+      retained.moveTo(bounds)
       return retained
     }
-    const created = options.createPresentation(metadata)
+    const created = options.createPresentation(bounds)
     presentation = created
     created.onDismissed(() => handleFrameEnded(created, false))
     created.onClosed(() => {
@@ -396,6 +431,8 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         queueMs: timings.queueMs,
         settleMs: timings.settleMs,
         captureMs: timings.captureMs,
+        foregroundMs: timings.foregroundMs,
+        targetKind: timings.targetKind,
         cursorMs: timings.cursorMs,
         displayMs: timings.displayMs,
         sourceMs: timings.sourceMs,
@@ -428,7 +465,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
   const recognize = async (
     session: Session,
-    metadata: OcrDisplayCaptureMetadata,
+    imageSize: OcrImageSize,
     frame: GameOcrWindow,
     imageBytesPromise: Promise<Uint8Array>
   ): Promise<void> => {
@@ -448,7 +485,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       const recognition = options.ocr.recognize({
         sessionId: session.sessionId,
         captureId: session.captureId,
-        imageSize: metadata.imageSize,
+        imageSize,
         imageBytes
       })
       imageBytes = EMPTY_IMAGE_BYTES
@@ -481,6 +518,91 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     }
   }
 
+  /**
+   * One capture attempt against one resolved target.
+   *
+   * Returns `'window-capture-failed'` instead of throwing when a *window*
+   * target could not be frozen. That is not an error the user should see: an
+   * exclusive-fullscreen game, a protected surface, or a handle Chromium
+   * declines to capture all land here, and the answer to every one of them is
+   * the display capture Game OCR did before focused-window selection existed.
+   */
+  const attemptCapture = async (
+    session: Session,
+    target: GameOcrCaptureTarget,
+    dequeuedAt: number,
+    capturedAt: number
+  ): Promise<'presented' | 'superseded' | 'window-capture-failed'> => {
+    const diagnostics = target.diagnostics ?? {
+      cursorMs: 0,
+      displayMs: 0,
+      sourceMs: 0,
+      foregroundMs: 0,
+      targetCacheHit: false,
+      sourceCacheHit: false
+    }
+    const captureMs = capturedAt - dequeuedAt
+
+    const frame = ensurePresentation(target.bounds)
+    // Register the waiter before asking the renderer to draw. A very fast
+    // canvas encode can otherwise arrive before main is listening for it.
+    const imageBytesPromise = frame.captureBytes(session.captureId)
+    let imageSize: OcrImageSize
+    try {
+      imageSize = await frame.freeze({
+        sessionId: session.sessionId,
+        captureId: session.captureId,
+        sourceId: target.sourceId,
+        targetKind: target.kind,
+        imageSize: target.expectedImageSize
+      })
+    } catch (error) {
+      if (target.kind === 'display' || !isCurrent(session)) throw error
+      reportDiagnostic(
+        `[game-ocr] window capture failed, falling back to display capture: ` +
+          describeFailure('reason', error)
+      )
+      return 'window-capture-failed'
+    }
+    if (!isCurrent(session)) {
+      // A newer capture owns this retained window. It will replace this
+      // canvas next; hiding here would make the newer shortcut visibly flash.
+      return 'superseded'
+    }
+    // Claimed only once the frame is actually up, so a capture that failed
+    // on its way here never leaves Escape taken away from the game.
+    holdFrameShortcuts(frame)
+    const presentedAt = now()
+    session.timings = {
+      sessionId: session.sessionId,
+      captureId: session.captureId,
+      dismissMs: 0,
+      queueMs: dequeuedAt - session.startedAt,
+      settleMs: 0,
+      captureMs,
+      foregroundMs: diagnostics.foregroundMs,
+      targetKind: target.kind,
+      cursorMs: diagnostics.cursorMs,
+      displayMs: diagnostics.displayMs,
+      sourceMs: diagnostics.sourceMs,
+      captureEventLoopMs: Math.max(
+        0,
+        captureMs -
+          diagnostics.foregroundMs -
+          diagnostics.cursorMs -
+          diagnostics.displayMs -
+          diagnostics.sourceMs
+      ),
+      targetCacheHit: diagnostics.targetCacheHit,
+      sourceCacheHit: diagnostics.sourceCacheHit,
+      presentMs: presentedAt - capturedAt,
+      presentedAt
+    }
+
+    void recognize(session, imageSize, frame, imageBytesPromise)
+    return 'presented'
+  }
+
   const runCapture = async (session: Session): Promise<void> => {
     try {
       if (!isCurrent(session)) return
@@ -488,65 +610,29 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
 
       // Geometry only. The pixels come from the stream the frame already
       // holds, so nothing here reads the screen.
-      const targetOrPromise = options.displays.cursorDisplay()
+      const targetOrPromise = options.targets.resolve()
       // A warm target is deliberately synchronous. Awaiting an already-known
       // value here would return control to Electron's global-shortcut dispatch,
       // which can postpone the Promise continuation by seconds on Windows.
-      const target = isPromiseLike(targetOrPromise) ? await targetOrPromise : targetOrPromise
+      let target = isPromiseLike(targetOrPromise) ? await targetOrPromise : targetOrPromise
       if (!isCurrent(session)) return
-      const capturedAt = now()
-      const displayDiagnostics = target.diagnostics ?? {
-        cursorMs: 0,
-        displayMs: 0,
-        sourceMs: 0,
-        targetCacheHit: false,
-        sourceCacheHit: false
-      }
-      const captureMs = capturedAt - dequeuedAt
+      reportDiagnostic(describeCaptureTarget(target))
 
-      const frame = ensurePresentation(target.metadata)
-      // Register the waiter before asking the renderer to draw. A very fast
-      // canvas encode can otherwise arrive before main is listening for it.
-      const imageBytesPromise = frame.captureBytes(session.captureId)
-      const imageSize = await frame.freeze({
-        sessionId: session.sessionId,
-        captureId: session.captureId,
-        sourceId: target.sourceId,
-        imageSize: target.metadata.imageSize
+      const outcome = await attemptCapture(session, target, dequeuedAt, now())
+      if (outcome !== 'window-capture-failed') return
+
+      // The window would not capture. Retry against the display under the
+      // pointer under a fresh capture identity, so the abandoned window
+      // capture's late reply cannot be mistaken for this one's.
+      nextCaptureId = allocateIdentifier(nextCaptureId)
+      session.captureId = nextCaptureId
+      const retryOrPromise = options.targets.resolve({
+        excludeWindow: 'window-capture-failed'
       })
-      if (!isCurrent(session)) {
-        // A newer capture owns this retained window. It will replace this
-        // canvas next; hiding here would make the newer shortcut visibly flash.
-        return
-      }
-      // Claimed only once the frame is actually up, so a capture that failed
-      // on its way here never leaves Escape taken away from the game.
-      holdFrameShortcuts(frame)
-      const presentedAt = now()
-      session.timings = {
-        sessionId: session.sessionId,
-        captureId: session.captureId,
-        dismissMs: 0,
-        queueMs: dequeuedAt - session.startedAt,
-        settleMs: 0,
-        captureMs,
-        cursorMs: displayDiagnostics.cursorMs,
-        displayMs: displayDiagnostics.displayMs,
-        sourceMs: displayDiagnostics.sourceMs,
-        captureEventLoopMs: Math.max(
-          0,
-          captureMs -
-            displayDiagnostics.cursorMs -
-            displayDiagnostics.displayMs -
-            displayDiagnostics.sourceMs
-        ),
-        targetCacheHit: displayDiagnostics.targetCacheHit,
-        sourceCacheHit: displayDiagnostics.sourceCacheHit,
-        presentMs: presentedAt - capturedAt,
-        presentedAt
-      }
-
-      void recognize(session, { ...target.metadata, imageSize }, frame, imageBytesPromise)
+      target = isPromiseLike(retryOrPromise) ? await retryOrPromise : retryOrPromise
+      if (!isCurrent(session)) return
+      reportDiagnostic(describeCaptureTarget(target))
+      await attemptCapture(session, target, dequeuedAt, now())
     } catch (error) {
       if (!isCurrent(session)) return
       await discardPresentation().catch((dismissError) => {
@@ -687,6 +773,20 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     stopping = false
   }
 
+  /**
+   * Stopping keeps the native foreground boundary loaded, because arming
+   * again is the ordinary next thing to happen and reloading it is not free.
+   * Only application shutdown releases it.
+   */
+  const shutdown = async (): Promise<void> => {
+    await stop()
+    try {
+      options.targets.dispose()
+    } catch (error) {
+      reportError('Game OCR capture target cleanup failed.', error)
+    }
+  }
+
   return {
     getStatus: () => ({ ...status }),
     subscribe(listener) {
@@ -697,7 +797,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     setAccelerator,
     capture: requestCapture,
     stop,
-    shutdown: stop
+    shutdown
   }
 }
 

@@ -8,6 +8,7 @@ import type {
   GameOcrRegionsRendered
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
+import { parseWindowSourceHandle } from './windowCapture'
 import {
   applyNavigationGuards,
   applyReloadGuard,
@@ -71,6 +72,12 @@ export function getGameOcrWindowOptions(
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
+      // `backgroundThrottling: false` deliberately absent. Electron implements
+      // it by setting Chromium's `disable_hidden_`, so the widget never makes
+      // the hidden→shown transition this window makes on every frame, and
+      // nothing on the capture path is throttled anyway: opening a stream and
+      // encoding a canvas are promises, not timers. It bought nothing and is
+      // the prime suspect for a frame that draws but does not take clicks.
     }
   }
 }
@@ -673,10 +680,17 @@ function validateFreezeRequest(request: GameOcrFreezeRequest): void {
     !request ||
     typeof request.sourceId !== 'string' ||
     request.sourceId.length === 0 ||
+    (request.targetKind !== 'window' && request.targetKind !== 'display') ||
     !isPositiveInteger(request.imageSize?.width) ||
     !isPositiveInteger(request.imageSize?.height)
   ) {
     throw new Error('Game OCR freeze request is invalid.')
+  }
+  // A window request's source id *is* its window handle. Checking the shape
+  // here fails the capture in main, where it falls back to display capture,
+  // rather than in the renderer as an opaque `getUserMedia` rejection.
+  if (request.targetKind === 'window' && parseWindowSourceHandle(request.sourceId) === undefined) {
+    throw new Error(`Game OCR freeze request names no window handle: ${request.sourceId}`)
   }
 }
 

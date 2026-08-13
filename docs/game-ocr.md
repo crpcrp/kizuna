@@ -30,12 +30,15 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
    Game OCR** in the menu bar). Kizuna registers the configured global
    shortcut, starts the local PP-OCR worker, hides its own window, and
    leaves a tray icon behind.
-2. Move the mouse onto the display showing the game and press the shortcut
-   (**Ctrl+Shift+O** by default; rebind it in the same tab).
-3. Kizuna freezes **the whole display containing the mouse pointer** and
-   immediately covers that display with the frozen frame. The screenshot
-   appears before recognition starts, so the frame the user sees is exactly the
-   frame being read.
+2. With the game in front, press the shortcut (**Ctrl+Shift+O** by default;
+   rebind it in the same tab).
+3. Kizuna freezes **the foreground application's window** and immediately
+   covers exactly that window with the frozen frame. When the focused window
+   cannot be captured safely it freezes **the display containing the mouse
+   pointer** instead — see [Choosing what is
+   captured](#choosing-what-is-captured). The screenshot appears before
+   recognition starts, so the frame the user sees is exactly the frame being
+   read.
 4. A small **"Recognizing text…"** sign sits at a fixed inset in the
    screenshot's bottom-right corner. It is visible only while OCR is running
    and disappears when the boxes appear.
@@ -56,6 +59,88 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 
 Mining a word from a frozen frame uses the existing **text-only** Anki path.
 Game OCR adds no screenshot, audio, or timestamp to a card.
+
+### Choosing what is captured
+
+A windowed game is a small part of a large desktop. Reading the whole display
+sends PP-OCR several times the pixels it needs and lets unrelated desktop
+content — a browser, a chat window, the taskbar — become word boxes. So the
+default target is the foreground window: a 1024×768 game on a 2560×1440
+monitor produces a 1024×768 image, roughly a ninth of the pixels.
+
+Windows itself has to be asked which window that is. Electron enumerates
+capturable windows but does not expose another process's foreground window,
+`BrowserWindow.getFocusedWindow()` only covers Kizuna's own, and titles are not
+identities — they duplicate, come back empty, and change while a game runs.
+`src/main/services/gameOcr/foregroundWindow.ts` is the whole native boundary
+and is described in [architecture](architecture-plan.md#the-one-in-process-native-boundary).
+
+The window is rejected, and the display under the pointer captured instead,
+when:
+
+| Reason | Why |
+|---|---|
+| `unsupported` | Not Windows |
+| `query-failed` | The native boundary could not load or answer |
+| `no-foreground` | Nothing holds the foreground |
+| `own-process` | Kizuna is in front. Its frozen frame is excluded from capture, so capturing it would produce a black image |
+| `minimized` | `IsIconic`; there are no pixels |
+| `invisible` | `IsWindowVisible` is false |
+| `cloaked` | `DWMWA_CLOAKED`. The dangerous one: background UWP windows and virtual-desktop residents look entirely valid, with real bounds and a real title, and capture as nothing |
+| `invalid-window` | No process, or a window that has never been laid out |
+| `no-display-match` | No display owns the window's rectangle |
+| `window-capture-failed` | The stream refused to open. Exclusive fullscreen, protected surfaces, and anti-cheat all arrive here |
+
+Falling back is never an error the user sees: Game OCR stays armed, a frame
+still appears, and only the development diagnostic says what happened. A
+failed window capture is retried once against the display under a fresh
+capture identity, so the abandoned window capture's late reply cannot be
+mistaken for the frame that replaced it.
+
+Development runs log one line per capture:
+
+```
+[game-ocr] target window game.exe (pid 4321) 1024x768
+[game-ocr] target display 2560x1440 (fallback: the foreground window is cloaked)
+```
+
+The executable basename and PID are there because "which window did it pick?"
+is otherwise unanswerable; the full path deliberately is not.
+
+#### Measured runtime facts this rests on
+
+Recorded against Electron 43.3.0 on Windows 11 26200, because each one
+decided a design choice and none of them is documented behavior:
+
+- **Window source ids encode the HWND.** Electron documents the form as
+  `window:XX:YY`; enumeration confirms it exactly, with foreground HWND
+  `1902762` appearing as `window:1902762:0`. Identity is the handle, never the
+  title.
+- **Enumerating window sources costs ~3.2 seconds, every call.**
+  `desktopCapturer.getSources({ types: ['window'] })` measured 3152–3217 ms
+  across five consecutive calls with a 1×1 thumbnail and does not warm up,
+  against ~304 ms for `['screen']`. That is unusable on the shortcut path, and
+  it cannot be cached across presses either, because the user may alt-tab
+  between them.
+- **A synthesized source id works.** Opening `window:<hwnd>:0` with no
+  preceding `getSources` call at all produced a live stream of that window in
+  ~430 ms. So the id is constructed from the handle rather than looked up. A
+  handle Chromium will not capture simply fails to open, which is already a
+  fallback branch — one failed stream open instead of 3.2 seconds on every
+  capture.
+- **The captured frame is the extended frame bounds.** For a maximized window
+  the stream delivered 2560×1392, matching `DWMWA_EXTENDED_FRAME_BOUNDS`
+  exactly and not `GetWindowRect` (2576×1408, which includes the invisible
+  8-pixel resize border). The overlay uses the DWM rectangle, so no guessed
+  offset is applied anywhere.
+
+Window bounds arrive in physical desktop pixels and are converted to logical
+coordinates using the owning display's scale factor and its *physical* origin,
+read with `screen.dipToScreenPoint`. A display's physical origin is not its
+logical origin times its scale factor in a mixed-DPI layout, and negative
+origins are carried through unchanged — a monitor left of the primary has a
+negative x, and clamping it would put the overlay on the wrong screen. A window
+straddling two monitors is placed on the one showing most of it.
 
 ### Recapture
 
@@ -128,11 +213,30 @@ closes it, and the box text is still selectable.
 Everything between the hotkey and the visible screenshot is latency the user
 feels, so the screenshot is not taken on demand at all.
 
-**The frozen frame holds an open desktop capture stream** for the display it
-covers, for as long as Game OCR is armed and its window is retained. A capture
-is then one `drawImage` from a frame the renderer already has. The expensive
-setup — enumerating capture sources, opening the stream — is paid on the first
-capture for a display and reused afterwards.
+**The frozen frame holds open desktop capture streams** for what it covers, for
+as long as Game OCR is armed and its window is retained. A capture is then one
+`drawImage` from a frame the renderer already has. The expensive setup —
+opening the stream — is paid on the first capture of a given window or display
+and reused afterwards.
+
+Streams are keyed by capture-source id, which covers windows and displays
+alike; only how many are retained differs, and the freeze request carries the
+target kind rather than the renderer interpreting the source id's shape.
+Display streams stay open, because there are only ever a handful and reopening
+one is the cost a warm capture exists to avoid. **At most one window stream is
+retained**, so alt-tabbing through a dozen programs does not leave Kizuna
+holding desktop capture access to all twelve. A stream whose track ends is
+evicted when it says so, not on the next capture that would have drawn from it.
+
+Switching to a window Kizuna has not captured before therefore costs one stream
+open, measured at ~430 ms, before that frame appears; returning to a window it
+already holds does not.
+
+The retained renderer deliberately does **not** set `backgroundThrottling:
+false`. Electron implements that by setting Chromium's `disable_hidden_`, so
+the widget never makes the hidden→shown transition this window performs on
+every frame, and nothing on the capture path is throttled regardless: opening a
+stream and encoding a canvas are promises, not timers.
 
 Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
@@ -145,14 +249,17 @@ Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 `desktopCapturer.getSources` was ~75% of the old path and none of it was
 recoverable: it charges roughly the same ~300 ms whether the requested
 thumbnail is 1×1 or the full display, and it does not warm up, so calling it
-early to prime the pipeline only pays it twice. It is still used once per armed
-run — with a 1×1 thumbnail, for source ids only. The current display target is
+early to prime the pipeline only pays it twice. For screen sources it is still
+used once per armed run — with a 1×1 thumbnail, for source ids only. For window
+sources it is not used at all, because there it costs ~3.2 seconds a call; the
+source id is constructed from the handle instead. The current display target is
 also cached while the pointer remains inside its bounds, avoiding Electron's
 display lookup on the hot path. A warm target is returned synchronously, so the
 freeze IPC reaches the renderer before the global-shortcut callback yields to
-Electron. Only real source enumeration uses a Promise. Both caches are cleared
-when Game OCR stops or the application shuts down; neither contains screenshot
-pixels.
+Electron. Only real source enumeration uses a Promise, so a window target never
+yields at all: the native foreground query costs ~40 µs and its source id needs
+no lookup. Both caches are cleared when Game OCR stops or the application shuts
+down; neither contains screenshot pixels.
 
 The screenshot no longer crosses IPC to be displayed. The renderer draws into
 its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
@@ -191,19 +298,65 @@ fields remain, but are no longer work stages: dismissal and settle are zero,
 while queue measures only synchronous shortcut dispatch into capture and should
 also be effectively zero. Capture, presentation, recognition, and rendering
 remain real stage costs.
-The capture field is split further into `cursor`, `display`, `source`, and
-`event-loop`: `display` is zero on a cached target, `source` says whether ids
-were cached or enumerated, and `event-loop` exposes time lost between the
-adapter's measured work and the controller continuation. The accompanying
-`target cached/resolved` label makes warm and cold paths distinguishable. Warm
-targets do not cross an asynchronous boundary, so their `event-loop` remainder
-should stay effectively zero; cold source enumeration can still yield.
+The capture field is split by what was actually consulted. A window capture
+reports `foreground` (the native query) and `source constructed`, because it
+consults neither the cursor, nor Electron's display lookup, nor source
+enumeration. A display capture reports `cursor`, `display`, `source`
+cached-or-enumerated, and `target cached/resolved` as before. Both report
+`event-loop`, the time lost between the adapter's measured work and the
+controller continuation; neither a window target nor a warm display target
+crosses an asynchronous boundary, so that remainder should stay effectively
+zero, while cold source enumeration can still yield.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 
-Detection runs at the screenshot's native size on ordinary displays. A
-960-pixel limit was faster on one benchmark, but reduced real-game recall too
-much to use as the application default.
+### Detection input size
+
+`--det-side-len` **sets** the detection input; it does not cap it. The worker
+resamples every capture so its longest side is exactly that many pixels —
+upwards as well as downwards — and detection then costs roughly the square of
+it. The previous value of 4000 was chosen believing it meant "native size on
+ordinary displays". It did not: it upscaled every capture, a 1920-wide one by
+2.1x and a 1026-wide one by 3.9x.
+
+That is why shrinking the capture to the focused window did not make
+recognition faster on its own. Detection was pinned to the same tensor
+whatever the capture measured, and *worse* for a tall window: a 1026x795
+capture became 4000x3099, more pixels than a 2560x1440 capture's 4000x2250.
+
+Measured against the vendor fixture, p50 of one recognition, Ryzen 7 5800X3D:
+
+| capture | at 4000 | at 2560 | at its own longest side |
+|---|---:|---:|---:|
+| 2560x1440 | 1661 ms | 595 ms | 599 ms |
+| 1920x1080 | 1635 ms | 573 ms | 264 ms |
+| 1280x720 | 1711 ms | 607 ms | 119 ms |
+| 960x540 | 1632 ms | — | 78 ms |
+
+A 960x540 capture costing the same as a 2560x1440 one at 4000 is the tell: at
+that setting the source resolution is irrelevant.
+
+The recall this was supposed to protect is not real. On the fixture, 4000
+returns one extra region over native — a single `C` at 0.88 confidence — and
+loses trailing punctuation the native run keeps. Detection at 960 does drop a
+region on a 1080p capture, so downscaling below native is still the thing to
+avoid; upscaling past it simply costs.
+
+An armed run therefore uses the **largest display's physical longest side**,
+which leaves a fullscreen or maximized game unscaled and bounds how far a
+smaller window is scaled up. The genuinely correct value is each capture's own
+longest side, worth another 2-5x for windowed games, but `--det-side-len` is a
+worker startup argument and the capture size is not known until the shortcut is
+pressed. The worker computes its scale per request
+(`getScaleParam(image, options_.detection_side_length)`) with no session state,
+so accepting a per-request override is a small vendor change and is the next
+thing worth doing here.
+
+`--rec-batch-size` is **not** a lever, measured 383-408 ms across batch sizes
+1 to 64 on a 20-region capture, which is inside the noise. The vendor's
+batching patch already took the win there (89.6 -> 83.2 ms); raising the batch
+further does nothing. `--cpu-threads` defaults to physical cores — 8 on this
+machine — and the vendor measured 16 threads as a 2x *loss*, so it stays.
 
 ### The screenshot must be PNG
 
@@ -263,9 +416,13 @@ endpoint the subtitle sidebar uses. Translation is opt-in and off by default.
 - **Stylized text** — heavy outlines, gradients, vertical layout, or decorative
   fonts — recognizes less reliably than plain UI text. Vertical text is
   recognized as its own region and replaced with horizontal text.
-- Kizuna captures one display, the one under the pointer. Selecting a specific
-  game process or window, or capturing several displays at once, is out of
+- Kizuna captures the foreground window, or one display when that window
+  cannot be captured. Choosing a specific game process by hand, capturing a
+  background window, or capturing several windows or displays at once is out of
   scope.
+- Switching to a window Kizuna has not captured before costs one stream open
+  (~430 ms measured) before that first frame appears. Returning to a window it
+  is already streaming does not.
 - There is no continuous OCR, no frame polling, no automatic capture, and no
   history of past captures.
 
@@ -285,9 +442,17 @@ given environment.
 | 2 | Borderless/windowed GPU-rendered game | Screenshot matches the game frame at capture time |
 | 3 | 100% DPI scale | Boxes sit over their source text |
 | 4 | Non-100% DPI scale (e.g. 125% or 150%) | Boxes sit over their source text; no offset or crop |
-| 5 | Single monitor | The display under the pointer is captured |
-| 6 | Two monitors | Only the display under the pointer is captured and covered |
+| 5 | Single monitor | The focused window is captured and covered |
+| 6 | Two monitors | Only the focused window is captured and covered; a display fallback covers only the display under the pointer |
 | 7 | Display at negative desktop coordinates | Frozen window lands on the correct display |
+| 7a | 1024×768 windowed game on a 2560×1440 monitor | Overlay and OCR image cover only the game window; the development log reports `target window <exe> (pid …) 1024x768` |
+| 7b | Resize or move the game window, then press again | The next capture uses its new size and location |
+| 7c | Borderless fullscreen | The whole game area is captured |
+| 7d | Alt-tab between two games | Each press captures the one currently in front |
+| 7e | Two windows with the same title | The focused instance is chosen; identity is the HWND |
+| 7f | Game on a 125%/150% secondary monitor, including negative coordinates | No offset or crop; boxes sit over their source text |
+| 7g | Minimized, cloaked, protected, or exclusive-fullscreen target | Display fallback captures normally, Game OCR stays armed, and the development log names the reason |
+| 7h | Kizuna focused when the shortcut is pressed | Display fallback; Kizuna's own window is never captured |
 | 8 | Press screenshot background once | Whole frame closes on that one press; live game visible; still armed |
 | 9 | Escape | Same as row 8 |
 | 10 | Rapid recapture with changing game content | The second screenshot shows newer live-game content, never Kizuna's previous frozen frame |
@@ -298,10 +463,21 @@ given environment.
 | 15 | Right-click translation (enabled) | Translation popup opens for the selection only |
 | 16 | Worker failure and Retry | Error is reported in Options; Retry recovers without restarting Kizuna |
 | 17 | Stop and Quit | Shortcut, worker process, frozen window, screenshot, and tray are all released |
+| 18 | Recognition timing, full 2560×1440 display vs a 1024×768 window | Record both; the window should be substantially faster |
 
 ### Recorded run
 
-No Windows manual run has been recorded yet. Rows 1–17 are **unverified**; the
+No Windows manual run has been recorded yet. Rows 1–18 are **unverified**; the
 integration matrix is expected to be filled in on a machine with a packaged
 build and a real game, and the results recorded in this section with the build
 version, Windows version, DPI scale, and monitor layout used.
+
+Four runtime facts *have* been measured directly, on Electron 43.3.0 /
+Windows 11 Pro 26200 / single 2560×1440 display at 100%, and are recorded under
+[Measured runtime facts](#measured-runtime-facts-this-rests-on): the
+`window:<hwnd>:0` id format, the ~3.2 s window-enumeration cost, that a
+synthesized source id opens a stream without enumeration, and that the captured
+frame matches `DWMWA_EXTENDED_FRAME_BOUNDS` rather than `GetWindowRect`. These
+were taken with probe programs against the pinned runtime, not against a game,
+so they establish the contracts the matrix above still has to confirm in
+practice.

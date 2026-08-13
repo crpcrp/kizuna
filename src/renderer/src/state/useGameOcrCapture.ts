@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { GameOcrFreezeRequest } from '../../../shared/gameOcr'
 import type { OcrImageSize } from '../../../shared/ocr'
 import { useLatestCallback } from './useLatestRef'
 import {
+  createCaptureStreamRegistry,
   desktopStreamConstraints,
   freezeCurrentFrame,
+  type CaptureStream,
+  type CaptureStreamEntry,
   type GameOcrCaptureSurface
 } from './gameOcrCaptureStream'
 
@@ -38,55 +41,31 @@ export interface UseGameOcrCaptureInput {
 }
 
 /**
- * Owns the desktop capture stream the frozen frame is taken from.
+ * Owns the desktop capture streams the frozen frame is taken from.
  *
- * The stream stays open for as long as Game OCR is armed and the window is
+ * A stream stays open for as long as Game OCR is armed and the window is
  * retained, which is what makes a capture cost one `drawImage` instead of a
- * ~300 ms `desktopCapturer.getSources` round trip. Opening it is the expensive
- * part and happens on the first capture for a display, not on every one.
+ * stream open. Opening one is the expensive part and happens on the first
+ * capture of a given window or display, not on every one.
+ *
+ * Streams are keyed by capture-source id, which covers windows and displays
+ * alike; only how many are retained differs, and the freeze request says
+ * which kind it is rather than the source id's shape being interpreted here.
  *
  * The overlay is excluded from Windows desktop capture. A recapture can
  * therefore replace its canvas in place without hiding, waiting for a native
  * event, or allowing the old text boxes into the captured pixels.
  */
 export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptureInput): void {
-  const streamsRef = useRef<
-    Map<string, { stream: MediaStream; video: HTMLVideoElement }> | undefined
-  >(undefined)
   // The freeze subscription must not be torn down and re-armed every time the
   // frame re-renders, so the newest handler is reached indirectly.
   const reportFrozen = useLatestCallback(onFrozen)
 
   useEffect(() => {
-    // Created here rather than in the initial ref value, so the map belongs to
-    // the effect that opens the streams and tears them down again.
-    const streams = (streamsRef.current ??= new Map())
-    const openings = new Map<string, Promise<{ stream: MediaStream; video: HTMLVideoElement }>>()
     let latestCaptureKey = ''
 
-    /** Opens the display's stream, or reuses the one already running for it. */
-    const acquire = async (
-      sourceId: string
-    ): Promise<{ stream: MediaStream; video: HTMLVideoElement }> => {
-      const existing = streams.get(sourceId)
-      // A track the user revoked, or a display that went away, leaves a stream
-      // that will never produce another frame; reopening is the only recovery.
-      if (
-        existing &&
-        existing.stream
-          .getVideoTracks()
-          .some((track: MediaStreamTrack) => track.readyState === 'live')
-      ) {
-        return existing
-      }
-      const opening = openings.get(sourceId)
-      if (opening) return opening
-      existing?.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-
-      const operation = (async (): Promise<{
-        stream: MediaStream
-        video: HTMLVideoElement
-      }> => {
+    const registry = createCaptureStreamRegistry({
+      open: async ({ sourceId }): Promise<CaptureStreamEntry> => {
         const stream = await navigator.mediaDevices.getUserMedia(desktopStreamConstraints(sourceId))
         const video = document.createElement('video')
         video.srcObject = stream
@@ -98,17 +77,9 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
             video.onloadedmetadata = () => resolve()
           })
         }
-        const entry = { stream, video }
-        streams.set(sourceId, entry)
-        return entry
-      })()
-      openings.set(sourceId, operation)
-      try {
-        return await operation
-      } finally {
-        if (openings.get(sourceId) === operation) openings.delete(sourceId)
+        return { stream: stream as unknown as CaptureStream, video }
       }
-    }
+    })
 
     const unsubscribe = api.onFreeze((request) => {
       const captureKey = `${request.sessionId}:${request.captureId}`
@@ -117,7 +88,10 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
         const identity = { sessionId: request.sessionId, captureId: request.captureId }
         let canvas: HTMLCanvasElement | null = null
         try {
-          const { video } = await acquire(request.sourceId)
+          const { video } = await registry.acquire({
+            sourceId: request.sourceId,
+            targetKind: request.targetKind
+          })
           if (latestCaptureKey !== captureKey) {
             throw new Error('The Game OCR capture was superseded by a newer shortcut.')
           }
@@ -178,11 +152,7 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     return () => {
       unsubscribe()
       latestCaptureKey = ''
-      openings.clear()
-      for (const { stream } of streams.values()) {
-        stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-      }
-      streams.clear()
+      registry.releaseAll()
     }
   }, [api, canvasRef, reportFrozen])
 }
