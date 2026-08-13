@@ -99,7 +99,7 @@ import { createProductionDisplaySources } from './services/gameOcr/displayCaptur
 import { createGameOcrCaptureTargets } from './services/gameOcr/captureTarget'
 import { createProductionForegroundWindowSource } from './services/gameOcr/foregroundWindow'
 import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
-import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
+import { createPpOcrWorkerService, resolveDetectionSideLength } from './services/ocr/ppOcrWorker'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
 import {
   createGameOcrBackgroundLifecycle,
@@ -566,6 +566,18 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   })
   const worker = createPpOcrWorkerService({
     executablePath: ocrPaths.workerPath,
+    // `--det-side-len` sets the detection tensor rather than capping it, so a
+    // value larger than any capture upscales every one of them. The largest
+    // display bounds what a capture can be, which leaves a fullscreen game
+    // unscaled and stops a small window being blown up past one.
+    detectionSideLength: resolveDetectionSideLength(
+      screen
+        .getAllDisplays()
+        .flatMap((display) => [
+          display.bounds.width * display.scaleFactor,
+          display.bounds.height * display.scaleFactor
+        ])
+    ),
     modelPaths: {
       detection: ocrPaths.detectionModelPath,
       recognition: ocrPaths.recognitionModelPath,

@@ -310,9 +310,53 @@ zero, while cold source enumeration can still yield.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 
-Detection runs at the screenshot's native size on ordinary displays. A
-960-pixel limit was faster on one benchmark, but reduced real-game recall too
-much to use as the application default.
+### Detection input size
+
+`--det-side-len` **sets** the detection input; it does not cap it. The worker
+resamples every capture so its longest side is exactly that many pixels —
+upwards as well as downwards — and detection then costs roughly the square of
+it. The previous value of 4000 was chosen believing it meant "native size on
+ordinary displays". It did not: it upscaled every capture, a 1920-wide one by
+2.1x and a 1026-wide one by 3.9x.
+
+That is why shrinking the capture to the focused window did not make
+recognition faster on its own. Detection was pinned to the same tensor
+whatever the capture measured, and *worse* for a tall window: a 1026x795
+capture became 4000x3099, more pixels than a 2560x1440 capture's 4000x2250.
+
+Measured against the vendor fixture, p50 of one recognition, Ryzen 7 5800X3D:
+
+| capture | at 4000 | at 2560 | at its own longest side |
+|---|---:|---:|---:|
+| 2560x1440 | 1661 ms | 595 ms | 599 ms |
+| 1920x1080 | 1635 ms | 573 ms | 264 ms |
+| 1280x720 | 1711 ms | 607 ms | 119 ms |
+| 960x540 | 1632 ms | — | 78 ms |
+
+A 960x540 capture costing the same as a 2560x1440 one at 4000 is the tell: at
+that setting the source resolution is irrelevant.
+
+The recall this was supposed to protect is not real. On the fixture, 4000
+returns one extra region over native — a single `C` at 0.88 confidence — and
+loses trailing punctuation the native run keeps. Detection at 960 does drop a
+region on a 1080p capture, so downscaling below native is still the thing to
+avoid; upscaling past it simply costs.
+
+An armed run therefore uses the **largest display's physical longest side**,
+which leaves a fullscreen or maximized game unscaled and bounds how far a
+smaller window is scaled up. The genuinely correct value is each capture's own
+longest side, worth another 2-5x for windowed games, but `--det-side-len` is a
+worker startup argument and the capture size is not known until the shortcut is
+pressed. The worker computes its scale per request
+(`getScaleParam(image, options_.detection_side_length)`) with no session state,
+so accepting a per-request override is a small vendor change and is the next
+thing worth doing here.
+
+`--rec-batch-size` is **not** a lever, measured 383-408 ms across batch sizes
+1 to 64 on a 20-region capture, which is inside the noise. The vendor's
+batching patch already took the win there (89.6 -> 83.2 ms); raising the batch
+further does nothing. `--cpu-threads` defaults to physical cores — 8 on this
+machine — and the vendor measured 16 threads as a 2x *loss*, so it stays.
 
 ### The screenshot must be PNG
 

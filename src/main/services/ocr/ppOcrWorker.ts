@@ -33,8 +33,55 @@ const WORKER_ARGS = {
   detectionSideLength: '--det-side-len'
 } as const
 
-/** Keep ordinary desktop captures at their native size for reliable detection. */
-export const PP_OCR_DETECTION_SIDE_LENGTH = 4000
+/**
+ * `--det-side-len` **sets** the detection input size; it does not cap it.
+ *
+ * The worker rescales every capture so its longest side is exactly this many
+ * pixels, upwards as well as downwards, and detection then costs roughly the
+ * square of it. Measured against the vendor fixture on a Ryzen 7 5800X3D, one
+ * recognition of the same content at four capture sizes:
+ *
+ * | capture | at 4000 | at the capture's own longest side |
+ * |---|---:|---:|
+ * | 960x540 | 1632 ms | 78 ms |
+ * | 1280x720 | 1648 ms | 117 ms |
+ * | 1920x1080 | 1651 ms | 268 ms |
+ * | 2560x1440 | 1761 ms | 602 ms |
+ *
+ * A 960x540 capture costing the same as a 2560x1440 one is the tell: at 4000
+ * the source resolution is irrelevant, because everything is resampled to the
+ * same tensor. It is worse than uniform for a tall window — a 1026x795 capture
+ * becomes 4000x3099, which is *more* pixels than a 2560x1440 one becomes.
+ *
+ * The 4000 this replaces was chosen believing it meant "native size". It did
+ * not, and the extra region it found on the fixture was a hallucinated `C` at
+ * 0.88 confidence, not recall: at the capture's own size the same five lines
+ * come back, with their trailing punctuation intact more often.
+ */
+export const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
+
+/** The worker refuses anything larger; it is also the whole-desktop worst case. */
+export const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
+
+/**
+ * Chooses the detection input size for an armed run.
+ *
+ * The genuinely correct value is each capture's own longest side, but
+ * `--det-side-len` is a startup argument and the capture size is not known
+ * until the shortcut is pressed. The largest side any capture can have is the
+ * largest display's, so that is the value which leaves the common case — a
+ * fullscreen or maximized game — unscaled, and bounds how far a smaller window
+ * is scaled up.
+ *
+ * Pure, and takes physical pixel sides rather than an Electron display list.
+ */
+export function resolveDetectionSideLength(physicalSides: readonly number[]): number {
+  const largest = Math.max(
+    PP_OCR_MIN_DETECTION_SIDE_LENGTH,
+    ...physicalSides.filter((side) => Number.isFinite(side) && side > 0)
+  )
+  return Math.min(PP_OCR_MAX_DETECTION_SIDE_LENGTH, Math.round(largest))
+}
 
 /** The model and dictionary files are injected so packaging can own their locations. */
 export interface PpOcrModelPaths {
@@ -46,6 +93,11 @@ export interface PpOcrModelPaths {
 export interface PpOcrWorkerOptions {
   executablePath: string
   modelPaths: PpOcrModelPaths
+  /**
+   * Detection input size for this run, in physical pixels. Defaults to the
+   * worker's own maximum, which is only right for a whole-desktop capture.
+   */
+  detectionSideLength?: number
   startupTimeoutMs?: number
   recognitionTimeoutMs?: number
   shutdownTimeoutMs?: number
@@ -161,7 +213,10 @@ export const spawnPpOcr: PpOcrSpawn = (executablePath, args, options) =>
  * model files, recognition dictionary and protocol version. All paths are argv
  * entries, never shell text.
  */
-export function buildPpOcrWorkerArgs(modelPaths: PpOcrModelPaths): string[] {
+export function buildPpOcrWorkerArgs(
+  modelPaths: PpOcrModelPaths,
+  detectionSideLength: number = PP_OCR_MAX_DETECTION_SIDE_LENGTH
+): string[] {
   const args = [
     WORKER_ARGS.protocolVersion,
     String(PP_OCR_PROTOCOL_VERSION),
@@ -174,7 +229,7 @@ export function buildPpOcrWorkerArgs(modelPaths: PpOcrModelPaths): string[] {
     WORKER_ARGS.keys,
     modelPaths.keys,
     WORKER_ARGS.detectionSideLength,
-    String(PP_OCR_DETECTION_SIDE_LENGTH)
+    String(resolveDetectionSideLength([detectionSideLength]))
   ]
   return args
 }
@@ -380,7 +435,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     try {
       const child = (this.options.spawn ?? spawnPpOcr)(
         this.options.executablePath,
-        buildPpOcrWorkerArgs(this.options.modelPaths),
+        buildPpOcrWorkerArgs(this.options.modelPaths, this.options.detectionSideLength),
         { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }
       )
       const record = createProcessRecord(child)
