@@ -116,7 +116,7 @@ export interface GameOcrWindow {
    * The encoded screenshot for that capture, which the renderer produces after
    * the frame is already on screen. Resolves whenever the encode lands.
    */
-  captureBytes(captureId: number): Promise<string>
+  captureBytes(captureId: number): Promise<Uint8Array>
   /** Renderer→main report that the frame is drawn. Bound by the IPC glue. */
   reportFrozen(frozen: GameOcrFrozenFrame): void
   /** Renderer→main report carrying the encoded screenshot. */
@@ -212,7 +212,11 @@ export function createGameOcrWindowController({
   >()
   const bytesWaiters = new Map<
     number,
-    { promise: Promise<string>; resolve: (value: string) => void; reject: (e: unknown) => void }
+    {
+      promise: Promise<Uint8Array>
+      resolve: (value: Uint8Array) => void
+      reject: (e: unknown) => void
+    }
   >()
 
   /** Fails everything still waiting on a renderer that can no longer answer. */
@@ -359,13 +363,13 @@ export function createGameOcrWindowController({
       return frozen.imageSize
     },
 
-    captureBytes(captureId): Promise<string> {
+    captureBytes(captureId): Promise<Uint8Array> {
       if (closed) return Promise.reject(new Error('The Game OCR frame is gone.'))
       const existing = bytesWaiters.get(captureId)
       if (existing) return existing.promise
-      let resolve!: (value: string) => void
+      let resolve!: (value: Uint8Array) => void
       let reject!: (error: unknown) => void
-      const promise = new Promise<string>((resolvePromise, rejectPromise) => {
+      const promise = new Promise<Uint8Array>((resolvePromise, rejectPromise) => {
         resolve = resolvePromise
         reject = rejectPromise
       })
@@ -390,7 +394,7 @@ export function createGameOcrWindowController({
       if (!waiter) return
       bytesWaiters.delete(value.captureId)
       if (value.error) waiter.reject(new Error(value.error))
-      else waiter.resolve(value.imageBase64)
+      else waiter.resolve(value.imageBytes)
     },
 
     reportRegionsRendered(value): void {

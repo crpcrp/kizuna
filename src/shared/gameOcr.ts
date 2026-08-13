@@ -52,7 +52,8 @@ export interface GameOcrFrozenFrame {
 export interface GameOcrCaptureBytes {
   sessionId: number
   captureId: number
-  imageBase64: string
+  /** Raw encoded PNG bytes. Base64 exists only at the worker protocol boundary. */
+  imageBytes: Uint8Array
   imageMediaType: string
   imageSize: OcrImageSize
   error?: string

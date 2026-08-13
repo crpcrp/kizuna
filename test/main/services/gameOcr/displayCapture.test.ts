@@ -90,21 +90,36 @@ describe('createGameOcrDisplaySources', () => {
 
   it('enumerates sources once and reuses them across captures', async () => {
     const getSources = vi.fn(async () => [source(7)])
+    const screenApi = screenFor([display()])
     const sources = createGameOcrDisplaySources({
       platform: 'win32',
-      screen: screenFor([display()]),
+      screen: screenApi,
       desktopCapturer: { getSources }
     })
 
-    await sources.cursorDisplay()
-    await sources.cursorDisplay()
+    const first = await sources.cursorDisplay()
+    const second = await sources.cursorDisplay()
     await sources.cursorDisplay()
     expect(getSources).toHaveBeenCalledOnce()
+    expect(screenApi.getCursorScreenPoint).toHaveBeenCalledTimes(3)
+    expect(screenApi.getDisplayNearestPoint).toHaveBeenCalledOnce()
+    expect(first.diagnostics).toMatchObject({
+      targetCacheHit: false,
+      sourceCacheHit: false
+    })
+    expect(second.diagnostics).toMatchObject({
+      displayMs: 0,
+      sourceMs: 0,
+      targetCacheHit: true,
+      sourceCacheHit: true
+    })
 
-    // A display change invalidates the ids, so the next capture re-enumerates.
+    // Stop, shutdown, or a display change releases both caches, so the next
+    // capture resolves the display and enumerates source ids again.
     sources.invalidate()
     await sources.cursorDisplay()
     expect(getSources).toHaveBeenCalledTimes(2)
+    expect(screenApi.getDisplayNearestPoint).toHaveBeenCalledTimes(2)
   })
 
   it('re-enumerates once for a display that appeared since the last listing', async () => {

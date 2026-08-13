@@ -22,7 +22,7 @@ export interface GameOcrCaptureBridge {
   captureBytes(value: {
     sessionId: number
     captureId: number
-    imageBase64: string
+    imageBytes: Uint8Array
     imageMediaType: string
     imageSize: OcrImageSize
     error?: string
@@ -155,7 +155,7 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           const buffer = await blob.arrayBuffer()
           api.captureBytes({
             ...identity,
-            imageBase64: base64FromBytes(new Uint8Array(buffer)),
+            imageBytes: new Uint8Array(buffer),
             imageMediaType: CAPTURE_MEDIA_TYPE,
             imageSize
           })
@@ -166,7 +166,7 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           api.frozen({ ...identity, imageSize: request.imageSize, error: message })
           api.captureBytes({
             ...identity,
-            imageBase64: '',
+            imageBytes: new Uint8Array(),
             imageMediaType: CAPTURE_MEDIA_TYPE,
             imageSize: request.imageSize,
             error: message
@@ -185,17 +185,4 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
       streams.clear()
     }
   }, [api, canvasRef, reportFrozen])
-}
-
-/**
- * Chunked so a full-display PNG cannot overflow the argument limit that
- * `String.fromCharCode(...bytes)` would hit on a megabyte of data.
- */
-function base64FromBytes(bytes: Uint8Array): string {
-  const CHUNK = 0x8000
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
-  }
-  return btoa(binary)
 }

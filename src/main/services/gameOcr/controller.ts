@@ -20,7 +20,7 @@ export interface GameOcrRecognitionAdapter {
     sessionId: number
     captureId: number
     imageSize: OcrDisplayCaptureMetadata['imageSize']
-    imageBase64: string
+    imageBytes: Uint8Array
   }): Promise<OcrResult>
   stop(): Promise<void>
 }
@@ -50,6 +50,12 @@ export interface GameOcrCaptureTimings {
   settleMs: number
   /** Locating the display whose pixels are already streaming in the renderer. */
   captureMs: number
+  cursorMs: number
+  displayMs: number
+  sourceMs: number
+  captureEventLoopMs: number
+  targetCacheHit: boolean
+  sourceCacheHit: boolean
   /** Handing the screenshot to the frozen-frame renderer and showing it. */
   presentMs: number
   /** Visible screenshot through PNG encode, OCR inference, and region IPC. */
@@ -69,7 +75,12 @@ export function writeGameOcrTotalTime(
     `[game-ocr] shortcut to word boxes: ${timings.totalMs}ms ` +
       `(dismiss ${timings.dismissMs}ms, queue ${timings.queueMs}ms, ` +
       `settle ${timings.settleMs}ms, ` +
-      `capture ${timings.captureMs}ms, present ${timings.presentMs}ms, ` +
+      `capture ${timings.captureMs}ms ` +
+      `(cursor ${timings.cursorMs}ms, display ${timings.displayMs}ms, ` +
+      `source ${timings.sourceMs}ms ${timings.sourceCacheHit ? 'cached' : 'enumerated'}, ` +
+      `event-loop ${timings.captureEventLoopMs}ms, ` +
+      `target ${timings.targetCacheHit ? 'cached' : 'resolved'}), ` +
+      `present ${timings.presentMs}ms, ` +
       `recognize ${timings.recognizeMs}ms, render ${timings.renderMs}ms)`
   )
 }
@@ -126,6 +137,9 @@ const FRAME_ACCELERATORS = Object.freeze({
 
 /** Suppresses key-repeat callbacks from one held global-shortcut chord. */
 const SHORTCUT_REPEAT_GUARD_MS = 250
+
+/** Shared zero-length replacement used to release captured image references. */
+const EMPTY_IMAGE_BYTES = new Uint8Array()
 
 /**
  * Joins a stage label to whatever the failing boundary said, so the Options
@@ -205,6 +219,14 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       options.invalidateResults?.()
     } catch (error) {
       reportError('Game OCR result invalidation failed.', error)
+    }
+  }
+
+  const invalidateDisplayCache = (): void => {
+    try {
+      options.displays.invalidate()
+    } catch (error) {
+      reportError('Game OCR display cache cleanup failed.', error)
     }
   }
 
@@ -346,7 +368,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     const created = options.createPresentation(metadata)
     presentation = created
     created.onDismissed(() => handleFrameEnded(created, false))
-    created.onClosed(() => handleFrameEnded(created, true))
+    created.onClosed(() => {
+      // Native display-change events destroy the retained window. Resolve its
+      // replacement from fresh bounds and source ids on the next shortcut.
+      if (!stopping) invalidateDisplayCache()
+      handleFrameEnded(created, true)
+    })
     created.onRegionsRendered((identity) => {
       const session = activeSession
       if (
@@ -369,6 +396,12 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         queueMs: timings.queueMs,
         settleMs: timings.settleMs,
         captureMs: timings.captureMs,
+        cursorMs: timings.cursorMs,
+        displayMs: timings.displayMs,
+        sourceMs: timings.sourceMs,
+        captureEventLoopMs: timings.captureEventLoopMs,
+        targetCacheHit: timings.targetCacheHit,
+        sourceCacheHit: timings.sourceCacheHit,
         presentMs: timings.presentMs,
         recognizeMs: regionsSentAt - timings.presentedAt,
         renderMs: renderedAt - regionsSentAt,
@@ -397,22 +430,29 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     session: Session,
     metadata: OcrDisplayCaptureMetadata,
     frame: GameOcrWindow,
-    imageBase64Promise: Promise<string>
+    imageBytesPromise: Promise<Uint8Array>
   ): Promise<void> => {
     if (!isCurrent(session)) return
     notify({ state: 'recognizing', sessionId: session.sessionId })
     try {
       // Encoded by the renderer after its frame was already on screen, so this
       // wait is never something the user is looking at a blank display for.
-      const imageBase64 = await imageBase64Promise
+      let imageBytes = await imageBytesPromise
+      // A resolved Promise retains its value. Drop both controller references
+      // before waiting on the much longer OCR operation; the worker adapter
+      // has synchronously taken ownership of the bytes by this point.
+      imageBytesPromise = Promise.resolve(EMPTY_IMAGE_BYTES)
       if (!isCurrent(session)) return
-      if (!imageBase64) throw new Error('The Game OCR capture contains no image data.')
-      const result = await options.ocr.recognize({
+      if (imageBytes.byteLength === 0)
+        throw new Error('The Game OCR capture contains no image data.')
+      const recognition = options.ocr.recognize({
         sessionId: session.sessionId,
         captureId: session.captureId,
         imageSize: metadata.imageSize,
-        imageBase64
+        imageBytes
       })
+      imageBytes = EMPTY_IMAGE_BYTES
+      const result = await recognition
       if (
         !isCurrent(session) ||
         result.sessionId !== session.sessionId ||
@@ -451,11 +491,19 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
       const target = await options.displays.cursorDisplay()
       if (!isCurrent(session)) return
       const capturedAt = now()
+      const displayDiagnostics = target.diagnostics ?? {
+        cursorMs: 0,
+        displayMs: 0,
+        sourceMs: 0,
+        targetCacheHit: false,
+        sourceCacheHit: false
+      }
+      const captureMs = capturedAt - dequeuedAt
 
       const frame = ensurePresentation(target.metadata)
       // Register the waiter before asking the renderer to draw. A very fast
       // canvas encode can otherwise arrive before main is listening for it.
-      const imageBase64Promise = frame.captureBytes(session.captureId)
+      const imageBytesPromise = frame.captureBytes(session.captureId)
       const imageSize = await frame.freeze({
         sessionId: session.sessionId,
         captureId: session.captureId,
@@ -477,12 +525,24 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
         dismissMs: 0,
         queueMs: dequeuedAt - session.startedAt,
         settleMs: 0,
-        captureMs: capturedAt - dequeuedAt,
+        captureMs,
+        cursorMs: displayDiagnostics.cursorMs,
+        displayMs: displayDiagnostics.displayMs,
+        sourceMs: displayDiagnostics.sourceMs,
+        captureEventLoopMs: Math.max(
+          0,
+          captureMs -
+            displayDiagnostics.cursorMs -
+            displayDiagnostics.displayMs -
+            displayDiagnostics.sourceMs
+        ),
+        targetCacheHit: displayDiagnostics.targetCacheHit,
+        sourceCacheHit: displayDiagnostics.sourceCacheHit,
         presentMs: presentedAt - capturedAt,
         presentedAt
       }
 
-      void recognize(session, { ...target.metadata, imageSize }, frame, imageBase64Promise)
+      void recognize(session, { ...target.metadata, imageSize }, frame, imageBytesPromise)
     } catch (error) {
       if (!isCurrent(session)) return
       await discardPresentation().catch((dismissError) => {
@@ -614,6 +674,9 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     invalidateSession()
     releaseFrameShortcuts()
     unregisterShortcut()
+    // Releases cached desktop source ids and immutable display targets. The
+    // adapter remains reusable if Game OCR is armed again later.
+    invalidateDisplayCache()
     const close = closePresentation()
     await Promise.allSettled([close, options.ocr.stop(), armPromise])
     notify({ state: 'off', sessionId: status.sessionId })

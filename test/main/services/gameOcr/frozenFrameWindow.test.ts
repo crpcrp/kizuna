@@ -95,7 +95,7 @@ const freezeRequest: GameOcrFreezeRequest = {
 async function freezeWith(
   controller: GameOcrWindow,
   request: GameOcrFreezeRequest = freezeRequest,
-  imageBase64 = 'iVBORw0KGgo='
+  imageBytes = Uint8Array.from([1, 2, 3])
 ): Promise<void> {
   const freezing = controller.freeze(request)
   await Promise.resolve()
@@ -108,7 +108,7 @@ async function freezeWith(
   controller.reportCaptureBytes({
     sessionId: request.sessionId,
     captureId: request.captureId,
-    imageBase64,
+    imageBytes,
     imageMediaType: 'image/png',
     imageSize: request.imageSize
   })
@@ -252,11 +252,11 @@ describe('createGameOcrWindowController', () => {
     controller.reportCaptureBytes({
       sessionId: 1,
       captureId: 1,
-      imageBase64: 'iVBORw0KGgo=',
+      imageBytes: Uint8Array.from([1, 2, 3]),
       imageMediaType: 'image/png',
       imageSize: freezeRequest.imageSize
     })
-    await expect(bytes).resolves.toBe('iVBORw0KGgo=')
+    await expect(bytes).resolves.toEqual(Uint8Array.from([1, 2, 3]))
   })
 
   it('matches overlapping frozen replies to their own capture', async () => {
@@ -303,7 +303,7 @@ describe('createGameOcrWindowController', () => {
     controller.reportCaptureBytes({
       sessionId: 1,
       captureId: 2,
-      imageBase64: '',
+      imageBytes: new Uint8Array(),
       imageMediaType: 'image/png',
       imageSize: freezeRequest.imageSize,
       error: 'the frame could not be encoded'

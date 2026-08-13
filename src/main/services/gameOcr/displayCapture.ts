@@ -60,6 +60,15 @@ export interface DisplayCaptureSource {
 export interface GameOcrDisplayTarget {
   metadata: OcrDisplayCaptureMetadata
   sourceId: string
+  diagnostics?: GameOcrDisplayDiagnostics
+}
+
+export interface GameOcrDisplayDiagnostics {
+  cursorMs: number
+  displayMs: number
+  sourceMs: number
+  targetCacheHit: boolean
+  sourceCacheHit: boolean
 }
 
 export interface GameOcrDisplaySources {
@@ -110,6 +119,7 @@ export interface DisplaySourcesDependencies {
   desktopCapturer: DisplayCapturer
   maxImageDimension?: number
   maxImagePixels?: number
+  now?: () => number
 }
 
 /** Returns the physical pixel dimensions of one Electron display. */
@@ -134,9 +144,12 @@ export function createGameOcrDisplaySources(
 
   const maxImageDimension = positiveLimit(deps.maxImageDimension, MAX_OCR_IMAGE_DIMENSION)
   const maxImagePixels = positiveLimit(deps.maxImagePixels, MAX_DISPLAY_CAPTURE_PIXELS)
+  const now = deps.now ?? (() => Date.now())
   // display_id -> source id. One enumeration serves every later capture, and
   // the smallest legal thumbnail is requested because the pixels are unused.
   let sources: Map<string, string> | undefined
+  let lastTarget: GameOcrDisplayTarget | undefined
+  const targets = new Map<string, GameOcrDisplayTarget>()
 
   const enumerate = async (): Promise<Map<string, string>> => {
     if (sources) return sources
@@ -162,15 +175,44 @@ export function createGameOcrDisplaySources(
 
   return {
     async cursorDisplay(): Promise<GameOcrDisplayTarget> {
-      const display = resolveCursorDisplay(deps.screen)
-      validateDisplay(display, maxImageDimension, maxImagePixels)
+      const startedAt = now()
+      const point = resolveCursorPoint(deps.screen)
+      const cursorAt = now()
+      if (lastTarget && pointInBounds(point, lastTarget.metadata.displayBounds)) {
+        return withDiagnostics(lastTarget, {
+          cursorMs: cursorAt - startedAt,
+          displayMs: 0,
+          sourceMs: 0,
+          targetCacheHit: true,
+          sourceCacheHit: true
+        })
+      }
 
-      let known = await enumerate()
+      const display = resolveDisplayNearestPoint(deps.screen, point)
+      validateDisplay(display, maxImageDimension, maxImagePixels)
+      const displayAt = now()
+
+      const cachedTarget = targets.get(String(display.id))
+      if (cachedTarget && targetMatchesDisplay(cachedTarget, display)) {
+        lastTarget = cachedTarget
+        return withDiagnostics(cachedTarget, {
+          cursorMs: cursorAt - startedAt,
+          displayMs: displayAt - cursorAt,
+          sourceMs: 0,
+          targetCacheHit: true,
+          sourceCacheHit: true
+        })
+      }
+
+      const sourceStartedAt = now()
+      let sourceCacheHit = sources !== undefined
+      let known = sources ?? (await enumerate())
       let sourceId = known.get(String(display.id))
       if (!sourceId) {
         // A display attached since the last enumeration is the ordinary reason
         // to miss, so one refresh is tried before this is called a failure.
         sources = undefined
+        sourceCacheHit = false
         known = await enumerate()
         sourceId = known.get(String(display.id))
       }
@@ -181,7 +223,7 @@ export function createGameOcrDisplaySources(
         )
       }
 
-      return {
+      const target = {
         sourceId,
         metadata: freezeMetadata({
           displayId: display.id,
@@ -190,10 +232,21 @@ export function createGameOcrDisplaySources(
           imageSize: displayCaptureImageSize(display)
         })
       }
+      targets.set(String(display.id), target)
+      lastTarget = target
+      return withDiagnostics(target, {
+        cursorMs: cursorAt - startedAt,
+        displayMs: displayAt - cursorAt,
+        sourceMs: now() - sourceStartedAt,
+        targetCacheHit: false,
+        sourceCacheHit
+      })
     },
 
     invalidate(): void {
       sources = undefined
+      targets.clear()
+      lastTarget = undefined
     }
   }
 }
@@ -215,13 +268,54 @@ export function createProductionDisplaySources(
   })
 }
 
-function resolveCursorDisplay(screenApi: DisplayCaptureScreen): DisplayCaptureDisplay {
+function resolveCursorPoint(screenApi: DisplayCaptureScreen): DisplayCapturePoint {
   try {
-    const point = screenApi.getCursorScreenPoint()
+    return screenApi.getCursorScreenPoint()
+  } catch (cause) {
+    throw new DisplayCaptureError('display-unavailable', undefined, cause)
+  }
+}
+
+function resolveDisplayNearestPoint(
+  screenApi: DisplayCaptureScreen,
+  point: DisplayCapturePoint
+): DisplayCaptureDisplay {
+  try {
     return screenApi.getDisplayNearestPoint(point)
   } catch (cause) {
     throw new DisplayCaptureError('display-unavailable', undefined, cause)
   }
+}
+
+function pointInBounds(point: DisplayCapturePoint, bounds: OcrDisplayBounds): boolean {
+  return (
+    point.x >= bounds.x &&
+    point.y >= bounds.y &&
+    point.x < bounds.x + bounds.width &&
+    point.y < bounds.y + bounds.height
+  )
+}
+
+function targetMatchesDisplay(
+  target: GameOcrDisplayTarget,
+  display: DisplayCaptureDisplay
+): boolean {
+  const metadata = target.metadata
+  return (
+    metadata.displayId === display.id &&
+    metadata.scaleFactor === display.scaleFactor &&
+    metadata.displayBounds.x === display.bounds.x &&
+    metadata.displayBounds.y === display.bounds.y &&
+    metadata.displayBounds.width === display.bounds.width &&
+    metadata.displayBounds.height === display.bounds.height
+  )
+}
+
+function withDiagnostics(
+  target: GameOcrDisplayTarget,
+  diagnostics: GameOcrDisplayDiagnostics
+): GameOcrDisplayTarget {
+  return { sourceId: target.sourceId, metadata: target.metadata, diagnostics }
 }
 
 function validateDisplay(

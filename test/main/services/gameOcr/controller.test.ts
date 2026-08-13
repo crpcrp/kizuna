@@ -93,7 +93,10 @@ function makeWindow(
     if (options.discard) await options.discard()
     visible = false
   })
-  const bytes = new Map<number, { resolve(value: string): void; promise: Promise<string> }>()
+  const bytes = new Map<
+    number,
+    { resolve(value: Uint8Array): void; promise: Promise<Uint8Array> }
+  >()
   return {
     freeze: vi.fn(async (request) => {
       events.push(`present:${id}`)
@@ -104,14 +107,14 @@ function makeWindow(
     captureBytes: vi.fn((captureId: number) => {
       const existing = bytes.get(captureId)
       if (existing) return existing.promise
-      let resolve!: (value: string) => void
-      const promise = new Promise<string>((r) => {
+      let resolve!: (value: Uint8Array) => void
+      const promise = new Promise<Uint8Array>((r) => {
         resolve = r
       })
       bytes.set(captureId, { promise, resolve })
       // The renderer encodes after the frame is up; the fake answers on the
       // next turn so the ordering the controller relies on is exercised.
-      queueMicrotask(() => resolve(`image-${captureId}`))
+      queueMicrotask(() => resolve(Uint8Array.of(captureId)))
       return promise
     }),
     reportFrozen: vi.fn(),
@@ -652,6 +655,12 @@ describe('createGameOcrController', () => {
       sessionId: 1,
       captureId: 1,
       settleMs: 0,
+      cursorMs: 0,
+      displayMs: 0,
+      sourceMs: 0,
+      captureEventLoopMs: expect.any(Number),
+      targetCacheHit: false,
+      sourceCacheHit: false,
       recognizeMs: expect.any(Number),
       renderMs: expect.any(Number),
       totalMs: expect.any(Number)
@@ -690,6 +699,7 @@ describe('createGameOcrController', () => {
     // capture must build a replacement instead of reusing a dead one.
     fake.windows[0].triggerClosed()
     expect(fake.controller.getStatus()).toMatchObject({ state: 'armed' })
+    expect(fake.displays.invalidate).toHaveBeenCalledOnce()
 
     await fake.controller.capture()
     expect(fake.createPresentation).toHaveBeenCalledTimes(2)
@@ -705,6 +715,7 @@ describe('createGameOcrController', () => {
     await fake.controller.stop()
     expect(fake.windows[0].close).toHaveBeenCalledOnce()
     expect(fake.windows[0].visible()).toBe(false)
+    expect(fake.displays.invalidate).toHaveBeenCalledOnce()
 
     // A later run gets a fresh window rather than the closed one.
     await fake.controller.arm()

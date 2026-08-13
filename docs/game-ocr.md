@@ -140,18 +140,27 @@ Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 |---|---:|---:|
 | getting the pixels | ~300 ms | 12–44 ms |
 | encoding them | 85 ms | ~25 ms, *after* the frame is shown |
-| base64, IPC | under 1 ms | not on the path at all |
+| base64, IPC | under 1 ms | binary IPC after presentation; base64 only at worker stdin |
 
 `desktopCapturer.getSources` was ~75% of the old path and none of it was
 recoverable: it charges roughly the same ~300 ms whether the requested
 thumbnail is 1×1 or the full display, and it does not warm up, so calling it
 early to prime the pipeline only pays it twice. It is still used once per armed
-run — with a 1×1 thumbnail, for source ids only.
+run — with a 1×1 thumbnail, for source ids only. The current display target is
+also cached while the pointer remains inside its bounds, avoiding Electron's
+display lookup on the hot path. Both caches are cleared when Game OCR stops or
+the application shuts down; neither contains screenshot pixels.
 
 The screenshot no longer crosses IPC to be displayed. The renderer draws into
 its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
 and sent to the main process then, so nothing the user is looking at a blank
 display for sits behind an encode.
+
+The encoded PNG crosses renderer IPC as bytes. It is converted to base64 only
+at the PP-OCR sidecar's JSONL protocol boundary, immediately before the stdin
+write. Main drops its byte and base64 references before waiting for inference,
+so a full-resolution screenshot is not retained for the worker's 2–3 second
+recognition time.
 
 Three ordering properties this relies on:
 
@@ -179,6 +188,11 @@ fields remain, but are no longer work stages: dismissal and settle are zero,
 while queue measures only synchronous shortcut dispatch into capture and should
 also be effectively zero. Capture, presentation, recognition, and rendering
 remain real stage costs.
+The capture field is split further into `cursor`, `display`, `source`, and
+`event-loop`: `display` is zero on a cached target, `source` says whether ids
+were cached or enumerated, and `event-loop` exposes time lost between the
+adapter's measured work and the controller continuation. The accompanying
+`target cached/resolved` label makes warm and cold paths distinguishable.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 

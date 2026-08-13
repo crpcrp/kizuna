@@ -73,8 +73,8 @@ Display capture, the global shortcut, the native window, the tray, and the
 PP-OCR subprocess live in the main process behind injected interfaces;
 PP-OCR itself is a spawned sidecar speaking a newline-delimited JSON
 protocol over stdio, never a linked library. Only validated, serializable data
-crosses the preload: a freeze request naming a capture source, a base64
-screenshot with its media type and dimensions, and normalized OCR regions.
+crosses the preload: a freeze request naming a capture source, encoded PNG
+bytes with their media type and dimensions, and normalized OCR regions.
 Executable paths, native image handles, and raw worker output stay in main.
 
 The screenshot travels renderer→main, not the other way. The frozen frame holds
@@ -84,7 +84,10 @@ an open desktop capture stream for the display it covers, so a capture is one
 never warms up. Main resolves geometry and the capture source; the renderer
 draws, shows itself, and only then encodes the PNG the worker needs. PNG because
 the worker's vendored OpenCV has no JPEG codec, and the media type travels with
-the bytes rather than being assumed at either end.
+the bytes rather than being assumed at either end. Those bytes stay binary
+through renderer IPC. Base64 is allocated only while writing the sidecar's
+JSONL request, and neither the controller nor the pending worker record retains
+the image during inference.
 
 The frozen frame is its own renderer entry point (`src/renderer/gameOcr.html`),
 loaded into a dedicated opaque, always-on-top, full-display BrowserWindow
@@ -122,6 +125,12 @@ so presentation and OCR input preparation overlap. Capture, OCR, tokenization,
 lookup, and translation results are accepted only for the current session. An
 outside click sends the close IPC first; main hides the native window
 immediately while renderer cleanup finishes in the background.
+
+Display source ids and small immutable display targets are cached independently
+of screenshot data. Each capture still reads the cursor position, but while it
+remains inside the last display bounds no Electron display lookup or source
+enumeration is needed. Stopping or shutting down Game OCR explicitly clears
+both caches.
 
 While Game OCR is armed the player window hides behind a tray icon, and
 stopping or quitting releases the shortcut, the worker process, the frozen
