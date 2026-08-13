@@ -1,5 +1,6 @@
 import { describe, it, expectTypeOf } from 'vitest'
 import type { KizunaApi } from '@src/shared/preloadApi'
+import type { AppSurface } from '@src/shared/appShell'
 import type { LookupResult, DictInfo } from '@src/shared/dictionary'
 import type { AnkiMembershipMatches, AnkiSettings } from '@src/shared/anki'
 import type { KnowledgeDetails, PublicKnowledgeSettings } from '@src/shared/knowledge'
@@ -17,6 +18,18 @@ import type { FileAvailability } from '@src/shared/preloadApi'
 // preload `satisfies KizunaApi` implementation silently diverging in
 // parameter/result shape. A mismatch fails `tsc --noEmit`, not this assertion.
 describe('KizunaApi', () => {
+  it('exposes the typed application-surface commands', () => {
+    expectTypeOf<KizunaApi['appShell']['getSurface']>().returns.toEqualTypeOf<Promise<AppSurface>>()
+    expectTypeOf<KizunaApi['appShell']['showPlayer']>().returns.toEqualTypeOf<Promise<AppSurface>>()
+    expectTypeOf<KizunaApi['appShell']['showOptions']>().returns.toEqualTypeOf<
+      Promise<AppSurface>
+    >()
+    expectTypeOf<KizunaApi['appShell']['quit']>().returns.toEqualTypeOf<void>()
+    expectTypeOf<KizunaApi['appShell']['onSurfaceChanged']>().parameters.toEqualTypeOf<
+      [(surface: AppSurface) => void]
+    >()
+  })
+
   it('dict.lookup takes the longest-match/frequency params and returns LookupResult[]', () => {
     expectTypeOf<KizunaApi['dict']['lookup']>().parameters.toEqualTypeOf<
       [string, string?, (number | null)?, ('rank-based' | 'occurrence-based')?, string[]?, string?]

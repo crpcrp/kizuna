@@ -462,6 +462,12 @@ export function syncInitialWindowBounds(
   uiOverlay.setContentBounds(videoHost.getContentBounds())
 }
 
+/** Maps the opaque video host only when a player surface is about to start. */
+export function preparePlayerAppWindowSet(windows: Pick<AppWindowSet, 'videoHost'>): void {
+  if (windows.videoHost.isDestroyed()) return
+  windows.videoHost.show()
+}
+
 interface CloseableWindow {
   on(event: 'close' | 'closed', listener: (event?: WindowCloseEvent) => void): unknown
   close(): void
@@ -541,6 +547,46 @@ export function loadRendererWindow(
 }
 
 const PRESENT_FALLBACK_MS = 2000
+
+/**
+ * Presents only the renderer-owning window. On Linux this deliberately leaves
+ * the opaque mpv host hidden; the player coordinator maps it immediately before
+ * starting the player runtime.
+ */
+export function presentOverlayAppWindowSet(
+  windows: AppWindowSet,
+  onRendererReady: (callback: () => void) => void = (callback) => {
+    windows.uiOverlay.once('ready-to-show', callback)
+    windows.uiOverlay.webContents.once('did-finish-load', callback)
+  },
+  setTimeoutFn: WindowPairSetTimeout = (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeoutFn: WindowPairClearTimeout = (handle) =>
+    clearTimeout(handle as ReturnType<typeof setTimeout>)
+): void {
+  let presented = false
+  let fallbackTimer: unknown
+  let fallbackTimerPending = false
+
+  const present = (): void => {
+    if (presented || windows.uiOverlay.isDestroyed()) return
+    presented = true
+    if (fallbackTimerPending) {
+      fallbackTimerPending = false
+      clearTimeoutFn(fallbackTimer)
+      fallbackTimer = undefined
+    }
+    windows.uiOverlay.show()
+    windows.uiOverlay.focus()
+  }
+
+  fallbackTimerPending = true
+  fallbackTimer = setTimeoutFn(() => {
+    fallbackTimerPending = false
+    fallbackTimer = undefined
+    present()
+  }, PRESENT_FALLBACK_MS)
+  onRendererReady(present)
+}
 
 /**
  * Presents a Linux pair once the renderer is ready or the safety-net timeout

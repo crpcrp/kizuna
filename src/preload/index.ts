@@ -4,6 +4,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   ANKI_CHANNELS,
   APP_INFO_CHANNELS,
+  APP_SHELL_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   GAME_OCR_CHANNELS,
@@ -65,6 +66,7 @@ import type {
 import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
 import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { OcrResult } from '../shared/ocr'
+import type { AppSurface } from '../shared/appShell'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -165,6 +167,15 @@ const api = {
       subscribe(LAUNCH_CHANNELS.openPath, cb),
     onError: (cb: (message: string) => void): (() => void) => subscribe(LAUNCH_CHANNELS.error, cb),
     rendererReady: (): void => ipcRenderer.send(LAUNCH_CHANNELS.rendererReady)
+  },
+
+  appShell: {
+    getSurface: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.getSurface),
+    showPlayer: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showPlayer),
+    showOptions: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showOptions),
+    quit: (): void => ipcRenderer.send(APP_SHELL_CHANNELS.quit),
+    onSurfaceChanged: (cb: (surface: AppSurface) => void): (() => void) =>
+      subscribe(APP_SHELL_CHANNELS.surfaceChanged, cb)
   },
 
   gameOcr: {

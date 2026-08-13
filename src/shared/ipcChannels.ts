@@ -141,6 +141,15 @@ export const LAUNCH_CHANNELS = {
   error: 'launch:error'
 } as const
 
+/** Main-owned application-surface commands and state push. */
+export const APP_SHELL_CHANNELS = {
+  getSurface: 'appShell:getSurface',
+  showPlayer: 'appShell:showPlayer',
+  showOptions: 'appShell:showOptions',
+  quit: 'appShell:quit',
+  surfaceChanged: 'appShell:surfaceChanged'
+} as const
+
 /** Dedicated Windows Game OCR frozen-frame renderer channels. */
 export const GAME_OCR_CHANNELS = {
   /** renderer→main invoke: read the persisted Game OCR settings. */
