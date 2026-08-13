@@ -14,7 +14,7 @@ import {
   type GameOcrRecognitionAdapter,
   type GameOcrShortcut
 } from '@src/main/services/gameOcr/controller'
-import type { GameOcrWindow } from '@src/main/services/gameOcr/frozenFrameWindow'
+import type { GameOcrWindow } from '@src/main/services/gameOcr/frozenFrameController'
 import type { OcrDisplayBounds, OcrResult } from '@src/shared/ocr'
 import { deferred, type Deferred } from './deferred'
 

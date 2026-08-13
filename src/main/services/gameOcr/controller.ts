@@ -2,7 +2,7 @@ import type { OcrDisplayBounds, OcrResult } from '../../../shared/ocr'
 import type { GameOcrCaptureTargets } from './captureTarget'
 import { createGameOcrCaptureCoordinator, type GameOcrRecognitionAdapter } from './captureSession'
 import type { GameOcrCaptureTimings } from './captureTimings'
-import type { GameOcrWindow } from './frozenFrameWindow'
+import type { GameOcrWindow } from './frozenFrameController'
 import { createGameOcrShortcutOwner, type GameOcrShortcut } from './shortcuts'
 
 export { writeGameOcrTotalTime, type GameOcrCaptureTimings } from './captureTimings'
