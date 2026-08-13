@@ -45,6 +45,7 @@ describe('initialPlayerState', () => {
       selectedSubtitleId: null,
       externalSubtitlePath: undefined,
       keyBindings: DEFAULT_KEY_BINDINGS,
+      startupBehavior: 'splash',
       skipSeconds: DEFAULT_SKIP_SECONDS,
       activeTokens: [],
       allCueTokens: {},
@@ -187,6 +188,7 @@ describe('playerReducer', () => {
       selectedSubtitleId: 4,
       externalSubtitlePath: undefined,
       keyBindings: DEFAULT_KEY_BINDINGS,
+      startupBehavior: 'splash',
       skipSeconds: DEFAULT_SKIP_SECONDS,
       activeTokens: [],
       allCueTokens: {},
@@ -614,6 +616,7 @@ describe('playerReducer', () => {
       type: 'loadSettings',
       settings: {
         keyBindings,
+        startupBehavior: 'video-player',
         skipSeconds: 20,
         popupSettings,
         subtitleStyle,
@@ -640,6 +643,7 @@ describe('playerReducer', () => {
       }
     })
     expect(next.keyBindings).toBe(keyBindings)
+    expect(next.startupBehavior).toBe('video-player')
     expect(next.skipSeconds).toBe(20)
     expect(next.popupSettings).toBe(popupSettings)
     expect(next.subtitleStyle).toBe(subtitleStyle)
@@ -772,6 +776,15 @@ describe('playerReducer', () => {
     const next = playerReducer(initialPlayerState, { type: 'setTranslationEnabled', value: true })
     expect(next.translationEnabled).toBe(true)
     expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
+  })
+
+  it('setStartupBehavior changes only the next-launch preference', () => {
+    const next = playerReducer(initialPlayerState, {
+      type: 'setStartupBehavior',
+      value: 'game-ocr'
+    })
+    expect(next.startupBehavior).toBe('game-ocr')
+    expect(next.filePath).toBe(initialPlayerState.filePath)
   })
 
   it('setAppearance changes only the appearance preference', () => {
