@@ -1,17 +1,25 @@
 import { spawn } from 'node:child_process'
+import { MAX_OCR_IDENTIFIER, type OcrResult } from '../../../shared/ocr'
 import {
-  MAX_OCR_IDENTIFIER,
-  MAX_OCR_IMAGE_DIMENSION,
-  MAX_OCR_REGION_COUNT,
-  MAX_OCR_TEXT_LENGTH,
-  normalizeOcrResult,
-  type OcrBounds,
-  type OcrImageSize,
-  type OcrResult
-} from '../../../shared/ocr'
+  asPpOcrWorkerError,
+  buildPpOcrResult,
+  buildPpOcrWorkerArgs,
+  parsePpOcrMessage,
+  PP_OCR_MAX_IMAGE_BASE64_BYTES,
+  PpOcrWorkerError,
+  serializePpOcrRequest,
+  validatePpOcrRequest,
+  type PpOcrMessage,
+  type PpOcrModelPaths,
+  type PpOcrRequest,
+  type PpOcrRequestMetadata
+} from './ppOcrProtocol'
 
-/** Version of the newline-delimited protocol spoken by the PP-OCR worker. */
-export const PP_OCR_PROTOCOL_VERSION = 1
+/**
+ * Long-lived child process for PP-OCR: spawn, startup handshake, latest-request
+ * -wins queuing, timers, output buffering, cancellation and bounded shutdown.
+ * Everything on the wire is encoded and decoded by `ppOcrProtocol.ts`.
+ */
 
 /** Conservative defaults; each can be lowered in tests or development tools. */
 export const PP_OCR_STARTUP_TIMEOUT_MS = 15_000
@@ -19,76 +27,9 @@ export const PP_OCR_RECOGNITION_TIMEOUT_MS = 30_000
 export const PP_OCR_SHUTDOWN_TIMEOUT_MS = 2_000
 export const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
 export const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
-export const PP_OCR_MAX_IMAGE_BASE64_BYTES = 32 * 1024 * 1024
-export const PP_OCR_MAX_IMAGE_PIXELS = 64 * 1024 * 1024
 
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
-const WORKER_ARGS = {
-  protocolVersion: '--protocol-version',
-  language: '--lang',
-  detectionModel: '--det-model',
-  recognitionModel: '--rec-model',
-  keys: '--keys',
-  detectionSideLength: '--det-side-len'
-} as const
-
-/**
- * `--det-side-len` **sets** the detection input size; it does not cap it.
- *
- * The worker rescales every capture so its longest side is exactly this many
- * pixels, upwards as well as downwards, and detection then costs roughly the
- * square of it. Measured against the vendor fixture on a Ryzen 7 5800X3D, one
- * recognition of the same content at four capture sizes:
- *
- * | capture | at 4000 | at the capture's own longest side |
- * |---|---:|---:|
- * | 960x540 | 1632 ms | 78 ms |
- * | 1280x720 | 1648 ms | 117 ms |
- * | 1920x1080 | 1651 ms | 268 ms |
- * | 2560x1440 | 1761 ms | 602 ms |
- *
- * A 960x540 capture costing the same as a 2560x1440 one is the tell: at 4000
- * the source resolution is irrelevant, because everything is resampled to the
- * same tensor. It is worse than uniform for a tall window — a 1026x795 capture
- * becomes 4000x3099, which is *more* pixels than a 2560x1440 one becomes.
- *
- * The 4000 this replaces was chosen believing it meant "native size". It did
- * not, and the extra region it found on the fixture was a hallucinated `C` at
- * 0.88 confidence, not recall: at the capture's own size the same five lines
- * come back, with their trailing punctuation intact more often.
- */
-export const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
-
-/** The worker refuses anything larger; it is also the whole-desktop worst case. */
-export const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
-
-/**
- * Chooses the detection input size for an armed run.
- *
- * The genuinely correct value is each capture's own longest side, but
- * `--det-side-len` is a startup argument and the capture size is not known
- * until the shortcut is pressed. The largest side any capture can have is the
- * largest display's, so that is the value which leaves the common case — a
- * fullscreen or maximized game — unscaled, and bounds how far a smaller window
- * is scaled up.
- *
- * Pure, and takes physical pixel sides rather than an Electron display list.
- */
-export function resolveDetectionSideLength(physicalSides: readonly number[]): number {
-  const largest = Math.max(
-    PP_OCR_MIN_DETECTION_SIDE_LENGTH,
-    ...physicalSides.filter((side) => Number.isFinite(side) && side > 0)
-  )
-  return Math.min(PP_OCR_MAX_DETECTION_SIDE_LENGTH, Math.round(largest))
-}
-
-/** The model and dictionary files are injected so packaging can own their locations. */
-export interface PpOcrModelPaths {
-  detection: string
-  recognition: string
-  keys: string
-}
 
 export interface PpOcrWorkerOptions {
   executablePath: string
@@ -108,48 +49,11 @@ export interface PpOcrWorkerOptions {
   onStateChange?: (status: PpOcrWorkerStatus) => void
 }
 
-/**
- * Raw PNG bytes stay binary until this worker boundary. The sidecar's JSONL
- * protocol requires base64, so it is created immediately before `stdin.write`
- * and is not retained by the pending recognition record.
- */
-export interface PpOcrRequest {
-  sessionId: number
-  captureId: number
-  imageSize: OcrImageSize
-  imageBytes: Uint8Array
-}
-
 export type PpOcrWorkerState = 'stopped' | 'starting' | 'ready' | 'recognizing' | 'error'
 
 export interface PpOcrWorkerStatus {
   state: PpOcrWorkerState
   error?: string
-}
-
-export type PpOcrWorkerErrorCode =
-  | 'cancelled'
-  | 'invalid-input'
-  | 'startup-failed'
-  | 'startup-timeout'
-  | 'protocol-error'
-  | 'worker-error'
-  | 'worker-exited'
-  | 'recognition-timeout'
-  | 'output-limit'
-  | 'shutdown-timeout'
-
-const ERROR_MESSAGES: Record<PpOcrWorkerErrorCode, string> = {
-  cancelled: 'PP-OCR work was cancelled',
-  'invalid-input': 'PP-OCR received invalid image input',
-  'startup-failed': 'PP-OCR worker could not start',
-  'startup-timeout': 'PP-OCR worker startup timed out',
-  'protocol-error': 'PP-OCR worker returned an invalid response',
-  'worker-error': 'PP-OCR worker rejected the request',
-  'worker-exited': 'PP-OCR worker exited unexpectedly',
-  'recognition-timeout': 'PP-OCR recognition timed out',
-  'output-limit': 'PP-OCR worker output exceeded its limit',
-  'shutdown-timeout': 'PP-OCR worker did not stop in time'
 }
 
 /**
@@ -159,19 +63,6 @@ const ERROR_MESSAGES: Record<PpOcrWorkerErrorCode, string> = {
  * failed, which is what made a PNG-only decoder look like a recognition bug.
  */
 export const PP_OCR_STDERR_TAIL_CHARS = 400
-
-export class PpOcrWorkerError extends Error {
-  readonly code: PpOcrWorkerErrorCode
-  /** The worker's own explanation, when it gave one on stderr. */
-  readonly detail: string | undefined
-
-  constructor(code: PpOcrWorkerErrorCode, cause?: unknown, detail?: string) {
-    super(detail ? `${ERROR_MESSAGES[code]}: ${detail}` : ERROR_MESSAGES[code], { cause })
-    this.name = 'PpOcrWorkerError'
-    this.code = code
-    this.detail = detail
-  }
-}
 
 /** Minimal stream surface needed by the adapter; tests provide a small fake. */
 export interface PpOcrWorkerOutput {
@@ -208,32 +99,6 @@ export type PpOcrSpawn = (
 export const spawnPpOcr: PpOcrSpawn = (executablePath, args, options) =>
   spawn(executablePath, args, options) as unknown as PpOcrWorkerProcess
 
-/**
- * Arguments understood by the PP-OCR ONNX sidecar. The adapter supplies the
- * model files, recognition dictionary and protocol version. All paths are argv
- * entries, never shell text.
- */
-export function buildPpOcrWorkerArgs(
-  modelPaths: PpOcrModelPaths,
-  detectionSideLength: number = PP_OCR_MAX_DETECTION_SIDE_LENGTH
-): string[] {
-  const args = [
-    WORKER_ARGS.protocolVersion,
-    String(PP_OCR_PROTOCOL_VERSION),
-    WORKER_ARGS.language,
-    'japan',
-    WORKER_ARGS.detectionModel,
-    modelPaths.detection,
-    WORKER_ARGS.recognitionModel,
-    modelPaths.recognition,
-    WORKER_ARGS.keys,
-    modelPaths.keys,
-    WORKER_ARGS.detectionSideLength,
-    String(resolveDetectionSideLength([detectionSideLength]))
-  ]
-  return args
-}
-
 export interface PpOcrWorkerService {
   /** Starts one worker and waits for its ready handshake. */
   start(): Promise<void>
@@ -259,7 +124,7 @@ interface StartupAttempt {
 }
 
 interface PendingRecognition {
-  request: Omit<PpOcrRequest, 'imageBytes'>
+  request: PpOcrRequestMetadata
   imageBytes?: Uint8Array
   requestId: number
   resolve: (result: OcrResult) => void
@@ -268,11 +133,6 @@ interface PendingRecognition {
   stale: boolean
   timer?: ReturnType<typeof setTimeout>
 }
-
-const READY_KEYS = ['version', 'type'] as const
-const RESULT_KEYS = ['version', 'type', 'requestId', 'regions'] as const
-const ERROR_KEYS = ['version', 'type', 'requestId'] as const
-const REGION_KEYS = ['text', 'confidence', 'quad'] as const
 
 class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   private readonly options: Required<
@@ -356,7 +216,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   }
 
   recognize(request: PpOcrRequest): Promise<OcrResult> {
-    const inputError = validateRequest(request, this.options.maxImageBase64Bytes)
+    const inputError = validatePpOcrRequest(request, this.options.maxImageBase64Bytes)
     if (inputError) return Promise.reject(inputError)
 
     const result = new Promise<OcrResult>((resolve, reject) => {
@@ -401,7 +261,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       try {
         await this.cleanupRecord(record)
       } catch (error) {
-        const failure = asWorkerError(error, 'shutdown-timeout')
+        const failure = asPpOcrWorkerError(error, 'shutdown-timeout')
         this.setStatus({ state: 'error', error: failure.message })
         throw failure
       }
@@ -478,34 +338,19 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       }, this.options.recognitionTimeoutMs)
     } catch (error) {
       if (this.active !== pending) return
-      const failure = asWorkerError(error, 'worker-error')
+      const failure = asPpOcrWorkerError(error, 'worker-error')
       this.fail(failure, this.processRecord)
     }
   }
 
   private writeRequest(record: ProcessRecord, pending: PendingRecognition): void {
+    // The PNG is released here rather than retained for the request's lifetime.
     const imageBytes = pending.imageBytes
     pending.imageBytes = undefined
     if (!imageBytes) throw new PpOcrWorkerError('invalid-input')
-    // Buffer.from(ArrayBuffer, offset, length) is a zero-copy view. The one
-    // base64 allocation and JSON serialization below are required by the
-    // existing sidecar protocol and become collectible after this write.
-    const imageBase64 = Buffer.from(
-      imageBytes.buffer,
-      imageBytes.byteOffset,
-      imageBytes.byteLength
-    ).toString('base64')
-    const message = {
-      version: PP_OCR_PROTOCOL_VERSION,
-      type: 'recognize',
-      requestId: pending.requestId,
-      sessionId: pending.request.sessionId,
-      captureId: pending.request.captureId,
-      imageSize: pending.request.imageSize,
-      imageBase64
-    }
+    const line = serializePpOcrRequest(pending.requestId, pending.request, imageBytes)
     try {
-      record.process.stdin.write(JSON.stringify(message) + '\n')
+      record.process.stdin.write(line)
     } catch (error) {
       throw new PpOcrWorkerError('worker-error', error)
     }
@@ -539,9 +384,9 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       this.stdoutBuffer = this.stdoutBuffer.slice(newlineIndex + 1)
       if (line.trim() !== '') {
         try {
-          this.handleMessage(record, JSON.parse(line) as unknown)
+          this.handleMessage(record, parsePpOcrMessage(line))
         } catch (error) {
-          this.fail(asWorkerError(error, 'protocol-error'), record)
+          this.fail(asPpOcrWorkerError(error, 'protocol-error'), record)
           return
         }
         if (record !== this.processRecord || record.exited || this.stoppingRecord === record) return
@@ -574,15 +419,9 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     return tail
   }
 
-  private handleMessage(record: ProcessRecord, value: unknown): void {
-    if (!isRecord(value) || value.version !== PP_OCR_PROTOCOL_VERSION) {
-      throw new PpOcrWorkerError('protocol-error')
-    }
-
-    if (value.type === 'ready') {
-      if (!hasOnlyKeys(value, READY_KEYS) || this.startup?.record !== record) {
-        throw new PpOcrWorkerError('protocol-error')
-      }
+  private handleMessage(record: ProcessRecord, message: PpOcrMessage): void {
+    if (message.type === 'ready') {
+      if (this.startup?.record !== record) throw new PpOcrWorkerError('protocol-error')
       const startup = this.startup
       this.startup = undefined
       if (startup.timer) clearTimeout(startup.timer)
@@ -592,14 +431,16 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       return
     }
 
-    if (value.type === 'error') {
-      if (!hasOnlyKeys(value, ERROR_KEYS)) throw new PpOcrWorkerError('protocol-error')
-      const requestId = value.requestId
-      if (requestId === undefined && this.startup?.record === record) {
+    if (message.type === 'error') {
+      if (message.requestId === undefined && this.startup?.record === record) {
         this.fail(new PpOcrWorkerError('worker-error'), record)
         return
       }
-      if (!isRequestId(requestId) || !this.active || this.active.requestId !== requestId) {
+      if (
+        message.requestId === undefined ||
+        !this.active ||
+        this.active.requestId !== message.requestId
+      ) {
         throw new PpOcrWorkerError('protocol-error')
       }
       const pending = this.active
@@ -614,20 +455,13 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       return
     }
 
-    if (value.type !== 'result' || !hasOnlyKeys(value, RESULT_KEYS)) {
-      throw new PpOcrWorkerError('protocol-error')
-    }
     if (this.startup?.record === record) throw new PpOcrWorkerError('protocol-error')
-    if (
-      !isRequestId(value.requestId) ||
-      !this.active ||
-      this.active.requestId !== value.requestId
-    ) {
+    if (!this.active || this.active.requestId !== message.requestId) {
       throw new PpOcrWorkerError('protocol-error')
     }
 
     const pending = this.active
-    const result = buildOcrResult(pending.request, value.regions)
+    const result = buildPpOcrResult(pending.request, message.regions)
     this.active = undefined
     this.clearPendingTimer(pending)
     if (!pending.stale) this.resolvePending(pending, result)
@@ -717,7 +551,10 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   private scheduleCleanup(record: ProcessRecord): void {
     const cleanup = this.cleanupRecord(record)
     void cleanup.catch((error) => {
-      this.setStatus({ state: 'error', error: asWorkerError(error, 'shutdown-timeout').message })
+      this.setStatus({
+        state: 'error',
+        error: asPpOcrWorkerError(error, 'shutdown-timeout').message
+      })
     })
   }
 
@@ -823,132 +660,8 @@ function validateOptions(options: PpOcrWorkerOptions): void {
   }
 }
 
-function validateRequest(
-  request: PpOcrRequest,
-  maxImageBase64Bytes: number
-): PpOcrWorkerError | undefined {
-  if (!request || !isOcrIdentifier(request.sessionId) || !isOcrIdentifier(request.captureId)) {
-    return new PpOcrWorkerError('invalid-input')
-  }
-  const { width, height } = request.imageSize ?? ({} as OcrImageSize)
-  if (
-    !Number.isSafeInteger(width) ||
-    !Number.isSafeInteger(height) ||
-    width <= 0 ||
-    height <= 0 ||
-    width > MAX_OCR_IMAGE_DIMENSION ||
-    height > MAX_OCR_IMAGE_DIMENSION ||
-    width * height > PP_OCR_MAX_IMAGE_PIXELS
-  ) {
-    return new PpOcrWorkerError('invalid-input')
-  }
-  if (
-    !(request.imageBytes instanceof Uint8Array) ||
-    request.imageBytes.byteLength === 0 ||
-    4 * Math.ceil(request.imageBytes.byteLength / 3) > maxImageBase64Bytes
-  ) {
-    return new PpOcrWorkerError('invalid-input')
-  }
-  return undefined
-}
-
-function buildOcrResult(request: Omit<PpOcrRequest, 'imageBytes'>, rawRegions: unknown): OcrResult {
-  if (!Array.isArray(rawRegions) || rawRegions.length > MAX_OCR_REGION_COUNT) {
-    throw new PpOcrWorkerError('protocol-error')
-  }
-
-  const regions = rawRegions.map((candidate, index) => {
-    if (!isRecord(candidate) || !hasOnlyKeys(candidate, REGION_KEYS)) {
-      throw new PpOcrWorkerError('protocol-error')
-    }
-    if (
-      typeof candidate.text !== 'string' ||
-      candidate.text.length > MAX_OCR_TEXT_LENGTH ||
-      typeof candidate.confidence !== 'number' ||
-      !Number.isFinite(candidate.confidence) ||
-      candidate.confidence < 0 ||
-      candidate.confidence > 1
-    ) {
-      throw new PpOcrWorkerError('protocol-error')
-    }
-    const bounds = quadrilateralToBounds(candidate.quad)
-    if (!bounds) throw new PpOcrWorkerError('protocol-error')
-    return {
-      id: `ppocr-${index + 1}`,
-      text: candidate.text,
-      bounds,
-      confidence: candidate.confidence
-    }
-  })
-
-  const normalized = normalizeOcrResult({
-    sessionId: request.sessionId,
-    captureId: request.captureId,
-    imageSize: request.imageSize,
-    regions
-  })
-  if (!normalized.ok) throw new PpOcrWorkerError('protocol-error')
-  return normalized.value
-}
-
-function quadrilateralToBounds(value: unknown): OcrBounds | undefined {
-  if (!Array.isArray(value) || value.length !== 4) return undefined
-  const points: Array<[number, number]> = []
-  for (const point of value) {
-    if (
-      !Array.isArray(point) ||
-      point.length !== 2 ||
-      typeof point[0] !== 'number' ||
-      typeof point[1] !== 'number' ||
-      !Number.isFinite(point[0]) ||
-      !Number.isFinite(point[1])
-    ) {
-      return undefined
-    }
-    points.push([point[0], point[1]])
-  }
-  const xs = points.map(([x]) => x)
-  const ys = points.map(([, y]) => y)
-  const left = Math.min(...xs)
-  const top = Math.min(...ys)
-  const right = Math.max(...xs)
-  const bottom = Math.max(...ys)
-  if (right <= left || bottom <= top) return undefined
-  return { x: left, y: top, width: right - left, height: bottom - top }
-}
-
-function asWorkerError(error: unknown, fallback: PpOcrWorkerErrorCode): PpOcrWorkerError {
-  return error instanceof PpOcrWorkerError ? error : new PpOcrWorkerError(fallback, error)
-}
-
-function isRequestId(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value > 0 &&
-    value <= MAX_OCR_IDENTIFIER
-  )
-}
-
-function isOcrIdentifier(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isSafeInteger(value) &&
-    value >= 0 &&
-    value <= MAX_OCR_IDENTIFIER
-  )
-}
-
 function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
-  return Object.keys(value).every((key) => allowed.includes(key))
 }
 
 function delay(ms: number): Promise<void> {
