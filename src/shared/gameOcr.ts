@@ -30,14 +30,6 @@ export interface GameOcrFreezeRequest {
   /** The Electron desktop-capture source for the display being frozen. */
   sourceId: string
   imageSize: OcrImageSize
-  /**
-   * Whether to wait for a frame composited after Kizuna's own frame stopped
-   * covering the display, so a recapture cannot photograph the previous frozen
-   * frame. Bounded: a completely static screen produces no new frames at all —
-   * measured stalls of 3.3 s and 14.4 s — so the wait falls back to the frame
-   * already in hand rather than hanging the capture.
-   */
-  requireFreshFrame: boolean
 }
 
 /**
@@ -60,7 +52,8 @@ export interface GameOcrFrozenFrame {
 export interface GameOcrCaptureBytes {
   sessionId: number
   captureId: number
-  imageBase64: string
+  /** Raw encoded PNG bytes. Base64 exists only at the worker protocol boundary. */
+  imageBytes: Uint8Array
   imageMediaType: string
   imageSize: OcrImageSize
   error?: string

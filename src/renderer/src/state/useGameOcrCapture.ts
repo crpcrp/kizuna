@@ -22,7 +22,7 @@ export interface GameOcrCaptureBridge {
   captureBytes(value: {
     sessionId: number
     captureId: number
-    imageBase64: string
+    imageBytes: Uint8Array
     imageMediaType: string
     imageSize: OcrImageSize
     error?: string
@@ -45,9 +45,9 @@ export interface UseGameOcrCaptureInput {
  * ~300 ms `desktopCapturer.getSources` round trip. Opening it is the expensive
  * part and happens on the first capture for a display, not on every one.
  *
- * The frame is drawn while the window is still hidden and the encode runs after
- * it is shown, so nothing the user waits for is behind either the PNG encode or
- * the transfer to the main process.
+ * The overlay is excluded from Windows desktop capture. A recapture can
+ * therefore replace its canvas in place without hiding, waiting for a native
+ * event, or allowing the old text boxes into the captured pixels.
  */
 export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptureInput): void {
   const streamsRef = useRef<
@@ -61,6 +61,8 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
     // Created here rather than in the initial ref value, so the map belongs to
     // the effect that opens the streams and tears them down again.
     const streams = (streamsRef.current ??= new Map())
+    const openings = new Map<string, Promise<{ stream: MediaStream; video: HTMLVideoElement }>>()
+    let latestCaptureKey = ''
 
     /** Opens the display's stream, or reuses the one already running for it. */
     const acquire = async (
@@ -77,30 +79,48 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
       ) {
         return existing
       }
+      const opening = openings.get(sourceId)
+      if (opening) return opening
       existing?.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
 
-      const stream = await navigator.mediaDevices.getUserMedia(desktopStreamConstraints(sourceId))
-      const video = document.createElement('video')
-      video.srcObject = stream
-      video.muted = true
-      video.playsInline = true
-      await video.play()
-      if (!video.videoWidth) {
-        await new Promise<void>((resolve) => {
-          video.onloadedmetadata = () => resolve()
-        })
+      const operation = (async (): Promise<{
+        stream: MediaStream
+        video: HTMLVideoElement
+      }> => {
+        const stream = await navigator.mediaDevices.getUserMedia(desktopStreamConstraints(sourceId))
+        const video = document.createElement('video')
+        video.srcObject = stream
+        video.muted = true
+        video.playsInline = true
+        await video.play()
+        if (!video.videoWidth) {
+          await new Promise<void>((resolve) => {
+            video.onloadedmetadata = () => resolve()
+          })
+        }
+        const entry = { stream, video }
+        streams.set(sourceId, entry)
+        return entry
+      })()
+      openings.set(sourceId, operation)
+      try {
+        return await operation
+      } finally {
+        if (openings.get(sourceId) === operation) openings.delete(sourceId)
       }
-      const entry = { stream, video }
-      streams.set(sourceId, entry)
-      return entry
     }
 
     const unsubscribe = api.onFreeze((request) => {
+      const captureKey = `${request.sessionId}:${request.captureId}`
+      latestCaptureKey = captureKey
       void (async () => {
         const identity = { sessionId: request.sessionId, captureId: request.captureId }
         let canvas: HTMLCanvasElement | null = null
         try {
           const { video } = await acquire(request.sourceId)
+          if (latestCaptureKey !== captureKey) {
+            throw new Error('The Game OCR capture was superseded by a newer shortcut.')
+          }
           canvas = canvasRef.current
           if (!canvas) throw new Error('The frozen frame has no canvas to draw into.')
           const context = canvas.getContext('2d')
@@ -117,9 +137,11 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           }
           const { imageSize } = await freezeCurrentFrame({
             surface,
-            imageSize: request.imageSize,
-            requireFreshFrame: request.requireFreshFrame
+            imageSize: request.imageSize
           })
+          if (latestCaptureKey !== captureKey) {
+            throw new Error('The Game OCR capture was superseded by a newer shortcut.')
+          }
 
           // Main shows the window on this message, so it is sent before the
           // encode rather than after it.
@@ -133,7 +155,7 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           const buffer = await blob.arrayBuffer()
           api.captureBytes({
             ...identity,
-            imageBase64: base64FromBytes(new Uint8Array(buffer)),
+            imageBytes: new Uint8Array(buffer),
             imageMediaType: CAPTURE_MEDIA_TYPE,
             imageSize
           })
@@ -144,7 +166,7 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
           api.frozen({ ...identity, imageSize: request.imageSize, error: message })
           api.captureBytes({
             ...identity,
-            imageBase64: '',
+            imageBytes: new Uint8Array(),
             imageMediaType: CAPTURE_MEDIA_TYPE,
             imageSize: request.imageSize,
             error: message
@@ -155,23 +177,12 @@ export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptur
 
     return () => {
       unsubscribe()
+      latestCaptureKey = ''
+      openings.clear()
       for (const { stream } of streams.values()) {
         stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
       }
       streams.clear()
     }
   }, [api, canvasRef, reportFrozen])
-}
-
-/**
- * Chunked so a full-display PNG cannot overflow the argument limit that
- * `String.fromCharCode(...bytes)` would hit on a megabyte of data.
- */
-function base64FromBytes(bytes: Uint8Array): string {
-  const CHUNK = 0x8000
-  let binary = ''
-  for (let offset = 0; offset < bytes.length; offset += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + CHUNK))
-  }
-  return btoa(binary)
 }

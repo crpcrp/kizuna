@@ -119,8 +119,9 @@ to the player's React tree does not reach it. Anything renderer-facing has to be
 declared in `electron.vite.config.ts`'s renderer inputs to be built.
 
 `services/gameOcr/controller.ts` owns session identity and the
-invalidate → discard → settle → capture → move → present → recognize order that
-keeps a recapture off Kizuna's own frozen screenshot. It retains one frozen-frame
+invalidate → capture → move → replace canvas → recognize order. The native
+window is excluded from Windows desktop capture, which keeps a recapture off
+Kizuna's own frozen screenshot without hiding it first. The controller retains one frozen-frame
 window for the whole armed run, so a frame ends by hiding rather than closing;
 `services/gameOcr/frozenFrameWindow.ts` separates that discard from the close
 that only stopping, a display change, or a dead renderer performs. Work that

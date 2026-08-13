@@ -57,16 +57,15 @@ export interface PpOcrWorkerOptions {
 }
 
 /**
- * Raw PNG data is passed as base64; it never crosses the public OCR contract.
- * PNG specifically: the worker's OpenCV is built without the JPEG codec, so
- * anything else decodes to an empty `Mat` and the request is rejected. See
- * `DISPLAY_CAPTURE_MEDIA_TYPE`.
+ * Raw PNG bytes stay binary until this worker boundary. The sidecar's JSONL
+ * protocol requires base64, so it is created immediately before `stdin.write`
+ * and is not retained by the pending recognition record.
  */
 export interface PpOcrRequest {
   sessionId: number
   captureId: number
   imageSize: OcrImageSize
-  imageBase64: string
+  imageBytes: Uint8Array
 }
 
 export type PpOcrWorkerState = 'stopped' | 'starting' | 'ready' | 'recognizing' | 'error'
@@ -205,7 +204,8 @@ interface StartupAttempt {
 }
 
 interface PendingRecognition {
-  request: PpOcrRequest
+  request: Omit<PpOcrRequest, 'imageBytes'>
+  imageBytes?: Uint8Array
   requestId: number
   resolve: (result: OcrResult) => void
   reject: (error: unknown) => void
@@ -306,7 +306,12 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
 
     const result = new Promise<OcrResult>((resolve, reject) => {
       const pending: PendingRecognition = {
-        request,
+        request: {
+          sessionId: request.sessionId,
+          captureId: request.captureId,
+          imageSize: { ...request.imageSize }
+        },
+        imageBytes: request.imageBytes,
         requestId: this.allocateRequestId(),
         resolve,
         reject,
@@ -424,6 +429,17 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   }
 
   private writeRequest(record: ProcessRecord, pending: PendingRecognition): void {
+    const imageBytes = pending.imageBytes
+    pending.imageBytes = undefined
+    if (!imageBytes) throw new PpOcrWorkerError('invalid-input')
+    // Buffer.from(ArrayBuffer, offset, length) is a zero-copy view. The one
+    // base64 allocation and JSON serialization below are required by the
+    // existing sidecar protocol and become collectible after this write.
+    const imageBase64 = Buffer.from(
+      imageBytes.buffer,
+      imageBytes.byteOffset,
+      imageBytes.byteLength
+    ).toString('base64')
     const message = {
       version: PP_OCR_PROTOCOL_VERSION,
       type: 'recognize',
@@ -431,7 +447,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
       sessionId: pending.request.sessionId,
       captureId: pending.request.captureId,
       imageSize: pending.request.imageSize,
-      imageBase64: pending.request.imageBase64
+      imageBase64
     }
     try {
       record.process.stdin.write(JSON.stringify(message) + '\n')
@@ -622,6 +638,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   }
 
   private resolvePending(pending: PendingRecognition, result: OcrResult): void {
+    pending.imageBytes = undefined
     if (pending.settled) return
     pending.settled = true
     pending.resolve(result)
@@ -629,6 +646,9 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
 
   private rejectPending(pending: PendingRecognition, error: unknown): void {
     this.clearPendingTimer(pending)
+    // A stale queued request may never reach writeRequest, so release its PNG
+    // here instead of retaining it until worker startup or shutdown completes.
+    pending.imageBytes = undefined
     if (pending.settled) return
     pending.settled = true
     pending.reject(error)
@@ -768,16 +788,16 @@ function validateRequest(
     return new PpOcrWorkerError('invalid-input')
   }
   if (
-    typeof request.imageBase64 !== 'string' ||
-    request.imageBase64.length === 0 ||
-    Buffer.byteLength(request.imageBase64, 'utf8') > maxImageBase64Bytes
+    !(request.imageBytes instanceof Uint8Array) ||
+    request.imageBytes.byteLength === 0 ||
+    4 * Math.ceil(request.imageBytes.byteLength / 3) > maxImageBase64Bytes
   ) {
     return new PpOcrWorkerError('invalid-input')
   }
   return undefined
 }
 
-function buildOcrResult(request: PpOcrRequest, rawRegions: unknown): OcrResult {
+function buildOcrResult(request: Omit<PpOcrRequest, 'imageBytes'>, rawRegions: unknown): OcrResult {
   if (!Array.isArray(rawRegions) || rawRegions.length > MAX_OCR_REGION_COUNT) {
     throw new PpOcrWorkerError('protocol-error')
   }

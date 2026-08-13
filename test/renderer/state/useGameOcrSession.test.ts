@@ -21,8 +21,7 @@ function freezeRequest(captureId: number): GameOcrFreezeRequest {
     sessionId: captureId,
     captureId,
     sourceId: 'screen:0:0',
-    imageSize: IMAGE_SIZE,
-    requireFreshFrame: false
+    imageSize: IMAGE_SIZE
   }
 }
 
@@ -161,12 +160,12 @@ describe('useGameOcrSession', () => {
     await waitFor(() => expect(hook.result.current.regions).toHaveLength(1))
     const firstKey = hook.result.current.captureKey
 
-    act(() => {
-      pushes.freeze?.(freezeRequest(2))
-      hook.result.current.onFrozen(IMAGE_SIZE)
-    })
+    act(() => pushes.freeze?.(freezeRequest(2)))
+    // The old canvas remains visible until capture overwrites it, but its
+    // boxes are gone immediately.
     expect(hook.result.current.presentation?.imageSize).toEqual(IMAGE_SIZE)
     expect(hook.result.current.regions).toEqual([])
+    act(() => hook.result.current.onFrozen(IMAGE_SIZE))
 
     act(() => pushes.regions?.(result(2, '新しい')))
     expect(hook.result.current.regions[0]?.text).toBe('新しい')
@@ -200,6 +199,21 @@ describe('useGameOcrSession', () => {
     expect(gameOcr.close).toHaveBeenCalledOnce()
     expect(hook.result.current.presentation).toBeUndefined()
     expect(hook.result.current.regions).toEqual([])
+  })
+
+  it('asks main to hide before doing renderer cleanup', () => {
+    const { hook, gameOcr } = setup()
+    const removeAllRanges = vi.fn()
+    const getSelection = vi
+      .spyOn(document, 'getSelection')
+      .mockReturnValue({ removeAllRanges } as unknown as Selection)
+
+    act(() => hook.result.current.close())
+
+    expect(gameOcr.close.mock.invocationCallOrder[0]).toBeLessThan(
+      removeAllRanges.mock.invocationCallOrder[0]
+    )
+    getSelection.mockRestore()
   })
 
   it('clears a leftover selection at every frame boundary', async () => {

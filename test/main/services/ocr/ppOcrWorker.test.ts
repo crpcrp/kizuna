@@ -11,9 +11,7 @@ import {
 import { fixture, REPO_ROOT } from '@test/paths'
 
 const JAPANESE_WORKER_FIXTURE = readFileSync(fixture('ocr', 'ppocr-worker-japanese.jsonl'), 'utf8')
-const JAPANESE_SCREENSHOT_BASE64 = readFileSync(join(REPO_ROOT, 'build', 'player.jpg')).toString(
-  'base64'
-)
+const JAPANESE_SCREENSHOT_BYTES = readFileSync(join(REPO_ROOT, 'build', 'player.jpg'))
 
 class FakePpOcrProcess extends EventEmitter implements PpOcrWorkerProcess {
   readonly writes: string[] = []
@@ -79,7 +77,7 @@ const request = (captureId = 7) => ({
   sessionId: 3,
   captureId,
   imageSize: { width: 640, height: 480 },
-  imageBase64: 'iVBORw0KGgo='
+  imageBytes: Buffer.from('iVBORw0KGgo=', 'base64')
 })
 
 const japaneseRegion = (x: number, text = '日本語') => ({
@@ -127,6 +125,10 @@ describe('createPpOcrWorkerService', () => {
     expect(service.getStatus().state).toBe('starting')
     process.ready()
     await vi.waitFor(() => expect(service.getStatus().state).toBe('recognizing'))
+    expect(JSON.parse(process.writes[0])).toMatchObject({
+      type: 'recognize',
+      imageBase64: 'iVBORw0KGgo='
+    })
     process.result(1, [japaneseRegion(200), japaneseRegion(10, '猫')])
 
     await expect(first).resolves.toEqual({
@@ -175,7 +177,7 @@ describe('createPpOcrWorkerService', () => {
     const pending = service.recognize({
       ...request(),
       imageSize: { width: 1272, height: 688 },
-      imageBase64: JAPANESE_SCREENSHOT_BASE64
+      imageBytes: JAPANESE_SCREENSHOT_BYTES
     })
     const [readyLine, resultLine] = JAPANESE_WORKER_FIXTURE.trimEnd().split('\n')
     process.stdout.emit('data', readyLine + '\n')

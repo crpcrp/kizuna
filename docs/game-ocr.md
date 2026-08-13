@@ -60,21 +60,21 @@ Game OCR adds no screenshot, audio, or timestamp to a card.
 ### Recapture
 
 Pressing the shortcut while a frozen frame is open must never re-read Kizuna's
-own screenshot. The coordinator therefore always:
+own screenshot. The frozen-frame window is marked with Electron content
+protection, which maps to `WDA_EXCLUDEFROMCAPTURE` on current Windows. Desktop
+capture therefore sees the game beneath the overlay, even while the previous
+screenshot and its boxes remain visible. The coordinator:
 
-1. invalidates the old session and drops its boxes, popups, selection,
-   indicator, and screenshot references;
-2. drops the screenshot from the frozen window and hides it, then waits for
-   confirmation that it is no longer visible;
-3. allows one bounded compositor-settle step;
-4. captures the now-visible live game;
-5. moves the window onto the captured display and presents the new screenshot
-   immediately;
-6. accepts OCR, tokenization, lookup, and translation results only for the new
+1. invalidates the old session and drops its boxes, popups, and selection;
+2. captures the game directly while leaving the old canvas visible;
+3. moves the retained window when necessary and replaces that canvas in place;
+4. starts PNG encoding and OCR as soon as the new pixels are drawn; and
+5. accepts OCR, tokenization, lookup, and translation results only for the new
    session ID.
 
-If a recapture fails after the old frame is gone, the live game stays visible.
-The stale screenshot is never restored.
+There is no native hide event, compositor delay, fresh-frame callback, or stream
+reopen on the shortcut path. If recapture fails, the overlay is hidden and the
+live game remains visible.
 
 ### One retained window
 
@@ -131,8 +131,8 @@ feels, so the screenshot is not taken on demand at all.
 **The frozen frame holds an open desktop capture stream** for the display it
 covers, for as long as Game OCR is armed and its window is retained. A capture
 is then one `drawImage` from a frame the renderer already has. The expensive
-setup — enumerating capture sources, opening the stream — is paid at arm time
-and on the first capture for a display, not on the hotkey.
+setup — enumerating capture sources, opening the stream — is paid on the first
+capture for a display and reused afterwards.
 
 Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 
@@ -140,40 +140,64 @@ Measured on a 2560×1440 display, Ryzen 7 5800X3D:
 |---|---:|---:|
 | getting the pixels | ~300 ms | 12–44 ms |
 | encoding them | 85 ms | ~25 ms, *after* the frame is shown |
-| base64, IPC | under 1 ms | not on the path at all |
+| base64, IPC | under 1 ms | binary IPC after presentation; base64 only at worker stdin |
 
 `desktopCapturer.getSources` was ~75% of the old path and none of it was
 recoverable: it charges roughly the same ~300 ms whether the requested
 thumbnail is 1×1 or the full display, and it does not warm up, so calling it
 early to prime the pipeline only pays it twice. It is still used once per armed
-run — with a 1×1 thumbnail, for source ids only.
+run — with a 1×1 thumbnail, for source ids only. The current display target is
+also cached while the pointer remains inside its bounds, avoiding Electron's
+display lookup on the hot path. A warm target is returned synchronously, so the
+freeze IPC reaches the renderer before the global-shortcut callback yields to
+Electron. Only real source enumeration uses a Promise. Both caches are cleared
+when Game OCR stops or the application shuts down; neither contains screenshot
+pixels.
 
 The screenshot no longer crosses IPC to be displayed. The renderer draws into
 its own canvas and shows it; the PNG the OCR worker needs is encoded afterwards
 and sent to the main process then, so nothing the user is looking at a blank
 display for sits behind an encode.
 
-Two ordering properties this relies on:
+The encoded PNG crosses renderer IPC as bytes. It is converted to base64 only
+at the PP-OCR sidecar's JSONL protocol boundary, immediately before the stdin
+write. Main drops its byte and base64 references before waiting for inference,
+so a full-resolution screenshot is not retained for the worker's 2–3 second
+recognition time.
 
-- **The frame is drawn while the window is still hidden**, which is why it
-  cannot appear in its own screenshot. That is a stronger guarantee than the
-  fixed 32 ms compositor-settle delay it replaces, which only assumed the
-  repaint had happened by then.
-- **A recapture additionally waits for a frame composited after the previous
-  frozen frame was hidden.** That wait is bounded at 120 ms, because a desktop
-  stream only produces frames when the screen *changes* — on a completely
-  static screen `requestVideoFrameCallback` can stall for seconds (measured
-  3.3 s and 14.4 s), and a screen full of unmoving visual-novel text is exactly
-  Kizuna's case. Hiding the frame is itself a change, so the frame normally
-  arrives within one refresh; the bound only covers the compositor disagreeing.
+Three ordering properties this relies on:
+
+- **The native overlay is excluded from desktop capture.** Self-capture safety
+  is a property of the window, not an inference from delayed hide events or
+  compositor timing.
+- **The previous canvas stays visible until `drawImage` replaces it.** The old
+  boxes are removed at the freeze boundary, so recapture neither flashes a
+  blank overlay nor mixes text from two sessions.
+- **Main registers the screenshot-byte waiter before requesting the draw.** PNG
+  encoding still starts after the pixels are displayed, but a fast encode can
+  no longer arrive before main is ready to hand it to the OCR worker.
 
 The stream runs continuously while Game OCR is armed. It is local, like the
 rest of the feature, and stops with the window.
 
+Outside-click dismissal sends the main-process close request first. Main issues
+the native `hide()` immediately and lets renderer state, selection, and pending
+lookup cleanup finish afterwards. It never waits for Electron's `hide` event,
+which can lag the visible transition by seconds on Windows.
+
 Development runs log the complete shortcut-to-word-box time after the renderer
-acknowledges a browser paint. The same line splits dismissal, capture-queue
-waiting, compositor settle, capture, presentation, recognition, and rendering
-so a slow machine can be profiled without guessing which boundary dominates.
+acknowledges a browser paint. The historical `dismiss`, `queue`, and `settle`
+fields remain, but are no longer work stages: dismissal and settle are zero,
+while queue measures only synchronous shortcut dispatch into capture and should
+also be effectively zero. Capture, presentation, recognition, and rendering
+remain real stage costs.
+The capture field is split further into `cursor`, `display`, `source`, and
+`event-loop`: `display` is zero on a cached target, `source` says whether ids
+were cached or enumerated, and `event-loop` exposes time lost between the
+adapter's measured work and the controller continuation. The accompanying
+`target cached/resolved` label makes warm and cold paths distinguishable. Warm
+targets do not cross an asynchronous boundary, so their `event-loop` remainder
+should stay effectively zero; cold source enumeration can still yield.
 `KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
 input trace.
 
