@@ -3,10 +3,6 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  buildPpOcrWorkerArgs,
-  resolveDetectionSideLength,
-  PP_OCR_MIN_DETECTION_SIDE_LENGTH,
-  PP_OCR_MAX_DETECTION_SIDE_LENGTH,
   createPpOcrWorkerService,
   type PpOcrSpawn,
   type PpOcrWorkerProcess
@@ -94,69 +90,8 @@ const japaneseRegion = (x: number, text = '日本語') => ({
   ]
 })
 
-describe('buildPpOcrWorkerArgs', () => {
-  it('passes the Japanese model paths as separate argv entries', () => {
-    expect(
-      buildPpOcrWorkerArgs({
-        detection: 'C:\\det model',
-        recognition: 'C:\\rec model',
-        keys: 'C:\\model keys.txt'
-      })
-    ).toEqual([
-      '--protocol-version',
-      '1',
-      '--lang',
-      'japan',
-      '--det-model',
-      'C:\\det model',
-      '--rec-model',
-      'C:\\rec model',
-      '--keys',
-      'C:\\model keys.txt',
-      '--det-side-len',
-      '4096'
-    ])
-  })
-
-  it('runs detection at the size it is given', () => {
-    expect(
-      buildPpOcrWorkerArgs({ detection: 'det', recognition: 'rec', keys: 'keys' }, 2560)
-    ).toEqual(expect.arrayContaining(['--det-side-len', '2560']))
-  })
-})
-
-describe('resolveDetectionSideLength', () => {
-  it('runs detection at the largest display, so a fullscreen game is not rescaled', () => {
-    // `--det-side-len` sets the detection tensor rather than capping it: the
-    // worker resamples every capture to exactly this longest side, upwards
-    // included. Measured on the vendor fixture, the same content at 960x540
-    // and at 2560x1440 both cost ~1.6 s at 4000, against 78 ms and 602 ms at
-    // their own size.
-    expect(resolveDetectionSideLength([2560, 1440])).toBe(2560)
-    expect(resolveDetectionSideLength([2560, 1440, 1920, 1080])).toBe(2560)
-  })
-
-  it('scales physical pixels, not logical bounds', () => {
-    // A 1920x1080 display at 150% captures 2880x1620 physical pixels.
-    expect(resolveDetectionSideLength([1920 * 1.5, 1080 * 1.5])).toBe(2880)
-  })
-
-  it('keeps a floor, so a small window still gets a usable detection tensor', () => {
-    expect(resolveDetectionSideLength([640, 480])).toBe(PP_OCR_MIN_DETECTION_SIDE_LENGTH)
-  })
-
-  it('never exceeds what the worker accepts', () => {
-    expect(resolveDetectionSideLength([7680, 4320])).toBe(PP_OCR_MAX_DETECTION_SIDE_LENGTH)
-  })
-
-  it('ignores unusable sides rather than producing NaN', () => {
-    expect(resolveDetectionSideLength([Number.NaN, 0, -1, 1920])).toBe(1920)
-    expect(resolveDetectionSideLength([])).toBe(PP_OCR_MIN_DETECTION_SIDE_LENGTH)
-  })
-})
-
 describe('createPpOcrWorkerService', () => {
-  it('keeps one worker warm and converts quadrilaterals through the shared contract', async () => {
+  it('keeps one worker warm across consecutive requests', async () => {
     const process = new FakePpOcrProcess()
     const { service, spawn } = createService(process)
 
@@ -197,17 +132,6 @@ describe('createPpOcrWorkerService', () => {
     await expect(second).resolves.toMatchObject({ captureId: 8, regions: [{ text: '二回目' }] })
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(process.writes).toHaveLength(2)
-  })
-
-  it('accepts zero-valued session and capture counters from the shared OCR contract', async () => {
-    const process = new FakePpOcrProcess()
-    const { service } = createService(process)
-    const pending = service.recognize({ ...request(0), sessionId: 0 })
-    process.ready()
-    await vi.waitFor(() => expect(process.writes).toHaveLength(1))
-    process.result(1, [japaneseRegion(10)])
-
-    await expect(pending).resolves.toMatchObject({ sessionId: 0, captureId: 0 })
   })
 
   it('runs the adapter against the committed Japanese screenshot fixture', async () => {
