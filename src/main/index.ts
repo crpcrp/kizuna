@@ -98,7 +98,7 @@ import { createGameOcrController, writeGameOcrTotalTime } from './services/gameO
 import { createProductionDisplaySources } from './services/gameOcr/displayCapture'
 import { createGameOcrCaptureTargets } from './services/gameOcr/captureTarget'
 import { createProductionForegroundWindowSource } from './services/gameOcr/foregroundWindow'
-import { createGameOcrWindow } from './services/gameOcr/frozenFrameWindow'
+import { createGameOcrWindow } from './services/gameOcr/frozenFrameElectron'
 import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
 import { resolveDetectionSideLength } from './services/ocr/ppOcrProtocol'
 import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'

@@ -1,88 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrowserWindow } from 'electron'
 import {
-  createGameOcrWindow,
   createGameOcrWindowController,
-  getGameOcrWindowOptions,
-  registerGameOcrIpc,
-  type GameOcrNativeWindow,
   type GameOcrWindow
-} from '@src/main/services/gameOcr/frozenFrameWindow'
+} from '@src/main/services/gameOcr/frozenFrameController'
 import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
 import type { GameOcrFreezeRequest } from '@src/shared/gameOcr'
-
-type Listener = (...args: unknown[]) => void
-
-function fakeWindow(): {
-  window: GameOcrNativeWindow
-  fireWindow(event: 'closed' | 'hide'): void
-  fireRenderer(
-    event: 'did-finish-load' | 'render-process-gone' | 'did-fail-load',
-    ...args: unknown[]
-  ): void
-} {
-  const windowListeners = new Map<string, Listener[]>()
-  const rendererListeners = new Map<string, Listener[]>()
-  let visible = false
-  let destroyed = false
-  const on = (listeners: Map<string, Listener[]>, event: string, listener: Listener): void => {
-    const existing = listeners.get(event) ?? []
-    existing.push(listener)
-    listeners.set(event, existing)
-  }
-  const fire = (listeners: Map<string, Listener[]>, event: string, ...args: unknown[]): void => {
-    for (const listener of listeners.get(event) ?? []) listener(...args)
-  }
-
-  const window = {
-    isDestroyed: () => destroyed,
-    isVisible: () => visible,
-    show: vi.fn(() => {
-      visible = true
-    }),
-    hide: vi.fn(() => {
-      visible = false
-    }),
-    focus: vi.fn(),
-    moveTop: vi.fn(),
-    setAlwaysOnTop: vi.fn(),
-    close: vi.fn(),
-    setBounds: vi.fn(),
-    setContentProtection: vi.fn(),
-    loadURL: vi.fn(async () => undefined),
-    loadFile: vi.fn(async () => undefined),
-    on: vi.fn((event: 'closed' | 'hide', listener: () => void) =>
-      on(windowListeners, event, listener)
-    ),
-    webContents: {
-      isDestroyed: () => destroyed,
-      send: vi.fn(),
-      on: vi.fn((event: string, listener: Listener) => on(rendererListeners, event, listener)),
-      getURL: () => 'file:///gameOcr.html',
-      setWindowOpenHandler: vi.fn(),
-      openDevTools: vi.fn(),
-      fire: (
-        event: 'did-finish-load' | 'render-process-gone' | 'did-fail-load',
-        ...args: unknown[]
-      ) => fire(rendererListeners, event, ...args)
-    }
-  } as unknown as GameOcrNativeWindow
-
-  return {
-    window,
-    fireWindow: (event) => {
-      visible = false
-      if (event === 'closed') destroyed = true
-      fire(windowListeners, event)
-    },
-    fireRenderer: (event, ...args) => fire(rendererListeners, event, ...args)
-  }
-}
-
-function windowListenerCount(window: GameOcrNativeWindow, event: 'closed' | 'hide'): number {
-  const on = window.on as unknown as ReturnType<typeof vi.fn>
-  return on.mock.calls.filter((call) => call[0] === event).length
-}
+import { fakeNativeWindow, windowListenerCount } from '@test/harness/fakeFrozenFrame'
 
 const freezeRequest: GameOcrFreezeRequest = {
   sessionId: 1,
@@ -94,7 +17,7 @@ const freezeRequest: GameOcrFreezeRequest = {
 
 describe('freeze request validation', () => {
   it('accepts a window request whose source id carries a handle', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     controller.rendererReady()
 
@@ -118,7 +41,7 @@ describe('freeze request validation', () => {
     ['a malformed id', { sourceId: 'window:abc:0', targetKind: 'window' as const }],
     ['an unknown target kind', { targetKind: 'monitor' as unknown as 'window' }]
   ])('rejects %s in main, where it can still fall back', async (_label, overrides) => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     controller.rendererReady()
 
@@ -151,97 +74,9 @@ async function freezeWith(
   })
 }
 
-describe('getGameOcrWindowOptions', () => {
-  it('creates an opaque, never-focused, always-on-top full-display window', () => {
-    const options = getGameOcrWindowOptions('/fake/preload.js', {
-      x: -1920,
-      y: 40,
-      width: 1920,
-      height: 1080
-    })
-
-    expect(options).toMatchObject({
-      x: -1920,
-      y: 40,
-      width: 1920,
-      height: 1080,
-      frame: false,
-      transparent: false,
-      backgroundColor: '#000000',
-      show: false,
-      skipTaskbar: true,
-      // Never focusable: Windows refuses a cross-process foreground steal, and a
-      // window it has not activated spends the user's first press on activation
-      // instead of delivering it to the page.
-      focusable: false,
-      alwaysOnTop: true,
-      resizable: false,
-      fullscreenable: false
-    })
-    expect(options.webPreferences).toMatchObject({
-      preload: '/fake/preload.js',
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    })
-  })
-})
-
-describe('createGameOcrWindow', () => {
-  it('re-asserts the display bounds Windows clamps away at construction', () => {
-    const fake = fakeWindow()
-    const displayBounds = { x: 0, y: 0, width: 2560, height: 1440 }
-    const createWindow = vi.fn(() => fake.window as unknown as BrowserWindow)
-
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds,
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow
-    })
-
-    expect(createWindow).toHaveBeenCalledWith(expect.objectContaining(displayBounds))
-    // Windows shrinks the *initial* size of a window to the display's work
-    // area. Without this second assignment the frozen frame comes up a taskbar
-    // short and leaves a live strip of the game showing below the screenshot.
-    expect(fake.window.setBounds).toHaveBeenCalledWith(displayBounds)
-    expect(fake.window.setContentProtection).toHaveBeenCalledWith(true)
-    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
-  })
-
-  it('asks the renderer to trace its input only when tracing is on', () => {
-    const off = fakeWindow()
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow: () => off.window as unknown as BrowserWindow
-    })
-    expect(off.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
-    expect(off.window.webContents.openDevTools).not.toHaveBeenCalled()
-
-    const on = fakeWindow()
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow: () => on.window as unknown as BrowserWindow,
-      traceInput: true
-    })
-    // Detached, because the frame covers the display it would otherwise share.
-    expect(on.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {
-      query: { trace: 'input' }
-    })
-    expect(on.window.webContents.openDevTools).toHaveBeenCalledWith({ mode: 'detach' })
-  })
-})
-
 describe('createGameOcrWindowController', () => {
   it('waits for the renderer, asks it to freeze, and shows it without focusing', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window })
 
     const freezing = controller.freeze(freezeRequest)
@@ -274,7 +109,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('resolves the encoded screenshot only after the frame is already shown', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     const freezing = controller.freeze(freezeRequest)
@@ -297,7 +132,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('matches overlapping frozen replies to their own capture', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const firstRequest = { ...freezeRequest, sessionId: 1, captureId: 1 }
     const secondRequest = { ...freezeRequest, sessionId: 2, captureId: 2 }
@@ -322,7 +157,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('surfaces a renderer that could not freeze or encode the frame', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     const freezing = controller.freeze(freezeRequest)
@@ -349,7 +184,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('fails a capture still waiting when the renderer goes away', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const freezing = controller.freeze(freezeRequest)
     const bytes = controller.captureBytes(1)
@@ -361,8 +196,39 @@ describe('createGameOcrWindowController', () => {
     await expect(bytes).rejects.toThrow(/renderer stopped/)
   })
 
+  it.each([
+    ['a discard', (controller: GameOcrWindow) => controller.discard(), /discarded/],
+    ['a dismissal', (controller: GameOcrWindow) => controller.dismiss(), /dismissed/],
+    ['a close', (controller: GameOcrWindow) => controller.close(), /closed/]
+  ])('rejects the waiters of an abandoned capture once on %s', async (_label, abandon, reason) => {
+    const fake = fakeNativeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    const freezing = controller.freeze(freezeRequest)
+    const bytes = controller.captureBytes(freezeRequest.captureId)
+    await Promise.resolve()
+
+    void abandon(controller)
+
+    await expect(freezing).rejects.toThrow(reason)
+    await expect(bytes).rejects.toThrow(reason)
+    // The waiters are gone, so a late renderer report cannot settle them a
+    // second time — it is dropped instead.
+    controller.reportFrozen({
+      sessionId: 1,
+      captureId: freezeRequest.captureId,
+      imageSize: freezeRequest.imageSize
+    })
+    controller.reportCaptureBytes({
+      sessionId: 1,
+      captureId: freezeRequest.captureId,
+      imageBytes: Uint8Array.from([1]),
+      imageMediaType: 'image/png',
+      imageSize: freezeRequest.imageSize
+    })
+  })
+
   it('sends accepted regions to the renderer that is showing their screenshot', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const result = {
       sessionId: 4,
@@ -385,7 +251,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('drops regions once the frame is gone rather than reviving it', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
     fake.fireWindow('closed')
@@ -404,7 +270,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('updates and clears the recognition state through the dedicated channels', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     await freezeWith(controller)
@@ -417,7 +283,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('answers repeated close requests with one native close', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
 
@@ -434,7 +300,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('keeps the window and its renderer alive across a discard', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const onClosed = vi.fn()
     controller.onClosed(onClosed)
@@ -461,7 +327,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('serves many discards without waiting on native hide events', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     for (let frame = 0; frame < 5; frame++) {
@@ -475,7 +341,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('moves the retained window onto the next captured display only when it changes', () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const constructed = { x: 0, y: 0, width: 2560, height: 1440 }
     const controller = createGameOcrWindowController({
       window: fake.window,
@@ -498,7 +364,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('notifies dismissal listeners when the renderer asks for the live game back', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const onDismissed = vi.fn()
     const onClosed = vi.fn()
@@ -524,7 +390,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('does not await a native hide event after a background press', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
 
@@ -537,7 +403,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('releases a pending discard when the window is destroyed instead', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
 
@@ -547,7 +413,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('closes and notifies listeners without retaining the old presentation', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const onClosed = vi.fn()
     controller.onClosed(onClosed)
@@ -566,7 +432,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('tears the window down when its renderer becomes unusable', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     const onClosed = vi.fn()
     controller.onClosed(onClosed)
@@ -583,7 +449,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('tears the window down when its renderer fails to load', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window })
 
     const presenting = controller.freeze(freezeRequest)
@@ -594,7 +460,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('hides the window on dismissal even when it reports itself invisible', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
     await freezeWith(controller)
     // The one failure this path must not have is a frozen frame left covering
@@ -608,7 +474,7 @@ describe('createGameOcrWindowController', () => {
   })
 
   it('rejects a malformed freeze request before it reaches the renderer', async () => {
-    const fake = fakeWindow()
+    const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
 
     await expect(
@@ -619,45 +485,5 @@ describe('createGameOcrWindowController', () => {
       'freeze request is invalid'
     )
     expect(fake.window.webContents.send).not.toHaveBeenCalled()
-  })
-
-  it('routes only this window renderer events and removes the handlers on cleanup', () => {
-    const fake = fakeWindow()
-    const listeners = new Map<string, (event: { sender: unknown }) => void>()
-    const ipc = {
-      on: vi.fn((channel: string, listener: (event: { sender: unknown }) => void) => {
-        listeners.set(channel, listener)
-      }),
-      removeListener: vi.fn()
-    }
-    const rendererReady = vi.fn()
-    // The renderer's close request dismisses the frame; it never destroys the
-    // window the next capture is going to reuse.
-    const dismiss = vi.fn(async () => {})
-    const reportRegionsRendered = vi.fn()
-    const remove = registerGameOcrIpc(ipc, fake.window, {
-      rendererReady,
-      dismiss,
-      reportFrozen: vi.fn(),
-      reportCaptureBytes: vi.fn(),
-      reportRegionsRendered
-    })
-
-    listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: {} })
-    expect(rendererReady).not.toHaveBeenCalled()
-    listeners.get(GAME_OCR_CHANNELS.rendererReady)!({ sender: fake.window.webContents })
-    listeners.get(GAME_OCR_CHANNELS.close)!({ sender: fake.window.webContents })
-    const regionsRenderedListener = listeners.get(GAME_OCR_CHANNELS.regionsRendered) as unknown as (
-      event: { sender: unknown },
-      value: { sessionId: number; captureId: number }
-    ) => void
-    regionsRenderedListener({ sender: fake.window.webContents }, { sessionId: 1, captureId: 1 })
-    expect(rendererReady).toHaveBeenCalledOnce()
-    expect(dismiss).toHaveBeenCalledOnce()
-    expect(reportRegionsRendered).toHaveBeenCalledWith({ sessionId: 1, captureId: 1 })
-
-    remove()
-    // Ready and close, plus the frozen, encoded, and painted reports.
-    expect(ipc.removeListener).toHaveBeenCalledTimes(5)
   })
 })

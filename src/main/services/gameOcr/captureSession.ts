@@ -16,7 +16,7 @@ import {
   type GameOcrCaptureTimingRecorder,
   type GameOcrCaptureTimings
 } from './captureTimings'
-import type { GameOcrWindow } from './frozenFrameWindow'
+import type { GameOcrWindow } from './frozenFrameController'
 import type { GameOcrFrameShortcutHandlers } from './shortcuts'
 
 /** The OCR adapter may be a real PP-OCR worker or a fixture-backed fake. */
