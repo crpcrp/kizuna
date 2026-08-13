@@ -130,7 +130,9 @@ interface VocabularyOccurrence {
  * The one word-understanding rule: a grammatical function word is never
  * vocabulary to learn and counts as wellKnown, while every other occurrence
  * takes the best level any of its identities resolves to — starting from the
- * level of the span covering it, when one does.
+ * level of the span covering it, when one does. A multi-token dictionary span
+ * is one vocabulary item: its member tokens are not evidence that the
+ * compound itself is known.
  */
 function occurrenceLevel(
   identities: string[],
@@ -170,11 +172,18 @@ function cueOccurrences(
       if (processedSpans.has(accepted)) continue
       processedSpans.add(accepted)
       const { span, members } = accepted
-      const identities = [
-        span.expression,
-        span.matchedSurface,
-        ...members.flatMap((member) => [member.lemma, member.surface])
-      ]
+      // A dictionary span can join MeCab tokens into one displayed word. Do
+      // not let knowledge of a member (e.g. 人間) promote the compound
+      // (e.g. 棒人間); only single-token projections need their token's lemma
+      // and surface as aliases for the dictionary expression.
+      const identities =
+        members.length > 1
+          ? [span.expression, span.matchedSurface]
+          : [
+              span.expression,
+              span.matchedSurface,
+              ...members.flatMap((member) => [member.lemma, member.surface])
+            ]
       const grammar = members.some(isGrammarToken)
       occurrences.push({
         key: span.expression,

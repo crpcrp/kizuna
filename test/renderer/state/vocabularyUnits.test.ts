@@ -191,7 +191,36 @@ describe('deriveVocabularyUnits', () => {
 })
 
 describe('vocabularyLevelsByToken', () => {
-  it('levels every member of a compound the same way the derived unit is levelled', () => {
+  it('does not promote a compound from knowledge of one of its members', () => {
+    const cue = {
+      cueKey: 'cue-1',
+      text: '棒人間',
+      tokens: [
+        token({ surface: '棒', lemma: '棒' }),
+        token({ surface: '人間', lemma: '人間', startOffset: 1 })
+      ],
+      spans: [
+        span({
+          expression: '棒人間',
+          matchedSurface: '棒人間',
+          endOffset: 3
+        })
+      ]
+    }
+    const details: Record<string, KnowledgeDetails> = {
+      人間: { level: 'known', sourceKinds: [], sources: [] }
+    }
+
+    expect(vocabularyLevelsByToken(cue, { 人間: 'known' })).toEqual(
+      new Map([
+        [0, 'unknown'],
+        [1, 'unknown']
+      ])
+    )
+    expect(deriveVocabularyUnits([cue], details)[0].level).toBe('unknown')
+  })
+
+  it('levels every member from the compound identity when the compound is known', () => {
     const cue = {
       cueKey: 'cue-1',
       text: '神様',
@@ -202,10 +231,10 @@ describe('vocabularyLevelsByToken', () => {
       spans: [span()]
     }
     const details: Record<string, KnowledgeDetails> = {
-      様: { level: 'known', sourceKinds: [], sources: [] }
+      神様: { level: 'known', sourceKinds: [], sources: [] }
     }
 
-    expect(vocabularyLevelsByToken(cue, { 様: 'known' })).toEqual(
+    expect(vocabularyLevelsByToken(cue, { 神様: 'known' })).toEqual(
       new Map([
         [0, 'known'],
         [1, 'known']
