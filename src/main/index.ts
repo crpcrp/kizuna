@@ -84,6 +84,7 @@ import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
 import { createStartupProbe, STARTUP_PROBE_ENV } from './startupProbe'
+import { createPlayerRuntime, type PlayerRuntime } from './playerRuntime'
 import {
   createAppWindowSet,
   loadRendererWindow,
@@ -141,8 +142,7 @@ const startupProbe = createStartupProbe({
 // (currently single) main window.
 const controller = new MpvController()
 let mediaHistory: MediaHistoryService | undefined
-let powerSave: ReturnType<typeof createPowerSaveController> | undefined
-let systemMedia: ReturnType<typeof createSystemMediaController> | undefined
+let playerRuntime: PlayerRuntime | undefined
 let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
 let gameOcr: GameOcrRuntimeService | undefined
@@ -203,9 +203,12 @@ function createWindow(
   startGameOcr(settings, windows)
 
   // Do not let renderer effects invoke player channels before their handlers
-  // exist. A failed mpv start is caught inside startPlayer and still loads a
+  // exist. A failed mpv start is caught inside ensureStarted and still loads a
   // usable UI over the opaque host.
-  void startPlayer(videoHost, uiOverlay, mpvPath, history, settings).then(() => {
+  const runtime =
+    playerRuntime ??
+    (playerRuntime = createPlayerRuntimeForWindow(videoHost, uiOverlay, mpvPath, history, settings))
+  void runtime.ensureStarted().then(() => {
     if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
     // Linux keeps the transparent overlay hidden until the renderer has
     // finished its first document load. Windows retains eager presentation.
@@ -287,66 +290,55 @@ function createSystemMediaForWindow(
   })
 }
 
-/**
- * Starts mpv in `videoHost` and wires the IPC bridge to `uiOverlay` once it's up.
- *
- * The bridge is only registered after `controller.start()` resolves: it
- * eagerly calls observeTimePos/observeDuration, which send IPC over the
- * mpv socket — registering it before a live connection produces an
- * unhandled rejection. If mpv fails to start (e.g. binary missing), we log
- * and continue with the player bridge left unregistered; the rest of the
- * app must keep working without it.
- */
-async function startPlayer(
+function createPlayerRuntimeForWindow(
   videoHost: BrowserWindow,
   uiOverlay: BrowserWindow,
   mpvPath: string,
   history: MediaHistoryService,
   settings: SettingsStore
-): Promise<void> {
-  try {
-    const windowId = windowIdFromHandleBuffer(videoHost.getNativeWindowHandle())
-    await startMpvForWindow(uiOverlay, mpvPath, windowId, settings)
-    powerSave = createPowerSaveController(powerSaveBlocker)
-    systemMedia = createSystemMediaForWindow(videoHost, uiOverlay)
-    const screenshots = createScreenshotService({
-      takeScreenshot: (path) => controller.screenshotToFile(path),
-      folder: () =>
-        settings.get().player.screenshotFolder ?? screenshotsDir(app.getPath('pictures')),
-      exists: (path) => fs.existsSync(path),
-      mkdir: (path) => {
-        fs.mkdirSync(path, { recursive: true })
-      }
-    })
-    const frames = createFrameCaptureService({
-      takeScreenshot: (path) => controller.screenshotToFile(path),
-      tempDir: () => app.getPath('temp'),
-      readBase64: async (path) => (await fs.promises.readFile(path)).toString('base64'),
-      remove: (path) => fs.promises.rm(path, { force: true })
-    })
-    registerPlayerBridge(
-      ipcMain,
-      controller,
-      (channel, value) => {
-        sendToWindow(uiOverlay, channel, value)
-      },
-      history,
-      powerSave,
-      screenshots,
-      systemMedia,
-      frames
-    )
-    launchPathBuffer.markPlayerReady()
-    // Reached only after `controller.start()` resolved, which means mpv is
-    // running and its IPC socket accepted a connection.
-    startupProbe.mark('mpv')
-  } catch (err) {
-    console.warn('[kizuna] mpv not started:', err)
-    // A file double-clicked to launch the app can never play now; surface a
-    // banner instead of dropping it silently (the buffer only reports if a
-    // launch path is actually queued).
-    launchPathBuffer.markPlayerFailed()
-  }
+): PlayerRuntime {
+  return createPlayerRuntime({
+    startMpv: () => {
+      const windowId = windowIdFromHandleBuffer(videoHost.getNativeWindowHandle())
+      return startMpvForWindow(uiOverlay, mpvPath, windowId, settings)
+    },
+    createPowerSave: () => createPowerSaveController(powerSaveBlocker),
+    createSystemMedia: () => createSystemMediaForWindow(videoHost, uiOverlay),
+    createScreenshots: () =>
+      createScreenshotService({
+        takeScreenshot: (path) => controller.screenshotToFile(path),
+        folder: () =>
+          settings.get().player.screenshotFolder ?? screenshotsDir(app.getPath('pictures')),
+        exists: (path) => fs.existsSync(path),
+        mkdir: (path) => {
+          fs.mkdirSync(path, { recursive: true })
+        }
+      }),
+    createFrames: () =>
+      createFrameCaptureService({
+        takeScreenshot: (path) => controller.screenshotToFile(path),
+        tempDir: () => app.getPath('temp'),
+        readBase64: async (path) => (await fs.promises.readFile(path)).toString('base64'),
+        remove: (path) => fs.promises.rm(path, { force: true })
+      }),
+    registerBridge: ({ powerSave, systemMedia, screenshots, frames }) => {
+      registerPlayerBridge(
+        ipcMain,
+        controller,
+        (channel, value) => {
+          sendToWindow(uiOverlay, channel, value)
+        },
+        history,
+        powerSave,
+        screenshots,
+        systemMedia,
+        frames
+      )
+    },
+    launchPathBuffer,
+    startupProbe,
+    warn: (err) => console.warn('[kizuna] mpv not started:', err)
+  })
 }
 
 /**
@@ -721,8 +713,8 @@ if (!gotSingleInstanceLock) {
       else await gameOcr?.stop()
     },
     flushHistory: () => mediaHistory?.flush(),
-    releasePowerSave: () => powerSave?.dispose(),
-    disposeSystemMedia: () => systemMedia?.dispose(),
+    releasePowerSave: () => playerRuntime?.releasePowerSave(),
+    disposeSystemMedia: () => playerRuntime?.disposeSystemMedia(),
     onShutdownStart: () => {
       updates?.beginShutdown()
     },
@@ -797,11 +789,11 @@ if (!gotSingleInstanceLock) {
     // target): `window-all-closed` quits the app there, so all windows are
     // never simultaneously closed while the process lives. It is left minimal
     // rather than fixed because re-opening a window here would re-enter
-    // `startPlayer` with the singleton `MpvController`, whose `start` throws
-    // "already started"; the catch would leave the new window bound to the old
-    // bridge, whose `send` closure targets the destroyed window (pushes dropped
-    // via the `isDestroyed` guard). A correct macOS revival needs a fresh
-    // controller/bridge per window — out of scope until macOS is supported.
+    // `ensureStarted` reuses the process-lifetime runtime, but the new window
+    // would still be bound to the old bridge, whose `send` closure targets the
+    // destroyed window (pushes dropped via the `isDestroyed` guard). A correct
+    // macOS revival needs a fresh controller/bridge per window — out of scope
+    // until macOS is supported.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && mediaHistory)
         createWindow(binaryPaths.mpvPath, mediaHistory, settings)
