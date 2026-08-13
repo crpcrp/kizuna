@@ -1,25 +1,87 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
-import { PlaybackMenu } from '@src/renderer/src/components/menu/PlaybackMenu'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  PlaybackMenu,
+  type PlaybackMenuProps
+} from '@src/renderer/src/components/menu/PlaybackMenu'
 
 const run = (action: () => void): (() => void) => action
 
-describe('PlaybackMenu', () => {
-  it('owns speed, A–B loop, and frame-step choices', () => {
-    const html = renderToStaticMarkup(
-      <PlaybackMenu
-        open
-        onToggle={vi.fn()}
-        run={run}
-        hasFile
-        speed={1.25}
-        abLoop={{ a: 12, b: null }}
-      />
+function menu(props: Partial<PlaybackMenuProps> = {}): React.JSX.Element {
+  return <PlaybackMenu open onToggle={vi.fn()} run={run} {...props} />
+}
+
+const markup = (props: Partial<PlaybackMenuProps> = {}): string => renderToStaticMarkup(menu(props))
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+describe('PlaybackMenu speed', () => {
+  it('renders the presets and a read-only custom-speed readout', () => {
+    const html = markup({ speed: 2.75 })
+    expect(html).toContain('Speed')
+    expect(html).toContain('0.75×')
+    expect(html).toContain('2.75×')
+  })
+
+  it('checks the active preset', () => {
+    expect(markup({ speed: 1.5 })).toContain('✓</span><span class="menu-item-label">1.5×')
+  })
+
+  it('forwards the picked preset', () => {
+    const onSetSpeed = vi.fn()
+    render(menu({ onSetSpeed }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: '1.5×' }))
+    expect(onSetSpeed).toHaveBeenCalledWith(1.5)
+  })
+})
+
+describe('PlaybackMenu A–B loop', () => {
+  it('labels the item by its cycle phase and checks it once armed', () => {
+    expect(markup({ hasFile: true, abLoop: { a: 12, b: 30 } })).toContain(
+      '✓</span><span class="menu-item-label">A–B loop · looping'
     )
 
-    expect(html).toContain('1.25×')
-    expect(html).toContain('A–B loop · A set')
-    expect(html).toContain('Step forward one frame')
-    expect(html).toContain('Step back one frame')
+    const off = markup({ hasFile: false, abLoop: { a: null, b: null } })
+    // Off phase: not checked, and disabled without a loaded file.
+    expect(off).toContain(
+      'disabled=""><span class="menu-item-check"></span><span class="menu-item-label">A–B loop'
+    )
+    expect(off).not.toContain('✓</span><span class="menu-item-label">A–B loop')
+  })
+
+  it('forwards the cycle request', () => {
+    const onCycleAbLoop = vi.fn()
+    render(menu({ hasFile: true, onCycleAbLoop }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'A–B loop' }))
+    expect(onCycleAbLoop).toHaveBeenCalledOnce()
+  })
+})
+
+describe('PlaybackMenu frame stepping', () => {
+  it('renders both items, disabled without a file and enabled with one', () => {
+    const noFile = markup({ hasFile: false })
+    const withFile = markup({ hasFile: true })
+    for (const label of ['Step forward one frame', 'Step back one frame']) {
+      const disabled = `disabled=""><span class="menu-item-check"></span><span class="menu-item-label">${label}`
+      expect(noFile).toContain(label)
+      expect(noFile).toContain(disabled)
+      expect(withFile).not.toContain(disabled)
+    }
+  })
+
+  it('forwards both step directions', () => {
+    const onFrameStep = vi.fn()
+    const onFrameBack = vi.fn()
+    render(menu({ hasFile: true, onFrameStep, onFrameBack }))
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Step forward one frame' }))
+    expect(onFrameStep).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Step back one frame' }))
+    expect(onFrameBack).toHaveBeenCalledOnce()
   })
 })
