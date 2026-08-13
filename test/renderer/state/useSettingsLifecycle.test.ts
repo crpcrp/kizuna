@@ -9,6 +9,10 @@ import {
 } from '@src/renderer/src/state/useSettingsLifecycle'
 import { createSettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
 import type { TimerLike } from '@src/renderer/src/state/settingsPersistence'
+import {
+  selectLoadedRendererSettings,
+  type SyncedSettingKey
+} from '@src/renderer/src/state/rendererSettings'
 
 function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
   let nextId = 1
@@ -50,24 +54,7 @@ function deferred<T>(): {
   }
 }
 
-type SettingsTestState = Pick<
-  PlayerState,
-  | 'keyBindings'
-  | 'skipSeconds'
-  | 'popupSettings'
-  | 'subtitleStyle'
-  | 'subtitleDragEnabled'
-  | 'rightClickTogglePause'
-  | 'autoPlayNext'
-  | 'appearance'
-  | 'levelColors'
-  | 'screenshotFolder'
-  | 'mpvUserConfig'
-  | 'mpvExtraArgs'
-  | 'videoAdjustments'
-  | 'audioDevice'
-  | 'loudnessNormalization'
->
+type SettingsTestState = Pick<PlayerState, SyncedSettingKey>
 
 function setup(): {
   input: UseSettingsLifecycleInput
@@ -160,7 +147,10 @@ describe('useSettingsLifecycle', () => {
     expect(setupResult.hook.result.current).toBe(false)
     await hydrate(setupResult.settingsGate, loaded)
 
-    expect(setupResult.dispatch).toHaveBeenCalledWith({ type: 'loadSettings', ...loaded })
+    expect(setupResult.dispatch).toHaveBeenCalledWith({
+      type: 'loadSettings',
+      settings: selectLoadedRendererSettings(loaded)
+    })
     expect(setupResult.input.subtitleOffsetsRef.current).toEqual(loaded.subtitleOffsets)
     expect(setupResult.input.folderSubtitleOffsetsRef.current).toEqual(loaded.folderSubtitleOffsets)
     expect(setupResult.input.audioDelaysRef.current).toEqual(loaded.audioDelays)

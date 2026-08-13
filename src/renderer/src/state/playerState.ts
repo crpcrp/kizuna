@@ -23,6 +23,7 @@ import {
   type VideoAdjustments
 } from '../../../shared/playerSettings'
 import { AUTO_AUDIO_DEVICE } from '../../../shared/audioDevice'
+import type { LoadedRendererSettings } from './rendererSettings'
 import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
 
 /** The armed A–B loop endpoints (seconds), or `null` when that endpoint is
@@ -235,25 +236,10 @@ export type PlayerAction =
   | { type: 'setVideoAdjustments'; value: VideoAdjustments }
   | { type: 'setAudioDevice'; value: string }
   | { type: 'setLoudnessNormalization'; value: boolean }
-  | {
-      type: 'loadSettings'
-      keyBindings: KeyBindings
-      skipSeconds: number
-      popupSettings: PopupSettings
-      subtitleStyle: SubtitleStyleSettings
-      subtitleDragEnabled: boolean
-      rightClickTogglePause: boolean
-      autoPlayNext: boolean
-      translationEnabled: boolean
-      appearance: Appearance
-      levelColors: LevelColors
-      screenshotFolder: string | null
-      mpvUserConfig: boolean
-      mpvExtraArgs: string[]
-      videoAdjustments: VideoAdjustments
-      audioDevice: string
-      loudnessNormalization: boolean
-    }
+  /** Applies a freshly-loaded `settings.json` in one payload; its shape is the
+   * renderer's owned settings selection (see `state/rendererSettings.ts`), so
+   * the two cannot drift. */
+  | { type: 'loadSettings'; settings: LoadedRendererSettings }
   | { type: 'activeTokensLoaded'; tokens: Token[] }
   | { type: 'allCueTokensLoaded'; tokens: Record<string, Token[]> }
   | { type: 'resetTokenization' }
@@ -403,25 +389,7 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case 'setLoudnessNormalization':
       return { ...state, loudnessNormalization: action.value }
     case 'loadSettings':
-      return {
-        ...state,
-        keyBindings: action.keyBindings,
-        skipSeconds: action.skipSeconds,
-        popupSettings: action.popupSettings,
-        subtitleStyle: action.subtitleStyle,
-        subtitleDragEnabled: action.subtitleDragEnabled,
-        rightClickTogglePause: action.rightClickTogglePause,
-        autoPlayNext: action.autoPlayNext,
-        translationEnabled: action.translationEnabled,
-        appearance: action.appearance,
-        levelColors: action.levelColors,
-        screenshotFolder: action.screenshotFolder,
-        mpvUserConfig: action.mpvUserConfig,
-        mpvExtraArgs: action.mpvExtraArgs,
-        videoAdjustments: action.videoAdjustments,
-        audioDevice: action.audioDevice,
-        loudnessNormalization: action.loudnessNormalization
-      }
+      return { ...state, ...action.settings }
     case 'activeTokensLoaded':
       return { ...state, activeTokens: action.tokens }
     case 'allCueTokensLoaded':
