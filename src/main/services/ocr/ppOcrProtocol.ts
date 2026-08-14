@@ -28,7 +28,8 @@ const WORKER_ARGS = {
   detectionModel: '--det-model',
   recognitionModel: '--rec-model',
   keys: '--keys',
-  detectionSideLength: '--det-side-len'
+  detectionSideLength: '--det-side-len',
+  recognitionWidth: '--rec-width'
 } as const
 
 const READY_KEYS = ['version', 'type'] as const
@@ -65,6 +66,13 @@ export const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
 
 /** The worker refuses anything larger; it is also the whole-desktop worst case. */
 export const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
+
+/**
+ * Keeps long single-line text legible to the fixed-width recognizer. The
+ * vendored default of 320 compresses narrator lines enough to produce empty
+ * or low-confidence output while shorter answer options still succeed.
+ */
+export const PP_OCR_RECOGNITION_WIDTH = 480
 
 export type PpOcrWorkerErrorCode =
   | 'cancelled'
@@ -173,7 +181,9 @@ export function buildPpOcrWorkerArgs(
     WORKER_ARGS.keys,
     modelPaths.keys,
     WORKER_ARGS.detectionSideLength,
-    String(resolveDetectionSideLength([detectionSideLength]))
+    String(resolveDetectionSideLength([detectionSideLength])),
+    WORKER_ARGS.recognitionWidth,
+    String(PP_OCR_RECOGNITION_WIDTH)
   ]
   return args
 }
