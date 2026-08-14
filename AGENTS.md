@@ -1,15 +1,29 @@
 # Agent guidelines
 
-Kizuna is a Windows and Linux Electron and TypeScript application. Use
-`docs/codebase-map.md` when you need help locating a subsystem and
-`docs/architecture-plan.md` when a change affects architecture.
+Kizuna is a Windows and Linux Electron/TypeScript application. Use
+`docs/codebase-map.md` to locate subsystems and `docs/architecture-plan.md` for
+architectural changes.
+
+## Output
+
+- Be accurate. State material uncertainty or verification limits directly.
+- Minimize output and token usage without omitting information needed for
+  correctness.
+- Lead with the answer or result. Skip preambles, restatements, routine work
+  narration, and discarded alternatives.
+- Avoid hedging unless uncertainty matters. Do not repeat known context or
+  earlier results.
+- Prefer concise prose; use lists only when they are shorter or clearer.
+- When showing code, put it before any explanation and explain only non-obvious
+  details.
+- End when the request is answered; no recap or generic follow-up offer.
 
 ## Working principles
 
 - Keep changes focused on the requested outcome and preserve unrelated work.
 - Prefer clear, conventional code over clever abstractions.
-- Add or update tests when they protect meaningful behavior or a likely
-  regression. A trivial function does not need a test merely because it exists.
+- Add tests for meaningful behavior and likely regressions, not trivial
+  implementation details.
 - Use fakes or fixtures for mpv, FFmpeg, MeCab, AnkiConnect, WaniKani, SQLite,
   and other external boundaries. Automated tests must not require live accounts,
   network services, or bundled binaries.
@@ -20,7 +34,6 @@ Kizuna is a Windows and Linux Electron and TypeScript application. Use
   counterpart coverage.
 - Update documentation only when setup, user-visible behavior, architecture, or
   a public interface changes.
-- Report what you changed, what you verified, and anything you could not verify.
 
 ## Validation
 
@@ -47,9 +60,7 @@ Do not call live external integrations from tests.
 
 - Never commit development work directly to `main`.
 - Keep unrelated changes out of the branch.
+- Use the GitHub API, not local CLI commands, to create or update pull requests.
 - For GitHub implementation tasks, publish a draft PR against `main` unless the
   user asks for a different handoff.
 - The user reviews and merges the PR.
-
-A change is ready when the requested behavior is implemented, relevant checks
-pass (or limitations are stated), and the diff contains no unrelated work.

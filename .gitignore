@@ -3,6 +3,10 @@ commands.txt
 bugs.json
 .env
 
+# Agent-local configuration
+/.claude/
+/.codex/
+
 # Dependencies & build output
 node_modules/
 out/

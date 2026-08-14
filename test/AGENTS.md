@@ -15,9 +15,3 @@ Rules that differ inside `test/`. The repository-wide principles stay in
   and must name its technical reason and counterpart coverage.
 - No live binaries, accounts, or network calls, and no secrets or personal data
   in fixtures.
-- A focused run needs Electron's Node ABI because of `better-sqlite3`:
-
-  ```powershell
-  $env:ELECTRON_RUN_AS_NODE = '1'
-  & .\node_modules\electron\dist\electron.exe .\node_modules\vitest\vitest.mjs run test\<path>.test.ts
-  ```
