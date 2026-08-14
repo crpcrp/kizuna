@@ -1,4 +1,4 @@
-import type { Dispatch } from 'react'
+import { useCallback, useRef, type Dispatch } from 'react'
 import type { Cue } from '../../../shared/cue'
 import type { KnowledgeSource, KnowledgeTuning, SyncStatus } from '../../../shared/knowledge'
 import type { KizunaApi } from '../../../shared/preloadApi'
@@ -44,6 +44,43 @@ export interface UseKnowledgeOptionsResult {
   /** The same function as `options.onSyncNow`, exposed because bulk mining's
    * completion effect re-syncs Anki after a finished run. */
   syncNow(source: KnowledgeSource, force?: boolean): Promise<SyncStatus>
+}
+
+/**
+ * The same knowledge settings actions for standalone Options. There is no
+ * subtitle session to invalidate, so the cache boundary is intentionally
+ * empty; dictionary and knowledge persistence still use the normal actions.
+ */
+export function useStandaloneKnowledgeOptions({
+  bridge,
+  dispatch,
+  optionsData
+}: Pick<
+  UseKnowledgeOptionsInput,
+  'bridge' | 'dispatch' | 'optionsData'
+>): VocabularyKnowledgeOptions {
+  const caches: Pick<UseVocabularyCachesResult, 'refs' | 'invalidateVocabularySpans'> = {
+    refs: {
+      tokenCache: useRef(new Map()),
+      tokenizeToken: useRef({ current: 0 }),
+      knownLevelsCache: useRef(new Map()),
+      knownLevelsToken: useRef({ current: 0 }),
+      allCuesToken: useRef({ current: 0 }),
+      allCuesLevelsToken: useRef({ current: 0 })
+    },
+    invalidateVocabularySpans: useCallback(() => undefined, [])
+  }
+  return useKnowledgeOptions({
+    bridge,
+    dispatch,
+    optionsData,
+    activeCue: undefined,
+    cues: [],
+    sidebarOpen: false,
+    activeTokens: [],
+    allCueTokens: {},
+    caches
+  }).options
 }
 
 /**

@@ -15,6 +15,8 @@ export interface OptionsToggleProps {
   checked: boolean
   /** Receives the checkbox's new checked state. */
   onChange: (checked: boolean) => void
+  /** Disables a live-only control when its runtime owner is unavailable. */
+  disabled?: boolean
   /** Literal accessible name, for switches with no visible title to point at. */
   ariaLabel?: string
   /** Id of the element holding the setting's visible title. */
@@ -27,6 +29,7 @@ export default function OptionsToggle({
   id,
   checked,
   onChange,
+  disabled = false,
   ariaLabel,
   ariaLabelledBy,
   ariaDescribedBy
@@ -40,6 +43,7 @@ export default function OptionsToggle({
         className="options-toggle-input"
         id={id}
         checked={checked}
+        disabled={disabled}
         aria-label={ariaLabel}
         aria-labelledby={ariaLabelledBy}
         aria-describedby={ariaDescribedBy}

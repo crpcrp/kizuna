@@ -28,6 +28,8 @@ export interface PlaybackTabProps {
   onChangeMpvExtraArgs: (value: string[]) => void
   onOpenMpvConfigDir: () => void
   onAudioDevicesRequest: () => void
+  /** False for standalone Options, where mpv has not been initialized. */
+  livePlayerAvailable?: boolean
 }
 
 function parseMpvExtraArgs(rawValue: string): string[] {
@@ -126,14 +128,17 @@ export default function PlaybackTab({
   onChangeMpvUserConfig,
   onChangeMpvExtraArgs,
   onOpenMpvConfigDir,
-  onAudioDevicesRequest
+  onAudioDevicesRequest,
+  livePlayerAvailable: livePlayerAvailableProp = true
 }: PlaybackTabProps): React.JSX.Element {
   const [screenshotFolderDraft, setScreenshotFolderDraft] = useState<string | null>(null)
   const [mpvExtraArgsDraft, setMpvExtraArgsDraft] = useState<string | null>(null)
+  const livePlayerAvailable = livePlayerAvailableProp
+  const livePlayerMessage = 'Available after opening Video player.'
 
   useEffect(() => {
-    if (open && active) onAudioDevicesRequest()
-  }, [open, active, onAudioDevicesRequest])
+    if (open && active && livePlayerAvailable) onAudioDevicesRequest()
+  }, [open, active, livePlayerAvailable, onAudioDevicesRequest])
 
   const commitScreenshotFolder = (): void => {
     if (screenshotFolderDraft === null) return
@@ -212,12 +217,13 @@ export default function PlaybackTab({
             Output device
             <span className="options-row-description">
               Falls back to the system default if the device disappears.
+              {!livePlayerAvailable && <> {livePlayerMessage}</>}
             </span>
           </label>
           <select
             id="audio-device-select"
             value={selectedAudioDevice}
-            disabled={audioDeviceSelectionPending}
+            disabled={audioDeviceSelectionPending || !livePlayerAvailable}
             onChange={(e) => onSelectAudioDevice(e.target.value)}
           >
             {audioDeviceMenuList(audioDevices).map((device) => (
@@ -230,9 +236,15 @@ export default function PlaybackTab({
         <OptionsToggleRow
           id="loudness-normalization-checkbox"
           title="Normalize loudness"
-          description={<>Uses mpv&rsquo;s dynamic audio-normalization filter.</>}
+          description={
+            <>
+              Uses mpv&rsquo;s dynamic audio-normalization filter.
+              {!livePlayerAvailable && <> {livePlayerMessage}</>}
+            </>
+          }
           checked={loudnessNormalization}
           onChange={onToggleLoudnessNorm}
+          disabled={!livePlayerAvailable}
         />
       </div>
 

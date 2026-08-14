@@ -10,17 +10,8 @@ export interface UseKeyboardShortcutsInput {
   suspended: boolean
 }
 
-/** Installs the global player shortcut and modifier-tracking listeners. */
-export function useKeyboardShortcuts({
-  keyContextRef,
-  modifiers,
-  suspended
-}: UseKeyboardShortcutsInput): void {
-  // Which left-side Ctrl/Shift keys are held, for the modifier-prefixed
-  // bindings below and for the Options menu's rebind capture (which reads the
-  // same set). Kept in its own always-on effect — the shortcut effect below is
-  // suspended while a dialog is open, and a tracker that missed those keyups
-  // would report keys the user has long released.
+/** Tracks modifier keys for both player shortcuts and Options key capture. */
+export function useModifierTracking(modifiers: ModifierTracker): void {
   useEffect(() => {
     const tracker = modifiers
     const down = (e: KeyboardEvent): void => tracker.keyDown(e)
@@ -35,6 +26,20 @@ export function useKeyboardShortcuts({
       window.removeEventListener('blur', clear)
     }
   }, [modifiers])
+}
+
+/** Installs the global player shortcut and modifier-tracking listeners. */
+export function useKeyboardShortcuts({
+  keyContextRef,
+  modifiers,
+  suspended
+}: UseKeyboardShortcutsInput): void {
+  // Which left-side Ctrl/Shift keys are held, for the modifier-prefixed
+  // bindings below and for the Options menu's rebind capture (which reads the
+  // same set). Kept in its own always-on effect — the shortcut effect below is
+  // suspended while a dialog is open, and a tracker that missed those keyups
+  // would report keys the user has long released.
+  useModifierTracking(modifiers)
 
   // Keyboard shortcuts, per state.keyBindings (user-configurable via the
   // Options menu). The listener reads changing playback context from a ref so

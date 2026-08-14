@@ -1,29 +1,50 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppSurface } from '../../shared/appShell'
 import type { KizunaApi } from '../../shared/preloadApi'
 import App from './App'
+import OptionsSurface from './OptionsSurface'
 import SplashScreen from './components/SplashScreen'
 import { errorMessage } from './util/errorMessage'
 
 import './theme.css'
 import './App.css'
 
-type AppShellApi = Pick<KizunaApi, 'appShell' | 'gameOcr'>
-
-function useSurface(api: AppShellApi | undefined): {
+function useSurface(api: KizunaApi | undefined): {
   surface: AppSurface | null
   error: string | undefined
-  setSurface: (surface: AppSurface) => void
+  requestSurface: (
+    request: () => Promise<AppSurface>,
+    shouldApply?: (surface: AppSurface) => boolean
+  ) => Promise<AppSurface>
 } {
   const [surface, setSurface] = useState<AppSurface | null>(null)
   const [error, setError] = useState<string>()
+  const pushRevision = useRef(0)
+  const activeRef = useRef(false)
+
+  const requestSurface = useCallback(
+    async (
+      request: () => Promise<AppSurface>,
+      shouldApply: (next: AppSurface) => boolean = () => true
+    ): Promise<AppSurface> => {
+      const revision = pushRevision.current
+      const next = await request()
+      if (activeRef.current && revision === pushRevision.current && shouldApply(next)) {
+        setError(undefined)
+        setSurface(next)
+      }
+      return next
+    },
+    []
+  )
 
   useEffect(() => {
     if (!api) return
     let active = true
-    let surfacePushed = false
+    activeRef.current = true
+    const initialRevision = pushRevision.current
     const unsubscribe = api.appShell.onSurfaceChanged((next) => {
-      surfacePushed = true
+      pushRevision.current++
       if (!active) return
       setError(undefined)
       setSurface(next)
@@ -31,52 +52,52 @@ function useSurface(api: AppShellApi | undefined): {
 
     void api.appShell.getSurface().then(
       (next) => {
-        if (active && !surfacePushed) {
+        if (active && pushRevision.current === initialRevision) {
           setError(undefined)
           setSurface(next)
         }
       },
       (err) => {
         if (!active) return
-        void api.appShell.showPlayer().then(
-          (next) => {
-            if (!active) return
-            setError(undefined)
-            setSurface(next)
-          },
-          (fallbackError) => {
-            if (!active) return
-            setError(errorMessage(fallbackError))
-          }
-        )
-        if (active) setError(errorMessage(err))
+        setError(errorMessage(err))
+        void requestSurface(api.appShell.showPlayer).catch((fallbackError) => {
+          if (active) setError(errorMessage(fallbackError))
+        })
       }
     )
 
     return () => {
       active = false
+      activeRef.current = false
       unsubscribe()
     }
-  }, [api])
+  }, [api, requestSurface])
 
-  return { surface, error, setSurface }
+  return { surface, error, requestSurface }
 }
 
 /** Chooses the renderer surface without mounting the player during splash. */
-export default function AppShell({ bridge }: { bridge?: AppShellApi }): React.JSX.Element | null {
-  const api = bridge ?? (typeof window === 'undefined' ? undefined : (window.kizuna as AppShellApi))
-  const { surface, error, setSurface } = useSurface(api)
+export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.Element | null {
+  const api = bridge ?? (typeof window === 'undefined' ? undefined : window.kizuna)
+  const { surface, error, requestSurface } = useSurface(api)
 
   const show = useCallback(
     async (request: () => Promise<AppSurface>): Promise<void> => {
-      const next = await request()
-      setSurface(next)
+      await requestSurface(request)
     },
-    [setSurface]
+    [requestSurface]
   )
 
   if (!api) return null
-  if (surface !== 'player' && surface !== 'options') {
+  if (surface === 'options') {
+    return (
+      <OptionsSurface
+        bridge={api}
+        onClose={() => requestSurface(api.appShell.showSplash, (next) => next === 'splash')}
+      />
+    )
+  }
+  if (surface !== 'player') {
     const startGameOcr = async (): Promise<void> => {
       const status = await api.gameOcr.start()
       const error = status.game.error ?? status.ocr.error
@@ -94,5 +115,5 @@ export default function AppShell({ bridge }: { bridge?: AppShellApi }): React.JS
     )
   }
 
-  return <App surface={surface} />
+  return <App />
 }

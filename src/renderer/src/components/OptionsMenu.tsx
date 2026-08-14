@@ -35,6 +35,7 @@ import { matchSettings } from './options/settingsSearch'
 
 export interface OptionsMenuProps {
   open: boolean
+  error?: string
   onClose: () => void
   onCategoryOpen: (category: OptionsCategory) => void
   keybindings: Omit<KeybindingsTabProps, 'active' | 'open'>
@@ -71,6 +72,7 @@ const FLASH_MS = 1600
 /** Options dialog shell: navigation, search, lazy category mounting, and tab composition. */
 export default function OptionsMenu({
   open,
+  error,
   onClose,
   onCategoryOpen,
   keybindings,
@@ -164,6 +166,12 @@ export default function OptionsMenu({
             &#x2715;
           </button>
         </div>
+
+        {error && (
+          <p id="options-error" className="options-error" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="options-body">
           <nav className="options-sidebar" role="tablist" aria-label="Options categories">
