@@ -669,7 +669,9 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     runtime,
     window: {
       hide: () => windows.uiOverlay.hide(),
-      activate: () => windows.activate()
+      activate: () => windows.activate(),
+      showOptions: async () => (await appShell?.showOptions()) === 'options',
+      showPlayer: async () => (await appShell?.showPlayer()) === 'player'
     },
     tray: createElectronGameOcrTrayFactory(
       nativeImage.createFromPath(join(resourcesBase, 'icons', 'play.png'))
@@ -758,7 +760,7 @@ if (!gotSingleInstanceLock) {
     },
     controller,
     stopGameOcr: async () => {
-      if (gameOcrLifecycle) await gameOcrLifecycle.stop()
+      if (gameOcrLifecycle) await gameOcrLifecycle.stop(false)
       else await gameOcr?.stop()
     },
     flushHistory: () => mediaHistory?.flush(),
@@ -779,10 +781,10 @@ if (!gotSingleInstanceLock) {
   app.on('second-instance', (_event, argv, cwd) => {
     const launchPath = videoPathFromArgv(argv, cwd)
     if (launchPath) {
-      void appShell?.showPlayer()
+      void (gameOcrLifecycle?.showFromSecondInstance(true) ?? appShell?.showPlayer())
       launchPathBuffer.setPath(launchPath)
     } else {
-      appWindows?.activate()
+      void (gameOcrLifecycle?.showFromSecondInstance() ?? Promise.resolve())
     }
   })
 

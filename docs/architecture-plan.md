@@ -181,9 +181,12 @@ freeze IPC is sent from inside the global-shortcut callback instead of yielding
 to an already-resolved Promise first. Stopping or shutting down Game OCR
 explicitly clears both caches.
 
-While Game OCR is armed the player window hides behind a tray icon, and
-stopping or quitting releases the shortcut, the worker process, the frozen
-window, the retained screenshot, and the tray together.
+While Game OCR is armed the player window hides behind a tray icon. Tray Show
+and a no-file second launch restore the Options-only surface through the app
+shell; closing Options can then reveal the existing player. Stopping restores
+Options only when the lifecycle itself hid the window, while quitting releases
+the shortcut, worker process, frozen window, retained screenshot, and tray
+together.
 
 OCR runs locally and the models are bundled; the only network path is the
 existing opt-in translator, and only for text the user explicitly selects. The

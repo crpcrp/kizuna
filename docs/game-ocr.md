@@ -385,14 +385,17 @@ so nothing reached the console either.
 
 While Game OCR is armed, the tray icon offers:
 
-- **Show Kizuna** — restores and focuses the player window.
-- **Stop Game OCR** — disarms the shortcut, stops the worker, and brings the
-  window back.
+- **Show Kizuna** — opens the Options-only surface and keeps OCR armed. Closing
+  Options then reveals the player without restarting mpv or OCR.
+- **Stop Game OCR** — disarms the shortcut, stops the worker, and restores
+  Options only when Kizuna was hidden for OCR; an already visible player or
+  Options surface stays unchanged.
 - **Quit Kizuna** — quits the application.
 
-Closing the player window while armed hides it instead of quitting. Stopping
-Game OCR, or quitting, releases the shortcut, the worker process, the frozen
-window, the retained screenshot, and the tray icon.
+Closing the player window while armed hides it instead of quitting. A second
+launch without a media path behaves like **Show Kizuna** when the window is
+hidden for OCR. Stopping Game OCR, or quitting, releases the shortcut, the
+worker process, the frozen window, the retained screenshot, and the tray icon.
 
 ## Privacy
 

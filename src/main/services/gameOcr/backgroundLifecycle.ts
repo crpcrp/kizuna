@@ -4,6 +4,8 @@ import type { GameOcrRuntimeService } from './runtime'
 export interface GameOcrBackgroundWindow {
   hide(): void
   activate(): void
+  showOptions(): Promise<boolean>
+  showPlayer(): Promise<boolean>
 }
 
 export interface GameOcrWindowCloseEvent {
@@ -39,7 +41,9 @@ export interface GameOcrBackgroundLifecycle {
   handleWindowClose(event: GameOcrWindowCloseEvent): boolean
   /** Stops cleanly if the main renderer/native window is no longer usable. */
   handleWindowLost(): void
-  stop(): Promise<void>
+  /** Presents the player for a media launch, or restores the current surface. */
+  showFromSecondInstance(hasLaunchPath?: boolean): Promise<void>
+  stop(restoreSurface?: boolean): Promise<void>
   dispose(): void
 }
 
@@ -61,7 +65,9 @@ export function createGameOcrBackgroundLifecycle(
 ): GameOcrBackgroundLifecycle {
   let tray: GameOcrTray | undefined
   let wasArmed = false
+  let hiddenForOcr = false
   let disposed = false
+  let stopping = false
   let stopPromise: Promise<void> | undefined
 
   const reportSurfaceFailure = (action: () => void): void => {
@@ -82,6 +88,28 @@ export function createGameOcrBackgroundLifecycle(
     reportSurfaceFailure(() => options.window.hide())
   }
 
+  const showOptions = async (): Promise<boolean> => {
+    if (disposed) return false
+    try {
+      const shown = await options.window.showOptions()
+      if (shown) hiddenForOcr = false
+      return shown
+    } catch {
+      return false
+    }
+  }
+
+  const showPlayer = async (): Promise<boolean> => {
+    if (disposed) return false
+    try {
+      const shown = await options.window.showPlayer()
+      if (shown) hiddenForOcr = false
+      return shown
+    } catch {
+      return false
+    }
+  }
+
   const destroyTray = (): void => {
     const current = tray
     tray = undefined
@@ -89,20 +117,22 @@ export function createGameOcrBackgroundLifecycle(
     reportSurfaceFailure(() => current.destroy())
   }
 
-  const stop = (): Promise<void> => {
+  const stop = (restoreSurface = true): Promise<void> => {
     if (stopPromise) return stopPromise
     if (options.runtime.getStatus().game.state === 'stopped' && !tray) {
       return Promise.resolve()
     }
 
     const wasActiveBeforeStop = wasArmed
+    stopping = true
     const operation = (async (): Promise<void> => {
       try {
         await options.runtime.stop()
       } finally {
-        if (wasActiveBeforeStop && wasArmed) activateWindow()
+        if (restoreSurface && wasActiveBeforeStop && hiddenForOcr) await showOptions()
         destroyTray()
         wasArmed = false
+        stopping = false
       }
     })()
     const tracked = operation.finally(() => {
@@ -113,7 +143,9 @@ export function createGameOcrBackgroundLifecycle(
   }
 
   const actions: GameOcrTrayActions = {
-    show: activateWindow,
+    show: () => {
+      void showOptions()
+    },
     stop: () => {
       void stop()
     },
@@ -138,9 +170,12 @@ export function createGameOcrBackgroundLifecycle(
       const armed = ARMED_STATES.has(status.game.state)
       if (armed) {
         createTray()
-        if (!wasArmed) hideWindow()
+        if (!wasArmed) {
+          hideWindow()
+          hiddenForOcr = true
+        }
       } else {
-        if (wasArmed) activateWindow()
+        if (wasArmed && hiddenForOcr && !stopping) void showOptions()
         destroyTray()
       }
       wasArmed = armed
@@ -167,6 +202,13 @@ export function createGameOcrBackgroundLifecycle(
       void stop().then(options.quit, options.quit)
     },
 
+    showFromSecondInstance(hasLaunchPath = false): Promise<void> {
+      if (hasLaunchPath) return showPlayer().then(() => undefined)
+      if (hiddenForOcr) return showOptions().then(() => undefined)
+      activateWindow()
+      return Promise.resolve()
+    },
+
     stop,
 
     dispose(): void {
@@ -174,6 +216,7 @@ export function createGameOcrBackgroundLifecycle(
       disposed = true
       unsubscribe()
       wasArmed = false
+      hiddenForOcr = false
       destroyTray()
     }
   }
