@@ -5,8 +5,15 @@ import type { PopupSettings } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
 import { buildGameOcrBoxRegions } from './gameOcrBoxRegions'
+import { groupGameOcrTextBlocks } from './gameOcrTextBlocks'
+import { createGameOcrTextProjection } from './gameOcrTextProjection'
+import { selectedGameOcrText } from './gameOcrSelection'
 import type { GameOcrLayoutSize } from './gameOcrLayout'
-import { createGameOcrTextPipeline, type GameOcrTextSnapshot } from './gameOcrTextPipeline'
+import {
+  createGameOcrTextPipeline,
+  type InteractiveTextBlock,
+  type GameOcrTextSnapshot
+} from './gameOcrTextPipeline'
 import { useLatestCallback } from './useLatestRef'
 
 /** The renderer-side services one frozen frame needs, all main-process backed. */
@@ -50,6 +57,20 @@ export function useGameOcrSession({
   const [presentation, setPresentation] = useState<GameOcrPresentation | undefined>()
   const [result, setResult] = useState<OcrResult | undefined>()
   const [text, setText] = useState<GameOcrTextSnapshot | undefined>()
+  const blocks = useMemo(() => (result ? groupGameOcrTextBlocks(result.regions) : []), [result])
+  const projectedBlocks = useMemo<InteractiveTextBlock[]>(
+    () =>
+      blocks.map((block) => {
+        const projection = createGameOcrTextProjection(block.lines)
+        return {
+          id: block.id,
+          text: projection.displayText,
+          analysisText: projection.analysisText,
+          projection
+        }
+      }),
+    [blocks]
+  )
 
   useEffect(() => {
     if (!result) return
@@ -118,17 +139,13 @@ export function useGameOcrSession({
     const unsubscribeRecognition = api.onRecognitionState((recognizing) =>
       setPresentation((current) => (current ? { ...current, recognizing } : current))
     )
-    // Keep PP-OCR's line-level regions intact. Besides making each line an
-    // independent lookup target, this preserves the detector's tight bounds;
-    // merging nearby lines creates large paragraph rectangles that cover
-    // background pixels rather than recognized text.
     const unsubscribeRegions = api.onRegions(setResult)
     // The frame is never focused, so the browser's own Ctrl+C never fires here
     // and main forwards the global shortcut instead. An empty selection is not
     // an error: it is the user pressing Ctrl+C having selected nothing, and
     // overwriting their clipboard with "" would be worse than doing nothing.
     const unsubscribeCopy = api.onCopySelection(() => {
-      const selected = document.getSelection()?.toString() ?? ''
+      const selected = selectedGameOcrText(document.getSelection())
       if (selected === '') return
       void copyText(selected).catch(() => undefined)
     })
@@ -146,10 +163,7 @@ export function useGameOcrSession({
     if (!result) return
     let active = true
     void pipeline
-      .process(
-        { sessionId: result.sessionId, captureId: result.captureId },
-        result.regions.map((region) => ({ id: region.id, text: region.text }))
-      )
+      .process({ sessionId: result.sessionId, captureId: result.captureId }, projectedBlocks)
       .then((processed) => {
         if (!active || processed.kind !== 'resolved') return
         setText(processed.snapshot)
@@ -160,11 +174,11 @@ export function useGameOcrSession({
     return () => {
       active = false
     }
-  }, [pipeline, result])
+  }, [pipeline, projectedBlocks, result])
 
   const regions = useMemo(
-    () => (result ? buildGameOcrBoxRegions({ result, viewportSize, text }) : []),
-    [result, text, viewportSize]
+    () => (result ? buildGameOcrBoxRegions({ result, blocks, viewportSize, text }) : []),
+    [blocks, result, text, viewportSize]
   )
 
   const onFrozen = useCallback((imageSize: OcrImageSize): void => {

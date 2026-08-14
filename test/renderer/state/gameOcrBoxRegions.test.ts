@@ -56,13 +56,41 @@ describe('buildGameOcrBoxRegions', () => {
       viewportSize: { width: 960, height: 540 }
     })
 
-    expect(box.id).toBe('one')
+    expect(box.id).toBe('block:one')
     expect(box.text).toBe('日本語')
     expect(box.layout.originalBounds).toEqual({ x: 50, y: 100, width: 150, height: 30 })
     expect(box.layout.displayBounds.x).toBe(50)
     expect(box.layout.displayBounds.y).toBe(100)
     expect(box.layout.displayBounds).toEqual(box.layout.originalBounds)
     expect(box.fontSize).toBe(26)
+  })
+
+  it('renders one box for a grouped block and preserves the visible newline', () => {
+    const grouped = result({
+      regions: [
+        {
+          id: 'first',
+          text: '棒人間が描か',
+          bounds: { x: 100, y: 200, width: 300, height: 20 },
+          confidence: 0.9
+        },
+        {
+          id: 'second',
+          text: 'れている。',
+          bounds: { x: 100, y: 224, width: 280, height: 20 },
+          confidence: 0.9
+        }
+      ]
+    })
+
+    const [box] = buildGameOcrBoxRegions({
+      result: grouped,
+      viewportSize: { width: 1920, height: 1080 }
+    })
+
+    expect(box.id).toBe('block:first|second')
+    expect(box.text).toBe('棒人間が描か\nれている。')
+    expect(box.layout.originalBounds).toEqual({ x: 100, y: 200, width: 300, height: 44 })
   })
 
   it('attaches processed tokens once the pipeline resolves the same capture', () => {

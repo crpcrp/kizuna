@@ -10,6 +10,7 @@ import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
 import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
+import type { GameOcrTextProjection } from '../state/gameOcrTextProjection'
 import type { GameOcrLayoutResult } from '../state/gameOcrLayout'
 import InteractiveText, { type InteractiveTextProps } from './InteractiveText'
 
@@ -20,6 +21,8 @@ export interface GameOcrBoxRegion {
   id: string
   text: string
   layout: GameOcrLayoutResult
+  /** Maps continuous token offsets back onto the visible line-broken text. */
+  projection?: GameOcrTextProjection
   /** Typography fitted to the detected line without changing its bounds. */
   fontSize?: number
   tokens?: Token[]
@@ -142,6 +145,7 @@ export default function GameOcrBoxes({
               highlightedTokens={highlightedTokens}
               levels={region.levels}
               vocabularySpans={region.vocabularySpans}
+              projection={region.projection}
               className="game-ocr-box__text"
               onWordHover={(token, event) =>
                 onWordHover?.(token, event, popupContextFor(region, event))
@@ -161,7 +165,8 @@ export default function GameOcrBoxes({
 }
 
 function popupContextFor(region: GameOcrBoxRegion, event?: React.MouseEvent): WordPopupTextContext {
-  const target = event?.currentTarget as HTMLElement | undefined
+  const currentTarget = event?.currentTarget as HTMLElement | undefined
+  const target = currentTarget?.closest<HTMLElement>('[data-game-ocr-box]') ?? currentTarget
   const rect = target?.getBoundingClientRect()
   const anchorRect =
     rect && (rect.width > 0 || rect.height > 0)

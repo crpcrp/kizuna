@@ -1,11 +1,15 @@
 import type { OcrResult } from '../../../shared/ocr'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
+import { groupGameOcrTextBlocks, type GameOcrTextBlock } from './gameOcrTextBlocks'
 import { calculateGameOcrLayout, type GameOcrLayoutSize } from './gameOcrLayout'
+import { createGameOcrTextProjection } from './gameOcrTextProjection'
 import type { GameOcrTextSnapshot } from './gameOcrTextPipeline'
 
 export interface GameOcrBoxRegionsInput {
   result: OcrResult
   viewportSize: GameOcrLayoutSize
+  /** Grouped line regions; omitted for callers that only have raw OCR output. */
+  blocks?: readonly GameOcrTextBlock[]
   /** Tokens, knowledge levels, and vocabulary spans, when they have resolved. */
   text?: GameOcrTextSnapshot
 }
@@ -19,6 +23,7 @@ export interface GameOcrBoxRegionsInput {
 export function buildGameOcrBoxRegions({
   result,
   viewportSize,
+  blocks = groupGameOcrTextBlocks(result.regions),
   text
 }: GameOcrBoxRegionsInput): GameOcrBoxRegion[] {
   const processed =
@@ -30,24 +35,35 @@ export function buildGameOcrBoxRegions({
     calculateGameOcrLayout({
       imageSize: result.imageSize,
       viewportSize,
-      regions: result.regions.map(({ id, bounds }) => ({ id, bounds }))
+      regions: blocks.map(({ id, bounds }) => ({ id, bounds }))
     }).map((layout) => [layout.id, layout])
   )
 
-  return result.regions.flatMap((region) => {
-    const layout = layouts.get(region.id)
+  return blocks.flatMap((block) => {
+    const layout = layouts.get(block.id)
     if (!layout) return []
-    const resolved = processed?.[region.id]
+    const projection = createGameOcrTextProjection(block.lines)
+    const candidate =
+      processed?.[block.id] ??
+      (block.regionIds.length === 1 ? processed?.[block.regionIds[0]] : undefined)
+    const displayText = projection.displayText
+    const resolved =
+      candidate &&
+      candidate.text === displayText &&
+      (!candidate.analysisText || candidate.analysisText === projection.analysisText)
+        ? candidate
+        : undefined
     return [
       {
-        id: region.id,
-        text: region.text,
+        id: block.id,
+        text: displayText,
         layout,
         fontSize: fitGameOcrFontSize(
-          region.text,
+          displayText,
           layout.displayBounds.width,
           layout.displayBounds.height
         ),
+        projection,
         ...(resolved
           ? {
               tokens: resolved.tokens,
