@@ -90,6 +90,16 @@ describe('eventKeyBinding', () => {
     )
   })
 
+  it('falls back to the layout-produced key when the physical code is unidentified', () => {
+    expect(eventKeyBinding(chord({ code: 'Unidentified', key: 'í' }), noModifiers)).toBe('í')
+    expect(eventKeyBinding(chord({ code: '', key: 'í', shiftKey: true }), shiftHeld)).toBe(
+      'ShiftLeft+í'
+    )
+    expect(
+      eventKeyBinding(chord({ code: 'Unidentified', key: 'Unidentified' }), noModifiers)
+    ).toBeNull()
+  })
+
   it('rejects right-side, standalone, and unsupported modifier combinations', () => {
     expect(eventKeyBinding(chord({ code: 'ArrowUp', ctrlKey: true }), noModifiers)).toBeNull()
     expect(eventKeyBinding(chord({ code: 'ControlLeft', ctrlKey: true }), ctrlHeld)).toBeNull()

@@ -42,8 +42,8 @@ export function isKeyModifier(code: string): code is KeyModifier {
 }
 
 /**
- * An input code a player action is bound to, optionally prefixed with one
- * modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
+ * An input identifier a player action is bound to, optionally prefixed with
+ * one modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
  * `MouseWheelUp`/`MouseWheelDown` pseudo-codes are used for the subtitle-size
  * wheel bindings. Matching is exact, so a bare `ArrowLeft` binding does *not*
  * fire on Ctrl+ArrowLeft (which is what lets the two be bound separately).
