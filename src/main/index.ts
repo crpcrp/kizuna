@@ -228,6 +228,7 @@ function createWindow(
 
   const shell = createAppShellCoordinator({
     initialSurface: decision.initialSurface,
+    presentInitialSurface: decision.presentInitialSurface,
     ensurePlayerStarted: () => {
       // Restore the normal player rectangle before mapping the mpv host. This
       // prevents a splash-sized host from ever being shown as the player.

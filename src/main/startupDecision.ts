@@ -11,17 +11,18 @@ export interface StartupDecisionInput {
 export interface StartupDecision {
   initialSurface: AppSurface
   startGameOcr: boolean
+  presentInitialSurface: boolean
 }
 
 /** Resolves the one startup choice before any player process is started. */
 export function resolveStartupDecision(input: StartupDecisionInput): StartupDecision {
   if (input.hasLaunchPath || input.probe || input.startupBehavior === 'video-player') {
-    return { initialSurface: 'player', startGameOcr: false }
+    return { initialSurface: 'player', startGameOcr: false, presentInitialSurface: true }
   }
 
   if (input.startupBehavior === 'game-ocr' && input.supportsGameOcr) {
-    return { initialSurface: 'splash', startGameOcr: true }
+    return { initialSurface: 'splash', startGameOcr: true, presentInitialSurface: false }
   }
 
-  return { initialSurface: 'splash', startGameOcr: false }
+  return { initialSurface: 'splash', startGameOcr: false, presentInitialSurface: true }
 }

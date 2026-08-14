@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAppShellCoordinator } from '@src/main/services/appShell'
 import { deferred } from '@test/harness/deferred'
 
-function makeFixture(initialSurface: 'splash' | 'options' | 'player' = 'splash') {
+function makeFixture(
+  initialSurface: 'splash' | 'options' | 'player' = 'splash',
+  presentInitialSurface = true
+) {
   const ensurePlayerStarted = vi.fn(async (): Promise<'ready' | 'failed'> => 'ready')
   const presentSplash = vi.fn()
   const presentPlayer = vi.fn()
@@ -12,6 +15,7 @@ function makeFixture(initialSurface: 'splash' | 'options' | 'player' = 'splash')
   const quit = vi.fn()
   const coordinator = createAppShellCoordinator({
     initialSurface,
+    presentInitialSurface,
     ensurePlayerStarted,
     presentSplash,
     presentPlayer,
@@ -43,6 +47,18 @@ describe('createAppShellCoordinator', () => {
     await fixture.coordinator.showOptions()
     expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
     expect(fixture.presentOptions).toHaveBeenCalledOnce()
+  })
+
+  it('can defer the initial presentation until startup succeeds or fails', async () => {
+    const fixture = makeFixture('splash', false)
+
+    expect(fixture.presentSplash).not.toHaveBeenCalled()
+    expect(fixture.coordinator.getSurface()).toBe('splash')
+
+    await fixture.coordinator.showOptions()
+
+    expect(fixture.presentOptions).toHaveBeenCalledOnce()
+    expect(fixture.sendSurfaceChanged).toHaveBeenCalledExactlyOnceWith('options')
   })
 
   it('returns to splash without starting the player', async () => {
