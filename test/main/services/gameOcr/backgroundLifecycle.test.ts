@@ -33,7 +33,9 @@ function setup(initial: GameOcrRuntimeStatus['game']['state'] = 'stopped') {
   }
   const window = {
     hide: vi.fn(),
-    activate: vi.fn()
+    activate: vi.fn(),
+    showOptions: vi.fn(async () => true),
+    showPlayer: vi.fn(async () => true)
   }
   const trayFactory = {
     create: vi.fn((next: GameOcrTrayActions) => {
@@ -69,7 +71,7 @@ function setup(initial: GameOcrRuntimeStatus['game']['state'] = 'stopped') {
 }
 
 describe('Game OCR background lifecycle', () => {
-  it('hides on arm, keeps one tray, restores on Show, and prevents close-to-tray', () => {
+  it('hides on arm, keeps one tray, restores Options on Show, and prevents close-to-tray', async () => {
     const fake = setup()
     const closeEvent = { preventDefault: vi.fn() }
 
@@ -81,7 +83,8 @@ describe('Game OCR background lifecycle', () => {
     expect(fake.tray.setToolTip).toHaveBeenCalledWith('Kizuna — Game OCR armed')
 
     fake.actions?.show()
-    expect(fake.window.activate).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+    expect(fake.window.activate).not.toHaveBeenCalled()
     expect(fake.window.hide).toHaveBeenCalledOnce()
 
     expect(fake.lifecycle.handleWindowClose(closeEvent)).toBe(false)
@@ -89,7 +92,7 @@ describe('Game OCR background lifecycle', () => {
     expect(fake.window.hide).toHaveBeenCalledTimes(2)
   })
 
-  it('stops from the tray, removes the tray, and restores the player window', async () => {
+  it('stops from the hidden tray state, removes the tray, and restores Options', async () => {
     const fake = setup()
     fake.update('armed')
 
@@ -97,8 +100,74 @@ describe('Game OCR background lifecycle', () => {
     await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
 
     expect(fake.tray.destroy).toHaveBeenCalledOnce()
-    expect(fake.window.activate).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
     expect(fake.lifecycle.handleWindowClose({ preventDefault: vi.fn() })).toBe(true)
+  })
+
+  it('does not change the visible surface when stopping', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.actions?.show()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+
+    fake.actions?.stop()
+    await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
+
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.activate).not.toHaveBeenCalled()
+  })
+
+  it('restores Options after an error while hidden', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.update('error')
+
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+    expect(fake.tray.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('uses Show behavior for a no-file second instance while hidden', async () => {
+    const fake = setup()
+    fake.update('armed')
+
+    await fake.lifecycle.showFromSecondInstance()
+
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.activate).not.toHaveBeenCalled()
+  })
+
+  it('activates the current surface for a second instance when visible', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.actions?.show()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+
+    await fake.lifecycle.showFromSecondInstance()
+
+    expect(fake.window.activate).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
+  })
+
+  it('presents the player for a media second instance and marks it visible', async () => {
+    const fake = setup()
+    fake.update('armed')
+
+    await fake.lifecycle.showFromSecondInstance(true)
+
+    expect(fake.window.showPlayer).toHaveBeenCalledOnce()
+    fake.actions?.stop()
+    await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
+    expect(fake.window.showOptions).not.toHaveBeenCalled()
+  })
+
+  it('does not restore a surface during shutdown cleanup', async () => {
+    const fake = setup()
+    fake.update('armed')
+
+    await fake.lifecycle.stop(false)
+
+    expect(fake.runtime.stop).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).not.toHaveBeenCalled()
   })
 
   it('leaves the player visible after a failed start', () => {
