@@ -88,7 +88,7 @@ export default function OptionsMenu({
   supportsGameOcr,
   gameOcr
 }: OptionsMenuProps): React.JSX.Element {
-  const [activeCategory, setActiveCategory] = useState<OptionsCategory>('keybindings')
+  const [activeCategory, setActiveCategory] = useState<OptionsCategory>('playback')
   const [query, setQuery] = useState('')
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [nowMs] = useState(() => Date.now())

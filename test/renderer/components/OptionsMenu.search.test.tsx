@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import OptionsMenu from '@src/renderer/src/components/OptionsMenu'
 import { baseOptionsMenuProps } from './optionsMenuProps'
@@ -23,7 +23,9 @@ describe('OptionsMenu setting search', () => {
 
     fireEvent.change(searchBox(), { target: { value: 'loudness' } })
 
-    const options = screen.getAllByRole('option')
+    const options = within(
+      screen.getByRole('listbox', { name: 'Setting search results' })
+    ).getAllByRole('option')
     expect(options).toHaveLength(1)
     // The result names the setting and the tab that holds it — the tab being
     // the thing the user shouldn't have to know.
@@ -35,20 +37,24 @@ describe('OptionsMenu setting search', () => {
 
     fireEvent.change(searchBox(), { target: { value: 'zzzz no such setting' } })
 
-    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    expect(
+      within(screen.getByRole('listbox', { name: 'Setting search results' })).queryAllByRole(
+        'option'
+      )
+    ).toHaveLength(0)
     expect(screen.getByText('No settings match that search.')).toBeTruthy()
   })
 
   it('switches to the result’s tab and clears the query when a result is picked', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
-    // Starts on Keybindings.
-    expect(tab('Keybindings').getAttribute('aria-selected')).toBe('true')
-
-    fireEvent.change(searchBox(), { target: { value: 'loudness' } })
-    fireEvent.click(screen.getByRole('option', { name: /Normalize loudness/ }))
-
+    // Starts on Playback.
     expect(tab('Playback').getAttribute('aria-selected')).toBe('true')
-    expect(tab('Keybindings').getAttribute('aria-selected')).toBe('false')
+
+    fireEvent.change(searchBox(), { target: { value: 'theme' } })
+    fireEvent.click(screen.getByRole('option', { name: /Theme/ }))
+
+    expect(tab('Appearance').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Playback').getAttribute('aria-selected')).toBe('false')
     expect(searchBox().value).toBe('')
     // Query cleared, so the results list is gone and the tabbed view is back.
     expect(screen.queryByRole('listbox', { name: 'Setting search results' })).toBeNull()
