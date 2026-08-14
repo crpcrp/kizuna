@@ -30,7 +30,7 @@ const CATEGORY_IDS = [
 
 function props(overrides: Partial<MenuBarProps> = {}): MenuBarProps {
   return {
-    media: { onOpenFile: noop },
+    media: { onOpenFile: noop, onExit: noop },
     video: {},
     audio: { tracks, onSelectAudio: noop },
     subtitle: { tracks, selectedSubtitleId: null, onSelectSubtitle: noop },
@@ -83,7 +83,7 @@ describe('MenuBar composition', () => {
   it('is a no-op to render with handlers wired (nothing fired at render)', () => {
     const onOpenFile = vi.fn()
     const onOpenOptions = vi.fn()
-    render({ media: { onOpenFile }, onOpenOptions })
+    render({ media: { onOpenFile, onExit: noop }, onOpenOptions })
     expect(onOpenFile).not.toHaveBeenCalled()
     expect(onOpenOptions).not.toHaveBeenCalled()
   })
@@ -92,7 +92,11 @@ describe('MenuBar composition', () => {
 describe('MenuBar grouped prop forwarding', () => {
   it('routes each group to its own category and nowhere else', () => {
     const html = render({
-      media: { onOpenFile: noop, recentFiles: [{ path: 'C:\\Media\\episode05.mkv', openedAt: 1 }] },
+      media: {
+        onOpenFile: noop,
+        onExit: noop,
+        recentFiles: [{ path: 'C:\\Media\\episode05.mkv', openedAt: 1 }]
+      },
       video: { alwaysOnTop: true },
       audio: { tracks, selectedAudioId: 1, onSelectAudio: noop, audioDelayMs: 125 },
       subtitle: { tracks, selectedSubtitleId: 3, onSelectSubtitle: noop, subtitleOffsetMs: -75 },

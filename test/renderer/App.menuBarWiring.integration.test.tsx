@@ -31,6 +31,7 @@ interface Fakes {
   loadSubtitle: FakeKizunaApi['media']['loadSubtitle']
   getAppInfo: FakeKizunaApi['appInfo']['get']
   setPause: FakeKizunaApi['player']['setPause']
+  quit: FakeKizunaApi['appShell']['quit']
 }
 
 function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fakes {
@@ -73,7 +74,8 @@ function installBridge(settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS): Fake
     setPlayerSettings: api.playerSettings.setSettings,
     loadSubtitle: api.media.loadSubtitle,
     getAppInfo: api.appInfo.get,
-    setPause: api.player.setPause
+    setPause: api.player.setPause,
+    quit: api.appShell.quit
   }
 }
 
@@ -83,6 +85,21 @@ function openMenu(label: string): void {
 }
 
 afterEach(appTeardown)
+
+describe('MenuBar exit command', () => {
+  it('calls the app-shell quit command once and closes Media', () => {
+    const fakes = installBridge()
+    render(<App />)
+
+    openMenu('Media')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Exit Kizuna' }))
+
+    expect(fakes.quit).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Media' }).getAttribute('aria-expanded')).toBe(
+      'false'
+    )
+  })
+})
 
 describe('About Kizuna wiring', () => {
   it('opens from Settings and suspends playback shortcuts while visible', async () => {

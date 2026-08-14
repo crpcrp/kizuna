@@ -75,7 +75,7 @@ export interface MediaSessionBanner {
 }
 
 export interface UseMediaSessionResult {
-  mediaMenu: Omit<MediaMenuProps, 'onTogglePlaylist' | 'playlistOpen'>
+  mediaMenu: Omit<MediaMenuProps, 'onTogglePlaylist' | 'playlistOpen' | 'onExit'>
   subtitleMenu: Pick<
     SubtitleMenuProps,
     'mediaOpening' | 'onChangeExternalSubtitleEncoding' | 'onLoadSubtitleFile' | 'onSelectSubtitle'

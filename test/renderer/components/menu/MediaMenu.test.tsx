@@ -14,9 +14,16 @@ const recent: RecentMediaFile[] = [
   { path: 'C:\\Media\\episode04.mkv', openedAt: 1 }
 ]
 
-function render(props: Partial<MediaMenuProps> = {}): string {
+function render(props: Partial<MediaMenuProps> = {}, runAction: typeof run = run): string {
   return renderToStaticMarkup(
-    <MediaMenu open onToggle={vi.fn()} run={run} onOpenFile={vi.fn()} {...props} />
+    <MediaMenu
+      open
+      onToggle={vi.fn()}
+      run={runAction}
+      onOpenFile={vi.fn()}
+      onExit={vi.fn()}
+      {...props}
+    />
   )
 }
 
@@ -107,5 +114,26 @@ describe('MediaMenu playlist items', () => {
   it('disables Save playlist until the queue has entries', () => {
     expect(render({ hasPlaylist: false })).toMatch(/id="playlist-save"[^>]*disabled/)
     expect(render({ hasPlaylist: true })).not.toMatch(/id="playlist-save"[^>]*disabled/)
+  })
+})
+
+describe('MediaMenu exit command', () => {
+  it('is last after a separator and invokes onExit', () => {
+    const onExit = vi.fn()
+    let exitAction: (() => void) | undefined
+    const html = render({ onExit }, (action) => {
+      exitAction = action
+      return action
+    })
+
+    const playlistSave = html.indexOf('id="playlist-save"')
+    const separator = html.lastIndexOf('class="menu-separator"')
+    const exit = html.indexOf('id="exit-kizuna"')
+    expect(playlistSave).toBeLessThan(separator)
+    expect(separator).toBeLessThan(exit)
+    expect(html).toContain('aria-label="Exit Kizuna"')
+
+    exitAction?.()
+    expect(onExit).toHaveBeenCalledOnce()
   })
 })

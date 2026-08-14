@@ -397,7 +397,8 @@ export default function App({
             media={{
               ...mediaSession.mediaMenu,
               playlistOpen,
-              onTogglePlaylist: playbackWindow.panels.onTogglePlaylist
+              onTogglePlaylist: playbackWindow.panels.onTogglePlaylist,
+              onExit: () => window.kizuna.appShell.quit()
             }}
             video={{
               ...playbackWindow.videoMenu

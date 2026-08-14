@@ -9,7 +9,7 @@ import MenuBar, { type MenuBarProps } from '@src/renderer/src/components/MenuBar
 
 function renderMenu(overrides: Partial<MenuBarProps> = {}) {
   const props: MenuBarProps = {
-    media: { onOpenFile: vi.fn() },
+    media: { onOpenFile: vi.fn(), onExit: vi.fn() },
     video: {},
     audio: { tracks: [], onSelectAudio: vi.fn() },
     subtitle: { tracks: [], selectedSubtitleId: null, onSelectSubtitle: vi.fn() },
