@@ -2,7 +2,7 @@ import type { WindowBounds } from './windowBounds'
 
 /** The compact native content size used by the startup chooser. */
 export const SPLASH_SURFACE_WIDTH = 640
-export const SPLASH_SURFACE_HEIGHT = 400
+export const SPLASH_SURFACE_HEIGHT = 360
 
 /** The default windowed size used by the player and standalone Options. */
 export const APPLICATION_SURFACE_WIDTH = 1280

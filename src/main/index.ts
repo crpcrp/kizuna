@@ -251,11 +251,10 @@ function createWindow(
     dismissGameOcrOptions: () => gameOcrLifecycle?.dismissOptions() ?? false,
     sendSurfaceChanged: (surface) =>
       sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
-    // app.quit() enters the existing before-quit lifecycle coordinator below.
-    quit: () => {
-      if (appShell) appShell.quit()
-      else app.quit()
-    }
+    // The coordinator owns the renderer-facing idempotence guard; this
+    // callback must enter Electron's quit lifecycle directly or it would call
+    // back into the coordinator and stop at that guard.
+    quit: () => app.quit()
   })
   appShell = shell
   registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)
