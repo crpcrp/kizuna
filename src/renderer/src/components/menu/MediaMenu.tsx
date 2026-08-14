@@ -17,6 +17,7 @@ export interface MediaMenuProps {
   onAddFiles?: () => void
   onAddFolder?: () => void
   onSavePlaylist?: () => void
+  onExit: () => void
 }
 export function MediaMenu({
   open,
@@ -105,6 +106,13 @@ export function MediaMenu({
         id="playlist-save"
         disabled={!hasPlaylist}
         onClick={run(() => props.onSavePlaylist?.())}
+      />
+      <div className="menu-separator" />
+      <CommandItem
+        label="Exit Kizuna"
+        ariaLabel="Exit Kizuna"
+        id="exit-kizuna"
+        onClick={run(props.onExit)}
       />
     </Menu>
   )
