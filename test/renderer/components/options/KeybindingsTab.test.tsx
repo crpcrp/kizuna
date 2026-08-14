@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import KeybindingsTab from '@src/renderer/src/components/options/KeybindingsTab'
-import { DEFAULT_KEY_BINDINGS } from '@src/shared/playerSettings'
+import { DEFAULT_KEY_BINDINGS, type KeyBindings } from '@src/shared/playerSettings'
 
 afterEach(cleanup)
 
@@ -102,5 +102,33 @@ describe('KeybindingsTab subtitle-size bindings', () => {
     fireEvent.keyDown(window, { code: 'Escape' })
     expect(onChangeKeyBinding).not.toHaveBeenCalled()
     expect(button.textContent).toContain('Shift + mouse wheel up')
+  })
+})
+
+describe('KeybindingsTab binding conflicts', () => {
+  it('warns below every conflicting row and clears the warnings once resolved', () => {
+    const conflictingBindings: KeyBindings = {
+      ...DEFAULT_KEY_BINDINGS,
+      togglePause: 'KeyK',
+      toggleFullscreen: 'KeyK'
+    }
+    const { rerender } = render(
+      <KeybindingsTab active open keyBindings={conflictingBindings} onChangeKeyBinding={vi.fn()} />
+    )
+
+    expect(screen.getAllByRole('alert')).toHaveLength(2)
+    expect(screen.getByText('This keybinding is already used by Toggle Fullscreen.')).toBeTruthy()
+    expect(screen.getByText('This keybinding is already used by Play / Pause.')).toBeTruthy()
+
+    rerender(
+      <KeybindingsTab
+        active
+        open
+        keyBindings={{ ...conflictingBindings, toggleFullscreen: 'KeyG' }}
+        onChangeKeyBinding={vi.fn()}
+      />
+    )
+
+    expect(screen.queryAllByRole('alert')).toHaveLength(0)
   })
 })

@@ -19,6 +19,30 @@ export function keyToAction(
   return entry ? entry[0] : null
 }
 
+/** Finds every action that shares its binding with one or more other actions. */
+export function findKeyBindingConflicts(
+  bindings: KeyBindings
+): ReadonlyMap<PlayerKeyAction, readonly PlayerKeyAction[]> {
+  const actionsByBinding = new Map<KeyBinding, PlayerKeyAction[]>()
+  for (const [action, binding] of Object.entries(bindings) as [PlayerKeyAction, KeyBinding][]) {
+    const actions = actionsByBinding.get(binding) ?? []
+    actions.push(action)
+    actionsByBinding.set(binding, actions)
+  }
+
+  const conflicts = new Map<PlayerKeyAction, readonly PlayerKeyAction[]>()
+  for (const actions of actionsByBinding.values()) {
+    if (actions.length < 2) continue
+    for (const action of actions) {
+      conflicts.set(
+        action,
+        actions.filter((conflictingAction) => conflictingAction !== action)
+      )
+    }
+  }
+  return conflicts
+}
+
 const MODIFIER_KEY_CODES = new Set([
   'ControlLeft',
   'ControlRight',
