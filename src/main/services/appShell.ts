@@ -5,6 +5,8 @@ export type OptionsPresentationOrigin = 'startup' | 'gameOcr'
 export interface AppShellCoordinatorDeps {
   /** The surface selected by the composition root for this window. */
   initialSurface: AppSurface
+  /** Whether to present the initial surface before startup work completes. */
+  presentInitialSurface?: boolean
   /** Starts the one process-lifetime player runtime. */
   ensurePlayerStarted(): Promise<unknown>
   /** Presents only the renderer-owning overlay. */
@@ -53,7 +55,7 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
     return deps.presentPlayer
   }
 
-  if (surface !== 'player') {
+  if (deps.presentInitialSurface !== false && surface !== 'player') {
     const initialSurface = surface
     try {
       // Initial presentation can be asynchronous. Consume failures here so a

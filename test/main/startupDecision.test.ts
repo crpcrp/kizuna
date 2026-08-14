@@ -15,27 +15,30 @@ describe('resolveStartupDecision', () => {
   ])('%s starts the player', (_name, input) => {
     expect(resolveStartupDecision(input)).toEqual({
       initialSurface: 'player',
-      startGameOcr: false
+      startGameOcr: false,
+      presentInitialSurface: true
     })
   })
 
   it('shows the splash for the saved splash default', () => {
     expect(resolveStartupDecision({ ...base, startupBehavior: 'splash' })).toEqual({
       initialSurface: 'splash',
-      startGameOcr: false
+      startGameOcr: false,
+      presentInitialSurface: true
     })
   })
 
   it('starts Game OCR on supported Windows', () => {
     expect(resolveStartupDecision({ ...base, startupBehavior: 'game-ocr' })).toEqual({
       initialSurface: 'splash',
-      startGameOcr: true
+      startGameOcr: true,
+      presentInitialSurface: false
     })
   })
 
   it('falls back to the splash on unsupported platforms', () => {
     expect(
       resolveStartupDecision({ ...base, startupBehavior: 'game-ocr', supportsGameOcr: false })
-    ).toEqual({ initialSurface: 'splash', startGameOcr: false })
+    ).toEqual({ initialSurface: 'splash', startGameOcr: false, presentInitialSurface: true })
   })
 })
