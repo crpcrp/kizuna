@@ -91,7 +91,8 @@ import { applyAppIdentity, screenshotsDir } from './appIdentity'
 import { createStartupProbe, STARTUP_PROBE_ENV } from './startupProbe'
 import { createPlayerRuntime, type PlayerRuntime } from './playerRuntime'
 import { registerAppShellBridge } from './appShellBridge'
-import { createAppShellCoordinator } from './services/appShell'
+import { createAppShellCoordinator, type AppShellCoordinator } from './services/appShell'
+import { resolveStartupDecision, type StartupDecision } from './startupDecision'
 import {
   createAppWindowSet,
   loadRendererWindow,
@@ -156,6 +157,7 @@ let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
 let gameOcr: GameOcrRuntimeService | undefined
 let gameOcrLifecycle: GameOcrBackgroundLifecycle | undefined
+let appShell: AppShellCoordinator | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
 let mainWindow: BrowserWindow | undefined
@@ -173,7 +175,8 @@ const launchPathBuffer = createLaunchPathBuffer(
 function createWindow(
   mpvPath: string,
   history: MediaHistoryService,
-  settings: SettingsStore
+  settings: SettingsStore,
+  decision: StartupDecision
 ): void {
   const windows = createAppWindowSet({
     preloadPath: join(__dirname, '../preload/index.js'),
@@ -214,7 +217,7 @@ function createWindow(
     (playerRuntime = createPlayerRuntimeForWindow(videoHost, uiOverlay, mpvPath, history, settings))
   let initialPlayerPresentation = true
   const shell = createAppShellCoordinator({
-    initialSurface: 'player',
+    initialSurface: decision.initialSurface,
     ensurePlayerStarted: () => {
       // mpv's X11 --wid target must already be mapped while it initializes.
       if (runtime.getState() === 'not-started') preparePlayerAppWindowSet(windows)
@@ -235,16 +238,36 @@ function createWindow(
     // app.quit() enters the existing before-quit lifecycle coordinator below.
     quit: () => app.quit()
   })
+  appShell = shell
   registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)
 
-  void shell.showPlayer().then(() => {
-    if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
+  let rendererLoaded = false
+  const loadRenderer = (): void => {
+    if (rendererLoaded || uiOverlay.isDestroyed()) return
+    rendererLoaded = true
     startupProbe.mark('window')
     loadRendererWindow(uiOverlay, {
       devUrl,
       packagedHtmlPath: join(__dirname, '../renderer/index.html')
     })
-  })
+  }
+
+  const start = async (): Promise<void> => {
+    if (decision.startGameOcr) {
+      try {
+        const status = await gameOcr?.start()
+        if (status?.game.error || status?.game.state === 'error') await shell.showOptions()
+      } catch {
+        await shell.showOptions()
+      }
+    } else if (decision.initialSurface === 'player') {
+      await shell.showPlayer()
+    }
+
+    if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
+    loadRenderer()
+  }
+  void start()
 }
 
 /**
@@ -754,9 +777,13 @@ if (!gotSingleInstanceLock) {
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
   app.on('second-instance', (_event, argv, cwd) => {
-    appWindows?.activate()
     const launchPath = videoPathFromArgv(argv, cwd)
-    if (launchPath) launchPathBuffer.setPath(launchPath)
+    if (launchPath) {
+      void appShell?.showPlayer()
+      launchPathBuffer.setPath(launchPath)
+    } else {
+      appWindows?.activate()
+    }
   })
 
   ipcMain.on(LAUNCH_CHANNELS.rendererReady, () => {
@@ -787,6 +814,12 @@ if (!gotSingleInstanceLock) {
     })
     migrateLegacyUnidicFromResources(binaryPaths, userUnidic)
     const settings = createAppSettingsStore()
+    const decision = resolveStartupDecision({
+      startupBehavior: settings.get().player.startupBehavior,
+      hasLaunchPath: initialLaunchPath !== undefined,
+      supportsGameOcr: process.platform === 'win32',
+      probe: process.env[STARTUP_PROBE_ENV] === '1'
+    })
     // Register once for the application lifetime. The overlay renderer starts
     // the optional startup check only after it has subscribed to state pushes.
     updates = startUpdates(lifecycle, settings)
@@ -809,7 +842,7 @@ if (!gotSingleInstanceLock) {
     startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
     registerTranslateBridge(ipcMain, createGoogleTranslator(httpFetch))
-    createWindow(binaryPaths.mpvPath, mediaHistory, settings)
+    createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
 
     // macOS dock re-activation. This path is dead on Windows (the primary
     // target): `window-all-closed` quits the app there, so all windows are
@@ -822,7 +855,7 @@ if (!gotSingleInstanceLock) {
     // until macOS is supported.
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0 && mediaHistory)
-        createWindow(binaryPaths.mpvPath, mediaHistory, settings)
+        createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
     })
   })
 

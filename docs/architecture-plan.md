@@ -17,6 +17,12 @@ Electron runs with context isolation enabled and Node integration disabled.
 IPC channels are declared centrally in `src/shared/ipcChannels.ts`, and the
 renderer-facing contract is defined in `src/shared/preloadApi.ts`.
 
+At launch, `src/main/startupDecision.ts` resolves the persisted startup mode
+once, before mpv or the main renderer surface is started. An explicit video
+path and the packaged startup probe force the player path. Splash starts only
+the renderer shell; supported Windows Game OCR starts its runtime without mpv;
+an OCR startup error presents Options so the user can recover.
+
 ## Playback and subtitles
 
 On Windows, mpv renders into Kizuna's single transparent frameless window and
