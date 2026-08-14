@@ -129,8 +129,8 @@ describe('reclaimFreedPages', () => {
 
   it('defers conversion for a WAL-mode legacy file DB', () => {
     const db = new Database(tempDbPath())
+    db.pragma('auto_vacuum = NONE')
     db.pragma('journal_mode = WAL')
-    seedAndDelete(db)
 
     expect(reclaimFreedPages(db)).toBe('deferred')
     expect(db.pragma('auto_vacuum', { simple: true })).toBe(0)
