@@ -269,7 +269,7 @@ describe('Linux window pair presentation and shutdown', () => {
     await presentation.presentSplash(vi.fn())
 
     expect(host.bounds).toEqual(original)
-    expect(overlay.bounds).toEqual({ x: -1240, y: 390, width: 560, height: 340 })
+    expect(overlay.bounds).toEqual({ x: -1280, y: 360, width: 640, height: 400 })
 
     presentation.restorePlayerBounds()
     expect(host.bounds).toEqual(original)
@@ -301,7 +301,7 @@ describe('Linux window pair presentation and shutdown', () => {
     await presentation.presentSplash(vi.fn())
 
     expect(window.fullscreen).toBe(false)
-    expect(window.bounds).toEqual({ x: 680, y: 370, width: 560, height: 340 })
+    expect(window.bounds).toEqual({ x: 640, y: 340, width: 640, height: 400 })
   })
 
   it('keeps the Windows single-window surface visible', () => {
