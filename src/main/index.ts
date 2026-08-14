@@ -102,6 +102,7 @@ import {
   showOverlayAppWindowSet,
   type AppWindowSet
 } from './windowPair'
+import { createSurfacePresentation } from './surfacePresentation'
 import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
 import { registerUpdateBridge } from './updateBridge'
 import { createUpdateService, type UpdateService } from './updateService'
@@ -183,6 +184,7 @@ function createWindow(
     preloadPath: join(__dirname, '../preload/index.js'),
     closeGuard: (event) => gameOcrLifecycle?.handleWindowClose(event) ?? true
   })
+  const surfacePresentation = createSurfacePresentation(windows, screen)
   const { videoHost, uiOverlay } = windows
   appWindows = windows
   mainWindow = uiOverlay
@@ -227,11 +229,14 @@ function createWindow(
   const shell = createAppShellCoordinator({
     initialSurface: decision.initialSurface,
     ensurePlayerStarted: () => {
+      // Restore the normal player rectangle before mapping the mpv host. This
+      // prevents a splash-sized host from ever being shown as the player.
+      surfacePresentation.restorePlayerBounds()
       // mpv's X11 --wid target must already be mapped while it initializes.
       if (runtime.getState() === 'not-started') preparePlayerAppWindowSet(windows)
       return runtime.ensureStarted()
     },
-    presentSplash: presentOverlay,
+    presentSplash: () => surfacePresentation.presentSplash(presentOverlay),
     presentPlayer: () => {
       if (initialPlayerPresentation) {
         initialPlayerPresentation = false

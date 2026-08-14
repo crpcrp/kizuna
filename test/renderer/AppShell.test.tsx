@@ -25,6 +25,8 @@ describe('SplashScreen', () => {
       true
     )
     expect(screen.getByText('Windows only')).toBeTruthy()
+    expect(document.querySelector('.splash-brand img')).toBeTruthy()
+    expect(screen.queryByText('絆')).toBeNull()
     expect(
       (screen.getByRole('button', { name: 'Video player' }) as HTMLButtonElement).disabled
     ).toBe(false)

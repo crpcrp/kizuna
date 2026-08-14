@@ -1,22 +1,19 @@
 .splash-app {
   min-height: 100%;
-  background: var(--surface-panel);
-}
-
-.splash-app #top-controls {
-  background: var(--surface-bar);
+  background: transparent;
 }
 
 .splash-main {
   display: grid;
-  min-height: calc(100% - 32px);
+  width: 100%;
+  min-height: 100%;
   place-items: center;
-  padding: 32px;
   box-sizing: border-box;
 }
 
 .splash-card {
-  width: min(560px, 100%);
+  width: 100%;
+  min-height: 100%;
   padding: 42px;
   box-sizing: border-box;
   text-align: center;
@@ -24,6 +21,7 @@
   border: 1px solid var(--border-default);
   border-radius: 16px;
   box-shadow: var(--shadow-panel);
+  -webkit-app-region: drag;
 }
 
 .splash-brand {
@@ -32,11 +30,16 @@
   height: 64px;
   margin: 0 auto 18px;
   place-items: center;
-  color: var(--on-accent);
-  background: var(--accent);
   border-radius: 18px;
-  font-size: 2rem;
-  font-weight: 700;
+  overflow: hidden;
+}
+
+.splash-brand img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
 }
 
 .splash-card h1 {
@@ -52,12 +55,15 @@
 .splash-error {
   margin: 0 0 16px;
   color: var(--danger-text);
+  -webkit-app-region: no-drag;
+  user-select: text;
 }
 
 .splash-choices {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+  -webkit-app-region: no-drag;
 }
 
 .splash-choices button {
@@ -69,6 +75,7 @@
   border: 1px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .splash-choices button:hover:not(:disabled),

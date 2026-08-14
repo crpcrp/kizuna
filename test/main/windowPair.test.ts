@@ -11,6 +11,7 @@ import {
   syncInitialWindowBounds,
   type WindowCloseEvent
 } from '@src/main/windowPair'
+import { createSurfacePresentation } from '@src/main/surfacePresentation'
 
 type WindowEvent =
   | 'close'
@@ -248,6 +249,59 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(host.hide).toHaveBeenCalledOnce()
     expect(overlay.show).toHaveBeenCalledOnce()
     expect(overlay.focus).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the hidden host at player bounds while compacting the splash overlay', async () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+    const original = { ...host.bounds }
+    const presentation = createSurfacePresentation(windows, {
+      getDisplayMatching: vi.fn(() => ({
+        workArea: { x: -1920, y: 40, width: 1920, height: 1040 }
+      }))
+    })
+
+    await presentation.presentSplash(vi.fn())
+
+    expect(host.bounds).toEqual(original)
+    expect(overlay.bounds).toEqual({ x: -1240, y: 390, width: 560, height: 340 })
+
+    presentation.restorePlayerBounds()
+    expect(host.bounds).toEqual(original)
+    expect(overlay.bounds).toEqual(original)
+
+    const movedPlayer = { x: 300, y: 260, width: 1100, height: 700 }
+    windows.coordinator.setBounds(movedPlayer)
+    await presentation.presentSplash(vi.fn())
+    presentation.restorePlayerBounds()
+    expect(host.bounds).toEqual(movedPlayer)
+    expect(overlay.bounds).toEqual(movedPlayer)
+  })
+
+  it('leaves fullscreen before applying compact splash bounds', async () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const window = factory.created[0]
+    windows.coordinator.setFullScreen(true)
+    const presentation = createSurfacePresentation(windows, {
+      getDisplayMatching: vi.fn(() => ({
+        workArea: { x: 0, y: 0, width: 1920, height: 1080 }
+      }))
+    })
+
+    await presentation.presentSplash(vi.fn())
+
+    expect(window.fullscreen).toBe(false)
+    expect(window.bounds).toEqual({ x: 680, y: 370, width: 560, height: 340 })
   })
 
   it('keeps the Windows single-window surface visible', () => {
