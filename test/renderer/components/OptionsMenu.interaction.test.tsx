@@ -325,15 +325,10 @@ describe('OptionsMenu audio output', () => {
     expect(onToggleLoudnessNorm).toHaveBeenCalledOnce()
   })
 
-  it('requests a fresh device list when the Playback tab becomes active', () => {
+  it('requests a fresh device list when Playback is initially active', () => {
     const onAudioDevicesRequest = vi.fn()
     const base = baseOptionsMenuProps()
     render(<OptionsMenu {...base} playback={{ ...base.playback, onAudioDevicesRequest }} />)
-    // Opens on Keybindings, so nothing is requested until Playback is shown.
-    expect(onAudioDevicesRequest).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
-
     expect(onAudioDevicesRequest).toHaveBeenCalledOnce()
   })
 

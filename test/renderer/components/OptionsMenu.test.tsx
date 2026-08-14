@@ -72,6 +72,12 @@ function renderMenu(overrides: MenuOverrides = {}): string {
   )
 }
 
+function tabLabels(html: string): string[] {
+  return Array.from(html.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g), ([, label]) =>
+    label.replace(/&amp;/g, '&')
+  )
+}
+
 describe('OptionsMenu markup', () => {
   it('is present but hidden (no "open" class) when closed', () => {
     const html = renderMenu({ open: false })
@@ -144,24 +150,45 @@ describe('OptionsMenu markup', () => {
     expect(onCategoryOpen).not.toHaveBeenCalled()
   })
 
-  it('renders a sidebar tab per category, with Keybindings active by default', () => {
+  it('renders the workflow order with Game OCR only when supported', () => {
+    expect(tabLabels(renderMenu({ supportsGameOcr: true }))).toEqual([
+      'Playback',
+      'Subtitles',
+      'Keybindings',
+      'Appearance',
+      'Anki',
+      'Parser & Dictionaries',
+      'Known words',
+      'Game OCR',
+      'Startup',
+      'Setup & integrations'
+    ])
+    expect(tabLabels(renderMenu())).toEqual([
+      'Playback',
+      'Subtitles',
+      'Keybindings',
+      'Appearance',
+      'Anki',
+      'Parser & Dictionaries',
+      'Known words',
+      'Startup',
+      'Setup & integrations'
+    ])
+  })
+
+  it('selects Playback by default', () => {
     const html = renderMenu()
     expect(html).toContain('role="tablist"')
+    expect(html).toMatch(/<button[^>]*role="tab" aria-selected="true"[^>]*>Playback<\/button>/)
     expect(html).toContain('>Keybindings<')
-    expect(html).toContain('>Playback<')
-    expect(html).toContain('>Appearance<')
-    expect(html).toContain('>Subtitles<')
     expect(html).not.toContain('>Game OCR<')
-    expect(html).toContain('>Parser &amp; Dictionaries<')
-    expect(html).toContain('>Anki<')
-    expect(html).toContain('>Known words<')
     expect(html).toContain('Skip back/ahead seconds')
   })
 
-  it('keeps Keybindings/Playback/Appearance/Subtitles mounted but hidden via CSS/aria, while Dictionaries/Anki/Known-words are not mounted until active', () => {
+  it('keeps the always-mounted tabs hidden via CSS/aria, while Dictionaries/Anki/Known-words are not mounted until active', () => {
     const html = renderMenu()
-    // Keybindings tab is active by default; Playback, Appearance and
-    // Subtitles are still present in the DOM (not conditionally unmounted)
+    // Playback is active by default; Keybindings, Appearance and Subtitles
+    // are still present in the DOM (not conditionally unmounted)
     // but marked aria-hidden, same pattern the dialog itself uses for
     // open/closed.
     expect(html).toMatch(/class="options-tab active" aria-hidden="false"/)
