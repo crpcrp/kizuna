@@ -250,7 +250,10 @@ function createWindow(
     sendSurfaceChanged: (surface) =>
       sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
     // app.quit() enters the existing before-quit lifecycle coordinator below.
-    quit: () => app.quit()
+    quit: () => {
+      if (appShell) appShell.quit()
+      else app.quit()
+    }
   })
   appShell = shell
   registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)

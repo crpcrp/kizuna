@@ -71,7 +71,7 @@ function setup(initial: GameOcrRuntimeStatus['game']['state'] = 'stopped') {
 }
 
 describe('Game OCR background lifecycle', () => {
-  it('hides on arm, keeps one tray, restores Options on Show, and prevents close-to-tray', async () => {
+  it('hides on arm, exposes Options, and prevents close-to-tray', async () => {
     const fake = setup()
     const closeEvent = { preventDefault: vi.fn() }
 
@@ -81,10 +81,19 @@ describe('Game OCR background lifecycle', () => {
     expect(fake.trayFactory.create).toHaveBeenCalledOnce()
     expect(fake.window.hide).toHaveBeenCalledOnce()
     expect(fake.tray.setToolTip).toHaveBeenCalledWith('Kizuna — Game OCR armed')
+    expect(fake.actions).toEqual(
+      expect.objectContaining({
+        options: expect.any(Function),
+        videoPlayer: expect.any(Function),
+        quit: expect.any(Function)
+      })
+    )
+    expect(fake.actions).not.toHaveProperty('show')
+    expect(fake.actions).not.toHaveProperty('stop')
 
-    fake.actions?.show()
+    fake.actions?.options()
     await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
-    expect(fake.window.activate).not.toHaveBeenCalled()
+    expect(fake.window.activate).toHaveBeenCalledOnce()
     expect(fake.window.hide).toHaveBeenCalledOnce()
 
     expect(fake.lifecycle.handleWindowClose(closeEvent)).toBe(false)
@@ -92,56 +101,74 @@ describe('Game OCR background lifecycle', () => {
     expect(fake.window.hide).toHaveBeenCalledTimes(2)
   })
 
-  it('stops from the hidden tray state, removes the tray, and restores Options', async () => {
+  it('opens the player from the tray without stopping OCR', async () => {
     const fake = setup()
     fake.update('armed')
 
-    fake.actions?.stop()
-    await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
+    fake.actions?.videoPlayer()
+    await vi.waitFor(() => expect(fake.window.showPlayer).toHaveBeenCalledOnce())
 
-    expect(fake.tray.destroy).toHaveBeenCalledOnce()
-    expect(fake.window.showOptions).toHaveBeenCalledOnce()
-    expect(fake.lifecycle.handleWindowClose({ preventDefault: vi.fn() })).toBe(true)
+    expect(fake.window.showOptions).not.toHaveBeenCalled()
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.quit).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
   })
 
-  it('does not change the visible surface when stopping', async () => {
+  it('keeps the tray and OCR armed after a successful Options presentation', async () => {
     const fake = setup()
     fake.update('armed')
-    fake.actions?.show()
+    fake.actions?.options()
     await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
 
-    fake.actions?.stop()
-    await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
-
     expect(fake.window.showOptions).toHaveBeenCalledOnce()
-    expect(fake.window.activate).not.toHaveBeenCalled()
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
   })
 
-  it('restores Options after an error while hidden', async () => {
+  it('swallows presentation failures and allows a retry', async () => {
     const fake = setup()
     fake.update('armed')
-    fake.update('error')
+    fake.window.showOptions.mockRejectedValueOnce(new Error('window closed'))
 
+    fake.actions?.options()
     await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
+
+    fake.actions?.options()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledTimes(2))
+    expect(fake.window.activate).toHaveBeenCalledOnce()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
+  })
+
+  it('still restores Options when in-app stopping ends a hidden run', async () => {
+    const fake = setup()
+    fake.update('armed')
+
+    await fake.lifecycle.stop()
+
+    expect(fake.runtime.stop).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
     expect(fake.tray.destroy).toHaveBeenCalledOnce()
   })
 
-  it('uses Show behavior for a no-file second instance while hidden', async () => {
+  it('uses Options behavior for a no-file second instance while hidden', async () => {
     const fake = setup()
     fake.update('armed')
 
     await fake.lifecycle.showFromSecondInstance()
 
     expect(fake.window.showOptions).toHaveBeenCalledOnce()
-    expect(fake.window.activate).not.toHaveBeenCalled()
+    expect(fake.window.activate).toHaveBeenCalledOnce()
   })
 
   it('activates the current surface for a second instance when visible', async () => {
     const fake = setup()
     fake.update('armed')
-    fake.actions?.show()
+    fake.actions?.options()
     await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
 
+    fake.window.activate.mockClear()
     await fake.lifecycle.showFromSecondInstance()
 
     expect(fake.window.activate).toHaveBeenCalledOnce()
@@ -155,9 +182,9 @@ describe('Game OCR background lifecycle', () => {
     await fake.lifecycle.showFromSecondInstance(true)
 
     expect(fake.window.showPlayer).toHaveBeenCalledOnce()
-    fake.actions?.stop()
-    await vi.waitFor(() => expect(fake.runtime.stop).toHaveBeenCalledOnce())
-    expect(fake.window.showOptions).not.toHaveBeenCalled()
+    expect(fake.window.activate).toHaveBeenCalledOnce()
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
   })
 
   it('does not restore a surface during shutdown cleanup', async () => {
@@ -196,5 +223,15 @@ describe('Game OCR background lifecycle', () => {
 
     expect(fake.quit).toHaveBeenCalledOnce()
     expect(fake.runtime.stop).not.toHaveBeenCalled()
+  })
+
+  it('keeps one tray when the armed status is reported repeatedly', () => {
+    const fake = setup()
+
+    fake.update('armed')
+    fake.update('capturing')
+    fake.update('recognizing')
+
+    expect(fake.trayFactory.create).toHaveBeenCalledOnce()
   })
 })

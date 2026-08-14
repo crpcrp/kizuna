@@ -13,8 +13,8 @@ export interface GameOcrWindowCloseEvent {
 }
 
 export interface GameOcrTrayActions {
-  show(): void
-  stop(): void
+  options(): void
+  videoPlayer(): void
   quit(): void
 }
 
@@ -92,7 +92,10 @@ export function createGameOcrBackgroundLifecycle(
     if (disposed) return false
     try {
       const shown = await options.window.showOptions()
-      if (shown) hiddenForOcr = false
+      if (shown) {
+        hiddenForOcr = false
+        activateWindow()
+      }
       return shown
     } catch {
       return false
@@ -103,7 +106,10 @@ export function createGameOcrBackgroundLifecycle(
     if (disposed) return false
     try {
       const shown = await options.window.showPlayer()
-      if (shown) hiddenForOcr = false
+      if (shown) {
+        hiddenForOcr = false
+        activateWindow()
+      }
       return shown
     } catch {
       return false
@@ -143,11 +149,11 @@ export function createGameOcrBackgroundLifecycle(
   }
 
   const actions: GameOcrTrayActions = {
-    show: () => {
+    options: () => {
       void showOptions()
     },
-    stop: () => {
-      void stop()
+    videoPlayer: () => {
+      void showPlayer()
     },
     quit: options.quit
   }
@@ -193,6 +199,7 @@ export function createGameOcrBackgroundLifecycle(
     handleWindowClose(event): boolean {
       if (!ARMED_STATES.has(options.runtime.getStatus().game.state)) return true
       reportSurfaceFailure(() => event.preventDefault())
+      hiddenForOcr = true
       hideWindow()
       return false
     },
