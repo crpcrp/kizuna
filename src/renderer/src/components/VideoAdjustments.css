@@ -10,7 +10,7 @@
   width: 280px;
   padding: 12px 14px;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   background: var(--surface-panel);
   color: var(--text-primary);
   box-shadow: var(--shadow-panel);
@@ -21,25 +21,34 @@
   display: block;
 }
 
+/* Micro-label header over a hairline, matching the dialogs. */
 .video-adjustments-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .video-adjustments-title {
-  font-weight: 600;
+  color: var(--text-soft);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 
 .video-adjustments-close {
   border: none;
+  border-radius: var(--radius-chip);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
   padding: 2px 4px;
+  transition: color var(--transition-fast);
 }
 
 .video-adjustments-close:hover {
@@ -74,14 +83,18 @@
   flex: 1 1 auto;
   padding: 4px 8px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .video-adjustments-rotate:hover {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 
 .video-adjustments-footer {
@@ -93,14 +106,18 @@
 .video-adjustments-reset {
   padding: 4px 10px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .video-adjustments-reset:hover:not(:disabled) {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 
 .video-adjustments-reset:disabled {

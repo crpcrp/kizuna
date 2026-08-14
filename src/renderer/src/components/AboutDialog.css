@@ -31,9 +31,12 @@
   align-items: baseline;
 }
 
+/* Field names are micro-labels; their values stay at body size. */
 .about-details dt {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 
 .about-details dd {
@@ -56,6 +59,14 @@
   margin: 0;
 }
 
+.about-update h3 {
+  color: var(--text-soft);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
 .about-update-meta {
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -69,7 +80,7 @@
   overflow: auto;
   box-sizing: border-box;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   color: var(--text-secondary);
@@ -108,15 +119,19 @@
 .about-button {
   padding: 7px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   color: var(--text-primary);
   background: var(--control-bg);
   font: inherit;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .about-button:hover {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 
 .about-button:disabled {

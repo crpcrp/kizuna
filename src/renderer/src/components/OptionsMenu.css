@@ -21,29 +21,47 @@
   flex-direction: column;
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-panel);
-  padding: 16px;
+  padding: 18px;
   box-sizing: border-box;
 }
+/* Same micro-label-over-a-hairline header as the shared modal chrome, so the
+   two dialog families read as one surface. */
 .options-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
   flex-shrink: 0;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.options-header > span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 .options-header button {
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
   color: inherit;
   font-size: 0.9rem;
+  line-height: 1;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 10px;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 .options-header button:hover {
-  background: var(--hover-bg);
+  color: var(--on-danger);
+  background: var(--danger-solid);
+  border-color: var(--danger-border);
 }
 
 /* Body: category sidebar on the left, active tab's content on the right. */
@@ -53,10 +71,11 @@
   min-height: 0;
   gap: 16px;
 }
+/* Categories as a hairline-separated stack (the splash choice list), with a
+   leading marker bar instead of a rounded pill. */
 .options-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   width: 168px;
   flex-shrink: 0;
   padding-right: 12px;
@@ -66,20 +85,31 @@
 .options-nav-item {
   text-align: left;
   font: inherit;
-  color: inherit;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-left: 2px solid transparent;
+  border-radius: 0;
   padding: 9px 12px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+.options-nav-item + .options-nav-item {
+  border-top: 1px solid var(--border-subtle);
 }
 .options-nav-item:hover {
-  background: var(--hover-bg);
+  color: var(--text-primary);
+  background: var(--surface-card);
 }
 /* Selected category: the hot accent, so which tab you are in is obvious even
    at a glance across a 168px-wide sidebar. */
 .options-nav-item.active {
   background: var(--accent-hot-soft-bg);
+  border-left-color: var(--accent-hot);
   color: var(--text-primary);
   font-weight: 600;
 }
@@ -116,8 +146,9 @@
   color: var(--text-primary);
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
+  transition: border-color var(--transition-fast);
 }
 .options-search::placeholder {
   color: var(--text-muted);
@@ -126,10 +157,11 @@
   outline: none;
   border-color: var(--accent-border);
 }
+/* Results borrow the splash choice list wholesale: hairline-separated rows
+   that shift inward and tint on hover. */
 .options-search-results {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
 .options-search-result {
   display: flex;
@@ -141,19 +173,29 @@
   color: inherit;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
   padding: 10px 12px;
   cursor: pointer;
+  transition:
+    padding var(--transition-fast),
+    background var(--transition-fast);
+}
+.options-search-result:last-child {
+  border-bottom: 1px solid var(--border-subtle);
 }
 .options-search-result:hover {
-  background: var(--hover-bg);
+  padding-left: 18px;
+  background: var(--surface-card);
 }
 /* Which tab the hit lives in — the point of the search box is that you don't
    have to know, so the answer is shown rather than hidden. */
 .options-search-result-category {
   flex-shrink: 0;
-  font-size: 0.78rem;
   color: var(--text-muted);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 
 /* Transient flash on the row a search result navigated to. Added and removed
@@ -170,14 +212,15 @@
   }
 }
 
-/* Each settings group is a card: 1px border, 12px radius, faint fill, and an
-   <h3> header bar separated from the rows below it. `overflow: hidden` keeps
-   the first/last row's background inside the rounded corners. */
+/* Each settings group is a card: 1px border, faint fill, and an <h3> header bar
+   separated from the rows below it. `overflow: hidden` keeps the first/last
+   row's background inside the rounded corners. The header is the splash
+   screen's micro-label: uppercase and widely tracked. */
 .options-section {
   margin-bottom: 18px;
   overflow: hidden;
   border: 1px solid var(--border-default);
-  border-radius: 12px;
+  border-radius: var(--radius-panel);
   background: var(--surface-card);
 }
 .options-section:last-child {
@@ -185,11 +228,13 @@
 }
 .options-section h3 {
   margin: 0;
-  padding: 13px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-primary);
+  color: var(--text-soft);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 /* The card's own horizontal padding, applied to whatever the section puts in
    its body (rows, hints, the Yomitan import row, the shortcut grid) rather
@@ -290,12 +335,12 @@
   box-sizing: border-box;
   margin-top: 6px;
   padding: 6px 8px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 0.85rem;
   color: var(--text-primary);
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   resize: vertical;
 }
 .options-mpv-args:focus-visible {
@@ -307,21 +352,28 @@
   color: var(--text-primary);
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .options-button:hover {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 
-/* Readiness pill at the right edge of a row: "Installed" (success tint) or
-   "Missing" (warning tint), used by the MeCab dictionary rows. */
+/* Readiness marker at the right edge of a row: "Installed" (success tint) or
+   "Missing" (warning tint), used by the MeCab dictionary rows. A squared tag
+   rather than a pill — the splash screen's label voice. */
 .state-badge {
   flex-shrink: 0;
   padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  line-height: 1.5;
+  border-radius: var(--radius-chip);
+  font-size: 0.72rem;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.6;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 .state-badge.installed {
@@ -407,9 +459,12 @@
   color: inherit;
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 0;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .yomitan-dict-actions button:hover:not([disabled]) {
   background: var(--control-hover-bg);
@@ -448,9 +503,10 @@
   color: var(--text-primary);
   background: var(--accent-soft-bg);
   border: 1px dashed var(--accent-border);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   padding: 10px 16px;
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 .yomitan-import-button:hover {
   background: var(--accent-selected-bg);
@@ -478,7 +534,7 @@
   align-items: center;
   justify-content: center;
   background: var(--surface-busy);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
 }
 .options-import-overlay.open {
   display: flex;
@@ -583,7 +639,7 @@
 .options-shortcut-row {
   padding: 8px 11px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   font-size: 0.85rem;
   align-items: flex-start;
@@ -601,12 +657,16 @@
   color: inherit;
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 5px 10px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .options-keybind-button:hover {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 .options-keybind-warning {
   max-width: 100%;
@@ -637,7 +697,7 @@
   margin: 0;
   padding: 6px 8px;
   border: 1px solid var(--accent-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--accent-soft-bg);
   font-size: 0.8rem;
 }
@@ -647,6 +707,6 @@
   color: inherit;
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 4px 6px;
 }

@@ -13,7 +13,7 @@
   overflow: hidden;
   padding: 1px 2px;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   background: var(--surface-subtitle);
   color: var(--text-primary);
   font-family: 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans JP', sans-serif;

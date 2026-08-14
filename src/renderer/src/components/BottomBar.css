@@ -61,12 +61,12 @@
   background: var(--accent-soft-bg);
 }
 
-/* Speed button: a pill showing the current multiplier, not a glyph circle. */
+/* Speed button: a tag showing the current multiplier, not a glyph circle. */
 #bottom-bar button.speed-control {
   width: auto;
   min-width: 46px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-control);
   font-size: 0.85rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -183,13 +183,14 @@ input[type='range'] {
   pointer-events: none;
 }
 .abloop-badge {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   color: var(--accent-strong);
   background: var(--accent-soft-bg);
   border: 1px solid var(--accent-border);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 1px 5px;
 }
 #volume-slider {

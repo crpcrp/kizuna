@@ -41,7 +41,7 @@
   gap: 8px;
   padding: 7px 10px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface-busy);
   color: var(--text-primary);
   box-shadow: var(--shadow-menu);

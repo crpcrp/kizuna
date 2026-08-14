@@ -6,7 +6,7 @@
   gap: 8px;
   padding: 10px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   background: var(--surface-panel);
 }
 
@@ -42,12 +42,16 @@
   color: inherit;
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 5px 10px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .bulk-mining-sidebar-actions button:hover:not([disabled]) {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 .bulk-mining-sidebar-actions button[disabled] {
   cursor: default;

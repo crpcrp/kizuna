@@ -39,7 +39,7 @@
   line-height: 1;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   cursor: pointer;
   -webkit-app-region: no-drag;
 }
@@ -66,8 +66,8 @@
 
 .splash-visual-footer,
 .splash-content-footer {
-  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  letter-spacing: 0.08em;
+  font-family: var(--font-mono);
+  letter-spacing: var(--label-tracking);
   text-transform: uppercase;
 }
 
@@ -222,7 +222,7 @@
 
 .splash-choice-index {
   color: var(--text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.04em;

@@ -24,14 +24,16 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 .playlist-sidebar-title {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: var(--text-primary);
+  color: var(--text-soft);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 .playlist-sidebar-count {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
-  color: var(--text-soft);
+  color: var(--text-muted);
 }
 
 #playlist-sidebar-empty {
@@ -43,16 +45,23 @@
 #playlist-sidebar ul {
   list-style: none;
   margin: 0;
-  padding: 0.25rem;
+  padding: 0;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
 }
 
+/* Hairline-separated entries, matching the subtitle sidebar and the splash
+   screen's choice list. The separator sits on the <li> so it spans the row
+   button and its trailing remove button as one band. */
 #playlist-sidebar li {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding-right: 4px;
+}
+#playlist-sidebar li + li {
+  border-top: 1px solid var(--border-subtle);
 }
 
 .playlist-sidebar-row {
@@ -62,22 +71,29 @@
   text-align: left;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-left: 2px solid transparent;
+  border-radius: 0;
   color: var(--text-primary);
   padding: 0.45rem 0.55rem;
-  margin-bottom: 2px;
   font-size: 0.9rem;
   line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  transition:
+    padding var(--transition-fast),
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .playlist-sidebar-row:hover {
-  background: var(--accent-soft-bg);
+  padding-left: 0.8rem;
+  background: var(--surface-card);
+  border-left-color: var(--border-default);
 }
 .playlist-sidebar-row[data-active] {
-  background: var(--accent-selected-bg);
+  background: var(--accent-soft-bg);
+  border-left-color: var(--accent);
 }
 .playlist-sidebar-row[data-missing] {
   color: var(--text-disabled);
@@ -88,15 +104,18 @@
   flex-shrink: 0;
   background: transparent;
   border: none;
-  border-radius: 6px;
-  color: var(--text-soft);
+  border-radius: var(--radius-chip);
+  color: var(--text-muted);
   font: inherit;
   padding: 2px 6px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 .playlist-sidebar-remove:hover {
-  background: var(--accent-soft-bg);
-  color: var(--text-primary);
+  background: var(--danger-bg);
+  color: var(--danger-text);
 }
 
 #playlist-sidebar-footer {
@@ -109,18 +128,27 @@
 .playlist-sidebar-mode {
   flex: 1;
   font: inherit;
-  font-size: 0.82rem;
-  color: inherit;
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-soft);
   background: var(--control-bg);
-  border: none;
-  border-radius: 6px;
-  padding: 4px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control);
+  padding: 5px 8px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
 }
 .playlist-sidebar-mode:hover {
-  background: var(--accent-soft-bg);
+  color: var(--text-primary);
+  background: var(--control-hover-bg);
 }
 .playlist-sidebar-mode[data-active],
 .playlist-sidebar-mode[aria-pressed='true'] {
-  background: var(--accent-selected-bg);
+  color: var(--text-primary);
+  background: var(--accent-soft-bg);
+  border-color: var(--accent-border);
 }

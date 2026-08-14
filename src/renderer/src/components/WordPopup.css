@@ -22,7 +22,7 @@
   overflow-y: auto;
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-panel);
   padding: 12px;
   box-sizing: border-box;
@@ -43,7 +43,8 @@
   font-size: 1rem;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
+  transition: background var(--transition-fast);
 }
 .word-popup-close:hover {
   background: var(--hover-bg);
@@ -58,7 +59,8 @@
   font-size: 1rem;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
+  transition: background var(--transition-fast);
 }
 .word-popup-back:hover {
   background: var(--hover-bg);
@@ -98,36 +100,43 @@
   color: var(--text-muted);
   font-weight: 400;
 }
+/* The row's small chips are all squared tags, so a headword's metadata reads
+   as one strip of labels rather than mixed pills. */
 .word-popup-priority {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   color: var(--on-priority);
   background: var(--priority);
-  border-radius: 8px;
-  padding: 1px 7px;
+  border-radius: var(--radius-chip);
+  padding: 2px 7px;
   white-space: nowrap;
 }
 .word-popup-frequency {
   font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
   color: var(--text-soft);
   background: var(--frequency-bg);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
 }
 .word-popup-pitch-accent {
   font-size: 0.78rem;
   color: var(--text-soft);
   background: var(--control-bg);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
   white-space: nowrap;
 }
 .word-popup-dict-badge {
   margin-left: auto;
-  font-size: 0.78rem;
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   color: var(--text-muted);
   background: var(--accent-soft-bg);
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
 }
 .word-popup-provenance {
@@ -137,8 +146,10 @@
   margin-top: 5px;
 }
 .word-popup-provenance-badge {
-  font-size: 0.75rem;
-  border-radius: 4px;
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
 }
 .word-popup-provenance-badge--wanikani {
@@ -155,15 +166,18 @@
    dict badge (the badge's own margin-left:auto already pushed the row's
    trailing chips to the right). */
 .word-popup-anki-button {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   color: var(--text-secondary);
   background: var(--accent-soft-bg);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
   cursor: pointer;
   white-space: nowrap;
+  transition: background var(--transition-fast);
 }
 .word-popup-anki-button:hover {
   background: var(--accent-selected-bg);
@@ -181,9 +195,11 @@
 /* Transient result shown in place of the button while a mine request is in
    flight or after it resolves (see WordPopup.tsx's ankiStatus prop). */
 .word-popup-anki-status {
-  font-size: 0.78rem;
-  font-weight: 600;
-  border-radius: 4px;
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  border-radius: var(--radius-chip);
   padding: 2px 6px;
   white-space: nowrap;
 }
@@ -206,11 +222,13 @@
   margin-top: 4px;
 }
 .word-popup-pos {
-  font-size: 0.78rem;
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   color: var(--text-muted);
   background: var(--control-bg);
-  border-radius: 8px;
-  padding: 1px 7px;
+  border-radius: var(--radius-chip);
+  padding: 2px 7px;
 }
 
 /* ---- Glossary senses: one numbered badge per top-level glossary
@@ -237,11 +255,12 @@
   justify-content: center;
   width: 19px;
   height: 19px;
-  border-radius: 50%;
+  /* Squared index, like the splash screen's numbered choices. */
+  border-radius: var(--radius-chip);
   background: var(--accent-selected-bg);
   color: var(--text-secondary);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
   transform: translateY(2px);
 }
@@ -292,7 +311,7 @@
   color: var(--link-text);
   background: var(--link-bg);
   border: 1px solid var(--link-border);
-  border-radius: 6px;
+  border-radius: var(--radius-chip);
   padding: 1px 7px;
   font-weight: 600;
 }
@@ -320,7 +339,7 @@
   padding: 5px 10px;
   background: var(--accent-faint-bg);
   border-left: 3px solid var(--accent-border);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-chip) var(--radius-chip) 0;
   font-size: 0.97rem;
 }
 .word-popup-sense-content [data-sc-content='example-sentence-b'] {

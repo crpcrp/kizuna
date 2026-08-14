@@ -1,4 +1,5 @@
-/* Semantic color tokens for both themes. This is the ONLY renderer stylesheet
+/* Semantic color tokens for both themes, plus the shared shape/type tokens at
+   the bottom of the file. This is the ONLY renderer stylesheet
    allowed to contain raw color literals (enforced by
    test/renderer/themeCss.test.ts) — every component stylesheet styles with
    var(--…) so a theme switch is a pure variable swap.
@@ -180,4 +181,25 @@
   --shadow-menu: 0 12px 32px rgba(30, 30, 60, 0.22);
 
   --subtitle-outline: #000000;
+}
+
+/* ---- Shared shape and type tokens ----
+   The splash screen's visual idiom, factored out so the rest of the UI speaks
+   it too: the micro-label's size and tracking, the monospace face the splash
+   itself uses, three radii, and one fast transition. These are identical in
+   both themes, so they get
+   their own block rather than being duplicated into the two color blocks — the
+   guard test compares those two blocks variable-for-variable, and resolves the
+   dark one by the FIRST `:root {` in the file, which stays the block at the
+   top. Nothing here may carry a color. */
+:root {
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  /* Micro-label: uppercase, widely tracked (splash's `MEDIA × LANGUAGE`
+     footer). Used for panel titles, card headers and section labels. */
+  --label-size: 0.68rem;
+  --label-tracking: 0.08em;
+  --radius-panel: 12px;
+  --radius-control: 6px;
+  --radius-chip: 4px;
+  --transition-fast: 120ms ease;
 }

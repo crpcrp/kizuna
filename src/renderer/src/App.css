@@ -44,6 +44,7 @@ body {
   z-index: 10;
   flex-shrink: 0;
   background: var(--surface-bar);
+  border-bottom: 1px solid var(--border-subtle);
   backdrop-filter: blur(10px);
 }
 
@@ -67,8 +68,10 @@ body {
   color: inherit;
   background: transparent;
   border: none;
+  border-radius: var(--radius-chip);
   cursor: pointer;
   padding: 2px 6px;
+  transition: background var(--transition-fast);
 }
 #media-error button:hover {
   background: var(--hover-bg);
@@ -85,7 +88,7 @@ body {
   max-width: min(520px, calc(100vw - 28px));
   padding: 10px 12px;
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   background: var(--surface-panel);
   box-shadow: var(--shadow-menu);
 }
@@ -113,9 +116,9 @@ body {
   gap: 12px;
   max-width: min(420px, calc(100vw - 32px));
   padding: 10px 12px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-bar);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--surface-panel);
   box-shadow: var(--shadow-panel);
 }
 #bulk-mining-completion-toast button {
