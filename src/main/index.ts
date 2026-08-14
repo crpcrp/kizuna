@@ -99,6 +99,7 @@ import {
   preparePlayerAppWindowSet,
   presentAppWindowSet,
   presentOverlayAppWindowSet,
+  showOverlayAppWindowSet,
   type AppWindowSet
 } from './windowPair'
 import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
@@ -209,13 +210,20 @@ function createWindow(
 
   startGameOcr(settings, windows)
 
+  let rendererLoaded = false
+  let initialPlayerPresentation = true
+
   // Do not let renderer effects invoke player channels before their handlers
   // exist. A failed mpv start is caught inside ensureStarted and still loads a
   // usable UI over the opaque host.
   const runtime =
     playerRuntime ??
     (playerRuntime = createPlayerRuntimeForWindow(videoHost, uiOverlay, mpvPath, history, settings))
-  let initialPlayerPresentation = true
+  const presentOverlay = (): void => {
+    if (rendererLoaded) showOverlayAppWindowSet(windows)
+    else presentOverlayAppWindowSet(windows)
+  }
+
   const shell = createAppShellCoordinator({
     initialSurface: decision.initialSurface,
     ensurePlayerStarted: () => {
@@ -223,16 +231,17 @@ function createWindow(
       if (runtime.getState() === 'not-started') preparePlayerAppWindowSet(windows)
       return runtime.ensureStarted()
     },
-    presentSplash: () => presentOverlayAppWindowSet(windows),
+    presentSplash: presentOverlay,
     presentPlayer: () => {
       if (initialPlayerPresentation) {
         initialPlayerPresentation = false
-        presentAppWindowSet(windows)
+        if (rendererLoaded) windows.activate()
+        else presentAppWindowSet(windows)
       } else {
         windows.activate()
       }
     },
-    presentOptions: () => windows.activate(),
+    presentOptions: presentOverlay,
     sendSurfaceChanged: (surface) =>
       sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
     // app.quit() enters the existing before-quit lifecycle coordinator below.
@@ -241,7 +250,6 @@ function createWindow(
   appShell = shell
   registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)
 
-  let rendererLoaded = false
   const loadRenderer = (): void => {
     if (rendererLoaded || uiOverlay.isDestroyed()) return
     rendererLoaded = true

@@ -19,6 +19,7 @@ export interface AppShellCoordinatorDeps {
 
 export interface AppShellCoordinator {
   getSurface(): AppSurface
+  showSplash(): Promise<AppSurface>
   showPlayer(): Promise<AppSurface>
   showOptions(): Promise<AppSurface>
   quit(): void
@@ -33,15 +34,31 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
   let surface = deps.initialSurface
   let presentedSurface: AppSurface | undefined
   let playerStart: Promise<unknown> | undefined
-  let requestedSurface: 'options' | 'player' | undefined
+  let requestedSurface: AppSurface | undefined
   let requestVersion = 0
   let transition: Promise<void> | undefined
   let quitRequested = false
 
-  if (surface === 'splash') {
+  const presenterFor = (next: AppSurface): (() => void | Promise<void>) => {
+    if (next === 'splash') return deps.presentSplash
+    if (next === 'options') return deps.presentOptions
+    return deps.presentPlayer
+  }
+
+  if (surface !== 'player') {
+    const initialSurface = surface
     try {
-      deps.presentSplash()
-      presentedSurface = 'splash'
+      // Initial presentation can be asynchronous. Consume failures here so a
+      // window teardown cannot become an unhandled main-process rejection.
+      const result = presenterFor(initialSurface)()
+      presentedSurface = initialSurface
+      if (result) {
+        void result.catch(() => {
+          if (surface === initialSurface && presentedSurface === initialSurface) {
+            presentedSurface = undefined
+          }
+        })
+      }
     } catch {
       // Window teardown can race initialization; the next explicit request
       // may still present a usable player/options surface.
@@ -57,9 +74,9 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
     return playerStart
   }
 
-  const present = async (next: 'options' | 'player'): Promise<boolean> => {
+  const present = async (next: AppSurface): Promise<boolean> => {
     try {
-      await (next === 'player' ? deps.presentPlayer() : deps.presentOptions())
+      await presenterFor(next)()
       return true
     } catch {
       // Native presentation is best-effort during window teardown. Keeping
@@ -74,15 +91,20 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
       const currentVersion = requestVersion
       requestedSurface = undefined
 
-      await ensurePlayer()
-      // A later request arrived while the shared player bootstrap was in
-      // flight. Skip the stale presentation and let the latest request win.
-      if (requestVersion > currentVersion) continue
+      if (currentSurface === 'player') {
+        await ensurePlayer()
+        // A later request arrived while the shared player bootstrap was in
+        // flight. Skip the stale presentation and let the latest request win.
+        if (requestVersion > currentVersion) continue
+      }
 
       const next = currentSurface
       if (next === surface && presentedSurface === next) continue
 
       if (!(await present(next))) continue
+      // Do not publish a surface that was superseded while its native
+      // presentation was in flight.
+      if (requestVersion > currentVersion) continue
       if (next !== surface) {
         surface = next
         try {
@@ -96,7 +118,7 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
     }
   }
 
-  const requestSurface = (next: 'options' | 'player'): Promise<AppSurface> => {
+  const requestSurface = (next: AppSurface): Promise<AppSurface> => {
     requestedSurface = next
     requestVersion += 1
     if (!transition) {
@@ -110,6 +132,9 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
   return {
     getSurface(): AppSurface {
       return surface
+    },
+    showSplash(): Promise<AppSurface> {
+      return requestSurface('splash')
     },
     showPlayer(): Promise<AppSurface> {
       return requestSurface('player')

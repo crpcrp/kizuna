@@ -121,6 +121,7 @@ export interface KizunaApi {
   }
   appShell: {
     getSurface(): Promise<AppSurface>
+    showSplash(): Promise<AppSurface>
     showPlayer(): Promise<AppSurface>
     showOptions(): Promise<AppSurface>
     quit(): void

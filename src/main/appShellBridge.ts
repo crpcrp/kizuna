@@ -24,6 +24,10 @@ export function registerAppShellBridge<
     allowed(event.sender)
     return coordinator.getSurface()
   })
+  ipc.handle(APP_SHELL_CHANNELS.showSplash, (event): Promise<AppSurface> => {
+    allowed(event.sender)
+    return coordinator.showSplash()
+  })
   ipc.handle(APP_SHELL_CHANNELS.showPlayer, (event): Promise<AppSurface> => {
     allowed(event.sender)
     return coordinator.showPlayer()
