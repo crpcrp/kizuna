@@ -7,6 +7,7 @@ function makeFixture(initialSurface: 'splash' | 'options' | 'player' = 'splash')
   const presentSplash = vi.fn()
   const presentPlayer = vi.fn()
   const presentOptions = vi.fn()
+  const dismissGameOcrOptions = vi.fn(async () => true)
   const sendSurfaceChanged = vi.fn()
   const quit = vi.fn()
   const coordinator = createAppShellCoordinator({
@@ -15,6 +16,7 @@ function makeFixture(initialSurface: 'splash' | 'options' | 'player' = 'splash')
     presentSplash,
     presentPlayer,
     presentOptions,
+    dismissGameOcrOptions,
     sendSurfaceChanged,
     quit
   })
@@ -24,6 +26,7 @@ function makeFixture(initialSurface: 'splash' | 'options' | 'player' = 'splash')
     presentSplash,
     presentPlayer,
     presentOptions,
+    dismissGameOcrOptions,
     sendSurfaceChanged,
     quit
   }
@@ -57,6 +60,45 @@ describe('createAppShellCoordinator', () => {
 
     expect(fixture.presentOptions).toHaveBeenCalledOnce()
     expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
+  })
+
+  it('hides Game OCR Options without changing the renderer surface and reopens it', async () => {
+    const fixture = makeFixture()
+
+    await fixture.coordinator.showOptions('gameOcr')
+    await expect(fixture.coordinator.dismissOptions()).resolves.toBe('options')
+
+    expect(fixture.dismissGameOcrOptions).toHaveBeenCalledOnce()
+    expect(fixture.sendSurfaceChanged).toHaveBeenCalledExactlyOnceWith('options')
+
+    await fixture.coordinator.showOptions('gameOcr')
+    expect(fixture.presentOptions).toHaveBeenCalledTimes(2)
+  })
+
+  it('leaves recovery Options visible when Game OCR no longer accepts dismissal', async () => {
+    const fixture = makeFixture()
+    fixture.dismissGameOcrOptions.mockResolvedValue(false)
+
+    await fixture.coordinator.showOptions('gameOcr')
+    await expect(fixture.coordinator.dismissOptions()).resolves.toBe('options')
+
+    expect(fixture.presentOptions).toHaveBeenCalledOnce()
+    expect(fixture.sendSurfaceChanged).toHaveBeenCalledExactlyOnceWith('options')
+  })
+
+  it('coalesces duplicate Game OCR dismissals', async () => {
+    const dismissal = deferred<boolean>()
+    const fixture = makeFixture()
+    fixture.dismissGameOcrOptions.mockReturnValue(dismissal.promise)
+    await fixture.coordinator.showOptions('gameOcr')
+
+    const first = fixture.coordinator.dismissOptions()
+    const second = fixture.coordinator.dismissOptions()
+    expect(second).toBe(first)
+    await vi.waitFor(() => expect(fixture.dismissGameOcrOptions).toHaveBeenCalledOnce())
+
+    dismissal.resolve(true)
+    await expect(first).resolves.toBe('options')
   })
 
   it('presents a usable player surface after a failed player start', async () => {

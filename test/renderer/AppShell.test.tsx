@@ -113,7 +113,7 @@ describe('AppShell', () => {
     const api = installFakeKizunaApi({
       appShell: {
         getSurface: vi.fn(async () => 'options' as const),
-        showSplash: vi.fn(async () => {
+        dismissOptions: vi.fn(async () => {
           push?.('splash')
           return 'splash' as const
         }),
@@ -129,7 +129,22 @@ describe('AppShell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close options' }))
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Kizuna' })).toBeTruthy())
-    expect(api.appShell.showSplash).toHaveBeenCalledOnce()
+    expect(api.appShell.dismissOptions).toHaveBeenCalledOnce()
+  })
+
+  it('uses the same main-owned dismissal for Escape', async () => {
+    const api = installFakeKizunaApi({
+      appShell: {
+        getSurface: vi.fn(async () => 'options' as const),
+        dismissOptions: vi.fn(async () => 'options' as const)
+      }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    fireEvent.keyDown(window, { code: 'Escape' })
+
+    await waitFor(() => expect(api.appShell.dismissOptions).toHaveBeenCalledOnce())
   })
 
   it('keeps a pushed surface ahead of a stale close result', async () => {
@@ -138,7 +153,7 @@ describe('AppShell', () => {
     const api = installFakeKizunaApi({
       appShell: {
         getSurface: vi.fn(async () => 'options' as const),
-        showSplash: vi.fn(() => close.promise),
+        dismissOptions: vi.fn(() => close.promise),
         onSurfaceChanged: vi.fn((callback: (surface: AppSurface) => void) => {
           push = callback
           return vi.fn()
@@ -164,7 +179,7 @@ describe('AppShell', () => {
     const api = installFakeKizunaApi({
       appShell: {
         getSurface: vi.fn(async () => 'options' as const),
-        showSplash: vi.fn(async () => {
+        dismissOptions: vi.fn(async () => {
           throw new Error('splash unavailable')
         })
       }

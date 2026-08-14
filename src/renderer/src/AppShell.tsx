@@ -91,10 +91,7 @@ export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.
   if (!api) return null
   if (surface === 'options') {
     return (
-      <OptionsSurface
-        bridge={api}
-        onClose={() => requestSurface(api.appShell.showSplash, (next) => next === 'splash')}
-      />
+      <OptionsSurface bridge={api} onClose={() => requestSurface(api.appShell.dismissOptions)} />
     )
   }
   if (surface !== 'player') {

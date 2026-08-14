@@ -1,5 +1,7 @@
 import type { AppSurface } from '../../shared/appShell'
 
+export type OptionsPresentationOrigin = 'startup' | 'gameOcr'
+
 export interface AppShellCoordinatorDeps {
   /** The surface selected by the composition root for this window. */
   initialSurface: AppSurface
@@ -11,6 +13,8 @@ export interface AppShellCoordinatorDeps {
   presentPlayer(): void | Promise<void>
   /** Presents the full logical window set for Options. */
   presentOptions(): void | Promise<void>
+  /** Hides Options opened from the armed Game OCR lifecycle. */
+  dismissGameOcrOptions(): boolean | Promise<boolean>
   /** Pushes a changed surface to the renderer. */
   sendSurfaceChanged(surface: AppSurface): void
   /** Requests the normal Electron quit path. */
@@ -21,7 +25,8 @@ export interface AppShellCoordinator {
   getSurface(): AppSurface
   showSplash(): Promise<AppSurface>
   showPlayer(): Promise<AppSurface>
-  showOptions(): Promise<AppSurface>
+  showOptions(origin?: OptionsPresentationOrigin): Promise<AppSurface>
+  dismissOptions(): Promise<AppSurface>
   quit(): void
 }
 
@@ -32,11 +37,14 @@ export interface AppShellCoordinator {
  */
 export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShellCoordinator {
   let surface = deps.initialSurface
+  let optionsOrigin: OptionsPresentationOrigin = 'startup'
   let presentedSurface: AppSurface | undefined
   let playerStart: Promise<unknown> | undefined
   let requestedSurface: AppSurface | undefined
+  let requestedOptionsOrigin: OptionsPresentationOrigin | undefined
   let requestVersion = 0
   let transition: Promise<void> | undefined
+  let optionsDismissal: Promise<AppSurface> | undefined
   let quitRequested = false
 
   const presenterFor = (next: AppSurface): (() => void | Promise<void>) => {
@@ -88,8 +96,11 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
   const runTransitions = async (): Promise<void> => {
     while (requestedSurface) {
       const currentSurface = requestedSurface
+      const currentOptionsOrigin =
+        currentSurface === 'options' ? (requestedOptionsOrigin ?? 'startup') : undefined
       const currentVersion = requestVersion
       requestedSurface = undefined
+      requestedOptionsOrigin = undefined
 
       if (currentSurface === 'player') {
         await ensurePlayer()
@@ -99,7 +110,10 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
       }
 
       const next = currentSurface
-      if (next === surface && presentedSurface === next) continue
+      if (next === surface && presentedSurface === next) {
+        if (next === 'options') optionsOrigin = currentOptionsOrigin ?? 'startup'
+        continue
+      }
 
       if (!(await present(next))) continue
       // Do not publish a surface that was superseded while its native
@@ -114,12 +128,17 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
           // into an unhandled main-process rejection.
         }
       }
+      if (next === 'options') optionsOrigin = currentOptionsOrigin ?? 'startup'
       presentedSurface = next
     }
   }
 
-  const requestSurface = (next: AppSurface): Promise<AppSurface> => {
+  const requestSurfaceNow = (
+    next: AppSurface,
+    origin: OptionsPresentationOrigin = 'startup'
+  ): Promise<AppSurface> => {
     requestedSurface = next
+    requestedOptionsOrigin = next === 'options' ? origin : undefined
     requestVersion += 1
     if (!transition) {
       transition = runTransitions().finally(() => {
@@ -127,6 +146,37 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
       })
     }
     return transition.then(() => surface)
+  }
+
+  const requestSurface = (
+    next: AppSurface,
+    origin: OptionsPresentationOrigin = 'startup'
+  ): Promise<AppSurface> => {
+    const pendingDismissal = optionsDismissal
+    if (pendingDismissal) {
+      return pendingDismissal.then(() => requestSurfaceNow(next, origin))
+    }
+    return requestSurfaceNow(next, origin)
+  }
+
+  const dismissOptions = (): Promise<AppSurface> => {
+    if (surface !== 'options' || optionsOrigin !== 'gameOcr') {
+      return requestSurface('splash')
+    }
+    if (optionsDismissal) return optionsDismissal
+
+    const dismissalVersion = requestVersion
+    const operation = Promise.resolve()
+      .then(() => deps.dismissGameOcrOptions())
+      .then((hidden) => {
+        if (hidden && requestVersion === dismissalVersion) presentedSurface = undefined
+        return surface
+      })
+    const tracked = operation.finally(() => {
+      if (optionsDismissal === tracked) optionsDismissal = undefined
+    })
+    optionsDismissal = tracked
+    return tracked
   }
 
   return {
@@ -139,9 +189,10 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
     showPlayer(): Promise<AppSurface> {
       return requestSurface('player')
     },
-    showOptions(): Promise<AppSurface> {
-      return requestSurface('options')
+    showOptions(origin: OptionsPresentationOrigin = 'startup'): Promise<AppSurface> {
+      return requestSurface('options', origin)
     },
+    dismissOptions,
     quit(): void {
       if (quitRequested) return
       quitRequested = true

@@ -247,6 +247,7 @@ function createWindow(
       }
     },
     presentOptions: presentOverlay,
+    dismissGameOcrOptions: () => gameOcrLifecycle?.dismissOptions() ?? false,
     sendSurfaceChanged: (surface) =>
       sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
     // app.quit() enters the existing before-quit lifecycle coordinator below.
@@ -686,7 +687,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     window: {
       hide: () => windows.uiOverlay.hide(),
       activate: () => windows.activate(),
-      showOptions: async () => (await appShell?.showOptions()) === 'options',
+      showOptions: async (origin) => (await appShell?.showOptions(origin)) === 'options',
       showPlayer: async () => (await appShell?.showPlayer()) === 'player'
     },
     tray: createElectronGameOcrTrayFactory(

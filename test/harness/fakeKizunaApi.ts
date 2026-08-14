@@ -79,6 +79,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       showSplash: vi.fn(async () => 'splash' as const),
       showPlayer: vi.fn(async () => 'player' as const),
       showOptions: vi.fn(async () => 'options' as const),
+      dismissOptions: vi.fn(async () => 'splash' as const),
       quit: vi.fn(),
       onSurfaceChanged: vi.fn(() => listenerCleanup)
     },

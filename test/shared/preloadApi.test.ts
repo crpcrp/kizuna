@@ -25,6 +25,9 @@ describe('KizunaApi', () => {
     expectTypeOf<KizunaApi['appShell']['showOptions']>().returns.toEqualTypeOf<
       Promise<AppSurface>
     >()
+    expectTypeOf<KizunaApi['appShell']['dismissOptions']>().returns.toEqualTypeOf<
+      Promise<AppSurface>
+    >()
     expectTypeOf<KizunaApi['appShell']['quit']>().returns.toEqualTypeOf<void>()
     expectTypeOf<KizunaApi['appShell']['onSurfaceChanged']>().parameters.toEqualTypeOf<
       [(surface: AppSurface) => void]
