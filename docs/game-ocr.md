@@ -390,17 +390,17 @@ so nothing reached the console either.
 
 While Game OCR is armed, the tray icon offers:
 
-- **Show Kizuna** — opens the Options-only surface and keeps OCR armed. Closing
-  Options then reveals the player without restarting mpv or OCR.
-- **Stop Game OCR** — disarms the shortcut, stops the worker, and restores
-  Options only when Kizuna was hidden for OCR; an already visible player or
-  Options surface stays unchanged.
+- **Options** — opens the Options-only surface and keeps OCR armed. Closing
+  Options hides Kizuna back to the tray without restarting mpv or OCR.
+- **Video player** — opens or reuses the normal player surface and keeps OCR
+  armed, preserving the current player session.
 - **Quit Kizuna** — quits the application.
 
 Closing the player window while armed hides it instead of quitting. A second
-launch without a media path behaves like **Show Kizuna** when the window is
-hidden for OCR. Stopping Game OCR, or quitting, releases the shortcut, the
-worker process, the frozen window, the retained screenshot, and the tray icon.
+launch without a media path behaves like **Options** when the window is hidden
+for OCR. Game OCR can still be stopped from the in-app controls; **Quit Kizuna**
+is the only tray command that ends the application and releases the shortcut,
+worker process, frozen window, retained screenshot, and tray icon.
 
 ## Privacy
 
@@ -470,7 +470,7 @@ given environment.
 | 14 | Selection and Ctrl+C | Selected OCR text reaches the clipboard |
 | 15 | Right-click translation (enabled) | Translation popup opens for the selection only |
 | 16 | Worker failure and Retry | Error is reported in Options; Retry recovers without restarting Kizuna |
-| 17 | Stop and Quit | Shortcut, worker process, frozen window, screenshot, and tray are all released |
+| 17 | Quit Kizuna from tray | Shortcut, worker process, frozen window, screenshot, and tray are all released |
 | 18 | Recognition timing, full 2560×1440 display vs a 1024×768 window | Record both; the window should be substantially faster |
 
 ### Recorded run
