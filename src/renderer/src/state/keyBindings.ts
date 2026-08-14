@@ -69,6 +69,11 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 
 export interface KeyChord {
   code: string
+  /**
+   * Layout-produced key value used when Chromium cannot identify a physical
+   * code (for example, a non-US keyboard's extra character key).
+   */
+  key?: string
   ctrlKey: boolean
   shiftKey: boolean
   altKey: boolean
@@ -98,9 +103,23 @@ export function eventKeyBinding(event: KeyChord, held: ReadonlySet<string>): Key
   if (MODIFIER_KEY_CODES.has(event.code)) return null
   if (event.altKey || event.metaKey) return null
   if (event.ctrlKey && event.shiftKey) return null
-  if (event.ctrlKey) return held.has('ControlLeft') ? `ControlLeft+${event.code}` : null
-  if (event.shiftKey) return held.has('ShiftLeft') ? `ShiftLeft+${event.code}` : null
-  return event.code
+  const key = keyIdentifier(event)
+  if (!key) return null
+  if (event.ctrlKey) return held.has('ControlLeft') ? `ControlLeft+${key}` : null
+  if (event.shiftKey) return held.has('ShiftLeft') ? `ShiftLeft+${key}` : null
+  return key
+}
+
+/**
+ * Chromium normally gives us a stable physical code. Some layout-specific
+ * keys have no code on a platform, though, while their printable `key` value
+ * is still available. Keep the physical-code behavior for ordinary keys and
+ * use that value only for an otherwise unidentified event.
+ */
+function keyIdentifier(event: KeyChord): string | null {
+  if (event.code !== '' && event.code !== 'Unidentified') return event.code
+  if (event.key && event.key !== 'Unidentified') return event.key
+  return null
 }
 
 function leftModifierIsHeld(

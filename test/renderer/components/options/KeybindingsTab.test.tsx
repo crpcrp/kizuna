@@ -84,6 +84,22 @@ describe('KeybindingsTab subtitle-size bindings', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('captures a layout-specific key when its physical code is unidentified', () => {
+    const onChangeKeyBinding = renderTab()
+
+    fireEvent.click(screen.getByRole('button', { name: INCREASE_ROW }))
+    const event = new KeyboardEvent('keydown', {
+      code: 'Unidentified',
+      key: 'í',
+      bubbles: true,
+      cancelable: true
+    })
+    window.dispatchEvent(event)
+
+    expect(onChangeKeyBinding).toHaveBeenCalledWith('subtitleFontScaleUp', 'í')
+    expect(event.defaultPrevented).toBe(true)
+  })
+
   it('cancels on Escape and ignores zero-delta or unsupported-modifier gestures', () => {
     const onChangeKeyBinding = renderTab()
 
