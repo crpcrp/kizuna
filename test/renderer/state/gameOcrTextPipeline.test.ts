@@ -5,7 +5,7 @@ import {
   createGameOcrTextPipeline,
   type GameOcrTextPipelineOptions
 } from '@src/renderer/src/state/gameOcrTextPipeline'
-import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
+import { createTextProjection } from '@src/shared/textProjection'
 import type { KnowledgeDetails, KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 
@@ -50,7 +50,7 @@ describe('createGameOcrTextPipeline', () => {
         }
       ]
     ])
-    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const projection = createTextProjection(['棒人間が描か', 'れている。'])
     const pipeline = createGameOcrTextPipeline(
       services({ mecab: { tokenizeBatch }, dict: { lookup: vi.fn(async () => []) } })
     )
@@ -82,7 +82,7 @@ describe('createGameOcrTextPipeline', () => {
   it('invalidates cached processing when block membership changes', async () => {
     const options = services({ dict: { lookup: vi.fn(async () => []) } })
     const pipeline = createGameOcrTextPipeline(options)
-    const projection = createGameOcrTextProjection(['同じ'])
+    const projection = createTextProjection(['同じ'])
 
     const input = {
       id: 'block:first',

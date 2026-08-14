@@ -6,7 +6,7 @@ import type { KizunaApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
 import { buildGameOcrBoxRegions } from './gameOcrBoxRegions'
 import { groupGameOcrTextBlocks } from './gameOcrTextBlocks'
-import { createGameOcrTextProjection } from './gameOcrTextProjection'
+import { createTextProjection } from '../../../shared/textProjection'
 import { selectedGameOcrText } from './gameOcrSelection'
 import type { GameOcrLayoutSize } from './gameOcrLayout'
 import {
@@ -61,7 +61,7 @@ export function useGameOcrSession({
   const projectedBlocks = useMemo<InteractiveTextBlock[]>(
     () =>
       blocks.map((block) => {
-        const projection = createGameOcrTextProjection(block.lines)
+        const projection = createTextProjection(block.lines)
         return {
           id: block.id,
           text: projection.displayText,

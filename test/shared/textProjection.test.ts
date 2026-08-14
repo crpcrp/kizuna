@@ -1,22 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createGameOcrTextProjection,
+  clipAnalysisRangeToDisplayRanges,
+  createTextProjection,
   displayRangeToAnalysisText,
+  displayTextProjection,
   mapAnalysisOffsetToDisplayOffset,
   mapAnalysisRangeToDisplayRanges,
   mapDisplayOffsetToAnalysisOffset,
   mapDisplayRangeToAnalysisRange,
   type TextOffsetRange
-} from '@src/renderer/src/state/gameOcrTextProjection'
+} from '@src/shared/textProjection'
 
 const range = (startOffset: number, endOffset: number): TextOffsetRange => ({
   startOffset,
   endOffset
 })
 
-describe('game OCR text projection', () => {
+describe('text projection', () => {
   it('keeps a single line identical in both views', () => {
-    const projection = createGameOcrTextProjection(['日本語'])
+    const projection = createTextProjection(['日本語'])
 
     expect(projection.displayText).toBe('日本語')
     expect(projection.analysisText).toBe('日本語')
@@ -26,7 +28,7 @@ describe('game OCR text projection', () => {
   })
 
   it('adds one display newline while joining analysis lines without a separator', () => {
-    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const projection = createTextProjection(['棒人間が描か', 'れている。'])
 
     expect(projection.displayText).toBe('棒人間が描か\nれている。')
     expect(projection.analysisText).toBe('棒人間が描かれている。')
@@ -35,7 +37,7 @@ describe('game OCR text projection', () => {
   })
 
   it('retains empty lines in display text but not analysis text', () => {
-    const projection = createGameOcrTextProjection(['上', '', '下'])
+    const projection = createTextProjection(['上', '', '下'])
 
     expect(projection.displayText).toBe('上\n\n下')
     expect(projection.analysisText).toBe('上下')
@@ -56,13 +58,13 @@ describe('game OCR text projection', () => {
       [range(0, 1), range(2, 4), range(5, 8)]
     ]
   ])('maps an analysis range %s to visible segments', (_name, lines, input, expected) => {
-    const projection = createGameOcrTextProjection(lines)
+    const projection = createTextProjection(lines)
 
     expect(mapAnalysisRangeToDisplayRanges(projection, input)).toEqual(expected)
   })
 
   it('maps display selections across lines back to continuous analysis text', () => {
-    const projection = createGameOcrTextProjection(['描か', 'れている'])
+    const projection = createTextProjection(['描か', 'れている'])
     const selection = range(1, 6)
 
     expect(mapDisplayRangeToAnalysisRange(projection, selection)).toEqual(range(1, 5))
@@ -70,14 +72,14 @@ describe('game OCR text projection', () => {
   })
 
   it('maps a selection containing only an inserted newline to no semantic text', () => {
-    const projection = createGameOcrTextProjection(['前', '後'])
+    const projection = createTextProjection(['前', '後'])
 
     expect(displayRangeToAnalysisText(projection, range(1, 2))).toBe('')
     expect(mapDisplayRangeToAnalysisRange(projection, range(1, 2))).toEqual(range(1, 1))
   })
 
   it('keeps offset boundaries stable around a newline', () => {
-    const projection = createGameOcrTextProjection(['ab', 'cd'])
+    const projection = createTextProjection(['ab', 'cd'])
 
     expect(mapDisplayOffsetToAnalysisOffset(projection, 2)).toBe(2)
     expect(mapDisplayOffsetToAnalysisOffset(projection, 3)).toBe(2)
@@ -86,14 +88,14 @@ describe('game OCR text projection', () => {
   })
 
   it('uses offsets rather than searching repeated text', () => {
-    const projection = createGameOcrTextProjection(['猫', '猫'])
+    const projection = createTextProjection(['猫', '猫'])
 
     expect(mapAnalysisRangeToDisplayRanges(projection, range(1, 2))).toEqual([range(2, 3)])
     expect(displayRangeToAnalysisText(projection, range(2, 3))).toBe('猫')
   })
 
   it('rejects malformed offsets and ranges consistently', () => {
-    const projection = createGameOcrTextProjection(['abc'])
+    const projection = createTextProjection(['abc'])
 
     expect(() => mapAnalysisOffsetToDisplayOffset(projection, -1)).toThrow(RangeError)
     expect(() => mapDisplayOffsetToAnalysisOffset(projection, 4)).toThrow(RangeError)
@@ -102,6 +104,20 @@ describe('game OCR text projection', () => {
   })
 
   it('rejects source lines containing embedded newlines', () => {
-    expect(() => createGameOcrTextProjection(['a\nb'])).toThrow(RangeError)
+    expect(() => createTextProjection(['a\nb'])).toThrow(RangeError)
+  })
+
+  it('rebuilds the same projection from text that already carries its line breaks', () => {
+    const lines = ['棒人間が描か', 'れている。']
+
+    expect(displayTextProjection(lines.join('\n'))).toEqual(createTextProjection(lines))
+  })
+
+  it('clips a range that does not belong to the text instead of rejecting it', () => {
+    const projection = displayTextProjection('描か\nれている')
+
+    expect(clipAnalysisRangeToDisplayRanges(projection, range(4, 40))).toEqual([range(5, 7)])
+    expect(clipAnalysisRangeToDisplayRanges(projection, range(20, 24))).toEqual([])
+    expect(clipAnalysisRangeToDisplayRanges(projection, range(-3, 2))).toEqual([range(0, 2)])
   })
 })

@@ -164,10 +164,13 @@ export function CueRowContent({
       renderLine={(line, offset, lineIndex) =>
         renderSegments(line, clipSegments(segments, offset, line.length), `l${lineIndex}`)
       }
-      renderTokenContent={(token, itemIndex) =>
+      renderTokenContent={(token, itemIndex, fragment) =>
         renderSegments(
-          token.surface,
-          clipSegments(segments, token.startOffset, token.surface.length),
+          fragment.text,
+          // Search matches are offsets into the cue's display text, so a token
+          // is clipped by where its visible fragment sits, not by its
+          // line-break-free analysis offset.
+          clipSegments(segments, fragment.displayStartOffset, fragment.text.length),
           `t${itemIndex}`
         )
       }

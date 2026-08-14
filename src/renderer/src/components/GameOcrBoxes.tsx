@@ -10,7 +10,7 @@ import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
 import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
-import type { GameOcrTextProjection } from '../state/gameOcrTextProjection'
+import type { TextProjection } from '../../../shared/textProjection'
 import type { GameOcrLayoutResult } from '../state/gameOcrLayout'
 import InteractiveText, { type InteractiveTextProps } from './InteractiveText'
 
@@ -22,7 +22,7 @@ export interface GameOcrBoxRegion {
   text: string
   layout: GameOcrLayoutResult
   /** Maps continuous token offsets back onto the visible line-broken text. */
-  projection?: GameOcrTextProjection
+  projection?: TextProjection
   /** Typography fitted to the detected line without changing its bounds. */
   fontSize?: number
   tokens?: Token[]

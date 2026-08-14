@@ -232,6 +232,11 @@ describe('SubtitleOverlay drag handling', () => {
 })
 
 describe('tokenSpans (pure)', () => {
+  /** Token offsets ignore the cue's line breaks, so fixtures use them that way. */
+  function fragment(text: string, displayStartOffset: number, fragmentCount = 1, index = 0) {
+    return { text, displayStartOffset, fragmentIndex: index, fragmentCount }
+  }
+
   it('returns one token item per token, in order, when there is no newline', () => {
     const tokens: Token[] = [
       makeToken({ surface: 'hello' }),
@@ -239,36 +244,51 @@ describe('tokenSpans (pure)', () => {
     ]
     const spans = tokenSpans('helloworld', tokens)
     expect(spans).toEqual<TokenSpanItem[]>([
-      { type: 'token', token: tokens[0] },
-      { type: 'token', token: tokens[1] }
+      { type: 'token', token: tokens[0], ...fragment('hello', 0) },
+      { type: 'token', token: tokens[1], ...fragment('world', 5) }
     ])
   })
 
   it('inserts a break item at a line boundary crossed by token startOffset', () => {
     const tokens: Token[] = [
       makeToken({ surface: 'a' }),
-      makeToken({ surface: 'b', startOffset: 2 })
+      makeToken({ surface: 'b', startOffset: 1 })
     ]
     const spans = tokenSpans('a\nb', tokens)
     expect(spans).toEqual<TokenSpanItem[]>([
-      { type: 'token', token: tokens[0] },
+      { type: 'token', token: tokens[0], ...fragment('a', 0) },
       { type: 'break' },
-      { type: 'token', token: tokens[1] }
+      { type: 'token', token: tokens[1], ...fragment('b', 2) }
     ])
   })
 
   it('inserts multiple breaks when a token spans several blank lines', () => {
     const tokens: Token[] = [
       makeToken({ surface: 'a' }),
-      makeToken({ surface: 'c', startOffset: 4 })
+      makeToken({ surface: 'c', startOffset: 1 })
     ]
     const spans = tokenSpans('a\n\nc', tokens)
     expect(spans).toEqual<TokenSpanItem[]>([
-      { type: 'token', token: tokens[0] },
+      { type: 'token', token: tokens[0], ...fragment('a', 0) },
       { type: 'break' },
       { type: 'break' },
-      { type: 'token', token: tokens[1] }
+      { type: 'token', token: tokens[1], ...fragment('c', 3) }
     ])
+  })
+
+  it('splits a word wrapped across two cue lines into fragments of one token', () => {
+    const tokens: Token[] = [makeToken({ surface: '描かれている', startOffset: 0 })]
+    const spans = tokenSpans('描か\nれている', tokens)
+    expect(spans).toEqual<TokenSpanItem[]>([
+      { type: 'token', token: tokens[0], ...fragment('描か', 0, 2, 0) },
+      { type: 'break' },
+      { type: 'token', token: tokens[0], ...fragment('れている', 3, 2, 1) }
+    ])
+  })
+
+  it('drops a token that no longer fits the text instead of throwing', () => {
+    const spans = tokenSpans('猫', [makeToken({ surface: '可愛い', startOffset: 8 })])
+    expect(spans).toEqual([])
   })
 
   it('returns an empty array for an empty tokens list', () => {
@@ -351,7 +371,7 @@ describe('SubtitleOverlay markup with tokens', () => {
   const tokens: Token[] = [
     makeToken({ surface: '猫', reading: 'ねこ' }),
     makeToken({ surface: 'は', reading: 'は', pos: '助詞', startOffset: 1 }),
-    makeToken({ surface: '可愛い', reading: 'かわいい', pos: '形容詞', startOffset: 3 })
+    makeToken({ surface: '可愛い', reading: 'かわいい', pos: '形容詞', startOffset: 2 })
   ]
 
   it('renders one data-token span per token, with the surface as its text', () => {
@@ -390,6 +410,46 @@ describe('SubtitleOverlay markup with tokens', () => {
       <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} />
     )
     expect(html).not.toContain('data-highlighted')
+  })
+})
+
+describe('SubtitleOverlay word wrapped across the cue line break', () => {
+  // MeCab sees the cue as one line, so 描かれている is one token even though the
+  // subtitle wraps in the middle of it (see cueAnalysisText).
+  const wrappedCues: Cue[] = [{ start: 0, end: 2, text: '棒人間が描か\nれている。' }]
+  const wrapped = makeToken({ surface: '描かれている', reading: 'えがかれている', pos: '動詞' })
+  const tokens: Token[] = [
+    makeToken({ surface: '棒人間' }),
+    makeToken({ surface: 'が', pos: '助詞', startOffset: 3 }),
+    { ...wrapped, startOffset: 4 },
+    makeToken({ surface: '。', pos: '記号', startOffset: 10 })
+  ]
+
+  function render(extra: Partial<React.ComponentProps<typeof SubtitleOverlay>> = {}): string {
+    return renderToStaticMarkup(
+      <SubtitleOverlay cues={wrappedCues} timePos={1} tokens={tokens} {...extra} />
+    )
+  }
+
+  it('renders the split word as two fragments of one token, keeping the line break', () => {
+    const html = render()
+
+    expect(html).toContain('data-token-key="0|2|棒人間が描か\n' + 'れている。:4"')
+    expect(html.match(/data-token-fragment/g)).toHaveLength(2)
+    expect(html).toContain('>描か</span><br/>')
+    expect(html).toContain('>れている</span>')
+  })
+
+  it('applies the word knowledge level to both fragments', () => {
+    const html = render({ levels: { 描かれている: 'learning' } })
+
+    expect(html.match(/data-level="learning"/g)).toHaveLength(2)
+  })
+
+  it('highlights both fragments when the popup resolves the split word', () => {
+    const html = render({ highlightedTokens: [tokens[2]] })
+
+    expect(html.match(/data-highlighted=""/g)).toHaveLength(2)
   })
 })
 

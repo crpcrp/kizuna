@@ -3,6 +3,10 @@
 // field mapping (unmapped fields are simply omitted).
 
 import type { Token } from '../../../shared/token'
+import {
+  clipAnalysisRangeToDisplayRanges,
+  displayTextProjection
+} from '../../../shared/textProjection'
 import { pitchAccentValue, type LookupResult } from '../../../shared/dictionary'
 import type { AnkiSettings } from '../../../shared/anki'
 import {
@@ -44,11 +48,28 @@ export interface NoteSource {
   sentence: string
 }
 
-/** Wraps `token`'s surface span within `sentence` in `<b>…</b>`. */
+/**
+ * Wraps `token`'s surface span within `sentence` in `<b>…</b>`. Token offsets
+ * ignore the sentence's line breaks (see `shared/textProjection.ts`), so a
+ * word wrapped across two lines is bolded as one piece per line and every
+ * later word still lands on its own characters. A token that does not belong
+ * to `sentence` leaves it unchanged rather than bolding the wrong span.
+ */
 export function boldTarget(sentence: string, token: Token): string {
-  const start = token.startOffset
-  const end = start + token.surface.length
-  return `${sentence.slice(0, start)}<b>${sentence.slice(start, end)}</b>${sentence.slice(end)}`
+  const projection = displayTextProjection(sentence)
+  const ranges = clipAnalysisRangeToDisplayRanges(projection, {
+    startOffset: token.startOffset,
+    endOffset: token.startOffset + token.surface.length
+  })
+  if (ranges.length === 0) return sentence
+
+  let bolded = ''
+  let cursor = 0
+  for (const range of ranges) {
+    bolded += `${sentence.slice(cursor, range.startOffset)}<b>${sentence.slice(range.startOffset, range.endOffset)}</b>`
+    cursor = range.endOffset
+  }
+  return bolded + sentence.slice(cursor)
 }
 
 const KANJI = /[\u3400-\u4dbf\u4e00-\u9fff々〆ヶ〇０-９]/u
