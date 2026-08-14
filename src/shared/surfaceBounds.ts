@@ -4,6 +4,10 @@ import type { WindowBounds } from './windowBounds'
 export const SPLASH_SURFACE_WIDTH = 640
 export const SPLASH_SURFACE_HEIGHT = 400
 
+/** The default windowed size used by the player and standalone Options. */
+export const APPLICATION_SURFACE_WIDTH = 1280
+export const APPLICATION_SURFACE_HEIGHT = 720
+
 /**
  * Centers a surface in a display work area, shrinking it when the work area is
  * smaller than the requested size so the whole surface remains visible.
@@ -24,6 +28,11 @@ export function centeredSurfaceBounds(
     width: surfaceWidth,
     height: surfaceHeight
   }
+}
+
+/** Centers the normal application surface, clipping it to the display work area. */
+export function normalSurfaceBounds(workArea: WindowBounds): WindowBounds {
+  return centeredSurfaceBounds(workArea, APPLICATION_SURFACE_WIDTH, APPLICATION_SURFACE_HEIGHT)
 }
 
 function positiveInteger(value: number): number {

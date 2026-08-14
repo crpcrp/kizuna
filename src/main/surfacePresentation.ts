@@ -1,5 +1,5 @@
 import type { WindowBounds } from '../shared/windowBounds'
-import { centeredSurfaceBounds } from '../shared/surfaceBounds'
+import { centeredSurfaceBounds, normalSurfaceBounds } from '../shared/surfaceBounds'
 import type { AppWindowSet } from './windowPair'
 import type { ScreenLike } from './windowOptions'
 
@@ -8,6 +8,8 @@ type SurfaceWindows = Pick<AppWindowSet, 'videoHost' | 'uiOverlay' | 'coordinato
 export interface SurfacePresentation {
   /** Makes the splash compact, then presents the renderer-owned surface. */
   presentSplash(presentOverlay: () => void | Promise<void>): Promise<void>
+  /** Restores normal application bounds, then presents standalone Options. */
+  presentOptions(presentOverlay: () => void | Promise<void>): Promise<void>
   /** Restores the saved player rectangle before the host is mapped. */
   restorePlayerBounds(): void
 }
@@ -50,12 +52,31 @@ export function createSurfacePresentation(
     })
   }
 
+  const boundsForOptions = (): WindowBounds => {
+    if (splashPresented && playerBounds) return playerBounds
+
+    if (playerBounds) {
+      playerBounds = windows.coordinator.getBounds()
+      return playerBounds
+    }
+
+    playerBounds = normalSurfaceBounds(workAreaForCurrentWindow())
+    return playerBounds
+  }
+
   return {
     async presentSplash(presentOverlay): Promise<void> {
       await leaveFullscreen()
       if (!splashPresented) playerBounds = windows.coordinator.getBounds()
       splashPresented = true
       windows.coordinator.setOverlayBounds(centeredSurfaceBounds(workAreaForCurrentWindow()))
+      await presentOverlay()
+    },
+
+    async presentOptions(presentOverlay): Promise<void> {
+      await leaveFullscreen()
+      windows.coordinator.setBounds(boundsForOptions())
+      splashPresented = false
       await presentOverlay()
     },
 

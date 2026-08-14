@@ -283,6 +283,78 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.bounds).toEqual(movedPlayer)
   })
 
+  it('restores normal bounds before showing standalone Options', async () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+    const original = { ...host.bounds }
+    const order: string[] = []
+    overlay.setBounds.mockImplementation((bounds) => {
+      order.push('set-bounds')
+      overlay.bounds = { ...bounds }
+    })
+    overlay.show.mockImplementation(() => order.push('show'))
+    overlay.focus.mockImplementation(() => order.push('focus'))
+    const presentation = createSurfacePresentation(windows, {
+      getDisplayMatching: vi.fn(() => ({
+        workArea: { x: -1920, y: 40, width: 1920, height: 1040 }
+      }))
+    })
+
+    await presentation.presentSplash(vi.fn())
+    order.length = 0
+    await presentation.presentOptions(() => showOverlayAppWindowSet(windows))
+
+    expect(host.bounds).toEqual(original)
+    expect(overlay.bounds).toEqual(original)
+    expect(host.hide).toHaveBeenCalledOnce()
+    expect(order).toEqual(['set-bounds', 'show', 'focus'])
+  })
+
+  it('uses centered normal fallback bounds for first-launch Options', async () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const window = factory.created[0]
+    const presentation = createSurfacePresentation(windows, {
+      getDisplayMatching: vi.fn(() => ({
+        workArea: { x: -1920, y: 40, width: 1920, height: 1040 }
+      }))
+    })
+
+    await presentation.presentOptions(vi.fn())
+
+    expect(window.bounds).toEqual({ x: -1600, y: 200, width: 1280, height: 720 })
+  })
+
+  it('leaves fullscreen before applying first-launch Options bounds', async () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const window = factory.created[0]
+    windows.coordinator.setFullScreen(true)
+    const presentation = createSurfacePresentation(windows, {
+      getDisplayMatching: vi.fn(() => ({
+        workArea: { x: 0, y: 0, width: 1920, height: 1080 }
+      }))
+    })
+
+    await presentation.presentOptions(vi.fn())
+
+    expect(window.fullscreen).toBe(false)
+    expect(window.bounds).toEqual({ x: 320, y: 180, width: 1280, height: 720 })
+  })
+
   it('leaves fullscreen before applying compact splash bounds', async () => {
     const factory = makeWindowFactory()
     const windows = createAppWindowSet({
