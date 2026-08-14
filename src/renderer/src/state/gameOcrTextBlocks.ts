@@ -29,8 +29,8 @@ interface OrderedRegion {
  */
 const HORIZONTAL_ASPECT_RATIO = 1.5
 
-/** A gap this large is more likely a separate UI element than a wrapped line. */
-const MAX_VERTICAL_GAP_LINE_HEIGHTS = 0.75
+/** A visibly separated row should remain its own readable replacement box. */
+const MAX_VERTICAL_GAP_LINE_HEIGHTS = 0.5
 
 /** Require substantial overlap when neither paragraph edge is aligned. */
 const MIN_HORIZONTAL_OVERLAP_RATIO = 0.5

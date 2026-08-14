@@ -62,7 +62,7 @@ describe('buildGameOcrBoxRegions', () => {
     expect(box.layout.displayBounds.x).toBe(50)
     expect(box.layout.displayBounds.y).toBe(100)
     expect(box.layout.displayBounds).toEqual(box.layout.originalBounds)
-    expect(box.fontSize).toBe(26)
+    expect(box.fontSize).toBe(23)
   })
 
   it('renders one box for a grouped block and preserves the visible newline', () => {
@@ -140,7 +140,11 @@ describe('buildGameOcrBoxRegions', () => {
 
   it('shrinks long lines to fit both dimensions without wrapping', () => {
     expect(fitGameOcrFontSize('チュートリアルのヒント', 150, 30)).toBe(12)
-    expect(fitGameOcrFontSize('時刻表示', 90, 30)).toBe(20)
+    expect(fitGameOcrFontSize('時刻表示', 90, 30)).toBe(19)
+  })
+
+  it('uses the available height for short replacement text instead of a small fixed cap', () => {
+    expect(fitGameOcrFontSize('日本語', 300, 60)).toBe(50)
   })
 
   it('does not move boxes away from overlapping detected text', () => {
