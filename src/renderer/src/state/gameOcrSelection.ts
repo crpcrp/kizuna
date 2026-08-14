@@ -5,6 +5,16 @@ export interface GameOcrSelection {
   range: Range
 }
 
+/** Reads selected DOM text with explicit line breaks for browser consistency. */
+export function selectedGameOcrText(selection: Selection | null): string {
+  if (!selection || selection.rangeCount !== 1) return selection?.toString() ?? ''
+
+  const range = selection.getRangeAt(0)
+  const cloned = range.cloneContents()
+  const text = textFromNode(cloned)
+  return text || selection.toString()
+}
+
 /**
  * Reads a browser selection without changing it. A selection is usable only
  * when its complete range is still inside one visible OCR box in the live
@@ -13,7 +23,7 @@ export interface GameOcrSelection {
 export function readGameOcrSelection(selection: Selection | null): GameOcrSelection | null {
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null
 
-  const text = selection.toString().trim()
+  const text = selectedGameOcrText(selection).trim()
   if (text.length === 0) return null
 
   const range = selection.getRangeAt(0)
@@ -50,4 +60,10 @@ function isVisible(box: HTMLElement): boolean {
   if (box.hidden || box.getAttribute('aria-hidden') === 'true') return false
   const style = window.getComputedStyle(box)
   return style.display !== 'none' && style.visibility !== 'hidden'
+}
+
+function textFromNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.nodeValue ?? ''
+  if (node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'BR') return '\n'
+  return [...node.childNodes].map(textFromNode).join('')
 }

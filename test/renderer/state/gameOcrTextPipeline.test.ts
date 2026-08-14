@@ -5,6 +5,7 @@ import {
   createGameOcrTextPipeline,
   type GameOcrTextPipelineOptions
 } from '@src/renderer/src/state/gameOcrTextPipeline'
+import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
 import type { KnowledgeDetails, KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 
@@ -37,6 +38,65 @@ function services(overrides: Partial<GameOcrTextPipelineOptions> = {}): GameOcrT
 }
 
 describe('createGameOcrTextPipeline', () => {
+  it('tokenizes grouped lines using continuous analysis text', async () => {
+    const tokenizeBatch = vi.fn(async (_texts: string[]) => [
+      [
+        {
+          surface: '描かれている',
+          reading: '',
+          lemma: '描かれる',
+          pos: '動詞',
+          startOffset: 4
+        }
+      ]
+    ])
+    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const pipeline = createGameOcrTextPipeline(
+      services({ mecab: { tokenizeBatch }, dict: { lookup: vi.fn(async () => []) } })
+    )
+
+    const result = await pipeline.process({ sessionId: 10, captureId: 1 }, [
+      {
+        id: 'block:one|two',
+        text: projection.displayText,
+        analysisText: projection.analysisText,
+        projection
+      }
+    ])
+
+    expect(tokenizeBatch).toHaveBeenCalledWith(['棒人間が描かれている。'])
+    expect(result).toMatchObject({
+      kind: 'resolved',
+      snapshot: {
+        regions: {
+          'block:one|two': {
+            text: '棒人間が描か\nれている。',
+            analysisText: '棒人間が描かれている。',
+            tokens: [{ surface: '描かれている', startOffset: 4 }]
+          }
+        }
+      }
+    })
+  })
+
+  it('invalidates cached processing when block membership changes', async () => {
+    const options = services({ dict: { lookup: vi.fn(async () => []) } })
+    const pipeline = createGameOcrTextPipeline(options)
+    const projection = createGameOcrTextProjection(['同じ'])
+
+    const input = {
+      id: 'block:first',
+      text: projection.displayText,
+      analysisText: projection.analysisText,
+      projection
+    }
+    await pipeline.process({ sessionId: 11, captureId: 1 }, [input])
+    await pipeline.process({ sessionId: 11, captureId: 1 }, [input])
+    await pipeline.process({ sessionId: 11, captureId: 1 }, [{ ...input, id: 'block:second' }])
+
+    expect(options.mecab.tokenizeBatch).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps repeated text independently addressable and bounds compound spans to each region', async () => {
     const pipeline = createGameOcrTextPipeline(services())
     const result = await pipeline.process({ sessionId: 1, captureId: 2 }, [

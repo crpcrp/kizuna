@@ -6,6 +6,7 @@ import {
 } from '../../../shared/knowledge'
 import type { OcrCaptureIdentity } from '../../../shared/ocr'
 import type { Token } from '../../../shared/token'
+import { createGameOcrTextProjection, type GameOcrTextProjection } from './gameOcrTextProjection'
 import type { MecabBatchBridge } from './tokenization'
 import {
   createVocabularySpanController,
@@ -19,10 +20,18 @@ export interface InteractiveTextRegion {
   text: string
 }
 
+/** One grouped OCR block with its display and continuous analysis views. */
+export interface InteractiveTextBlock extends InteractiveTextRegion {
+  analysisText: string
+  projection: GameOcrTextProjection
+}
+
 export interface GameOcrTextRegion extends InteractiveTextRegion {
   tokens: Token[]
   levels: Record<string, KnowledgeLevel>
   vocabularySpans: VocabularySpan[]
+  analysisText?: string
+  projection?: GameOcrTextProjection
 }
 
 export interface GameOcrTextSnapshot extends OcrCaptureIdentity {
@@ -48,14 +57,20 @@ export interface GameOcrTextPipelineOptions {
 export interface GameOcrTextPipeline {
   process(
     identity: OcrCaptureIdentity,
-    regions: InteractiveTextRegion[]
+    regions: Array<InteractiveTextRegion | InteractiveTextBlock>
   ): Promise<GameOcrTextResult>
   invalidate(): void
 }
 
 interface RegionCacheEntry {
-  text: string
-  result: GameOcrTextRegion
+  analysisText: string
+  result: ProcessedText
+}
+
+interface ProcessedText {
+  tokens: Token[]
+  levels: Record<string, KnowledgeLevel>
+  vocabularySpans: VocabularySpan[]
 }
 
 /** Processes one capture at a time and never publishes work from a superseded capture. */
@@ -89,12 +104,13 @@ export function createGameOcrTextPipeline(
       spans.invalidate()
       const isCurrent = (): boolean => generation === requestGeneration && activeCapture === capture
 
-      const cached = new Map<string, GameOcrTextRegion>()
-      const missing: InteractiveTextRegion[] = []
-      for (const region of regions) {
-        const entry = regionCache.get(region.id)
-        if (entry?.text === region.text) cached.set(region.id, entry.result)
-        else missing.push(region)
+      const blocks = regions.map(normalizeBlock)
+      const cached = new Map<string, ProcessedText>()
+      const missing: InteractiveTextBlock[] = []
+      for (const block of blocks) {
+        const entry = regionCache.get(block.id)
+        if (entry?.analysisText === block.analysisText) cached.set(block.id, entry.result)
+        else missing.push(block)
       }
 
       const tokensByRegion = await tokenizeRegions(options.mecab, missing)
@@ -116,20 +132,25 @@ export function createGameOcrTextPipeline(
 
       const nextCache = new Map<string, RegionCacheEntry>()
       const snapshot: Record<string, GameOcrTextRegion> = {}
-      for (const region of regions) {
-        const cachedResult = cached.get(region.id)
-        const tokens = tokensByRegion.get(region.id) ?? []
-        const result =
+      for (const block of blocks) {
+        const cachedResult = cached.get(block.id)
+        const tokens = tokensByRegion.get(block.id) ?? []
+        const processed =
           cachedResult ??
           ({
-            id: region.id,
-            text: region.text,
             tokens,
             levels: levelsForTokens(tokens, levelCache),
-            vocabularySpans: spanResult.spansByCue[region.id] ?? []
-          } satisfies GameOcrTextRegion)
-        snapshot[region.id] = result
-        nextCache.set(region.id, { text: region.text, result })
+            vocabularySpans: spanResult.spansByCue[block.id] ?? []
+          } satisfies ProcessedText)
+        const result = {
+          id: block.id,
+          text: block.text,
+          analysisText: block.analysisText,
+          projection: block.projection,
+          ...processed
+        } satisfies GameOcrTextRegion
+        snapshot[block.id] = result
+        nextCache.set(block.id, { analysisText: block.analysisText, result: processed })
       }
       regionCache = nextCache
 
@@ -145,14 +166,14 @@ export function createGameOcrTextPipeline(
 
 async function tokenizeRegions(
   mecab: MecabBatchBridge,
-  regions: InteractiveTextRegion[]
+  regions: InteractiveTextBlock[]
 ): Promise<Map<string, Token[]>> {
   const result = new Map(regions.map((region) => [region.id, [] as Token[]]))
-  const japanese = regions.filter((region) => containsJapanese(region.text))
+  const japanese = regions.filter((region) => containsJapanese(region.analysisText))
   if (japanese.length === 0) return result
 
   try {
-    const batches = await mecab.tokenizeBatch(japanese.map((region) => region.text))
+    const batches = await mecab.tokenizeBatch(japanese.map((region) => region.analysisText))
     japanese.forEach((region, index) => result.set(region.id, batches[index] ?? []))
   } catch {
     // MeCab failure leaves every affected region as its original selectable text.
@@ -194,7 +215,7 @@ async function resolveSpans(
   controller: VocabularySpanController,
   options: GameOcrTextPipelineOptions,
   identity: OcrCaptureIdentity,
-  regions: InteractiveTextRegion[],
+  regions: InteractiveTextBlock[],
   tokensByRegion: Map<string, Token[]>,
   generation: number
 ) {
@@ -232,4 +253,12 @@ function containsJapanese(text: string): boolean {
 
 function captureKey(identity: OcrCaptureIdentity): string {
   return `${identity.sessionId}:${identity.captureId}`
+}
+
+function normalizeBlock(
+  region: InteractiveTextRegion | InteractiveTextBlock
+): InteractiveTextBlock {
+  if ('analysisText' in region && 'projection' in region) return region
+  const projection = createGameOcrTextProjection([region.text])
+  return { ...region, analysisText: projection.analysisText, projection }
 }

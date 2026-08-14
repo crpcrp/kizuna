@@ -6,6 +6,7 @@ import GameOcrInteraction, {
   type GameOcrInteractionProps
 } from '@src/renderer/src/components/GameOcrInteraction'
 import type { GameOcrBoxRegion } from '@src/renderer/src/components/GameOcrBoxes'
+import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { deferred } from '@test/harness/deferred'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -13,7 +14,12 @@ import { readGameOcrSelection } from '@src/renderer/src/state/gameOcrSelection'
 
 afterEach(cleanup)
 
-function region(id: string, text: string, x: number): GameOcrBoxRegion {
+function region(
+  id: string,
+  text: string,
+  x: number,
+  overrides: Partial<GameOcrBoxRegion> = {}
+): GameOcrBoxRegion {
   return {
     id,
     text,
@@ -22,7 +28,8 @@ function region(id: string, text: string, x: number): GameOcrBoxRegion {
       originalBounds: { x, y: 0, width: 80, height: 32 },
       displayBounds: { x, y: 0, width: 100, height: 48 }
     },
-    tokens: [makeToken({ surface: text, reading: `${text}-reading` })]
+    tokens: [makeToken({ surface: text, reading: `${text}-reading` })],
+    ...overrides
   }
 }
 
@@ -62,6 +69,49 @@ const popupSettings = {
 }
 
 describe('GameOcrInteraction', () => {
+  it('shares lookup and highlight identity across a word split by a display newline', async () => {
+    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const token = makeToken({
+      surface: '描かれている',
+      reading: 'えがかれている',
+      startOffset: 4
+    })
+    const lookup = vi.fn().mockResolvedValue([
+      makeLookupResult({
+        expression: '描かれている',
+        matchedSurface: '描かれている'
+      })
+    ])
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[
+            region('block:one|two', projection.displayText, 0, {
+              projection,
+              tokens: [token]
+            })
+          ]}
+          bridge={bridge(lookup)}
+          popupSettings={popupSettings}
+        />
+      </GameOcrFrame>
+    )
+
+    const fragments = container.querySelectorAll('[data-token]')
+    expect(fragments).toHaveLength(2)
+    expect(fragments[0]?.getAttribute('data-token-key')).toBe(
+      fragments[1]?.getAttribute('data-token-key')
+    )
+
+    fireEvent.click(fragments[0]!, { clientX: 40, clientY: 40 })
+    await waitFor(() => expect(container.querySelector('#word-popup.open')).not.toBeNull())
+    fireEvent.click(fragments[1]!, { clientX: 40, clientY: 40 })
+    await waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+
+    expect(lookup.mock.calls[0]).toEqual(lookup.mock.calls[1])
+    expect(container.querySelectorAll('[data-token][data-highlighted]')).toHaveLength(2)
+  })
+
   it('opens the existing popup with one region as lookup and sentence context', async () => {
     const first = region('first', '前', 0)
     const second = region('second', '後', 120)
@@ -210,6 +260,38 @@ describe('GameOcrInteraction', () => {
 
     translation.resolve('Selected text')
     await waitFor(() => expect(screen.getByText('Selected text')).not.toBeNull())
+  })
+
+  it('translates a selection across grouped display lines as one request', () => {
+    const projection = createGameOcrTextProjection(['前の行', '後の行'])
+    const translate = vi.fn().mockResolvedValue('translation')
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[
+            region('block:first|second', projection.displayText, 0, {
+              projection,
+              tokens: undefined
+            })
+          ]}
+          bridge={bridge(vi.fn(), {
+            translate: { translate, cancel: vi.fn() }
+          })}
+          translationEnabled
+          createTranslationRequestId={() => 'cross-line'}
+        />
+      </GameOcrFrame>
+    )
+    const box = container.querySelector('[data-game-ocr-box]') as HTMLElement
+    const selection = window.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(box)
+    selection.removeAllRanges()
+    selection.addRange(range)
+
+    expect(readGameOcrSelection(selection)?.text).toBe('前の行\n後の行')
+    fireEvent.contextMenu(box, { bubbles: true, cancelable: true })
+    expect(translate).toHaveBeenCalledWith('前の行\n後の行', 'cross-line')
   })
 
   it('shows the shared sanitized error state when translation fails', async () => {

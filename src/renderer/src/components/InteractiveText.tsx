@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { Token } from '../../../shared/token'
+import {
+  mapAnalysisRangeToDisplayRanges,
+  type GameOcrTextProjection
+} from '../state/gameOcrTextProjection'
 import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
@@ -13,6 +17,8 @@ import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
 export interface InteractiveText {
   id: string
   text: string
+  /** Optional OCR projection whose token offsets refer to analysisText. */
+  projection?: GameOcrTextProjection
   tokens?: Token[]
   highlightedTokens?: Token[]
   levels?: Record<string, KnowledgeLevel>
@@ -32,14 +38,28 @@ export interface InteractiveTextProps extends InteractiveText {
   renderTokenContent?: (token: Token, itemIndex: number) => ReactNode
 }
 
-export type TokenSpanItem = { type: 'token'; token: Token } | { type: 'break' }
+export type TokenSpanItem =
+  | {
+      type: 'token'
+      token: Token
+      /** Visible fragment text; absent for the ordinary single-view path. */
+      text?: string
+      fragmentIndex?: number
+    }
+  | { type: 'break' }
 
 /**
  * Pure helper: turns text and ordered tokens into token items and line breaks.
  * Newlines are taken from the original text rather than inferred from token
  * surfaces, which also preserves blank lines between tokens.
  */
-export function tokenSpans(text: string, tokens: Token[]): TokenSpanItem[] {
+export function tokenSpans(
+  text: string,
+  tokens: Token[],
+  projection?: GameOcrTextProjection
+): TokenSpanItem[] {
+  if (projection) return projectedTokenSpans(projection, tokens)
+
   const items: TokenSpanItem[] = []
   let lastLine = 0
   for (const token of tokens) {
@@ -48,6 +68,39 @@ export function tokenSpans(text: string, tokens: Token[]): TokenSpanItem[] {
     items.push({ type: 'token', token })
     lastLine = line
   }
+  return items
+}
+
+/**
+ * Projects continuous analysis tokens onto the visible line-broken text.
+ * A token crossing a visual wrap becomes multiple DOM fragments, while every
+ * fragment keeps the same Token object and semantic data attributes.
+ */
+export function projectedTokenSpans(
+  projection: GameOcrTextProjection,
+  tokens: Token[]
+): TokenSpanItem[] {
+  const items: TokenSpanItem[] = []
+  let displayCursor = 0
+
+  for (const token of tokens) {
+    const ranges = mapAnalysisRangeToDisplayRanges(projection, {
+      startOffset: token.startOffset,
+      endOffset: token.startOffset + token.surface.length
+    })
+    ranges.forEach((range, fragmentIndex) => {
+      appendBreaks(projection.displayText, displayCursor, range.startOffset, items)
+      items.push({
+        type: 'token',
+        token,
+        text: projection.displayText.slice(range.startOffset, range.endOffset),
+        fragmentIndex
+      })
+      displayCursor = range.endOffset
+    })
+  }
+
+  appendBreaks(projection.displayText, displayCursor, projection.displayText.length, items)
   return items
 }
 
@@ -75,6 +128,17 @@ function countNewlinesBefore(text: string, offset: number): number {
   return count
 }
 
+function appendBreaks(
+  text: string,
+  startOffset: number,
+  endOffset: number,
+  items: TokenSpanItem[]
+): void {
+  for (let offset = startOffset; offset < endOffset; offset++) {
+    if (text[offset] === '\n') items.push({ type: 'break' })
+  }
+}
+
 function linesWithOffsets(text: string): Array<{ line: string; offset: number }> {
   const lines = text.split('\n')
   let offset = 0
@@ -92,6 +156,7 @@ function classNames(className: string | undefined): string | undefined {
 export default function InteractiveText({
   id,
   text,
+  projection,
   tokens,
   highlightedTokens,
   levels,
@@ -109,20 +174,28 @@ export default function InteractiveText({
   const levelFor = tokenLevels(id, tokens ?? [], levels, vocabularySpans)
   const content =
     tokens && tokens.length > 0
-      ? tokenSpans(text, tokens).map((item, itemIndex) =>
+      ? tokenSpans(text, tokens, projection).map((item, itemIndex) =>
           item.type === 'break' ? (
             <br key={itemIndex} />
           ) : (
             <span
               key={itemIndex}
               data-token=""
+              data-token-key={projection ? `${id}:${item.token.startOffset}` : undefined}
+              data-token-fragment={
+                projection && item.fragmentIndex !== undefined
+                  ? String(item.fragmentIndex)
+                  : undefined
+              }
               data-highlighted={highlightedOffsets.has(item.token.startOffset) ? '' : undefined}
               data-level={levelFor(item.token)}
               onMouseEnter={(event) => onWordHover?.(item.token, event)}
               onMouseLeave={() => onWordLeave?.()}
               onClick={(event) => onWordClick?.(item.token, event)}
             >
-              {renderTokenContent ? renderTokenContent(item.token, itemIndex) : item.token.surface}
+              {renderTokenContent
+                ? renderTokenContent(item.token, itemIndex)
+                : (item.text ?? item.token.surface)}
             </span>
           )
         )

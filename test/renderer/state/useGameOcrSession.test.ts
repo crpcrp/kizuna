@@ -118,7 +118,7 @@ describe('useGameOcrSession', () => {
     )
   })
 
-  it('keeps adjacent OCR lines as separate tightly bounded regions', () => {
+  it('groups adjacent OCR lines into one tightly bounded selectable region', () => {
     const { hook, pushes } = setup()
     const lines = result(1, '一行目')
     lines.regions.push({
@@ -130,10 +130,9 @@ describe('useGameOcrSession', () => {
 
     act(() => pushes.regions?.(lines))
 
-    expect(hook.result.current.regions.map(({ text }) => text)).toEqual(['一行目', '二行目'])
+    expect(hook.result.current.regions.map(({ text }) => text)).toEqual(['一行目\n二行目'])
     expect(hook.result.current.regions.map(({ layout }) => layout.displayBounds)).toEqual([
-      { x: 10, y: 10, width: 200, height: 40 },
-      { x: 10, y: 52, width: 160, height: 38 }
+      { x: 10, y: 10, width: 200, height: 80 }
     ])
   })
 

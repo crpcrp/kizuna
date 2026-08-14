@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import InteractiveText from '@src/renderer/src/components/InteractiveText'
+import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
 import type { Token } from '@src/shared/token'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -34,6 +35,30 @@ describe('InteractiveText', () => {
     expect(plain).toContain('<span>a</span><span><br/>b</span>')
     expect(plain).not.toContain('data-token')
     expect(tokenized).toContain('<span data-token="">a</span><br/><span data-token="">b</span>')
+  })
+
+  it('renders a token crossing a display newline as shared semantic fragments', () => {
+    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const token = makeToken({
+      surface: '描かれている',
+      startOffset: 4
+    })
+    const html = renderToStaticMarkup(
+      <InteractiveText
+        id="block:one|two"
+        text={projection.displayText}
+        projection={projection}
+        tokens={[token]}
+      />
+    )
+
+    expect(html).toContain(
+      'data-token-key="block:one|two:4" data-token-fragment="0">描か</span><br/>'
+    )
+    expect(html).toContain(
+      'data-token-key="block:one|two:4" data-token-fragment="1">れている</span>'
+    )
+    expect(html.match(/data-token-key="block:one\|two:4"/g) ?? []).toHaveLength(2)
   })
 
   it('projects compound, grammar, and punctuation knowledge and highlights tokens', () => {
