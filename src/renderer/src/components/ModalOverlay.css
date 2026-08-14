@@ -42,8 +42,7 @@
   min-width: 0;
   color: var(--text-secondary);
   font: inherit;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;

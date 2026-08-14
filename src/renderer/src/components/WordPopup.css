@@ -100,10 +100,9 @@
   color: var(--text-muted);
   font-weight: 400;
 }
-/* The row's small chips are all squared monospace tags, so a headword's
-   metadata reads as one strip of labels rather than mixed pills. */
+/* The row's small chips are all squared tags, so a headword's metadata reads
+   as one strip of labels rather than mixed pills. */
 .word-popup-priority {
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
@@ -115,8 +114,7 @@
   white-space: nowrap;
 }
 .word-popup-frequency {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-soft);
   background: var(--frequency-bg);
@@ -124,8 +122,7 @@
   padding: 2px 6px;
 }
 .word-popup-pitch-accent {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: var(--text-soft);
   background: var(--control-bg);
   border-radius: var(--radius-chip);
@@ -134,7 +131,6 @@
 }
 .word-popup-dict-badge {
   margin-left: auto;
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -150,7 +146,6 @@
   margin-top: 5px;
 }
 .word-popup-provenance-badge {
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -171,7 +166,6 @@
    dict badge (the badge's own margin-left:auto already pushed the row's
    trailing chips to the right). */
 .word-popup-anki-button {
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
@@ -201,7 +195,6 @@
 /* Transient result shown in place of the button while a mine request is in
    flight or after it resolves (see WordPopup.tsx's ankiStatus prop). */
 .word-popup-anki-status {
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
@@ -229,7 +222,6 @@
   margin-top: 4px;
 }
 .word-popup-pos {
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -263,12 +255,11 @@
   justify-content: center;
   width: 19px;
   height: 19px;
-  /* Squared monospace index, like the splash screen's numbered choices. */
+  /* Squared index, like the splash screen's numbered choices. */
   border-radius: var(--radius-chip);
   background: var(--accent-selected-bg);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   line-height: 1;
   transform: translateY(2px);

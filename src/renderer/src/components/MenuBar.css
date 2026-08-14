@@ -9,7 +9,7 @@
   position: relative;
   display: flex;
 }
-/* Uppercase monospace, matching the splash screen's micro-labels. The open
+/* Uppercase and tracked, matching the splash screen's micro-labels. The open
    menu is marked by an accent rule along its bottom edge rather than by a
    heavier fill, so the bar stays quiet while still showing where you are. */
 .menu-title {
@@ -17,8 +17,7 @@
   padding: 0 14px;
   color: var(--text-soft);
   font: inherit;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -107,7 +106,6 @@
 .menu-section-label {
   padding: 7px 10px 4px;
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -131,13 +129,11 @@
 .menu-offset-value {
   flex: 1;
   text-align: center;
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .menu-offset-input {
   width: 4.5em;
   font: inherit;
-  font-family: var(--font-mono);
   color: inherit;
   text-align: right;
   background: var(--control-bg);

@@ -48,8 +48,7 @@
   flex-shrink: 0;
   min-width: 3em;
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.85em;
   font-variant-numeric: tabular-nums;
   color: var(--text-soft);
 }
@@ -138,7 +137,6 @@
   border: 1px solid var(--success-text);
   border-radius: var(--radius-chip);
   padding: 3px 9px;
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);

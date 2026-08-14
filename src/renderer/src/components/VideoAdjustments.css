@@ -33,7 +33,6 @@
 
 .video-adjustments-title {
   color: var(--text-soft);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
@@ -77,7 +76,6 @@
   flex: 0 0 34px;
   text-align: right;
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

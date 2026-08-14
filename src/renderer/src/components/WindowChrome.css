@@ -7,16 +7,14 @@
   padding-left: 12px;
   user-select: none;
 }
-/* Monospace, lightly tracked — the splash screen's technical-label voice. Not
-   uppercased: the title carries a filename, whose own casing is information. */
+/* Not uppercased like the other labels: the title carries a filename, whose
+   own casing is information. */
 #chrome-title {
   min-width: 0;
   overflow: hidden;
   color: var(--text-soft);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

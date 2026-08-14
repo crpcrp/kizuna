@@ -41,7 +41,6 @@
 .report-section h3 {
   margin: 0 0 8px;
   color: var(--text-soft);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
@@ -157,7 +156,6 @@
 }
 .report-deck-table th {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);

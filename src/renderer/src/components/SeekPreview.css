@@ -45,8 +45,7 @@
   padding: 1px 6px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-chip);
-  font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
   background: var(--surface-bar-opaque);

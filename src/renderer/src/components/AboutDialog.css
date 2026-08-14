@@ -31,10 +31,9 @@
   align-items: baseline;
 }
 
-/* Field names are micro-labels; their values stay in the body face. */
+/* Field names are micro-labels; their values stay at body size. */
 .about-details dt {
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
@@ -62,7 +61,6 @@
 
 .about-update h3 {
   color: var(--text-soft);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);

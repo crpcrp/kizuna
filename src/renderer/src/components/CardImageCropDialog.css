@@ -37,7 +37,6 @@
 
 .card-image-title {
   color: var(--text-secondary);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);

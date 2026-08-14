@@ -25,15 +25,13 @@
 }
 .playlist-sidebar-title {
   color: var(--text-soft);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
 }
 .playlist-sidebar-count {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
 }
@@ -130,7 +128,6 @@
 .playlist-sidebar-mode {
   flex: 1;
   font: inherit;
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;

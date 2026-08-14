@@ -185,15 +185,16 @@
 
 /* ---- Shared shape and type tokens ----
    The splash screen's visual idiom, factored out so the rest of the UI speaks
-   it too: a monospace micro-label face with one tracking value, three radii,
-   and one fast transition. These are identical in both themes, so they get
+   it too: the micro-label's size and tracking, the monospace face the splash
+   itself uses, three radii, and one fast transition. These are identical in
+   both themes, so they get
    their own block rather than being duplicated into the two color blocks — the
    guard test compares those two blocks variable-for-variable, and resolves the
    dark one by the FIRST `:root {` in the file, which stays the block at the
    top. Nothing here may carry a color. */
 :root {
   --font-mono: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  /* Micro-label: mono, uppercase, widely tracked (splash's `MEDIA × LANGUAGE`
+  /* Micro-label: uppercase, widely tracked (splash's `MEDIA × LANGUAGE`
      footer). Used for panel titles, card headers and section labels. */
   --label-size: 0.68rem;
   --label-tracking: 0.08em;

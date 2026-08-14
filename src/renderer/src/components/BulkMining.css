@@ -38,7 +38,6 @@
 #bulk-mining-threshold,
 #bulk-mining-minimum-count {
   width: 88px;
-  font-family: var(--font-mono);
   background: var(--control-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-control);
@@ -87,7 +86,6 @@
   top: 0;
   background: var(--surface-panel);
   color: var(--text-muted);
-  font-family: var(--font-mono);
   font-size: var(--label-size);
   font-weight: 700;
   letter-spacing: var(--label-tracking);
