@@ -67,11 +67,7 @@ export const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
 /** The worker refuses anything larger; it is also the whole-desktop worst case. */
 export const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
 
-/**
- * Keeps long single-line text legible to the fixed-width recognizer. The
- * vendored default of 320 compresses narrator lines enough to produce empty
- * or low-confidence output while shorter answer options still succeed.
- */
+/** Fixed pixel width used to normalize text crops for batched recognition. */
 export const PP_OCR_RECOGNITION_WIDTH = 480
 
 export type PpOcrWorkerErrorCode =

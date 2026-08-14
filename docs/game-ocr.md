@@ -358,11 +358,10 @@ batching patch already took the win there (89.6 -> 83.2 ms); raising the batch
 further does nothing. `--cpu-threads` defaults to physical cores — 8 on this
 machine — and the vendor measured 16 threads as a 2x *loss*, so it stays.
 
-The app passes `--rec-width 480` to the fixed-width recognizer. The vendor
-default of 320 is adequate for short answer options but compresses long
-narrator lines enough to produce empty or low-confidence recognition. The
-wider crop preserves those lines while remaining within the worker's batched
-recognition limit.
+The app passes `--rec-width 480` to the fixed-width recognizer. This is the
+pixel width used to normalize detected text crops before batched recognition;
+it is independent of the display and capture dimensions. The value is tuned
+for the bundled model to balance horizontal detail against recognition cost.
 
 ### The screenshot must be PNG
 
