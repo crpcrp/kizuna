@@ -358,6 +358,11 @@ batching patch already took the win there (89.6 -> 83.2 ms); raising the batch
 further does nothing. `--cpu-threads` defaults to physical cores — 8 on this
 machine — and the vendor measured 16 threads as a 2x *loss*, so it stays.
 
+The app passes `--rec-width 480` to the fixed-width recognizer. This is the
+pixel width used to normalize detected text crops before batched recognition;
+it is independent of the display and capture dimensions. The value is tuned
+for the bundled model to balance horizontal detail against recognition cost.
+
 ### The screenshot must be PNG
 
 `ppocr.exe` links a minimal static OpenCV built `WITH_JPEG=OFF` /

@@ -8,7 +8,8 @@ import {
   validatePpOcrRequest,
   PP_OCR_MAX_DETECTION_SIDE_LENGTH,
   PP_OCR_MAX_IMAGE_BASE64_BYTES,
-  PP_OCR_MIN_DETECTION_SIDE_LENGTH
+  PP_OCR_MIN_DETECTION_SIDE_LENGTH,
+  PP_OCR_RECOGNITION_WIDTH
 } from '@src/main/services/ocr/ppOcrProtocol'
 
 const metadata = { sessionId: 3, captureId: 7, imageSize: { width: 640, height: 480 } }
@@ -44,7 +45,9 @@ describe('buildPpOcrWorkerArgs', () => {
       '--keys',
       'C:\\model keys.txt',
       '--det-side-len',
-      '4096'
+      '4096',
+      '--rec-width',
+      String(PP_OCR_RECOGNITION_WIDTH)
     ])
   })
 
