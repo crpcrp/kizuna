@@ -98,6 +98,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
   private fullscreenExitRequested = false
   private reenterAfterFullscreenLeave = false
   private lastFullscreenNotification: boolean | undefined
+  private overlayIndependent = false
 
   constructor(
     videoHost: ManagedWindow,
@@ -143,8 +144,25 @@ export class AppWindowCoordinator implements WindowControlTarget {
 
   /** Applies one logical rectangle to the host and overlay, if both are live. */
   setBounds(bounds: WindowBounds): void {
+    this.overlayIndependent = false
     this.synchronizePair(bounds)
     this.queueBoundsSync(this.isFullScreen() ? this.videoHost : this.uiOverlay)
+  }
+
+  /** Applies compact non-player geometry to the renderer overlay only. */
+  setOverlayBounds(bounds: WindowBounds): void {
+    if (!this.paired) {
+      this.setBounds(bounds)
+      return
+    }
+    this.cancelScheduledSync()
+    this.overlayIndependent = true
+    this.syncing = true
+    try {
+      this.setIfDifferent(this.uiOverlay, bounds)
+    } finally {
+      this.syncing = false
+    }
   }
 
   /** Minimizes the logical pair, without calling the same BrowserWindow twice. */
@@ -265,7 +283,7 @@ export class AppWindowCoordinator implements WindowControlTarget {
   }
 
   private queueBoundsSync(source: ManagedWindow): void {
-    if (!this.paired || this.syncing) return
+    if (!this.paired || this.syncing || this.overlayIndependent) return
     const current = this.readBounds(source)
     const expected = this.expectedProgrammaticBounds.get(source)
     if (current && expected && sameBounds(current, expected)) return

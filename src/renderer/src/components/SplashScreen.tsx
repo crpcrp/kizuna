@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { APP_NAME } from '../../../shared/appInfo'
-import WindowChrome from './WindowChrome'
 import { errorMessage } from '../util/errorMessage'
 
 import './SplashScreen.css'
+
+const APP_LOGO_URL = new URL('../../../../build/icon.png', import.meta.url).href
 
 export interface SplashScreenProps {
   gameOcrSupported: boolean
@@ -42,14 +43,10 @@ export default function SplashScreen({
 
   return (
     <div id="app" className="splash-app">
-      <div id="top-controls">
-        <WindowChrome />
-      </div>
-
       <main className="splash-main" aria-labelledby="splash-title">
         <section className="splash-card">
           <div className="splash-brand" aria-hidden="true">
-            絆
+            <img src={APP_LOGO_URL} alt="" draggable="false" />
           </div>
           <h1 id="splash-title">{APP_NAME}</h1>
           <p className="splash-subtitle">Choose how to begin.</p>
