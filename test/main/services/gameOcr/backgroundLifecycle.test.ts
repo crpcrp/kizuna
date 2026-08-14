@@ -93,12 +93,40 @@ describe('Game OCR background lifecycle', () => {
 
     fake.actions?.options()
     await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+    expect(fake.window.showOptions).toHaveBeenCalledWith('gameOcr')
     expect(fake.window.activate).toHaveBeenCalledOnce()
     expect(fake.window.hide).toHaveBeenCalledOnce()
 
     expect(fake.lifecycle.handleWindowClose(closeEvent)).toBe(false)
     expect(closeEvent.preventDefault).toHaveBeenCalledOnce()
     expect(fake.window.hide).toHaveBeenCalledTimes(2)
+  })
+
+  it('dismisses tray-opened Options back to hidden state without stopping OCR', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.actions?.options()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+
+    await expect(fake.lifecycle.dismissOptions()).resolves.toBe(true)
+    await expect(fake.lifecycle.dismissOptions()).resolves.toBe(true)
+
+    expect(fake.window.hide).toHaveBeenCalledTimes(2)
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps recovery Options visible when the runtime stops before dismissal', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.actions?.options()
+    await vi.waitFor(() => expect(fake.window.showOptions).toHaveBeenCalledOnce())
+    fake.update('error')
+
+    await expect(fake.lifecycle.dismissOptions()).resolves.toBe(false)
+
+    expect(fake.window.hide).toHaveBeenCalledOnce()
+    expect(fake.tray.destroy).toHaveBeenCalledOnce()
   })
 
   it('opens the player from the tray without stopping OCR', async () => {
@@ -149,6 +177,7 @@ describe('Game OCR background lifecycle', () => {
 
     expect(fake.runtime.stop).toHaveBeenCalledOnce()
     expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledWith('startup')
     expect(fake.tray.destroy).toHaveBeenCalledOnce()
   })
 
@@ -159,6 +188,7 @@ describe('Game OCR background lifecycle', () => {
     await fake.lifecycle.showFromSecondInstance()
 
     expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledWith('gameOcr')
     expect(fake.window.activate).toHaveBeenCalledOnce()
   })
 

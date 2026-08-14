@@ -10,6 +10,7 @@ function fakeCoordinator(): AppShellCoordinator {
     showSplash: vi.fn(async () => 'splash' as const),
     showPlayer: vi.fn(async () => 'player' as const),
     showOptions: vi.fn(async () => 'options' as const),
+    dismissOptions: vi.fn(async () => 'splash' as const),
     quit: vi.fn()
   }
 }
@@ -29,7 +30,8 @@ describe('registerAppShellBridge', () => {
         APP_SHELL_CHANNELS.getSurface,
         APP_SHELL_CHANNELS.showSplash,
         APP_SHELL_CHANNELS.showPlayer,
-        APP_SHELL_CHANNELS.showOptions
+        APP_SHELL_CHANNELS.showOptions,
+        APP_SHELL_CHANNELS.dismissOptions
       ].sort()
     )
     expect([...listeners.keys()]).toEqual([APP_SHELL_CHANNELS.quit])
@@ -37,11 +39,13 @@ describe('registerAppShellBridge', () => {
     await handlers.get(APP_SHELL_CHANNELS.showSplash)!({ sender: allowedSender })
     await handlers.get(APP_SHELL_CHANNELS.showPlayer)!({ sender: allowedSender })
     await handlers.get(APP_SHELL_CHANNELS.showOptions)!({ sender: allowedSender })
+    await handlers.get(APP_SHELL_CHANNELS.dismissOptions)!({ sender: allowedSender })
     listeners.get(APP_SHELL_CHANNELS.quit)!({ sender: allowedSender })
 
     expect(coordinator.showPlayer).toHaveBeenCalledOnce()
     expect(coordinator.showSplash).toHaveBeenCalledOnce()
     expect(coordinator.showOptions).toHaveBeenCalledOnce()
+    expect(coordinator.dismissOptions).toHaveBeenCalledOnce()
     expect(coordinator.quit).toHaveBeenCalledOnce()
     expect(() => handlers.get(APP_SHELL_CHANNELS.getSurface)!({ sender: { id: 2 } })).toThrow(
       'unknown window'

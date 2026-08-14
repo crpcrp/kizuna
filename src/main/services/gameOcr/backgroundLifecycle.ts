@@ -1,10 +1,11 @@
 import type { GameOcrRuntimeStatus } from '../../../shared/gameOcr'
+import type { OptionsPresentationOrigin } from '../appShell'
 import type { GameOcrRuntimeService } from './runtime'
 
 export interface GameOcrBackgroundWindow {
   hide(): void
   activate(): void
-  showOptions(): Promise<boolean>
+  showOptions(origin?: OptionsPresentationOrigin): Promise<boolean>
   showPlayer(): Promise<boolean>
 }
 
@@ -43,6 +44,7 @@ export interface GameOcrBackgroundLifecycle {
   handleWindowLost(): void
   /** Presents the player for a media launch, or restores the current surface. */
   showFromSecondInstance(hasLaunchPath?: boolean): Promise<void>
+  dismissOptions(): Promise<boolean>
   stop(restoreSurface?: boolean): Promise<void>
   dispose(): void
 }
@@ -88,10 +90,10 @@ export function createGameOcrBackgroundLifecycle(
     reportSurfaceFailure(() => options.window.hide())
   }
 
-  const showOptions = async (): Promise<boolean> => {
+  const showOptions = async (origin: OptionsPresentationOrigin = 'startup'): Promise<boolean> => {
     if (disposed) return false
     try {
-      const shown = await options.window.showOptions()
+      const shown = await options.window.showOptions(origin)
       if (shown) {
         hiddenForOcr = false
         activateWindow()
@@ -114,6 +116,14 @@ export function createGameOcrBackgroundLifecycle(
     } catch {
       return false
     }
+  }
+
+  const dismissOptions = async (): Promise<boolean> => {
+    if (disposed || !ARMED_STATES.has(options.runtime.getStatus().game.state)) return false
+    if (hiddenForOcr) return true
+    hiddenForOcr = true
+    hideWindow()
+    return true
   }
 
   const destroyTray = (): void => {
@@ -150,7 +160,7 @@ export function createGameOcrBackgroundLifecycle(
 
   const actions: GameOcrTrayActions = {
     options: () => {
-      void showOptions()
+      void showOptions('gameOcr')
     },
     videoPlayer: () => {
       void showPlayer()
@@ -211,10 +221,12 @@ export function createGameOcrBackgroundLifecycle(
 
     showFromSecondInstance(hasLaunchPath = false): Promise<void> {
       if (hasLaunchPath) return showPlayer().then(() => undefined)
-      if (hiddenForOcr) return showOptions().then(() => undefined)
+      if (hiddenForOcr) return showOptions('gameOcr').then(() => undefined)
       activateWindow()
       return Promise.resolve()
     },
+
+    dismissOptions,
 
     stop,
 

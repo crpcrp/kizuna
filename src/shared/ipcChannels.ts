@@ -147,6 +147,7 @@ export const APP_SHELL_CHANNELS = {
   showSplash: 'appShell:showSplash',
   showPlayer: 'appShell:showPlayer',
   showOptions: 'appShell:showOptions',
+  dismissOptions: 'appShell:dismissOptions',
   quit: 'appShell:quit',
   surfaceChanged: 'appShell:surfaceChanged'
 } as const

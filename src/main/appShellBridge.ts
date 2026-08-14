@@ -36,6 +36,10 @@ export function registerAppShellBridge<
     allowed(event.sender)
     return coordinator.showOptions()
   })
+  ipc.handle(APP_SHELL_CHANNELS.dismissOptions, (event): Promise<AppSurface> => {
+    allowed(event.sender)
+    return coordinator.dismissOptions()
+  })
   ipc.on(APP_SHELL_CHANNELS.quit, (event) => {
     allowed(event.sender)
     coordinator.quit()

@@ -124,6 +124,7 @@ export interface KizunaApi {
     showSplash(): Promise<AppSurface>
     showPlayer(): Promise<AppSurface>
     showOptions(): Promise<AppSurface>
+    dismissOptions(): Promise<AppSurface>
     quit(): void
     onSurfaceChanged(cb: (surface: AppSurface) => void): () => void
   }

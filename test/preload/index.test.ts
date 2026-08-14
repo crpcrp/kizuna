@@ -97,6 +97,7 @@ describe('preload app-shell contract', () => {
         showSplash(): Promise<unknown>
         showPlayer(): Promise<unknown>
         showOptions(): Promise<unknown>
+        dismissOptions(): Promise<unknown>
         quit(): void
         onSurfaceChanged(cb: (surface: string) => void): () => void
       }
@@ -107,6 +108,7 @@ describe('preload app-shell contract', () => {
     api.appShell.showSplash()
     api.appShell.showPlayer()
     api.appShell.showOptions()
+    api.appShell.dismissOptions()
     api.appShell.quit()
     const off = api.appShell.onSurfaceChanged(callback)
     const listener = electron.on.mock.calls.at(-1)![1]
@@ -117,6 +119,7 @@ describe('preload app-shell contract', () => {
     expect(electron.invoke).toHaveBeenNthCalledWith(2, APP_SHELL_CHANNELS.showSplash)
     expect(electron.invoke).toHaveBeenNthCalledWith(3, APP_SHELL_CHANNELS.showPlayer)
     expect(electron.invoke).toHaveBeenNthCalledWith(4, APP_SHELL_CHANNELS.showOptions)
+    expect(electron.invoke).toHaveBeenNthCalledWith(5, APP_SHELL_CHANNELS.dismissOptions)
     expect(electron.send).toHaveBeenCalledWith(APP_SHELL_CHANNELS.quit)
     expect(callback).toHaveBeenCalledWith('options')
     expect(electron.removeListener).toHaveBeenCalledWith(

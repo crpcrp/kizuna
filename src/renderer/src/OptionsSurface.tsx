@@ -39,15 +39,15 @@ export default function OptionsSurface({
     controller.options.closeDialog()
     void (async () => {
       try {
-        const next = await (onClose ?? bridge.appShell.showSplash)()
-        if (next !== 'splash') {
-          setError(`Could not return to the splash screen (surface is ${next}).`)
+        const next = await (onClose ?? bridge.appShell.dismissOptions)()
+        if (next === 'player') {
+          setError(`Could not dismiss Options (surface is ${next}).`)
         }
       } catch (closeError) {
         setError(errorMessage(closeError))
       }
     })()
-  }, [bridge.appShell.showSplash, controller.options, onClose])
+  }, [bridge.appShell.dismissOptions, controller.options, onClose])
 
   const optionsMenu = buildOptionsMenuProps({
     open: true,
