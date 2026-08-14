@@ -10,6 +10,8 @@ export const DEFAULT_GAME_OCR_SETTINGS: GameOcrSettings = {
 }
 
 const MODIFIER_ORDER = ['Ctrl', 'Alt', 'Shift', 'Super'] as const
+const ELECTRON_INTL_BACKSLASH = '\\'
+const HUNGARIAN_I_KEYS = new Set(['í', 'Í'])
 const NAMED_KEYS = new Set([
   'Space',
   'Enter',
@@ -36,7 +38,8 @@ const NAMED_KEYS = new Set([
   'BracketRight',
   'Semicolon',
   'Quote',
-  'Backquote'
+  'Backquote',
+  ELECTRON_INTL_BACKSLASH
 ])
 
 /**
@@ -67,6 +70,14 @@ export function normalizeGameOcrShortcut(raw: unknown): string {
   return [...ordered, key].join('+')
 }
 
+/** Renders Electron's physical-key token with the Hungarian key label. */
+export function formatGameOcrShortcutForDisplay(raw: unknown): string {
+  return normalizeGameOcrShortcut(raw)
+    .split('+')
+    .map((part) => (part === ELECTRON_INTL_BACKSLASH ? 'í' : part))
+    .join('+')
+}
+
 /** Converts a renderer KeyboardEvent into the persisted Electron accelerator. */
 export function gameOcrShortcutFromKeyboardEvent(
   event: Pick<KeyboardEvent, 'code' | 'key' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey'>
@@ -92,6 +103,9 @@ function canonicalModifier(raw: string): (typeof MODIFIER_ORDER)[number] | null 
 }
 
 function canonicalKey(raw: string): string | null {
+  // Older builds used the DOM code name; migrate it to Electron's supported
+  // punctuation token while keeping existing settings usable.
+  if (raw === 'Backslash') return ELECTRON_INTL_BACKSLASH
   if (/^[A-Za-z]$/.test(raw)) return raw.toUpperCase()
   if (/^[0-9]$/.test(raw)) return raw
   if (/^F(?:[1-9]|1[0-2])$/i.test(raw)) return raw.toUpperCase()
@@ -101,6 +115,7 @@ function canonicalKey(raw: string): string | null {
 function keyFromEvent(code: string, key: string): string | null {
   if (/^Key[A-Z]$/.test(code)) return code.slice(3)
   if (/^Digit[0-9]$/.test(code)) return code.slice(5)
+  if (code === 'IntlBackslash') return ELECTRON_INTL_BACKSLASH
   const codeNames: Record<string, string> = {
     Space: 'Space',
     Enter: 'Enter',
@@ -133,5 +148,6 @@ function keyFromEvent(code: string, key: string): string | null {
   }
   const named = codeNames[code]
   if (named) return named
+  if (HUNGARIAN_I_KEYS.has(key)) return ELECTRON_INTL_BACKSLASH
   return canonicalKey(key)
 }

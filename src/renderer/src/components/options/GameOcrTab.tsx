@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  formatGameOcrShortcutForDisplay,
   gameOcrShortcutFromKeyboardEvent,
   type GameOcrSettings
 } from '../../../../shared/gameOcrSettings'
@@ -167,7 +168,7 @@ export default function GameOcrTab({
             aria-label="Rebind Game OCR capture shortcut"
             onClick={() => setListening(true)}
           >
-            {listening ? 'Press a key…' : settings.captureShortcut}
+            {listening ? 'Press a key…' : formatGameOcrShortcutForDisplay(settings.captureShortcut)}
           </button>
         </div>
       </div>
