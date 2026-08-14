@@ -7,22 +7,39 @@
   padding-left: 12px;
   user-select: none;
 }
+/* Monospace, lightly tracked — the splash screen's technical-label voice. Not
+   uppercased: the title carries a filename, whose own casing is information. */
 #chrome-title {
-  font-size: 0.85rem;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#chrome-buttons {
+  flex-shrink: 0;
 }
 #chrome-buttons button {
   width: 46px;
   height: 32px;
-  border: none;
-  background: transparent;
-  color: inherit;
+  color: var(--text-soft);
   font-size: 0.95rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 #chrome-buttons button:hover {
+  color: var(--text-primary);
   background: var(--hover-bg);
 }
 #chrome-close:hover {
-  background: var(--danger-solid);
   color: var(--on-danger);
+  background: var(--danger-solid);
 }

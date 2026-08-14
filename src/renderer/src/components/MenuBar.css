@@ -9,17 +9,39 @@
   position: relative;
   display: flex;
 }
+/* Uppercase monospace, matching the splash screen's micro-labels. The open
+   menu is marked by an accent rule along its bottom edge rather than by a
+   heavier fill, so the bar stays quiet while still showing where you are. */
 .menu-title {
+  position: relative;
+  padding: 0 14px;
+  color: var(--text-soft);
   font: inherit;
-  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
   background: transparent;
   border: none;
-  padding: 0 14px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
 }
 .menu-title:hover,
 .menu-title[aria-expanded='true'] {
+  color: var(--text-primary);
   background: var(--hover-bg);
+}
+.menu-title[aria-expanded='true']::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 2px;
+  background: var(--accent);
+  content: '';
 }
 
 /* Dropdown panel — themed, matching the bar (no native <select> white). */
@@ -31,16 +53,19 @@
   min-width: 200px;
   max-height: 60vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 30;
-  padding: 4px;
+  padding: 5px;
   background: var(--surface-panel);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   box-shadow: var(--shadow-menu);
 }
 .menu-panel.open {
   display: block;
 }
+/* Hover marks the row with an inset accent bar on its leading edge — the same
+   "colored marker in front of the label" cue the splash choices use. */
 .menu-item {
   display: flex;
   align-items: center;
@@ -51,13 +76,17 @@
   color: inherit;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 7px 10px;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 .menu-item:hover:not([disabled]) {
-  background: var(--accent-selected-bg);
+  background: var(--accent-soft-bg);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .menu-item[disabled] {
   color: var(--text-disabled);
@@ -71,14 +100,17 @@
 
 .menu-separator {
   height: 1px;
-  margin: 4px 6px;
+  margin: 5px 6px;
   background: var(--border-subtle);
 }
 
 .menu-section-label {
-  padding: 4px 10px;
-  font-size: 0.85em;
+  padding: 7px 10px 4px;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 .menu-status {
   padding: 4px 10px;
@@ -99,16 +131,18 @@
 .menu-offset-value {
   flex: 1;
   text-align: center;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 .menu-offset-input {
   width: 4.5em;
   font: inherit;
+  font-family: var(--font-mono);
   color: inherit;
   text-align: right;
   background: var(--control-bg);
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-chip);
   padding: 2px 4px;
 }
 .menu-offset-input:focus {
@@ -119,13 +153,14 @@
   font: inherit;
   color: inherit;
   background: var(--control-bg);
-  border: none;
-  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
   padding: 3px 8px;
   cursor: pointer;
+  transition: background var(--transition-fast);
 }
 .menu-offset-row button:hover:not([disabled]) {
-  background: var(--accent-selected-bg);
+  background: var(--control-hover-bg);
 }
 .menu-offset-row button[disabled] {
   color: var(--text-disabled);

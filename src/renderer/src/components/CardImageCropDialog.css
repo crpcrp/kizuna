@@ -15,25 +15,33 @@
   width: 720px;
   max-width: 92vw;
   box-sizing: border-box;
-  padding: 16px;
+  padding: 18px;
   border: 1px solid var(--border-default);
-  border-radius: 10px;
+  border-radius: var(--radius-panel);
   background: var(--surface-panel);
   color: var(--text-primary);
   box-shadow: var(--shadow-panel);
   font-size: 13px;
 }
 
+/* Micro-label header over a hairline, matching the other dialogs. */
 .card-image-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .card-image-title {
-  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 
 .card-image-hint {
@@ -55,7 +63,7 @@
   max-width: 100%;
   max-height: 60vh;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
 }
 
 .card-image-selection {
@@ -75,10 +83,13 @@
 .card-image-button {
   padding: 6px 14px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--control-bg);
   color: var(--text-primary);
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
 .card-image-button:hover:not(:disabled) {

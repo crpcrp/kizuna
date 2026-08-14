@@ -11,7 +11,7 @@
   padding: 10px;
   margin: 0;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--surface-card);
   color: inherit;
   font: inherit;
@@ -26,14 +26,24 @@
 .update-actions button,
 #update-status button {
   border: 1px solid var(--border-default);
-  border-radius: 6px;
-  background: var(--surface-panel);
+  border-radius: var(--radius-control);
+  background: var(--control-bg);
   color: inherit;
   padding: 8px 12px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 
-.update-actions button.primary {
+.update-actions button:hover,
+#update-status button:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--accent-border);
+}
+
+.update-actions button.primary,
+.update-actions button.primary:hover {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--on-accent);

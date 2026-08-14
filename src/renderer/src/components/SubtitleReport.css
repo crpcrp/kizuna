@@ -40,7 +40,12 @@
 
 .report-section h3 {
   margin: 0 0 8px;
-  font-size: 0.95rem;
+  color: var(--text-soft);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 .report-section + .report-section {
   margin-top: 4px;
@@ -49,7 +54,7 @@
 .report-bar {
   display: flex;
   height: 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-chip);
   overflow: hidden;
   background: var(--hover-bg);
   margin: 4px 0 10px;
@@ -116,7 +121,7 @@
 
 .report-banner {
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   color: var(--danger-text);
@@ -124,7 +129,7 @@
 
 .report-error {
   padding: 10px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--danger-bg);
   border: 1px solid var(--danger-border);
   color: var(--danger-text);
@@ -147,8 +152,16 @@
 .report-deck-table th,
 .report-deck-table td {
   text-align: left;
-  padding: 4px 8px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--border-subtle);
+}
+.report-deck-table th {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 
 .report-top-unknown {

@@ -13,12 +13,16 @@
 .bulk-mining button {
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 5px 10px;
   cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
 }
 .bulk-mining button:hover:not([disabled]) {
   background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 .bulk-mining button[disabled],
 .bulk-mining input[disabled] {
@@ -34,9 +38,10 @@
 #bulk-mining-threshold,
 #bulk-mining-minimum-count {
   width: 88px;
+  font-family: var(--font-mono);
   background: var(--control-bg);
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 4px 6px;
 }
 .bulk-mining-hint,
@@ -63,7 +68,8 @@
 .bulk-mining-table-wrap {
   min-height: 0;
   overflow-y: auto;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
 }
 .bulk-mining-table {
   width: 100%;
@@ -80,6 +86,12 @@
   position: sticky;
   top: 0;
   background: var(--surface-panel);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
 }
 .bulk-mining-table tr[data-no-entry] {
   color: var(--text-muted);
@@ -111,7 +123,7 @@
 }
 .bulk-mining-abort {
   border: 1px solid var(--danger-border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--danger-bg);
   padding: 8px 10px;
 }
