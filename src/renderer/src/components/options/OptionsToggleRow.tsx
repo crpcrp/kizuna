@@ -18,6 +18,7 @@ export interface OptionsToggleRowProps {
   description?: React.ReactNode
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }
 
 export default function OptionsToggleRow({
@@ -25,7 +26,8 @@ export default function OptionsToggleRow({
   title,
   description,
   checked,
-  onChange
+  onChange,
+  disabled = false
 }: OptionsToggleRowProps): React.JSX.Element {
   const titleId = `${id}-label`
   const descriptionId = description === undefined ? undefined : `${id}-description`
@@ -43,6 +45,7 @@ export default function OptionsToggleRow({
         id={id}
         checked={checked}
         onChange={onChange}
+        disabled={disabled}
         ariaLabelledBy={titleId}
         ariaDescribedBy={descriptionId}
       />

@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import App from '@src/renderer/src/App'
 import AppShell from '@src/renderer/src/AppShell'
 import SplashScreen from '@src/renderer/src/components/SplashScreen'
 import type { AppSurface } from '@src/shared/appShell'
@@ -64,8 +63,10 @@ describe('SplashScreen', () => {
 
 describe('AppShell', () => {
   it('shows only Options on the options surface', async () => {
-    installFakeKizunaApi()
-    render(<App surface="options" />)
+    const api = installFakeKizunaApi({
+      appShell: { getSurface: vi.fn(async () => 'options' as const) }
+    })
+    render(<AppShell bridge={api} />)
 
     await waitFor(() =>
       expect(screen.getByRole('dialog', { name: 'Options' }).getAttribute('aria-hidden')).toBe(
@@ -76,6 +77,103 @@ describe('AppShell', () => {
     expect(document.querySelector('#player-area')).toBeNull()
     expect(screen.queryByRole('dialog', { name: 'About' })).toBeNull()
     expect(screen.queryByRole('dialog', { name: 'Update' })).toBeNull()
+    expect(api.player.load).not.toHaveBeenCalled()
+    expect(api.player.getAudioDevices).not.toHaveBeenCalled()
+    expect(api.player.onTimePos).not.toHaveBeenCalled()
+    expect(api.media.openFile).not.toHaveBeenCalled()
+  })
+
+  it('keeps mpv-only controls unavailable and persists ordinary settings', async () => {
+    const setSettings = vi.fn(async () => ({ ...window.kizuna.playerSettings.getSettings() }))
+    const api = installFakeKizunaApi({
+      appShell: { getSurface: vi.fn(async () => 'options' as const) },
+      playerSettings: { setSettings }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
+    expect((screen.getByLabelText(/Output device/) as HTMLSelectElement).disabled).toBe(true)
+    expect(
+      (screen.getByRole('checkbox', { name: 'Normalize loudness' }) as HTMLInputElement).disabled
+    ).toBe(true)
+    expect(screen.getAllByText(/Available after opening Video player/).length).toBeGreaterThan(0)
+    expect(api.player.getAudioDevices).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: /Skip back\/ahead seconds/ }), {
+      target: { value: '7' }
+    })
+    await waitFor(() => expect(setSettings).toHaveBeenCalledWith({ skipSeconds: 7 }))
+  })
+
+  it('returns standalone Options to splash on close', async () => {
+    let push: ((surface: AppSurface) => void) | undefined
+    const api = installFakeKizunaApi({
+      appShell: {
+        getSurface: vi.fn(async () => 'options' as const),
+        showSplash: vi.fn(async () => {
+          push?.('splash')
+          return 'splash' as const
+        }),
+        onSurfaceChanged: vi.fn((callback: (surface: AppSurface) => void) => {
+          push = callback
+          return vi.fn()
+        })
+      }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close options' }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Kizuna' })).toBeTruthy())
+    expect(api.appShell.showSplash).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a pushed surface ahead of a stale close result', async () => {
+    const close = deferred<AppSurface>()
+    let push: ((surface: AppSurface) => void) | undefined
+    const api = installFakeKizunaApi({
+      appShell: {
+        getSurface: vi.fn(async () => 'options' as const),
+        showSplash: vi.fn(() => close.promise),
+        onSurfaceChanged: vi.fn((callback: (surface: AppSurface) => void) => {
+          push = callback
+          return vi.fn()
+        })
+      }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close options' }))
+
+    await act(async () => {
+      push?.('splash')
+      close.resolve('player')
+      await close.promise
+    })
+
+    expect(screen.getByRole('heading', { name: 'Kizuna' })).toBeTruthy()
+    expect(screen.queryByRole('dialog', { name: 'Options' })).toBeNull()
+  })
+
+  it('keeps Options open when the close transition rejects', async () => {
+    const api = installFakeKizunaApi({
+      appShell: {
+        getSurface: vi.fn(async () => 'options' as const),
+        showSplash: vi.fn(async () => {
+          throw new Error('splash unavailable')
+        })
+      }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close options' }))
+
+    expect((await screen.findByRole('alert')).textContent).toContain('splash unavailable')
+    expect(screen.getByRole('dialog', { name: 'Options' })).toBeTruthy()
   })
 
   it('lets an early surface push win over a stale initial read without mounting App', async () => {

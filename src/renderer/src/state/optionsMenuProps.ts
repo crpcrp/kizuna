@@ -38,6 +38,7 @@ export type OptionsPlaybackGroup = Pick<
   | 'onSelectAudioDevice'
   | 'onToggleLoudnessNorm'
   | 'selectedAudioDevice'
+  | 'livePlayerAvailable'
 >
 
 export interface OptionsMenuPropsInput {

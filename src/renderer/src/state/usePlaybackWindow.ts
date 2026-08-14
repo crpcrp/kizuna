@@ -66,21 +66,6 @@ export interface PerFileValueRefs {
   videoAdjustmentsRef: RefObject<VideoAdjustments>
 }
 
-/**
- * Creates the per-file value caches this feature owns.
- *
- * Called by the composition root rather than by `usePlaybackWindow` itself
- * because `useSettingsLifecycle` hydrates them from `settings.json`, and it has
- * to run first: its `settingsReady` flag gates the per-load restore below.
- */
-export function usePerFileValues(initialVideoAdjustments: VideoAdjustments): PerFileValueRefs {
-  const subtitleOffsetsRef = useRef<Record<string, number>>({})
-  const folderSubtitleOffsetsRef = useRef<Record<string, number>>({})
-  const audioDelaysRef = useRef<Record<string, number>>({})
-  const videoAdjustmentsRef = useRef<VideoAdjustments>(initialVideoAdjustments)
-  return { subtitleOffsetsRef, folderSubtitleOffsetsRef, audioDelaysRef, videoAdjustmentsRef }
-}
-
 export interface PlaybackWindowPanels {
   sidebarOpen: boolean
   playlistOpen: boolean
