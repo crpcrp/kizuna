@@ -58,46 +58,86 @@ export default function SplashScreen({
           >
             &#x2715;
           </button>
-          <div className="splash-brand" aria-hidden="true">
-            <img src={APP_LOGO_URL} alt="" draggable="false" />
+          <div className="splash-visual" aria-hidden="true">
+            <div className="splash-logo-frame splash-brand">
+              <img src={APP_LOGO_URL} alt="" draggable="false" />
+            </div>
+            <div className="splash-visual-footer">
+              <span>MEDIA × LANGUAGE</span>
+              <span className="splash-track">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+            </div>
           </div>
-          <h1 id="splash-title">{APP_NAME}</h1>
+          <div className="splash-content">
+            <div className="splash-heading">
+              <h1 id="splash-title">{APP_NAME}</h1>
+            </div>
 
-          {message && (
-            <p className="splash-error" role="alert">
-              {message}
-            </p>
-          )}
+            {message && (
+              <p className="splash-error" role="alert">
+                {message}
+              </p>
+            )}
 
-          <div className="splash-choices" aria-label="Start Kizuna">
-            <button
-              type="button"
-              aria-label="Game OCR"
-              disabled={!gameOcrSupported || pending !== null}
-              style={noDragStyle}
-              onClick={() => void run('gameOcr', onGameOcr)}
-            >
-              <span>Game OCR</span>
-              {!gameOcrSupported && <small>Windows only</small>}
-            </button>
-            <button
-              type="button"
-              aria-label="Video player"
-              disabled={pending !== null}
-              style={noDragStyle}
-              onClick={() => void run('player', onPlayer)}
-            >
-              Video player
-            </button>
-            <button
-              type="button"
-              aria-label="Options"
-              disabled={pending !== null}
-              style={noDragStyle}
-              onClick={() => void run('options', onOptions)}
-            >
-              Options
-            </button>
+            <div className="splash-choices" aria-label="Start Kizuna">
+              <button
+                type="button"
+                className="splash-choice splash-choice-game-ocr"
+                aria-label="Game OCR"
+                disabled={!gameOcrSupported || pending !== null}
+                style={noDragStyle}
+                onClick={() => void run('gameOcr', onGameOcr)}
+              >
+                <span className="splash-choice-index">01</span>
+                <span className="splash-choice-copy">
+                  <span>Game OCR</span>
+                  <small>{gameOcrSupported ? 'Capture text anywhere' : 'Windows only'}</small>
+                </span>
+                <span className="splash-choice-arrow" aria-hidden="true">
+                  ↗
+                </span>
+              </button>
+              <button
+                type="button"
+                className="splash-choice splash-choice-player"
+                aria-label="Video player"
+                disabled={pending !== null}
+                style={noDragStyle}
+                onClick={() => void run('player', onPlayer)}
+              >
+                <span className="splash-choice-index">02</span>
+                <span className="splash-choice-copy">
+                  <span>Video player</span>
+                  <small>Watch and learn with subtitles</small>
+                </span>
+                <span className="splash-choice-arrow" aria-hidden="true">
+                  ↗
+                </span>
+              </button>
+              <button
+                type="button"
+                className="splash-choice splash-choice-options"
+                aria-label="Options"
+                disabled={pending !== null}
+                style={noDragStyle}
+                onClick={() => void run('options', onOptions)}
+              >
+                <span className="splash-choice-index">03</span>
+                <span className="splash-choice-copy">
+                  <span>Options</span>
+                  <small>Configure Kizuna</small>
+                </span>
+                <span className="splash-choice-arrow" aria-hidden="true">
+                  ↗
+                </span>
+              </button>
+            </div>
+            <p className="splash-content-footer">PLAY · MINE · REMEMBER</p>
           </div>
         </section>
       </main>
