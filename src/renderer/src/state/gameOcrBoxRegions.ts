@@ -76,20 +76,25 @@ export function buildGameOcrBoxRegions({
   })
 }
 
-const BOX_CONTENT_INSET = 4
+const BOX_HORIZONTAL_INSET = 6
+const BOX_VERTICAL_INSET = 4
+const LINE_HEIGHT = 1.1
 const MIN_FONT_SIZE = 6
-const MAX_FONT_SIZE = 32
+const MAX_FONT_SIZE = 64
 const WIDTH_SAFETY_FACTOR = 0.95
 
 /** Fit replacement glyphs inside the detector rectangle without growing it. */
 export function fitGameOcrFontSize(text: string, boxWidth: number, boxHeight: number): number {
   const lines = text.split('\n')
-  const availableWidth = Math.max(0, boxWidth - BOX_CONTENT_INSET)
-  const availableHeight = Math.max(0, boxHeight - BOX_CONTENT_INSET)
+  const availableWidth = Math.max(0, boxWidth - BOX_HORIZONTAL_INSET)
+  const availableHeight = Math.max(0, boxHeight - BOX_VERTICAL_INSET)
   const widestLine = Math.max(1, ...lines.map(estimatedTextUnits))
   const widthSize = (availableWidth / widestLine) * WIDTH_SAFETY_FACTOR
-  const heightSize = availableHeight / Math.max(1, lines.length)
-  return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.floor(widthSize), heightSize))
+  const heightSize = availableHeight / Math.max(1, lines.length * LINE_HEIGHT)
+  return Math.max(
+    MIN_FONT_SIZE,
+    Math.min(MAX_FONT_SIZE, Math.floor(widthSize), Math.floor(heightSize))
+  )
 }
 
 /** Approximate glyph advances in ems for the Japanese UI fonts used by the overlay. */

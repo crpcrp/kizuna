@@ -42,9 +42,9 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 4. A small **"Recognizing text…"** sign sits at a fixed inset in the
    screenshot's bottom-right corner. It is visible only while OCR is running
    and disappears when the boxes appear.
-5. Bordered text boxes appear over the original text locations. Nearby boxes
-   are separated by a small deterministic pass, so two lines of game text never
-   land on top of each other.
+5. Bordered text boxes appear over the original text locations. Closely stacked
+   lines stay together, while visibly separated rows get their own box so each
+   can use the available line height.
 
 ### Inside a frozen frame
 

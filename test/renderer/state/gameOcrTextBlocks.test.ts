@@ -33,6 +33,17 @@ describe('groupGameOcrTextBlocks', () => {
     ])
   })
 
+  it('keeps visibly separated aligned rows in separate blocks', () => {
+    const blocks = groupGameOcrTextBlocks([
+      region('row-one', 100, 100, 360, 40),
+      region('row-two', 100, 164, 320, 40),
+      region('row-three', 100, 228, 340, 40),
+      region('row-four', 100, 292, 360, 40)
+    ])
+
+    expect(ids(blocks)).toEqual([['row-one'], ['row-two'], ['row-three'], ['row-four']])
+  })
+
   it('is deterministic when the input order is shuffled', () => {
     const ordered = [
       region('one', 100, 100),
