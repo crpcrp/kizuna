@@ -4,6 +4,7 @@ import {
   describeKeyBinding,
   describeKeyCode,
   eventKeyBinding,
+  findKeyBindingConflicts,
   isEditableTarget,
   keyToAction,
   wheelDirection,
@@ -44,6 +45,29 @@ describe('keyToAction', () => {
     expect(new Set(bindings).size).toBe(bindings.length)
     expect(keyToAction('ShiftLeft+MouseWheelUp')).toBe('subtitleFontScaleUp')
     expect(keyToAction('ShiftLeft+MouseWheelDown')).toBe('subtitleFontScaleDown')
+  })
+})
+
+describe('findKeyBindingConflicts', () => {
+  it('returns every action and its peers in a duplicate binding group', () => {
+    const bindings: KeyBindings = {
+      ...DEFAULT_KEY_BINDINGS,
+      togglePause: 'KeyK',
+      toggleFullscreen: 'KeyK',
+      exitFullscreen: 'KeyK'
+    }
+
+    expect(findKeyBindingConflicts(bindings)).toEqual(
+      new Map([
+        ['togglePause', ['toggleFullscreen', 'exitFullscreen']],
+        ['toggleFullscreen', ['togglePause', 'exitFullscreen']],
+        ['exitFullscreen', ['togglePause', 'toggleFullscreen']]
+      ])
+    )
+  })
+
+  it('returns no conflicts when every action has a unique binding', () => {
+    expect(findKeyBindingConflicts(DEFAULT_KEY_BINDINGS)).toEqual(new Map())
   })
 })
 

@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react'
-import { describeKeyBinding, eventKeyBinding, wheelEventKeyBinding } from '../../state/keyBindings'
+import {
+  describeKeyBinding,
+  eventKeyBinding,
+  findKeyBindingConflicts,
+  wheelEventKeyBinding
+} from '../../state/keyBindings'
 import type { KeyBinding, KeyBindings, PlayerKeyAction } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 
@@ -46,6 +51,8 @@ export const KEYBINDINGS_SETTING_ENTRIES: SettingEntry[] = ACTION_ROWS.map(
   })
 )
 
+const ACTION_LABELS = new Map(ACTION_ROWS.map(({ action, label }) => [action, label]))
+
 export interface KeybindingsTabProps {
   active: boolean
   open: boolean
@@ -65,6 +72,7 @@ export default function KeybindingsTab({
   onChangeKeyBinding
 }: KeybindingsTabProps): React.JSX.Element {
   const [listeningFor, setListeningFor] = useState<PlayerKeyAction | null>(null)
+  const conflicts = findKeyBindingConflicts(keyBindings)
 
   useEffect(() => {
     if (!open || !listeningFor) return
@@ -114,19 +122,36 @@ export default function KeybindingsTab({
           {ACTION_ROWS.map(({ action, label }) => (
             <div className="options-row options-shortcut-row" key={action}>
               <span className="options-row-label">{label}</span>
-              <button
-                type="button"
-                id={`keybind-${action}`}
-                className="options-keybind-button"
-                aria-label={`Rebind ${label}`}
-                onClick={() => setListeningFor(action)}
-              >
-                {listeningFor === action
-                  ? WHEEL_BINDABLE_ACTIONS.has(action)
-                    ? 'Press a key or scroll…'
-                    : 'Press a key…'
-                  : describeKeyBinding(keyBindings[action])}
-              </button>
+              <div className="options-keybind-control">
+                <button
+                  type="button"
+                  id={`keybind-${action}`}
+                  className="options-keybind-button"
+                  aria-label={`Rebind ${label}`}
+                  aria-describedby={conflicts.has(action) ? `keybind-${action}-warning` : undefined}
+                  onClick={() => setListeningFor(action)}
+                >
+                  {listeningFor === action
+                    ? WHEEL_BINDABLE_ACTIONS.has(action)
+                      ? 'Press a key or scroll…'
+                      : 'Press a key…'
+                    : describeKeyBinding(keyBindings[action])}
+                </button>
+                {conflicts.has(action) && (
+                  <p
+                    className="options-keybind-warning"
+                    id={`keybind-${action}-warning`}
+                    role="alert"
+                  >
+                    This keybinding is already used by{' '}
+                    {conflicts
+                      .get(action)
+                      ?.map((conflictingAction) => ACTION_LABELS.get(conflictingAction))
+                      .join(', ')}
+                    .
+                  </p>
+                )}
+              </div>
             </div>
           ))}
         </div>
