@@ -246,7 +246,7 @@ function createWindow(
         windows.activate()
       }
     },
-    presentOptions: presentOverlay,
+    presentOptions: () => surfacePresentation.presentOptions(presentOverlay),
     dismissGameOcrOptions: () => gameOcrLifecycle?.dismissOptions() ?? false,
     sendSurfaceChanged: (surface) =>
       sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
