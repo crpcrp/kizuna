@@ -76,6 +76,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     },
     appShell: {
       getSurface: vi.fn(async () => 'player' as const),
+      showSplash: vi.fn(async () => 'splash' as const),
       showPlayer: vi.fn(async () => 'player' as const),
       showOptions: vi.fn(async () => 'options' as const),
       quit: vi.fn(),

@@ -171,6 +171,7 @@ const api = {
 
   appShell: {
     getSurface: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.getSurface),
+    showSplash: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showSplash),
     showPlayer: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showPlayer),
     showOptions: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showOptions),
     quit: (): void => ipcRenderer.send(APP_SHELL_CHANNELS.quit),

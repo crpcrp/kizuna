@@ -468,6 +468,18 @@ export function preparePlayerAppWindowSet(windows: Pick<AppWindowSet, 'videoHost
   windows.videoHost.show()
 }
 
+/** Shows only the renderer surface and hides Linux's opaque mpv host. */
+export function showOverlayAppWindowSet(
+  windows: Pick<AppWindowSet, 'videoHost' | 'uiOverlay'>
+): void {
+  if (windows.uiOverlay.isDestroyed()) return
+  if (windows.videoHost !== windows.uiOverlay && !windows.videoHost.isDestroyed()) {
+    windows.videoHost.hide()
+  }
+  windows.uiOverlay.show()
+  windows.uiOverlay.focus()
+}
+
 interface CloseableWindow {
   on(event: 'close' | 'closed', listener: (event?: WindowCloseEvent) => void): unknown
   close(): void
@@ -575,8 +587,7 @@ export function presentOverlayAppWindowSet(
       clearTimeoutFn(fallbackTimer)
       fallbackTimer = undefined
     }
-    windows.uiOverlay.show()
-    windows.uiOverlay.focus()
+    showOverlayAppWindowSet(windows)
   }
 
   fallbackTimerPending = true

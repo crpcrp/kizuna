@@ -38,7 +38,25 @@ describe('createAppShellCoordinator', () => {
     expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
 
     await fixture.coordinator.showOptions()
-    expect(fixture.ensurePlayerStarted).toHaveBeenCalledOnce()
+    expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
+    expect(fixture.presentOptions).toHaveBeenCalledOnce()
+  })
+
+  it('returns to splash without starting the player', async () => {
+    const fixture = makeFixture('options')
+
+    await fixture.coordinator.showSplash()
+
+    expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
+    expect(fixture.presentSplash).toHaveBeenCalledOnce()
+    expect(fixture.sendSurfaceChanged).toHaveBeenCalledWith('splash')
+  })
+
+  it('presents an initial options surface without starting the player', () => {
+    const fixture = makeFixture('options')
+
+    expect(fixture.presentOptions).toHaveBeenCalledOnce()
+    expect(fixture.ensurePlayerStarted).not.toHaveBeenCalled()
   })
 
   it('presents a usable player surface after a failed player start', async () => {
@@ -77,6 +95,32 @@ describe('createAppShellCoordinator', () => {
     expect(fixture.presentPlayer).not.toHaveBeenCalled()
     expect(fixture.presentOptions).toHaveBeenCalledOnce()
     expect(fixture.sendSurfaceChanged).toHaveBeenCalledExactlyOnceWith('options')
+  })
+
+  it('does not present a stale player when the request is superseded by splash', async () => {
+    const start = deferred<'ready' | 'failed'>()
+    const fixture = makeFixture('options')
+    fixture.ensurePlayerStarted.mockReturnValue(start.promise)
+
+    const player = fixture.coordinator.showPlayer()
+    const splash = fixture.coordinator.showSplash()
+    start.resolve('ready')
+
+    await expect(player).resolves.toBe('splash')
+    await expect(splash).resolves.toBe('splash')
+    expect(fixture.ensurePlayerStarted).toHaveBeenCalledOnce()
+    expect(fixture.presentPlayer).not.toHaveBeenCalled()
+    expect(fixture.presentSplash).toHaveBeenCalledOnce()
+    expect(fixture.sendSurfaceChanged).toHaveBeenCalledExactlyOnceWith('splash')
+  })
+
+  it('keeps the previous surface when native presentation fails', async () => {
+    const fixture = makeFixture()
+    fixture.presentOptions.mockRejectedValue(new Error('window closed'))
+
+    await expect(fixture.coordinator.showOptions()).resolves.toBe('splash')
+
+    expect(fixture.sendSurfaceChanged).not.toHaveBeenCalled()
   })
 
   it('coalesces quit requests', () => {

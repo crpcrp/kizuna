@@ -144,6 +144,7 @@ export const LAUNCH_CHANNELS = {
 /** Main-owned application-surface commands and state push. */
 export const APP_SHELL_CHANNELS = {
   getSurface: 'appShell:getSurface',
+  showSplash: 'appShell:showSplash',
   showPlayer: 'appShell:showPlayer',
   showOptions: 'appShell:showOptions',
   quit: 'appShell:quit',

@@ -20,6 +20,7 @@ import type { FileAvailability } from '@src/shared/preloadApi'
 describe('KizunaApi', () => {
   it('exposes the typed application-surface commands', () => {
     expectTypeOf<KizunaApi['appShell']['getSurface']>().returns.toEqualTypeOf<Promise<AppSurface>>()
+    expectTypeOf<KizunaApi['appShell']['showSplash']>().returns.toEqualTypeOf<Promise<AppSurface>>()
     expectTypeOf<KizunaApi['appShell']['showPlayer']>().returns.toEqualTypeOf<Promise<AppSurface>>()
     expectTypeOf<KizunaApi['appShell']['showOptions']>().returns.toEqualTypeOf<
       Promise<AppSurface>

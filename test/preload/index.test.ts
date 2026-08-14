@@ -94,6 +94,7 @@ describe('preload app-shell contract', () => {
     const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
       appShell: {
         getSurface(): Promise<unknown>
+        showSplash(): Promise<unknown>
         showPlayer(): Promise<unknown>
         showOptions(): Promise<unknown>
         quit(): void
@@ -103,6 +104,7 @@ describe('preload app-shell contract', () => {
     const callback = vi.fn()
 
     api.appShell.getSurface()
+    api.appShell.showSplash()
     api.appShell.showPlayer()
     api.appShell.showOptions()
     api.appShell.quit()
@@ -112,8 +114,9 @@ describe('preload app-shell contract', () => {
     off()
 
     expect(electron.invoke).toHaveBeenNthCalledWith(1, APP_SHELL_CHANNELS.getSurface)
-    expect(electron.invoke).toHaveBeenNthCalledWith(2, APP_SHELL_CHANNELS.showPlayer)
-    expect(electron.invoke).toHaveBeenNthCalledWith(3, APP_SHELL_CHANNELS.showOptions)
+    expect(electron.invoke).toHaveBeenNthCalledWith(2, APP_SHELL_CHANNELS.showSplash)
+    expect(electron.invoke).toHaveBeenNthCalledWith(3, APP_SHELL_CHANNELS.showPlayer)
+    expect(electron.invoke).toHaveBeenNthCalledWith(4, APP_SHELL_CHANNELS.showOptions)
     expect(electron.send).toHaveBeenCalledWith(APP_SHELL_CHANNELS.quit)
     expect(callback).toHaveBeenCalledWith('options')
     expect(electron.removeListener).toHaveBeenCalledWith(

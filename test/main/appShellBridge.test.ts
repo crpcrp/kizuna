@@ -7,6 +7,7 @@ import type { AppShellCoordinator } from '@src/main/services/appShell'
 function fakeCoordinator(): AppShellCoordinator {
   return {
     getSurface: vi.fn(() => 'splash' as const),
+    showSplash: vi.fn(async () => 'splash' as const),
     showPlayer: vi.fn(async () => 'player' as const),
     showOptions: vi.fn(async () => 'options' as const),
     quit: vi.fn()
@@ -26,17 +27,20 @@ describe('registerAppShellBridge', () => {
     expect([...handlers.keys()].sort()).toEqual(
       [
         APP_SHELL_CHANNELS.getSurface,
+        APP_SHELL_CHANNELS.showSplash,
         APP_SHELL_CHANNELS.showPlayer,
         APP_SHELL_CHANNELS.showOptions
       ].sort()
     )
     expect([...listeners.keys()]).toEqual([APP_SHELL_CHANNELS.quit])
     expect(handlers.get(APP_SHELL_CHANNELS.getSurface)!({ sender: allowedSender })).toBe('splash')
+    await handlers.get(APP_SHELL_CHANNELS.showSplash)!({ sender: allowedSender })
     await handlers.get(APP_SHELL_CHANNELS.showPlayer)!({ sender: allowedSender })
     await handlers.get(APP_SHELL_CHANNELS.showOptions)!({ sender: allowedSender })
     listeners.get(APP_SHELL_CHANNELS.quit)!({ sender: allowedSender })
 
     expect(coordinator.showPlayer).toHaveBeenCalledOnce()
+    expect(coordinator.showSplash).toHaveBeenCalledOnce()
     expect(coordinator.showOptions).toHaveBeenCalledOnce()
     expect(coordinator.quit).toHaveBeenCalledOnce()
     expect(() => handlers.get(APP_SHELL_CHANNELS.getSurface)!({ sender: { id: 2 } })).toThrow(

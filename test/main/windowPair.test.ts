@@ -7,6 +7,7 @@ import {
   preparePlayerAppWindowSet,
   presentAppWindowSet,
   presentOverlayAppWindowSet,
+  showOverlayAppWindowSet,
   syncInitialWindowBounds,
   type WindowCloseEvent
 } from '@src/main/windowPair'
@@ -34,6 +35,7 @@ class FakeWindow {
   readonly restore = vi.fn(() => {
     this.minimized = false
   })
+  readonly hide = vi.fn()
   readonly show = vi.fn()
   readonly moveTop = vi.fn()
   readonly moveAbove = vi.fn()
@@ -230,6 +232,36 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(host.show).not.toHaveBeenCalled()
     expect(overlay.show).toHaveBeenCalledOnce()
     expect(overlay.focus).toHaveBeenCalledOnce()
+  })
+
+  it('hides the Linux video host when showing a non-player surface', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+    const [host, overlay] = factory.created
+
+    showOverlayAppWindowSet(windows)
+
+    expect(host.hide).toHaveBeenCalledOnce()
+    expect(overlay.show).toHaveBeenCalledOnce()
+    expect(overlay.focus).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the Windows single-window surface visible', () => {
+    const factory = makeWindowFactory()
+    const windows = createAppWindowSet({
+      platform: 'win32',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow
+    })
+
+    showOverlayAppWindowSet(windows)
+
+    expect(factory.created[0].hide).not.toHaveBeenCalled()
+    expect(factory.created[0].show).toHaveBeenCalledOnce()
   })
 
   it('keeps Windows operations on its single BrowserWindow', () => {
