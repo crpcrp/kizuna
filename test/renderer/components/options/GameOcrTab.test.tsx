@@ -109,4 +109,38 @@ describe('GameOcrTab', () => {
     expect(onChangeShortcut).toHaveBeenCalledWith('Ctrl+Shift+P')
     expect(screen.getByText('Ctrl+Shift+O')).not.toBeNull()
   })
+
+  it('captures Alt+í and displays the persisted Electron-safe shortcut', () => {
+    const onChangeShortcut = vi.fn()
+    const { rerender } = renderTab({ onChangeShortcut })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rebind Game OCR capture shortcut' }))
+    fireEvent.keyDown(window, {
+      code: 'IntlBackslash',
+      key: 'í',
+      ctrlKey: false,
+      altKey: true,
+      shiftKey: false,
+      metaKey: false
+    })
+
+    expect(onChangeShortcut).toHaveBeenCalledWith('Alt+\\')
+    expect(screen.queryByText('Press a key…')).toBeNull()
+
+    rerender(
+      <GameOcrTab
+        active
+        open
+        settings={{ captureShortcut: 'Alt+\\' }}
+        status={stoppedStatus}
+        onChangeShortcut={onChangeShortcut}
+        onStart={vi.fn()}
+        onStop={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+    expect(
+      screen.getByRole('button', { name: 'Rebind Game OCR capture shortcut' }).textContent
+    ).toBe('Alt+í')
+  })
 })
