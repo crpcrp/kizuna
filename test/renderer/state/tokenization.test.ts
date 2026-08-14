@@ -58,6 +58,20 @@ describe('tokenizeActiveCue', () => {
     expect(result).toEqual([tokenA])
   })
 
+  it('tokenizes a wrapped cue as one continuous line, so a split word stays one word', async () => {
+    const bridge = makeMecabBridge()
+    const dispatch = vi.fn()
+
+    await tokenizeActiveCue(
+      bridge,
+      dispatch,
+      { start: 0, end: 1, text: '棒人間が描か\nれている。' },
+      new Map()
+    )
+
+    expect(bridge.tokenize).toHaveBeenCalledWith('棒人間が描かれている。')
+  })
+
   it('cache miss: clears stale tokens synchronously first, then dispatches the real tokens once resolved', async () => {
     const first = deferred<Token[]>()
     const tokenize = vi.fn().mockReturnValue(first.promise)
@@ -310,6 +324,18 @@ describe('tokenizeAllCues', () => {
       tokens: { [cueKey(cueA)]: [tokenCat], [cueKey(cueB)]: [tokenDog] }
     })
     expect(knowledge.levelsFor).toHaveBeenCalledWith(['猫', '犬'])
+  })
+
+  it('batches each wrapped cue as one continuous line while keying it by its displayed text', async () => {
+    const wrapped: Cue = { start: 0, end: 1, text: '棒人間が描か\nれている。' }
+    const mecab = makeMecabBatch([[tokenCat]])
+    const knowledge = makeKnowledge({ 猫: 'known' })
+    const tokenCache = new Map<string, Token[]>()
+
+    await tokenizeAllCues(mecab, knowledge, vi.fn(), [wrapped], tokenCache, new Map())
+
+    expect(mecab.tokenizeBatch).toHaveBeenCalledWith(['棒人間が描かれている。'])
+    expect(tokenCache.get(cueKey(wrapped))).toEqual([tokenCat])
   })
 
   it('one cache miss publishes one new complete snapshot while reusing cached cue arrays', async () => {

@@ -330,4 +330,41 @@ describe('CueRowContent search highlighting', () => {
     )
     expect(html).toContain('<span data-token="" data-level="learning"><mark>猫</mark></span>')
   })
+
+  it('marks a search hit on the line after the wrap, whose token offsets skip the break', () => {
+    const wrappedCue: Cue = { start: 0, end: 1, text: '棒人間が描か\nれている。' }
+    // One token per word, with 描かれている spanning the line break.
+    const tokens: Token[] = [
+      makeToken({ surface: '棒人間' }),
+      makeToken({ surface: 'が', startOffset: 3 }),
+      makeToken({ surface: '描かれている', startOffset: 4 }),
+      makeToken({ surface: '。', startOffset: 10 })
+    ]
+    // '。' at display offset 11 — one past its token offset, which skips the break.
+    const matches: SearchMatch[] = [{ cueKey: cueKey(wrappedCue), start: 11, end: 12 }]
+    const html = renderToStaticMarkup(
+      <CueRowContent cue={wrappedCue} rowTokens={tokens} matches={matches} />
+    )
+
+    expect(html).toContain('>描か</span><br/>')
+    expect(html).toContain('>れている</span>')
+    expect(html).toContain('<span data-token=""><mark>。</mark></span>')
+  })
+
+  it('clips a match inside a wrapped word to the fragment it is visible in', () => {
+    const wrappedCue: Cue = { start: 0, end: 1, text: '棒人間が描か\nれている。' }
+    const tokens: Token[] = [
+      makeToken({ surface: '棒人間' }),
+      makeToken({ surface: 'が', startOffset: 3 }),
+      makeToken({ surface: '描かれている', startOffset: 4 })
+    ]
+    // 'れて' on the second display line, inside the wrapped word.
+    const matches: SearchMatch[] = [{ cueKey: cueKey(wrappedCue), start: 7, end: 9 }]
+    const html = renderToStaticMarkup(
+      <CueRowContent cue={wrappedCue} rowTokens={tokens} matches={matches} />
+    )
+
+    expect(html).toContain('<mark>れて</mark>いる</span>')
+    expect(html).toContain('>描か</span><br/>')
+  })
 })

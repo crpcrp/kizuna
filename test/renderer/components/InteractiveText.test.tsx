@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import InteractiveText from '@src/renderer/src/components/InteractiveText'
-import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
+import { createTextProjection } from '@src/shared/textProjection'
 import type { Token } from '@src/shared/token'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -24,9 +24,10 @@ describe('InteractiveText', () => {
 
   it('keeps plain text fallback and multiline token breaks', () => {
     const plain = renderToStaticMarkup(<InteractiveText id="plain" text={'a\nb'} />)
+    // Token offsets skip the line break: 'b' is the second analysis character.
     const tokens: Token[] = [
       makeToken({ surface: 'a' }),
-      makeToken({ surface: 'b', startOffset: 2 })
+      makeToken({ surface: 'b', startOffset: 1 })
     ]
     const tokenized = renderToStaticMarkup(
       <InteractiveText id="tokenized" text={'a\nb'} tokens={tokens} />
@@ -38,7 +39,7 @@ describe('InteractiveText', () => {
   })
 
   it('renders a token crossing a display newline as shared semantic fragments', () => {
-    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const projection = createTextProjection(['棒人間が描か', 'れている。'])
     const token = makeToken({
       surface: '描かれている',
       startOffset: 4

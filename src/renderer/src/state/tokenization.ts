@@ -4,6 +4,7 @@
 
 import { type Cue } from '../../../shared/cue'
 import { type KnowledgeLevel, maxKnowledgeLevel } from '../../../shared/knowledge'
+import { displayTextProjection } from '../../../shared/textProjection'
 import { type Token } from '../../../shared/token'
 import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
 
@@ -16,6 +17,18 @@ export interface MecabBridge {
  * active cue changed (vs. the same cue still being active on a later tick). */
 export function cueKey(cue: Cue): string {
   return `${cue.start}|${cue.end}|${cue.text}`
+}
+
+/**
+ * The text one cue is tokenized as: its lines joined with no separator, the
+ * same continuous view Game OCR analyzes a grouped text block through (see
+ * `shared/textProjection.ts`). A subtitle wraps mid-word, so MeCab must see
+ * 描かれている rather than 描か and れている on two lines — and every token
+ * offset that follows is an offset into this text, which
+ * `InteractiveText` projects back onto the displayed lines.
+ */
+export function cueAnalysisText(cue: Cue): string {
+  return displayTextProjection(cue.text).analysisText
 }
 
 /**
@@ -52,7 +65,7 @@ export async function tokenizeActiveCue(
   dispatch({ type: 'activeTokensLoaded', tokens: [] })
 
   const requestId = ++tokenizeToken.current
-  const tokens = await bridge.tokenize(cue.text)
+  const tokens = await bridge.tokenize(cueAnalysisText(cue))
   // Stale: don't dispatch, and return [] rather than these (now-superseded)
   // tokens so a chained caller (e.g. resolveKnownLevels in App.tsx) treats
   // this resolution as a no-op too, instead of resolving levels for a cue
@@ -156,7 +169,7 @@ export async function tokenizeAllCues(
 
   const missing = cues.filter((cue) => !tokenCache.has(cueKey(cue)))
   if (missing.length > 0) {
-    const batches = await mecab.tokenizeBatch(missing.map((cue) => cue.text))
+    const batches = await mecab.tokenizeBatch(missing.map(cueAnalysisText))
     // A newer request started while MeCab was running: discard this result
     // rather than writing a superseded track's tokens into state.
     if (requestToken.current !== requestId) return undefined

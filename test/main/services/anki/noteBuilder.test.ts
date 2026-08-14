@@ -60,6 +60,21 @@ describe('boldTarget', () => {
     })
     expect(boldTarget('猫が食べる', t)).toBe('猫が<b>食べる</b>')
   })
+
+  it('bolds each visible piece of a word wrapped across two subtitle lines', () => {
+    const t: Token = makeToken({ surface: '描かれている', pos: '動詞', startOffset: 4 })
+    expect(boldTarget('棒人間が描か\nれている。', t)).toBe('棒人間が<b>描か</b>\n<b>れている</b>。')
+  })
+
+  it('ignores the line breaks before the target, which token offsets never count', () => {
+    const t: Token = makeToken({ surface: '好き', startOffset: 7 })
+    expect(boldTarget('私は食べる\nのが好き。', t)).toBe('私は食べる\nのが<b>好き</b>。')
+  })
+
+  it('leaves a sentence untouched when the token does not fit it', () => {
+    const t: Token = makeToken({ surface: '食べる', startOffset: 40 })
+    expect(boldTarget('猫が魚を食べる。', t)).toBe('猫が魚を食べる。')
+  })
 })
 
 describe('formatAnkiFurigana', () => {

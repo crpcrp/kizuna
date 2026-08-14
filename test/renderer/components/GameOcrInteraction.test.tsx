@@ -6,7 +6,7 @@ import GameOcrInteraction, {
   type GameOcrInteractionProps
 } from '@src/renderer/src/components/GameOcrInteraction'
 import type { GameOcrBoxRegion } from '@src/renderer/src/components/GameOcrBoxes'
-import { createGameOcrTextProjection } from '@src/renderer/src/state/gameOcrTextProjection'
+import { createTextProjection } from '@src/shared/textProjection'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { deferred } from '@test/harness/deferred'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -70,7 +70,7 @@ const popupSettings = {
 
 describe('GameOcrInteraction', () => {
   it('shares lookup and highlight identity across a word split by a display newline', async () => {
-    const projection = createGameOcrTextProjection(['棒人間が描か', 'れている。'])
+    const projection = createTextProjection(['棒人間が描か', 'れている。'])
     const token = makeToken({
       surface: '描かれている',
       reading: 'えがかれている',
@@ -263,7 +263,7 @@ describe('GameOcrInteraction', () => {
   })
 
   it('translates a selection across grouped display lines as one request', () => {
-    const projection = createGameOcrTextProjection(['前の行', '後の行'])
+    const projection = createTextProjection(['前の行', '後の行'])
     const translate = vi.fn().mockResolvedValue('translation')
     const { container } = render(
       <GameOcrFrame onClose={vi.fn()}>

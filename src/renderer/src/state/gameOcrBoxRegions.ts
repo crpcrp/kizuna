@@ -2,7 +2,7 @@ import type { OcrResult } from '../../../shared/ocr'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
 import { groupGameOcrTextBlocks, type GameOcrTextBlock } from './gameOcrTextBlocks'
 import { calculateGameOcrLayout, type GameOcrLayoutSize } from './gameOcrLayout'
-import { createGameOcrTextProjection } from './gameOcrTextProjection'
+import { createTextProjection } from '../../../shared/textProjection'
 import type { GameOcrTextSnapshot } from './gameOcrTextPipeline'
 
 export interface GameOcrBoxRegionsInput {
@@ -42,7 +42,7 @@ export function buildGameOcrBoxRegions({
   return blocks.flatMap((block) => {
     const layout = layouts.get(block.id)
     if (!layout) return []
-    const projection = createGameOcrTextProjection(block.lines)
+    const projection = createTextProjection(block.lines)
     const candidate =
       processed?.[block.id] ??
       (block.regionIds.length === 1 ? processed?.[block.regionIds[0]] : undefined)

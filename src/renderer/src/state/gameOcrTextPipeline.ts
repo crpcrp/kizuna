@@ -6,7 +6,7 @@ import {
 } from '../../../shared/knowledge'
 import type { OcrCaptureIdentity } from '../../../shared/ocr'
 import type { Token } from '../../../shared/token'
-import { createGameOcrTextProjection, type GameOcrTextProjection } from './gameOcrTextProjection'
+import { createTextProjection, type TextProjection } from '../../../shared/textProjection'
 import type { MecabBatchBridge } from './tokenization'
 import {
   createVocabularySpanController,
@@ -23,7 +23,7 @@ export interface InteractiveTextRegion {
 /** One grouped OCR block with its display and continuous analysis views. */
 export interface InteractiveTextBlock extends InteractiveTextRegion {
   analysisText: string
-  projection: GameOcrTextProjection
+  projection: TextProjection
 }
 
 export interface GameOcrTextRegion extends InteractiveTextRegion {
@@ -31,7 +31,7 @@ export interface GameOcrTextRegion extends InteractiveTextRegion {
   levels: Record<string, KnowledgeLevel>
   vocabularySpans: VocabularySpan[]
   analysisText?: string
-  projection?: GameOcrTextProjection
+  projection?: TextProjection
 }
 
 export interface GameOcrTextSnapshot extends OcrCaptureIdentity {
@@ -259,6 +259,6 @@ function normalizeBlock(
   region: InteractiveTextRegion | InteractiveTextBlock
 ): InteractiveTextBlock {
   if ('analysisText' in region && 'projection' in region) return region
-  const projection = createGameOcrTextProjection([region.text])
+  const projection = createTextProjection([region.text])
   return { ...region, analysisText: projection.analysisText, projection }
 }
