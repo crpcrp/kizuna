@@ -8,8 +8,8 @@ import {
 describe('centeredSurfaceBounds', () => {
   it('centers the compact splash on a secondary display', () => {
     expect(centeredSurfaceBounds({ x: -1920, y: 40, width: 1920, height: 1040 })).toEqual({
-      x: -1240,
-      y: 390,
+      x: -1280,
+      y: 360,
       width: SPLASH_SURFACE_WIDTH,
       height: SPLASH_SURFACE_HEIGHT
     })

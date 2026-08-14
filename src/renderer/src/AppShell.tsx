@@ -107,6 +107,7 @@ export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.
         onGameOcr={startGameOcr}
         onPlayer={() => show(api.appShell.showPlayer)}
         onOptions={() => show(api.appShell.showOptions)}
+        onQuit={api.appShell.quit}
         error={error}
       />
     )

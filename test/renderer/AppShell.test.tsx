@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import AppShell from '@src/renderer/src/AppShell'
 import SplashScreen from '@src/renderer/src/components/SplashScreen'
@@ -18,6 +19,7 @@ describe('SplashScreen', () => {
         onGameOcr={vi.fn(async () => undefined)}
         onPlayer={vi.fn(async () => undefined)}
         onOptions={vi.fn(async () => undefined)}
+        onQuit={vi.fn()}
       />
     )
 
@@ -33,17 +35,51 @@ describe('SplashScreen', () => {
     expect((screen.getByRole('button', { name: 'Options' }) as HTMLButtonElement).disabled).toBe(
       false
     )
+    expect(screen.queryByText('Choose how to begin.')).toBeNull()
+  })
+
+  it('exposes a draggable-safe accessible quit button', () => {
+    const onQuit = vi.fn()
+    render(
+      <SplashScreen
+        gameOcrSupported
+        onGameOcr={vi.fn(async () => undefined)}
+        onPlayer={vi.fn(async () => undefined)}
+        onOptions={vi.fn(async () => undefined)}
+        onQuit={onQuit}
+      />
+    )
+
+    const quit = screen.getByRole('button', { name: 'Quit Kizuna' })
+    expect(quit.textContent).toBe('✕')
+    expect(quit.className).toBe('splash-close')
+    const markup = renderToStaticMarkup(
+      <SplashScreen
+        gameOcrSupported
+        onGameOcr={vi.fn(async () => undefined)}
+        onPlayer={vi.fn(async () => undefined)}
+        onOptions={vi.fn(async () => undefined)}
+        onQuit={vi.fn()}
+      />
+    )
+    expect(markup).toMatch(/class="splash-card"[^>]*-webkit-app-region:\s*drag/)
+    expect(markup.match(/-webkit-app-region:\s*no-drag/g)).toHaveLength(4)
+
+    fireEvent.click(quit)
+    expect(onQuit).toHaveBeenCalledOnce()
   })
 
   it('disables all choices while a command is pending and recovers from rejection', async () => {
     const request = deferred<void>()
     const onPlayer = vi.fn(() => request.promise)
+    const onQuit = vi.fn()
     render(
       <SplashScreen
         gameOcrSupported
         onGameOcr={vi.fn(async () => undefined)}
         onPlayer={onPlayer}
         onOptions={vi.fn(async () => undefined)}
+        onQuit={onQuit}
       />
     )
 
@@ -54,6 +90,11 @@ describe('SplashScreen', () => {
     expect((screen.getByRole('button', { name: 'Options' }) as HTMLButtonElement).disabled).toBe(
       true
     )
+    expect(
+      (screen.getByRole('button', { name: 'Quit Kizuna' }) as HTMLButtonElement).disabled
+    ).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Quit Kizuna' }))
+    expect(onQuit).toHaveBeenCalledOnce()
 
     await act(async () => request.reject(new Error('player unavailable')))
     expect((await screen.findByRole('alert')).textContent).toContain('player unavailable')
@@ -83,6 +124,18 @@ describe('AppShell', () => {
     expect(api.player.getAudioDevices).not.toHaveBeenCalled()
     expect(api.player.onTimePos).not.toHaveBeenCalled()
     expect(api.media.openFile).not.toHaveBeenCalled()
+  })
+
+  it('routes splash quit through the app-shell API', async () => {
+    const api = installFakeKizunaApi({
+      appShell: { getSurface: vi.fn(async () => 'splash' as const) }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('button', { name: 'Quit Kizuna' })
+    fireEvent.click(screen.getByRole('button', { name: 'Quit Kizuna' }))
+
+    expect(api.appShell.quit).toHaveBeenCalledOnce()
   })
 
   it('keeps mpv-only controls unavailable and persists ordinary settings', async () => {

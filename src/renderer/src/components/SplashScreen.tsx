@@ -5,12 +5,15 @@ import { errorMessage } from '../util/errorMessage'
 import './SplashScreen.css'
 
 const APP_LOGO_URL = new URL('../../../../build/icon.png', import.meta.url).href
+const dragStyle = { WebkitAppRegion: 'drag' } as React.CSSProperties
+const noDragStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export interface SplashScreenProps {
   gameOcrSupported: boolean
   onGameOcr: () => Promise<void>
   onPlayer: () => Promise<void>
   onOptions: () => Promise<void>
+  onQuit: () => void
   error?: string
 }
 
@@ -22,6 +25,7 @@ export default function SplashScreen({
   onGameOcr,
   onPlayer,
   onOptions,
+  onQuit,
   error
 }: SplashScreenProps): React.JSX.Element {
   const [pending, setPending] = useState<PendingChoice>(null)
@@ -44,12 +48,20 @@ export default function SplashScreen({
   return (
     <div id="app" className="splash-app">
       <main className="splash-main" aria-labelledby="splash-title">
-        <section className="splash-card">
+        <section className="splash-card" style={dragStyle}>
+          <button
+            type="button"
+            className="splash-close"
+            aria-label="Quit Kizuna"
+            style={noDragStyle}
+            onClick={onQuit}
+          >
+            &#x2715;
+          </button>
           <div className="splash-brand" aria-hidden="true">
             <img src={APP_LOGO_URL} alt="" draggable="false" />
           </div>
           <h1 id="splash-title">{APP_NAME}</h1>
-          <p className="splash-subtitle">Choose how to begin.</p>
 
           {message && (
             <p className="splash-error" role="alert">
@@ -62,6 +74,7 @@ export default function SplashScreen({
               type="button"
               aria-label="Game OCR"
               disabled={!gameOcrSupported || pending !== null}
+              style={noDragStyle}
               onClick={() => void run('gameOcr', onGameOcr)}
             >
               <span>Game OCR</span>
@@ -71,6 +84,7 @@ export default function SplashScreen({
               type="button"
               aria-label="Video player"
               disabled={pending !== null}
+              style={noDragStyle}
               onClick={() => void run('player', onPlayer)}
             >
               Video player
@@ -79,6 +93,7 @@ export default function SplashScreen({
               type="button"
               aria-label="Options"
               disabled={pending !== null}
+              style={noDragStyle}
               onClick={() => void run('options', onOptions)}
             >
               Options

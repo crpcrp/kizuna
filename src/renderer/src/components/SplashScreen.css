@@ -1,6 +1,6 @@
 .splash-app {
   min-height: 100%;
-  background: transparent;
+  background: var(--surface-panel);
 }
 
 .splash-main {
@@ -12,16 +12,41 @@
 }
 
 .splash-card {
+  position: relative;
   width: 100%;
   min-height: 100%;
   padding: 42px;
   box-sizing: border-box;
   text-align: center;
-  background: var(--surface-card);
+  background: var(--surface-panel);
   border: 1px solid var(--border-default);
   border-radius: 16px;
   box-shadow: var(--shadow-panel);
   -webkit-app-region: drag;
+}
+
+.splash-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.splash-close:hover,
+.splash-close:focus-visible {
+  background: var(--hover-bg);
+  border-color: var(--border-default);
 }
 
 .splash-brand {
@@ -45,11 +70,6 @@
 .splash-card h1 {
   margin: 0;
   font-size: 2rem;
-}
-
-.splash-subtitle {
-  margin: 8px 0 28px;
-  color: var(--text-secondary);
 }
 
 .splash-error {

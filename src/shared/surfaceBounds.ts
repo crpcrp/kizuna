@@ -1,8 +1,8 @@
 import type { WindowBounds } from './windowBounds'
 
 /** The compact native content size used by the startup chooser. */
-export const SPLASH_SURFACE_WIDTH = 560
-export const SPLASH_SURFACE_HEIGHT = 340
+export const SPLASH_SURFACE_WIDTH = 640
+export const SPLASH_SURFACE_HEIGHT = 400
 
 /**
  * Centers a surface in a display work area, shrinking it when the work area is
