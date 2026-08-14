@@ -70,6 +70,48 @@ describe('deriveVocabularyUnits', () => {
     })
   })
 
+  it('treats a compound as grammar only when every member is a function word', () => {
+    const [mixed] = deriveVocabularyUnits(
+      [
+        {
+          cueKey: 'cue-1',
+          text: '気の毒',
+          tokens: [
+            token({ surface: '気', lemma: '気' }),
+            token({ surface: 'の', lemma: 'の', pos: '助詞', startOffset: 1 }),
+            token({ surface: '毒', lemma: '毒', startOffset: 2 })
+          ],
+          spans: [
+            span({
+              endOffset: 3,
+              memberTokenOffsets: [0, 1, 2],
+              expression: '気の毒',
+              matchedSurface: '気の毒'
+            })
+          ]
+        }
+      ],
+      {}
+    )
+    const [allGrammar] = deriveVocabularyUnits(
+      [
+        {
+          cueKey: 'cue-2',
+          text: 'のに',
+          tokens: [
+            token({ surface: 'の', lemma: 'の', pos: '助詞' }),
+            token({ surface: 'に', lemma: 'に', pos: '助詞', startOffset: 1 })
+          ],
+          spans: [span({ cueKey: 'cue-2', expression: 'のに', matchedSurface: 'のに' })]
+        }
+      ],
+      {}
+    )
+
+    expect(mixed).toMatchObject({ key: '気の毒', grammar: false, level: 'unknown' })
+    expect(allGrammar).toMatchObject({ key: 'のに', grammar: true, level: 'wellKnown' })
+  })
+
   it('keys a single-token projection by its dictionary expression', () => {
     const projected = token({ surface: 'ヤツ', lemma: 'ヤツ' })
     const [unit] = deriveVocabularyUnits(

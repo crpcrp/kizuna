@@ -148,6 +148,18 @@ function occurrenceLevel(
 }
 
 /**
+ * Returns the knowledge identities that speak for one dictionary span.
+ * Multi-token spans are words in their own right; a single-token span is the
+ * same word seen through a dictionary projection.
+ */
+function spanIdentities(span: VocabularySpan, members: Token[]): string[] {
+  const identities = [span.expression, span.matchedSurface]
+  return members.length > 1
+    ? identities
+    : [...identities, ...members.flatMap((member) => [member.lemma, member.surface])]
+}
+
+/**
  * Walks one cue's vocabulary occurrences: each accepted span once, covering its
  * members, then every token no span covers. The single place a word occurrence
  * is identified and levelled, shared by every consumer below.
@@ -176,15 +188,10 @@ function cueOccurrences(
       // not let knowledge of a member (e.g. 人間) promote the compound
       // (e.g. 棒人間); only single-token projections need their token's lemma
       // and surface as aliases for the dictionary expression.
-      const identities =
-        members.length > 1
-          ? [span.expression, span.matchedSurface]
-          : [
-              span.expression,
-              span.matchedSurface,
-              ...members.flatMap((member) => [member.lemma, member.surface])
-            ]
-      const grammar = members.some(isGrammarToken)
+      const identities = spanIdentities(span, members)
+      // A compound is grammar only when every member is a function word (のに),
+      // never because one member happens to be (の in 気の毒).
+      const grammar = members.every(isGrammarToken)
       occurrences.push({
         key: span.expression,
         surface: span.matchedSurface,
