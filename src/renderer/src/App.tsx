@@ -1,6 +1,6 @@
 import './theme.css'
 import './App.css'
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
@@ -51,6 +51,7 @@ import { useGameOcr } from './state/useGameOcr'
 import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
+import type { AppSurface } from '../../shared/appShell'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
 import { type AudioDevice } from '../../shared/audioDevice'
@@ -72,12 +73,16 @@ export interface AppProps {
   initialState?: PlayerState
   /** Optional initially-known mpv outputs for deterministic renderer integration tests. */
   initialAudioDevices?: AudioDevice[]
+  /** The main-owned surface; omitted for the ordinary player behavior in tests. */
+  surface?: Exclude<AppSurface, 'splash'>
 }
 
 export default function App({
   initialState = initialPlayerState,
-  initialAudioDevices = []
+  initialAudioDevices = [],
+  surface = 'player'
 }: AppProps): React.JSX.Element {
+  const optionsOnly = surface === 'options'
   // `window.kizuna` doesn't exist during SSR (renderToStaticMarkup has no
   // `window` at all, not even an empty stub) — every other reference to it in
   // this component lives inside an effect/callback, deferred until the
@@ -142,6 +147,7 @@ export default function App({
     settingsPersistenceRef,
     reportError: mediaSession.banner.reportError
   })
+  const optionsOpen = optionsOnly || options.open
   const gameOcr = useGameOcr(kizuna, mediaSession.banner.reportError)
   const about = useAboutDialog({
     bridge: kizuna,
@@ -324,7 +330,7 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: options.open || about.open || updates.modal !== null || vocabulary.modalOpen
+    suspended: optionsOpen || about.open || updates.modal !== null || vocabulary.modalOpen
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -334,17 +340,34 @@ export default function App({
     window.kizuna.player.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
   }
 
+  const closeDialog = options.closeDialog
+  const reportError = mediaSession.banner.reportError
+  const showPlayer = kizuna.appShell?.showPlayer
+  const closeOptions = useCallback((): void => {
+    if (!optionsOnly) {
+      closeDialog()
+      return
+    }
+    if (!showPlayer) return
+    void showPlayer().then(
+      (next) => {
+        if (next === 'player') closeDialog()
+      },
+      (error) => reportError(errorMessage(error))
+    )
+  }, [closeDialog, optionsOnly, reportError, showPlayer])
+
   // The Options dialog's props, assembled from their owners: reducer-backed
   // settings, the dialog's own integration data/actions, the playback feature's
   // mpv-output rows, and the vocabulary feature's cache-invalidating rows.
   const optionsMenu = buildOptionsMenuProps({
-    open: options.open,
+    open: optionsOpen,
     settings: state,
     dispatch,
     heldModifiers: modifiers.held,
     data: options.data,
     actions: options.actions,
-    onClose: options.closeDialog,
+    onClose: closeOptions,
     onCategoryOpen: options.onCategoryOpen,
     playback: playbackWindow.optionsPlayback,
     knowledge: vocabulary.knowledgeOptions,
@@ -369,7 +392,7 @@ export default function App({
     >
       <div id="top-controls" ref={topBarRef}>
         <WindowChrome fullscreen={state.fullscreen} filePath={state.filePath} />
-        {!miniPlayerActive && (
+        {!optionsOnly && !miniPlayerActive && (
           <MenuBar
             media={{
               ...mediaSession.mediaMenu,
@@ -408,7 +431,7 @@ export default function App({
         )}
       </div>
 
-      {mediaSession.banner.message && (
+      {!optionsOnly && mediaSession.banner.message && (
         <div id="media-error" role="alert">
           <span>{mediaSession.banner.message}</span>
           <button type="button" aria-label="Dismiss" onClick={mediaSession.banner.dismiss}>
@@ -417,7 +440,7 @@ export default function App({
         </div>
       )}
 
-      {updates.statusText && !about.open && (
+      {!optionsOnly && updates.statusText && !about.open && (
         <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
           <span>{updates.statusText}</span>
           {updates.snapshot.status === 'error' && (
@@ -445,132 +468,148 @@ export default function App({
         </div>
       )}
 
-      <div id="player-area">
-        {playlistOpen && !state.fullscreen && !miniPlayerActive && (
-          <aside id="left-sidebar-stack" ref={leftSidebarStackRef} aria-label="Playlist">
-            <PlaylistSidebar
-              entries={mediaSession.playlist.state.playlist.entries}
-              currentIndex={mediaSession.playlist.state.playlist.currentIndex}
-              missing={mediaSession.playlist.state.missing}
-              repeat={mediaSession.playlist.state.playlist.repeat}
-              shuffle={mediaSession.playlist.state.playlist.shuffle}
-              onPlay={mediaSession.playlist.play}
-              onRemove={mediaSession.playlist.remove}
-              onMove={mediaSession.playlist.move}
-              onSetRepeat={mediaSession.playlist.setRepeat}
-              onToggleShuffle={mediaSession.playlist.toggleShuffle}
-            />
-          </aside>
-        )}
-
-        <main
-          id="content"
-          ref={contentRef}
-          onWheel={(event) => {
-            const step = subtitleFontWheelStep(event, state.keyBindings, modifiers.held)
-            if (step === null) return
-            event.preventDefault()
-            handleAdjustSubtitleFontScale(step)
-          }}
-          onDoubleClick={playbackWindow.fullscreen.toggle}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            toggleFromRightClick(state.rightClickTogglePause, state.paused, playerAdapter.setPause)
-          }}
-        >
-          <SubtitleOverlay
-            cues={state.cues}
-            timePos={offsetTimePos(state.timePos, state.subtitleOffsetMs)}
-            tokens={japaneseSubtitleSelected ? state.activeTokens : undefined}
-            levels={coloredLevels}
-            {...vocabulary.subtitleOverlay}
-            style={miniPlayerSubtitleStyle(state.subtitleStyle, miniPlayerActive)}
-            onDragStart={state.subtitleDragEnabled ? handleSubtitleDragStart : undefined}
-            dragEnabled={state.subtitleDragEnabled}
-          />
-        </main>
-
-        {!state.fullscreen &&
-          !miniPlayerActive &&
-          (sidebarOpen || miningPresentation === 'sidebar') && (
-            <aside id="right-sidebar-stack" ref={rightSidebarStackRef} aria-label="Sidebars">
-              {sidebarOpen && (
-                <SubtitleSidebar
-                  cues={state.cues}
-                  activeCueKey={activeCueKey}
-                  tokens={japaneseSubtitleSelected ? state.allCueTokens : {}}
-                  levels={coloredLevels}
-                  {...vocabulary.subtitleSidebar}
-                  onSelectCue={handleSelectSidebarCue}
-                />
-              )}
-              {miningPresentation === 'sidebar' && (
-                <BulkMiningSidebar {...vocabulary.mining.sidebar} />
-              )}
+      {!optionsOnly && (
+        <div id="player-area">
+          {playlistOpen && !state.fullscreen && !miniPlayerActive && (
+            <aside id="left-sidebar-stack" ref={leftSidebarStackRef} aria-label="Playlist">
+              <PlaylistSidebar
+                entries={mediaSession.playlist.state.playlist.entries}
+                currentIndex={mediaSession.playlist.state.playlist.currentIndex}
+                missing={mediaSession.playlist.state.missing}
+                repeat={mediaSession.playlist.state.playlist.repeat}
+                shuffle={mediaSession.playlist.state.playlist.shuffle}
+                onPlay={mediaSession.playlist.play}
+                onRemove={mediaSession.playlist.remove}
+                onMove={mediaSession.playlist.move}
+                onSetRepeat={mediaSession.playlist.setRepeat}
+                onToggleShuffle={mediaSession.playlist.toggleShuffle}
+              />
             </aside>
           )}
-      </div>
 
-      <BottomBar
-        paused={state.paused}
-        currentTime={state.timePos}
-        duration={state.duration}
-        volume={state.volume}
-        muted={state.muted}
-        skipSeconds={state.skipSeconds}
-        speed={state.speed}
-        chapters={state.chapters}
-        abLoop={state.abLoopState}
-        onToggleFullscreen={playbackWindow.fullscreen.toggle}
-        miniPlayer={miniPlayerActive}
-        onExitMiniPlayer={playbackWindow.miniPlayer.toggle}
-        onSetSpeed={(speed) => void playerAdapter.setSpeed(speed)}
-        sidebarOpen={sidebarOpen}
-        playlistOpen={playlistOpen}
-        onToggleSidebar={playbackWindow.panels.onToggleSidebar}
-        onTogglePlaylist={playbackWindow.panels.onTogglePlaylist}
-        player={playerAdapter}
-        containerRef={bottomBarRef}
-        mediaPath={state.filePath}
-        thumbnailsEnabled={playbackWindow.thumbnailsEnabled}
-      />
+          <main
+            id="content"
+            ref={contentRef}
+            onWheel={(event) => {
+              const step = subtitleFontWheelStep(event, state.keyBindings, modifiers.held)
+              if (step === null) return
+              event.preventDefault()
+              handleAdjustSubtitleFontScale(step)
+            }}
+            onDoubleClick={playbackWindow.fullscreen.toggle}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              toggleFromRightClick(
+                state.rightClickTogglePause,
+                state.paused,
+                playerAdapter.setPause
+              )
+            }}
+          >
+            <SubtitleOverlay
+              cues={state.cues}
+              timePos={offsetTimePos(state.timePos, state.subtitleOffsetMs)}
+              tokens={japaneseSubtitleSelected ? state.activeTokens : undefined}
+              levels={coloredLevels}
+              {...vocabulary.subtitleOverlay}
+              style={miniPlayerSubtitleStyle(state.subtitleStyle, miniPlayerActive)}
+              onDragStart={state.subtitleDragEnabled ? handleSubtitleDragStart : undefined}
+              dragEnabled={state.subtitleDragEnabled}
+            />
+          </main>
 
-      <VideoAdjustments
-        {...playbackWindow.videoAdjustmentsDialog}
-        adjustments={state.videoAdjustments}
-      />
+          {!state.fullscreen &&
+            !miniPlayerActive &&
+            (sidebarOpen || miningPresentation === 'sidebar') && (
+              <aside id="right-sidebar-stack" ref={rightSidebarStackRef} aria-label="Sidebars">
+                {sidebarOpen && (
+                  <SubtitleSidebar
+                    cues={state.cues}
+                    activeCueKey={activeCueKey}
+                    tokens={japaneseSubtitleSelected ? state.allCueTokens : {}}
+                    levels={coloredLevels}
+                    {...vocabulary.subtitleSidebar}
+                    onSelectCue={handleSelectSidebarCue}
+                  />
+                )}
+                {miningPresentation === 'sidebar' && (
+                  <BulkMiningSidebar {...vocabulary.mining.sidebar} />
+                )}
+              </aside>
+            )}
+        </div>
+      )}
+
+      {!optionsOnly && (
+        <BottomBar
+          paused={state.paused}
+          currentTime={state.timePos}
+          duration={state.duration}
+          volume={state.volume}
+          muted={state.muted}
+          skipSeconds={state.skipSeconds}
+          speed={state.speed}
+          chapters={state.chapters}
+          abLoop={state.abLoopState}
+          onToggleFullscreen={playbackWindow.fullscreen.toggle}
+          miniPlayer={miniPlayerActive}
+          onExitMiniPlayer={playbackWindow.miniPlayer.toggle}
+          onSetSpeed={(speed) => void playerAdapter.setSpeed(speed)}
+          sidebarOpen={sidebarOpen}
+          playlistOpen={playlistOpen}
+          onToggleSidebar={playbackWindow.panels.onToggleSidebar}
+          onTogglePlaylist={playbackWindow.panels.onTogglePlaylist}
+          player={playerAdapter}
+          containerRef={bottomBarRef}
+          mediaPath={state.filePath}
+          thumbnailsEnabled={playbackWindow.thumbnailsEnabled}
+        />
+      )}
+
+      {!optionsOnly && (
+        <VideoAdjustments
+          {...playbackWindow.videoAdjustmentsDialog}
+          adjustments={state.videoAdjustments}
+        />
+      )}
 
       <OptionsMenu {...optionsMenu} />
 
-      <AboutDialog
-        open={about.open}
-        info={about.info}
-        noticeMessage={about.noticeMessage}
-        onClose={about.closeDialog}
-        onOpenLink={about.openLink}
-        onOpenNotices={about.openNotices}
-        updateState={updates.snapshot}
-        onCheckForUpdates={updates.checkManually}
-        onDownloadUpdate={updates.download}
-        onInstallUpdate={updates.install}
-        onRetryUpdate={updates.retry}
-      />
+      {!optionsOnly && (
+        <AboutDialog
+          open={about.open}
+          info={about.info}
+          noticeMessage={about.noticeMessage}
+          onClose={about.closeDialog}
+          onOpenLink={about.openLink}
+          onOpenNotices={about.openNotices}
+          updateState={updates.snapshot}
+          onCheckForUpdates={updates.checkManually}
+          onDownloadUpdate={updates.download}
+          onInstallUpdate={updates.install}
+          onRetryUpdate={updates.retry}
+        />
+      )}
 
-      <UpdateDialog
-        modal={about.open ? null : updates.modal}
-        onDismissAvailable={updates.dismissAvailable}
-        onDownload={updates.download}
-        onDeferInstall={updates.deferInstall}
-        onInstall={updates.install}
-      />
+      {!optionsOnly && (
+        <UpdateDialog
+          modal={about.open ? null : updates.modal}
+          onDismissAvailable={updates.dismissAvailable}
+          onDownload={updates.download}
+          onDeferInstall={updates.deferInstall}
+          onInstall={updates.install}
+        />
+      )}
 
-      <WordPopup
-        {...vocabulary.wordPopup}
-        maxEntries={state.popupSettings.maxEntries}
-        maxMeanings={state.popupSettings.maxMeanings}
-      />
+      {!optionsOnly && (
+        <WordPopup
+          {...vocabulary.wordPopup}
+          maxEntries={state.popupSettings.maxEntries}
+          maxMeanings={state.popupSettings.maxMeanings}
+        />
+      )}
 
-      {vocabulary.cardImageDialog.imageBase64 !== undefined && (
+      {!optionsOnly && vocabulary.cardImageDialog.imageBase64 !== undefined && (
         <CardImageCropDialog
           open
           imageBase64={vocabulary.cardImageDialog.imageBase64}
@@ -579,10 +618,12 @@ export default function App({
         />
       )}
 
-      <SubtitleReport {...vocabulary.report} />
+      {!optionsOnly && <SubtitleReport {...vocabulary.report} />}
 
-      {miningPresentation === 'modal' && <BulkMiningModal {...vocabulary.mining.modal} />}
-      {vocabulary.mining.completion && (
+      {!optionsOnly && miningPresentation === 'modal' && (
+        <BulkMiningModal {...vocabulary.mining.modal} />
+      )}
+      {!optionsOnly && vocabulary.mining.completion && (
         <div id="bulk-mining-completion-toast" role="status">
           <span>{vocabulary.mining.completion.text}</span>
           <button
