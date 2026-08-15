@@ -53,16 +53,14 @@ export function buildGameOcrBoxRegions({
       (!candidate.analysisText || candidate.analysisText === projection.analysisText)
         ? candidate
         : undefined
+    const fit = fitGameOcrText(displayText, layout.displayBounds.width, layout.displayBounds.height)
     return [
       {
         id: block.id,
         text: displayText,
         layout,
-        fontSize: fitGameOcrFontSize(
-          displayText,
-          layout.displayBounds.width,
-          layout.displayBounds.height
-        ),
+        fontSize: fit.fontSize,
+        lineHeight: fit.lineHeight,
         projection,
         ...(resolved
           ? {
@@ -78,23 +76,49 @@ export function buildGameOcrBoxRegions({
 
 const BOX_HORIZONTAL_INSET = 6
 const BOX_VERTICAL_INSET = 4
-const LINE_HEIGHT = 1.1
+/** Stacked replacement lines need visible separation to stay readable. */
+const MIN_LINE_HEIGHT = 1.35
+const MAX_LINE_HEIGHT = 2
+/** A single line has no neighbour to separate from, so it stays compact. */
+const SINGLE_LINE_HEIGHT = 1.1
 const MIN_FONT_SIZE = 6
 const MAX_FONT_SIZE = 64
 const WIDTH_SAFETY_FACTOR = 0.95
 
-/** Fit replacement glyphs inside the detector rectangle without growing it. */
-export function fitGameOcrFontSize(text: string, boxWidth: number, boxHeight: number): number {
+/** Typography that fits the detector rectangle without changing its bounds. */
+export interface GameOcrTextFit {
+  fontSize: number
+  /** Unitless CSS line height, spreading the lines over the whole rectangle. */
+  lineHeight: number
+}
+
+/**
+ * Fits replacement glyphs inside the detector rectangle without growing it.
+ *
+ * A block's rectangle spans its source lines, so the leading between them is
+ * part of the measurement: the fitted lines are spread back over that height
+ * instead of being packed at the top, which keeps each replacement line over
+ * the line it replaces and keeps the gap the reader saw in the game.
+ */
+export function fitGameOcrText(text: string, boxWidth: number, boxHeight: number): GameOcrTextFit {
   const lines = text.split('\n')
   const availableWidth = Math.max(0, boxWidth - BOX_HORIZONTAL_INSET)
   const availableHeight = Math.max(0, boxHeight - BOX_VERTICAL_INSET)
   const widestLine = Math.max(1, ...lines.map(estimatedTextUnits))
+  const minimumLineHeight = lines.length > 1 ? MIN_LINE_HEIGHT : SINGLE_LINE_HEIGHT
   const widthSize = (availableWidth / widestLine) * WIDTH_SAFETY_FACTOR
-  const heightSize = availableHeight / Math.max(1, lines.length * LINE_HEIGHT)
-  return Math.max(
+  const heightSize = availableHeight / (lines.length * minimumLineHeight)
+  const fontSize = Math.max(
     MIN_FONT_SIZE,
     Math.min(MAX_FONT_SIZE, Math.floor(widthSize), Math.floor(heightSize))
   )
+  return { fontSize, lineHeight: lineHeightFor(lines.length, availableHeight, fontSize) }
+}
+
+function lineHeightFor(lineCount: number, availableHeight: number, fontSize: number): number {
+  if (lineCount < 2) return SINGLE_LINE_HEIGHT
+  const spread = availableHeight / (lineCount * fontSize)
+  return Math.round(Math.min(MAX_LINE_HEIGHT, Math.max(MIN_LINE_HEIGHT, spread)) * 100) / 100
 }
 
 /** Approximate glyph advances in ems for the Japanese UI fonts used by the overlay. */

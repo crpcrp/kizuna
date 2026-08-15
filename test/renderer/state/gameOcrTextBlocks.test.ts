@@ -33,6 +33,55 @@ describe('groupGameOcrTextBlocks', () => {
     ])
   })
 
+  it('merges a marker detected beside its line into that line', () => {
+    const blocks = groupGameOcrTextBlocks([
+      region('marker', 100, 100, 26, 22, '2.'),
+      region('option', 132, 100, 400, 22, '[説得]気持ちのいい日だ。'),
+      region('next', 100, 126, 420, 22, '3.いい街だ。')
+    ])
+
+    expect(ids(blocks)).toEqual([['marker', 'option', 'next']])
+    expect(blocks[0].lines).toEqual(['2. [説得]気持ちのいい日だ。', '3.いい街だ。'])
+    expect(blocks[0].bounds).toEqual({ x: 100, y: 100, width: 432, height: 48 })
+  })
+
+  it('joins line fragments split without a visible gap', () => {
+    const [block] = groupGameOcrTextBlocks([
+      region('left', 100, 100, 120, 22, '棒人間が'),
+      region('right', 221, 100, 160, 22, '描かれている。')
+    ])
+
+    expect(block.lines).toEqual(['棒人間が描かれている。'])
+    expect(block.regionIds).toEqual(['left', 'right'])
+  })
+
+  it('keeps a marker out of a line it does not sit on', () => {
+    const blocks = groupGameOcrTextBlocks([
+      region('marker', 100, 100, 26, 22, '2.'),
+      region('lower', 132, 140, 400, 22, '別の行')
+    ])
+
+    expect(ids(blocks)).toEqual([['marker'], ['lower']])
+  })
+
+  it('keeps a heading and a small badge beside it apart', () => {
+    const blocks = groupGameOcrTextBlocks([
+      region('heading', 100, 100, 300, 60, '見出し'),
+      region('badge', 410, 130, 40, 18, 'NEW')
+    ])
+
+    expect(ids(blocks)).toEqual([['heading'], ['badge']])
+  })
+
+  it('keeps side-by-side columns of vertical text apart', () => {
+    const blocks = groupGameOcrTextBlocks([
+      region('column-one', 200, 100, 24, 300, '縦書き'),
+      region('column-two', 160, 100, 24, 300, '二列目')
+    ])
+
+    expect(ids(blocks)).toEqual([['column-two'], ['column-one']])
+  })
+
   it('keeps visibly separated aligned rows in separate blocks', () => {
     const blocks = groupGameOcrTextBlocks([
       region('row-one', 100, 100, 360, 40),
