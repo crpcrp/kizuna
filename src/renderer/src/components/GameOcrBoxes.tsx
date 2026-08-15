@@ -25,6 +25,8 @@ export interface GameOcrBoxRegion {
   projection?: TextProjection
   /** Typography fitted to the detected line without changing its bounds. */
   fontSize?: number
+  /** Unitless line height that spreads the lines over the detected height. */
+  lineHeight?: number
   tokens?: Token[]
   highlightedTokens?: Token[]
   levels?: Record<string, KnowledgeLevel>
@@ -121,7 +123,8 @@ export default function GameOcrBoxes({
               top: `${bounds.y}px`,
               width: `${bounds.width}px`,
               height: `${bounds.height}px`,
-              fontSize: region.fontSize ? `${region.fontSize}px` : undefined
+              fontSize: region.fontSize ? `${region.fontSize}px` : undefined,
+              lineHeight: region.lineHeight
             }}
             onPointerDown={stopPropagation}
             onMouseDown={stopPropagation}

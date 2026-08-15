@@ -42,9 +42,12 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
 4. A small **"Recognizing text…"** sign sits at a fixed inset in the
    screenshot's bottom-right corner. It is visible only while OCR is running
    and disappears when the boxes appear.
-5. Bordered text boxes appear over the original text locations. Closely stacked
-   lines stay together, while visibly separated rows get their own box so each
-   can use the available line height.
+5. Bordered text boxes appear over the original text locations. Parts of one
+   visible line detected separately — a numbered marker and the option it
+   belongs to, for example — are drawn as that one line rather than as boxes on
+   top of each other. Closely stacked lines stay together in one box, with the
+   replacement lines spread over the height their source lines occupied, while
+   visibly separated rows get their own box.
 
 ### Inside a frozen frame
 
@@ -466,6 +469,7 @@ given environment.
 | 10 | Rapid recapture with changing game content | The second screenshot shows newer live-game content, never Kizuna's previous frozen frame |
 | 11 | Recognition indicator | Appears with the screenshot, disappears when boxes appear |
 | 12 | Nearby text regions | Boxes are separated and individually readable |
+| 12a | Numbered dialogue menu (several options stacked) | Each marker sits in its option's line, no box overlaps another's text, and the lines keep the game's spacing |
 | 13 | Hover/click lookup | Dictionary popup opens with knowledge coloring |
 | 14 | Selection and Ctrl+C | Selected OCR text reaches the clipboard |
 | 15 | Right-click translation (enabled) | Translation popup opens for the selection only |

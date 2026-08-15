@@ -178,6 +178,23 @@ describe('GameOcrBoxes', () => {
     expect(onActiveRegionChange).toHaveBeenLastCalledWith(null)
   })
 
+  it('applies the fitted typography, including the line spacing of a stacked block', () => {
+    const { container } = render(
+      <GameOcrBoxes
+        regions={[
+          region('stacked', '\u4e00\u884c\u76ee\n\u4e8c\u884c\u76ee', 0, 0, {
+            fontSize: 18,
+            lineHeight: 1.6
+          })
+        ]}
+      />
+    )
+
+    const box = container.querySelector<HTMLElement>('[data-region-id="stacked"]')
+    expect(box?.style.fontSize).toBe('18px')
+    expect(box?.style.lineHeight).toBe('1.6')
+  })
+
   it('uses semantic theme tokens and preserves a readable Japanese text surface', () => {
     const css = readFileSync(
       join(
@@ -198,7 +215,7 @@ describe('GameOcrBoxes', () => {
     expect(css).toContain('border: 1px solid var(--border-default)')
     expect(css).toContain('outline: 2px solid var(--accent-strong)')
     expect(css).toMatch(/font-family:[^;]*Yu Gothic UI/)
-    expect(css).toContain('padding: 1px 2px')
+    expect(css).toContain('padding: 2px 3px')
     expect(css).toContain('line-height: 1.1')
     expect(css).toContain('letter-spacing: 0.03em')
     expect(css).toContain('white-space: pre')

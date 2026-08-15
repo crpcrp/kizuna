@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildGameOcrBoxRegions,
-  fitGameOcrFontSize
-} from '@src/renderer/src/state/gameOcrBoxRegions'
+import { buildGameOcrBoxRegions, fitGameOcrText } from '@src/renderer/src/state/gameOcrBoxRegions'
 import type { GameOcrTextSnapshot } from '@src/renderer/src/state/gameOcrTextPipeline'
 import type { OcrResult } from '@src/shared/ocr'
 import type { Token } from '@src/shared/token'
@@ -63,6 +60,7 @@ describe('buildGameOcrBoxRegions', () => {
     expect(box.layout.displayBounds.y).toBe(100)
     expect(box.layout.displayBounds).toEqual(box.layout.originalBounds)
     expect(box.fontSize).toBe(23)
+    expect(box.lineHeight).toBe(1.1)
   })
 
   it('renders one box for a grouped block and preserves the visible newline', () => {
@@ -91,6 +89,9 @@ describe('buildGameOcrBoxRegions', () => {
     expect(box.id).toBe('block:first|second')
     expect(box.text).toBe('棒人間が描か\nれている。')
     expect(box.layout.originalBounds).toEqual({ x: 100, y: 200, width: 300, height: 44 })
+    // 2 lines over 40 usable pixels: 20 per line, not the 1.1 of a single line.
+    expect(box.fontSize).toBe(14)
+    expect(box.lineHeight).toBe(1.43)
   })
 
   it('attaches processed tokens once the pipeline resolves the same capture', () => {
@@ -139,12 +140,33 @@ describe('buildGameOcrBoxRegions', () => {
   })
 
   it('shrinks long lines to fit both dimensions without wrapping', () => {
-    expect(fitGameOcrFontSize('チュートリアルのヒント', 150, 30)).toBe(12)
-    expect(fitGameOcrFontSize('時刻表示', 90, 30)).toBe(19)
+    expect(fitGameOcrText('チュートリアルのヒント', 150, 30).fontSize).toBe(12)
+    expect(fitGameOcrText('時刻表示', 90, 30).fontSize).toBe(19)
   })
 
   it('uses the available height for short replacement text instead of a small fixed cap', () => {
-    expect(fitGameOcrFontSize('日本語', 300, 60)).toBe(50)
+    expect(fitGameOcrText('日本語', 300, 60).fontSize).toBe(50)
+  })
+
+  it('spreads stacked lines over the detected height instead of packing them', () => {
+    const fit = fitGameOcrText('一行目\n二行目\n三行目', 400, 304)
+
+    expect(fit.lineHeight).toBeGreaterThan(1.35)
+    expect(fit.fontSize * fit.lineHeight * 3).toBeLessThanOrEqual(300)
+  })
+
+  it('keeps a readable gap when width, not height, limits the font size', () => {
+    const narrow = fitGameOcrText('とても長い日本語の一行目です\n二行目', 200, 200)
+
+    expect(narrow.lineHeight).toBe(2)
+  })
+
+  it('never packs stacked lines tighter than the readable minimum', () => {
+    // A rectangle too short for two lines at the smallest legible font size.
+    const tight = fitGameOcrText('一行目\n二行目', 400, 18)
+
+    expect(tight.fontSize).toBe(6)
+    expect(tight.lineHeight).toBe(1.35)
   })
 
   it('does not move boxes away from overlapping detected text', () => {
