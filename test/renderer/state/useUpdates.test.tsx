@@ -64,6 +64,20 @@ describe('useUpdates', () => {
     expect(api.updates.check).not.toHaveBeenCalled()
   })
 
+  it('touches nothing while another surface owns the controller', async () => {
+    const api = createFakeKizunaApi()
+    renderHook(() => useUpdates(api, { active: false }))
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.updates.onStateChange).not.toHaveBeenCalled()
+    expect(api.updates.getState).not.toHaveBeenCalled()
+    expect(api.updates.getSettings).not.toHaveBeenCalled()
+    expect(api.updates.check).not.toHaveBeenCalled()
+  })
+
   it('cleans up its updater subscription on unmount', () => {
     const unsubscribe = vi.fn()
     const api = createFakeKizunaApi({

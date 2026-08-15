@@ -77,32 +77,8 @@ body {
   background: var(--hover-bg);
 }
 
-#update-status {
-  position: fixed;
-  right: 14px;
-  bottom: 58px;
-  z-index: 45;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: min(520px, calc(100vw - 28px));
-  padding: 10px 12px;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-panel);
-  background: var(--surface-panel);
-  box-shadow: var(--shadow-menu);
-}
-#update-status span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-#update-status button {
-  flex-shrink: 0;
-}
-#update-status button.update-status-dismiss {
-  line-height: 1;
-  padding: 4px 8px;
-}
+/* The update banner's own rules live with its component
+   (components/UpdateNotifications.css); it is not a player-only element. */
 
 /* Global completion feedback stays visible when bulk mining is hidden or its
    detailed modal is closed; dismissing it never changes controller state. */

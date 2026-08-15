@@ -1,13 +1,22 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import AppShell from '@src/renderer/src/AppShell'
 import SplashScreen from '@src/renderer/src/components/SplashScreen'
 import type { AppSurface } from '@src/shared/appShell'
+import type { UpdateState } from '@src/shared/update'
 import { installFakeKizunaApi } from '../harness/fakeKizunaApi'
 import { appTeardown } from '../harness/appIntegration'
 import { deferred } from '../harness/deferred'
+
+const AVAILABLE: UpdateState = {
+  status: 'available',
+  currentVersion: '0.2.0',
+  version: '0.3.0',
+  packageType: 'nsis'
+}
+const OFFER = 'Kizuna 0.3.0 is available'
 
 afterEach(appTeardown)
 
@@ -271,6 +280,63 @@ describe('AppShell', () => {
 
     expect(screen.getByRole('heading', { name: 'Kizuna' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Open file' })).toBeNull()
+  })
+
+  // The Game OCR start mode loads this same renderer on the splash surface
+  // (the window is only kept hidden), so the splash cases cover it too.
+  it('checks for updates on the splash surface and offers the download there', async () => {
+    const api = installFakeKizunaApi({
+      appShell: { getSurface: vi.fn(async () => 'splash' as const) },
+      updates: { check: vi.fn(async () => AVAILABLE) }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('button', { name: 'Quit Kizuna' })
+    await waitFor(() => expect(api.updates.check).toHaveBeenCalledWith('automatic'))
+    const dialog = await screen.findByRole('dialog', { name: OFFER })
+    await waitFor(() => expect(dialog.getAttribute('aria-hidden')).toBe('false'))
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Download update' }))
+    expect(api.updates.download).toHaveBeenCalledOnce()
+  })
+
+  it('offers the same update on the standalone Options surface', async () => {
+    const api = installFakeKizunaApi({
+      appShell: { getSurface: vi.fn(async () => 'options' as const) },
+      updates: { check: vi.fn(async () => AVAILABLE) }
+    })
+    render(<AppShell bridge={api} />)
+
+    await screen.findByRole('dialog', { name: 'Options' })
+    const dialog = await screen.findByRole('dialog', { name: OFFER })
+    await waitFor(() => expect(dialog.getAttribute('aria-hidden')).toBe('false'))
+    expect(api.updates.check).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the single startup check and its dismissal across a surface switch', async () => {
+    let push: ((surface: AppSurface) => void) | undefined
+    const api = installFakeKizunaApi({
+      appShell: {
+        getSurface: vi.fn(async () => 'splash' as const),
+        onSurfaceChanged: vi.fn((callback: (surface: AppSurface) => void) => {
+          push = callback
+          return vi.fn()
+        })
+      },
+      updates: { check: vi.fn(async () => AVAILABLE) }
+    })
+    render(<AppShell bridge={api} />)
+
+    const dialog = await screen.findByRole('dialog', { name: OFFER })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Not now' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: OFFER })).toBeNull())
+
+    await act(async () => push?.('player'))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Media' })).toBeTruthy())
+    expect(screen.queryByRole('dialog', { name: OFFER })).toBeNull()
+    expect(api.updates.check).toHaveBeenCalledOnce()
+    expect(api.updates.getState).toHaveBeenCalledOnce()
   })
 
   it('falls back through showPlayer when the initial surface read fails', async () => {
