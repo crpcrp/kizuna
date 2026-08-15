@@ -26,6 +26,22 @@
   padding: 18px;
   box-sizing: border-box;
 }
+/* Standalone Options (OptionsSurface.tsx, reached from the splash screen or the
+   Game OCR tray) owns the whole frameless, transparent window. There is no
+   player behind it to dim, so the backdrop and the panel's drop shadow paint a
+   dark band over whatever is on the desktop instead. The panel fills the window
+   here, the way the splash card does. */
+.standalone-options-app #options-overlay {
+  background: transparent;
+}
+.standalone-options-app .options-panel {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  box-shadow: none;
+}
+
 /* Same micro-label-over-a-hairline header as the shared modal chrome, so the
    two dialog families read as one surface. */
 .options-header {
