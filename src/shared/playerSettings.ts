@@ -214,6 +214,16 @@ export interface SubtitleStyleSettings {
   backgroundEnabled: boolean
 }
 
+export type SubtitleAutoPauseTiming = 'off' | 'before' | 'after'
+
+export const DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING: SubtitleAutoPauseTiming = 'off'
+
+export function normalizeSubtitleAutoPauseTiming(raw: unknown): SubtitleAutoPauseTiming {
+  return raw === 'off' || raw === 'before' || raw === 'after'
+    ? raw
+    : DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING
+}
+
 /** Shared bounds and UI step for the persisted subtitle font scale. */
 export const SUBTITLE_FONT_SCALE_MIN = 0.5
 export const SUBTITLE_FONT_SCALE_MAX = 3
@@ -327,6 +337,8 @@ export interface PlayerSettings {
   rightClickTogglePause: boolean
   /** Whether EOF automatically opens the next video file in the folder. */
   autoPlayNext: boolean
+  /** Subtitle auto-pause timing; behavior is added by a later feature. */
+  subtitleAutoPauseTiming: SubtitleAutoPauseTiming
   subtitleOffsets: Record<string, number>
   /** Per-folder subtitle offsets (ms), keyed by `subtitleOffsetFolderKey`. Used
    * for any file in that folder without its own `subtitleOffsets` entry — see
@@ -379,6 +391,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   subtitleDragEnabled: true,
   rightClickTogglePause: true,
   autoPlayNext: false,
+  subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   subtitleOffsets: {},
   folderSubtitleOffsets: {},
   audioDelays: {},

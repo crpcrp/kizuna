@@ -294,6 +294,25 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     }
   )
 
+  it.each(['off', 'before', 'after'] as const)(
+    'preserves valid subtitle auto-pause timing %s',
+    (timing) => {
+      expect(mergeSettings({ player: { subtitleAutoPauseTiming: timing } }).player).toHaveProperty(
+        'subtitleAutoPauseTiming',
+        timing
+      )
+    }
+  )
+
+  it('defaults malformed subtitle auto-pause timing without resetting other settings', () => {
+    const merged = mergeSettings({
+      player: { subtitleAutoPauseTiming: 'Before', skipSeconds: 12 }
+    })
+
+    expect(merged.player.subtitleAutoPauseTiming).toBe('off')
+    expect(merged.player.skipSeconds).toBe(12)
+  })
+
   it('fills a partial keyBindings with defaults for the missing actions', () => {
     const merged = mergeSettings({ player: { keyBindings: { togglePause: 'KeyK' } } })
     expect(merged.player.keyBindings).toEqual({
@@ -437,6 +456,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
       subtitleDragEnabled: false,
       rightClickTogglePause: false,
       autoPlayNext: true,
+      subtitleAutoPauseTiming: 'after' as const,
       subtitleOffsets: { '/videos/a.mkv': 250 },
       folderSubtitleOffsets: { '/videos': -100 },
       audioDelays: { '/videos/a.mkv': -75 },
@@ -757,6 +777,17 @@ describe('createSettingsStore', () => {
       store.set({ player: { ...store.get().player, startupBehavior } })
 
       expect(createSettingsStore(io).get().player.startupBehavior).toBe(startupBehavior)
+    }
+  )
+
+  it.each(['before', 'after'] as const)(
+    'round-trips subtitle auto-pause timing %s across a reopen',
+    (timing) => {
+      const io = fakeIo(undefined)
+      const store = createSettingsStore(io)
+      store.set({ player: { ...store.get().player, subtitleAutoPauseTiming: timing } })
+
+      expect(createSettingsStore(io).get().player.subtitleAutoPauseTiming).toBe(timing)
     }
   )
 
