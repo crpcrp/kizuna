@@ -49,6 +49,13 @@ Related documents: [codebase map](codebase-map.md) for file ownership,
    replacement lines spread over the height their source lines occupied, while
    visibly separated rows get their own box.
 
+While Game OCR is armed Kizuna lives in the tray, and it comes back on its own
+for exactly one reason: an update offer waiting for an answer. The startup
+check runs in every start mode, so a Game OCR session that finds a release
+opens Options with the prompt on top of it. Nothing is downloaded or installed
+without confirmation, and closing Options returns Kizuna to the tray with Game
+OCR still armed.
+
 ### Inside a frozen frame
 
 | Action | Result |

@@ -103,6 +103,7 @@ import {
   type AppWindowSet
 } from './windowPair'
 import { createSurfacePresentation } from './surfacePresentation'
+import { isUpdateOffer } from '../shared/update'
 import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
 import { registerUpdateBridge } from './updateBridge'
 import { createUpdateService, type UpdateService } from './updateService'
@@ -761,7 +762,12 @@ function startUpdates(lifecycle: AppLifecycleCoordinator, settings: SettingsStor
     allowAutomaticChecks: process.env[STARTUP_PROBE_ENV] !== '1'
   })
   registerUpdateBridge(ipcMain, service, settings, (sender) => sender === mainWindow?.webContents)
-  service.subscribe((state) => sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state))
+  service.subscribe((state) => {
+    sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state)
+    // Game OCR runs with the window hidden behind the tray, where the renderer
+    // still holds the prompt but nobody can see it.
+    if (isUpdateOffer(state)) void gameOcrLifecycle?.revealForUpdate()
+  })
   return service
 }
 

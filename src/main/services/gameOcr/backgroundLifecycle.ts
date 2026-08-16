@@ -44,6 +44,8 @@ export interface GameOcrBackgroundLifecycle {
   handleWindowLost(): void
   /** Presents the player for a media launch, or restores the current surface. */
   showFromSecondInstance(hasLaunchPath?: boolean): Promise<void>
+  /** Brings the tray-hidden window back so an update offer can be answered. */
+  revealForUpdate(): Promise<void>
   dismissOptions(): Promise<boolean>
   stop(restoreSurface?: boolean): Promise<void>
   dispose(): void
@@ -224,6 +226,16 @@ export function createGameOcrBackgroundLifecycle(
       if (hiddenForOcr) return showOptions('gameOcr').then(() => undefined)
       activateWindow()
       return Promise.resolve()
+    },
+
+    // An update offer is worth interrupting the tray for: hidden behind a
+    // game, the prompt would otherwise wait until something else happened to
+    // show the window. Options is the surface every other armed reveal uses,
+    // and closing it hides back to the tray with Game OCR still armed.
+    revealForUpdate(): Promise<void> {
+      if (disposed || !hiddenForOcr) return Promise.resolve()
+      if (!ARMED_STATES.has(options.runtime.getStatus().game.state)) return Promise.resolve()
+      return showOptions('gameOcr').then(() => undefined)
     },
 
     dismissOptions,
