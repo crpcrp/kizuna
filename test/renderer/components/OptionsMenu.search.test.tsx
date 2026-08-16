@@ -32,6 +32,18 @@ describe('OptionsMenu setting search', () => {
     expect(options[0].textContent).toBe('Normalize loudnessPlayback')
   })
 
+  it('finds auto-pause by subtitle boundary terms', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} />)
+
+    fireEvent.change(searchBox(), { target: { value: 'line study after' } })
+
+    expect(
+      within(screen.getByRole('listbox', { name: 'Setting search results' })).getByRole('option', {
+        name: /Auto-pause subtitles/
+      })
+    ).toBeTruthy()
+  })
+
   it('says so when nothing matches', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
 

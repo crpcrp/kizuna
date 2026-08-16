@@ -62,6 +62,26 @@ describe('PlaybackMenu A–B loop', () => {
   })
 })
 
+describe('PlaybackMenu auto-pause', () => {
+  it('checks the selected timing and forwards changes', () => {
+    const onChangeSubtitleAutoPauseTiming = vi.fn()
+    render(
+      menu({
+        subtitleAutoPauseTiming: 'before',
+        onChangeSubtitleAutoPauseTiming
+      })
+    )
+
+    expect(
+      screen
+        .getByRole('menuitemradio', { name: 'Before each subtitle' })
+        .getAttribute('aria-checked')
+    ).toBe('true')
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'After each subtitle' }))
+    expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith('after')
+  })
+})
+
 describe('PlaybackMenu frame stepping', () => {
   it('renders both items, disabled without a file and enabled with one', () => {
     const noFile = markup({ hasFile: false })
