@@ -11,6 +11,7 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SKIP_SECONDS,
+  DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   DEFAULT_SUBTITLE_STYLE,
   DEFAULT_VIDEO_ADJUSTMENTS,
   type Appearance,
@@ -19,6 +20,7 @@ import {
   type LevelColors,
   type PopupSettings,
   type StartupBehavior,
+  type SubtitleAutoPauseTiming,
   type SubtitleStyleSettings,
   type UnderlineLevel,
   type VideoAdjustments
@@ -95,6 +97,8 @@ export interface PlayerState {
   rightClickTogglePause: boolean
   /** EOF opens the next same-folder video when true. */
   autoPlayNext: boolean
+  /** Subtitle auto-pause timing preference; behavior is added by a later feature. */
+  subtitleAutoPauseTiming: SubtitleAutoPauseTiming
   /** Whether right-clicked subtitle text may use the experimental online translator. */
   translationEnabled: boolean
   /** Subtitle timing offset (ms) for the currently-loaded file; positive delays
@@ -161,6 +165,7 @@ export const initialPlayerState: PlayerState = {
   externalSubtitleEncoding: 'auto',
   rightClickTogglePause: true,
   autoPlayNext: false,
+  subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   translationEnabled: false,
   subtitleOffsetMs: 0,
   audioDelayMs: 0,
@@ -226,6 +231,7 @@ export type PlayerAction =
   | { type: 'setExternalSubtitleEncoding'; value: SubtitleEncoding }
   | { type: 'setRightClickTogglePause'; value: boolean }
   | { type: 'setAutoPlayNext'; value: boolean }
+  | { type: 'setSubtitleAutoPauseTiming'; value: SubtitleAutoPauseTiming }
   | { type: 'setTranslationEnabled'; value: boolean }
   | { type: 'setSubtitleOffset'; value: number }
   | { type: 'setAudioDelay'; value: number }
@@ -367,6 +373,8 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, rightClickTogglePause: action.value }
     case 'setAutoPlayNext':
       return { ...state, autoPlayNext: action.value }
+    case 'setSubtitleAutoPauseTiming':
+      return { ...state, subtitleAutoPauseTiming: action.value }
     case 'setTranslationEnabled':
       return { ...state, translationEnabled: action.value }
     case 'setSubtitleOffset':

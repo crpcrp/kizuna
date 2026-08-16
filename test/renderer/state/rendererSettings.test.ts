@@ -28,6 +28,7 @@ const CHANGED_SETTINGS: RendererSettings = {
   subtitleDragEnabled: false,
   rightClickTogglePause: false,
   autoPlayNext: true,
+  subtitleAutoPauseTiming: 'after',
   appearance: 'dark',
   levelColors: { unknown: '#112233' },
   screenshotFolder: 'D:\\Shots',

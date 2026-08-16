@@ -16,6 +16,7 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SKIP_SECONDS,
+  DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   DEFAULT_SUBTITLE_STYLE,
   DEFAULT_VIDEO_ADJUSTMENTS
 } from '@src/shared/playerSettings'
@@ -57,6 +58,7 @@ describe('initialPlayerState', () => {
       externalSubtitleEncoding: 'auto',
       rightClickTogglePause: true,
       autoPlayNext: false,
+      subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -145,6 +147,7 @@ describe('playerReducer', () => {
       // expectation below cannot tell a real reset from an untouched field.
       externalSubtitlePath: 'old-subs.srt',
       externalSubtitleEncoding: 'shift_jis',
+      subtitleAutoPauseTiming: 'before',
       allCueTokens: { '0': [makeToken({ surface: '猫' })] },
       subtitleOffsetMs: 250,
       audioDelayMs: -75,
@@ -200,6 +203,7 @@ describe('playerReducer', () => {
       externalSubtitleEncoding: 'auto',
       rightClickTogglePause: true,
       autoPlayNext: false,
+      subtitleAutoPauseTiming: 'before',
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -234,7 +238,8 @@ describe('playerReducer', () => {
         ...initialPlayerState,
         volume: 40,
         audioDevice: 'wasapi/{abc}',
-        loudnessNormalization: true
+        loudnessNormalization: true,
+        subtitleAutoPauseTiming: 'after'
       },
       { type: 'fileLoaded', filePath: 'movie.mkv', tracks: [audioTrack, subTrack2] }
     )
@@ -274,6 +279,7 @@ describe('playerReducer', () => {
     expect(next.volume).toBe(40)
     expect(next.audioDevice).toBe('wasapi/{abc}')
     expect(next.loudnessNormalization).toBe(true)
+    expect(next.subtitleAutoPauseTiming).toBe('after')
     expect(next.keyBindings).toBe(active.keyBindings)
   })
 
@@ -318,6 +324,7 @@ describe('playerReducer', () => {
       ...initialPlayerState,
       tracks: [audioTrack, subTrack],
       selectedSubtitleId: 3,
+      subtitleAutoPauseTiming: 'after',
       allCueTokens: { '0|1|old': [] }
     }
 
@@ -334,6 +341,7 @@ describe('playerReducer', () => {
     expect(next.selectedSubtitleId).toBe(EXTERNAL_SUBTITLE_TRACK_ID)
     expect(next.externalSubtitlePath).toBe('/subs/episode.srt')
     expect(next.allCueTokens).toEqual({})
+    expect(next.subtitleAutoPauseTiming).toBe('after')
   })
 
   it('externalSubtitleLoaded replaces a previously loaded external track rather than duplicating it', () => {
@@ -401,6 +409,7 @@ describe('playerReducer', () => {
     const cues: Cue[] = [{ start: 0, end: 2, text: 'one' }]
     const withTokens: PlayerState = {
       ...initialPlayerState,
+      subtitleAutoPauseTiming: 'before',
       allCueTokens: {
         '0|2|old': [makeToken({ surface: 'x', pos: 'n' })]
       }
@@ -408,6 +417,7 @@ describe('playerReducer', () => {
     const next = playerReducer(withTokens, { type: 'cuesLoaded', cues })
     expect(next.cues).toBe(cues)
     expect(next.allCueTokens).toEqual({})
+    expect(next.subtitleAutoPauseTiming).toBe('before')
   })
 
   it('allCueTokensLoaded sets the whole-track token map', () => {
@@ -530,6 +540,16 @@ describe('playerReducer', () => {
     expect(next.rightClickTogglePause).toBe(false)
   })
 
+  it('setSubtitleAutoPauseTiming changes only the timing preference', () => {
+    const next = playerReducer(initialPlayerState, {
+      type: 'setSubtitleAutoPauseTiming',
+      value: 'after'
+    })
+
+    expect(next.subtitleAutoPauseTiming).toBe('after')
+    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
+  })
+
   it('setSubtitleOffset sets subtitleOffsetMs', () => {
     const next = playerReducer(initialPlayerState, { type: 'setSubtitleOffset', value: 250 })
     expect(next.subtitleOffsetMs).toBe(250)
@@ -623,6 +643,7 @@ describe('playerReducer', () => {
         subtitleDragEnabled: false,
         rightClickTogglePause: false,
         autoPlayNext: false,
+        subtitleAutoPauseTiming: 'before',
         translationEnabled: true,
         appearance: 'light',
         levelColors,
@@ -649,6 +670,7 @@ describe('playerReducer', () => {
     expect(next.subtitleStyle).toBe(subtitleStyle)
     expect(next.subtitleDragEnabled).toBe(false)
     expect(next.rightClickTogglePause).toBe(false)
+    expect(next.subtitleAutoPauseTiming).toBe('before')
     expect(next.translationEnabled).toBe(true)
     expect(next.appearance).toBe('light')
     expect(next.levelColors).toBe(levelColors)
