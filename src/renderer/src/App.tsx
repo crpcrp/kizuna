@@ -6,7 +6,7 @@ import MenuBar from './components/MenuBar'
 import BottomBar from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
 import AboutDialog from './components/AboutDialog'
-import UpdateDialog from './components/UpdateDialog'
+import UpdateNotifications from './components/UpdateNotifications'
 import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
@@ -390,34 +390,6 @@ export default function App({
         </div>
       )}
 
-      {updates.statusText && !about.open && (
-        <div id="update-status" role={updates.snapshot.status === 'error' ? 'alert' : 'status'}>
-          <span>{updates.statusText}</span>
-          {updates.snapshot.status === 'error' && (
-            <>
-              {updates.snapshot.retryable && (
-                <button type="button" onClick={updates.retry}>
-                  Retry
-                </button>
-              )}
-              <button
-                type="button"
-                className="update-status-dismiss"
-                aria-label="Dismiss update error"
-                onClick={updates.dismissError}
-              >
-                ×
-              </button>
-            </>
-          )}
-          {updates.snapshot.status === 'downloaded' && (
-            <button type="button" onClick={updates.install}>
-              Install and restart
-            </button>
-          )}
-        </div>
-      )}
-
       <div id="player-area">
         {playlistOpen && !state.fullscreen && !miniPlayerActive && (
           <aside id="left-sidebar-stack" ref={leftSidebarStackRef} aria-label="Playlist">
@@ -529,13 +501,7 @@ export default function App({
         onRetryUpdate={updates.retry}
       />
 
-      <UpdateDialog
-        modal={about.open ? null : updates.modal}
-        onDismissAvailable={updates.dismissAvailable}
-        onDownload={updates.download}
-        onDeferInstall={updates.deferInstall}
-        onInstall={updates.install}
-      />
+      <UpdateNotifications updates={updates} suppressed={about.open} />
 
       <WordPopup
         {...vocabulary.wordPopup}

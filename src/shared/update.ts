@@ -51,3 +51,12 @@ export type UpdateState =
       reason?: UpdateCheckFailureReason
       cancelled?: boolean
     }
+
+/**
+ * True while the update state is a decision waiting for the person: a release
+ * to download, or a downloaded release to install. Everything else is either
+ * progress or an outcome they do not have to answer.
+ */
+export function isUpdateOffer(state: UpdateState): boolean {
+  return state.status === 'available' || state.status === 'downloaded'
+}

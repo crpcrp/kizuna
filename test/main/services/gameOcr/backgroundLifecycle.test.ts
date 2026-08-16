@@ -205,6 +205,44 @@ describe('Game OCR background lifecycle', () => {
     expect(fake.window.showOptions).toHaveBeenCalledOnce()
   })
 
+  it('reveals the tray-hidden window so an update offer can be answered', async () => {
+    const fake = setup()
+    fake.update('armed')
+
+    await fake.lifecycle.revealForUpdate()
+
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.showOptions).toHaveBeenCalledWith('gameOcr')
+    expect(fake.window.activate).toHaveBeenCalledOnce()
+    expect(fake.runtime.stop).not.toHaveBeenCalled()
+    expect(fake.tray.destroy).not.toHaveBeenCalled()
+
+    // The window is already back; a second offer must not re-present it.
+    await fake.lifecycle.revealForUpdate()
+    expect(fake.window.showOptions).toHaveBeenCalledOnce()
+    expect(fake.window.activate).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the window alone for an update offer while Game OCR is not armed', async () => {
+    const fake = setup()
+
+    await fake.lifecycle.revealForUpdate()
+
+    expect(fake.window.showOptions).not.toHaveBeenCalled()
+    expect(fake.window.activate).not.toHaveBeenCalled()
+  })
+
+  it('does not reveal for an update offer after disposal', async () => {
+    const fake = setup()
+    fake.update('armed')
+    fake.lifecycle.dispose()
+
+    await fake.lifecycle.revealForUpdate()
+
+    expect(fake.window.showOptions).not.toHaveBeenCalled()
+    expect(fake.window.activate).not.toHaveBeenCalled()
+  })
+
   it('presents the player for a media second instance and marks it visible', async () => {
     const fake = setup()
     fake.update('armed')

@@ -20,7 +20,8 @@ import { useGameOcr, type UseGameOcrResult } from './useGameOcr'
 import { useOptionsDialog, type UseOptionsDialogResult } from './useOptionsDialog'
 import type { PerFileValueRefs } from './usePlaybackWindow'
 import { useSettingsLifecycle } from './useSettingsLifecycle'
-import { useUpdates } from './useUpdates'
+import { useSurfaceUpdates } from './updatesContext'
+import type { UpdatesController } from './useUpdates'
 
 const NOOP_SET_STATE: Dispatch<SetStateAction<boolean>> = () => undefined
 
@@ -40,7 +41,7 @@ export interface UseOptionsControllerResult {
   settingsPersistenceRef: RefObject<SettingsPersistence>
   options: UseOptionsDialogResult
   gameOcr: UseGameOcrResult
-  updates: ReturnType<typeof useUpdates>
+  updates: UpdatesController
   modifiers: ModifierTracker
 }
 
@@ -88,7 +89,7 @@ export function useOptionsController({
     reportError
   })
   const gameOcr = useGameOcr(bridge, reportError)
-  const updates = useUpdates(bridge)
+  const updates = useSurfaceUpdates(bridge)
   useAppearance({ appearance: state.appearance, levelColors: state.levelColors })
 
   return {

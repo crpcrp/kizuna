@@ -4,12 +4,15 @@ import type { KizunaApi } from '../../shared/preloadApi'
 import App from './App'
 import OptionsSurface from './OptionsSurface'
 import SplashScreen from './components/SplashScreen'
+import UpdateNotifications from './components/UpdateNotifications'
+import { UpdatesProvider } from './state/updatesContext'
+import { useUpdates } from './state/useUpdates'
 import { errorMessage } from './util/errorMessage'
 
 import './theme.css'
 import './App.css'
 
-function useSurface(api: KizunaApi | undefined): {
+function useSurface(api: KizunaApi): {
   surface: AppSurface | null
   error: string | undefined
   requestSurface: (
@@ -39,7 +42,6 @@ function useSurface(api: KizunaApi | undefined): {
   )
 
   useEffect(() => {
-    if (!api) return
     let active = true
     activeRef.current = true
     const initialRevision = pushRevision.current
@@ -79,7 +81,19 @@ function useSurface(api: KizunaApi | undefined): {
 /** Chooses the renderer surface without mounting the player during splash. */
 export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.Element | null {
   const api = bridge ?? (typeof window === 'undefined' ? undefined : window.kizuna)
+  if (!api) return null
+  return <AppSurfaces api={api} />
+}
+
+/**
+ * The surface router, and the one owner of the updater. It mounts for every
+ * start mode, so the startup check runs once whether Kizuna opened on the
+ * splash, in Game OCR, or straight into the player, and the resulting offer
+ * survives a switch between those surfaces.
+ */
+function AppSurfaces({ api }: { api: KizunaApi }): React.JSX.Element {
   const { surface, error, requestSurface } = useSurface(api)
+  const updates = useUpdates(api)
 
   const show = useCallback(
     async (request: () => Promise<AppSurface>): Promise<void> => {
@@ -88,17 +102,18 @@ export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.
     [requestSurface]
   )
 
-  if (!api) return null
-  if (surface === 'options') {
-    return (
-      <OptionsSurface bridge={api} onClose={() => requestSurface(api.appShell.dismissOptions)} />
-    )
-  }
-  if (surface !== 'player') {
+  const renderSurface = (): React.JSX.Element => {
+    if (surface === 'options') {
+      return (
+        <OptionsSurface bridge={api} onClose={() => requestSurface(api.appShell.dismissOptions)} />
+      )
+    }
+    if (surface === 'player') return <App />
+
     const startGameOcr = async (): Promise<void> => {
       const status = await api.gameOcr.start()
-      const error = status.game.error ?? status.ocr.error
-      if (error) throw new Error(error)
+      const failure = status.game.error ?? status.ocr.error
+      if (failure) throw new Error(failure)
     }
 
     return (
@@ -113,5 +128,11 @@ export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.
     )
   }
 
-  return <App />
+  return (
+    <UpdatesProvider value={updates}>
+      {renderSurface()}
+      {/* The player renders its own, gated on the About dialog. */}
+      {surface !== 'player' && <UpdateNotifications updates={updates} />}
+    </UpdatesProvider>
+  )
 }

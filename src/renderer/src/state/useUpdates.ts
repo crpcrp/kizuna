@@ -10,7 +10,7 @@ import {
 
 export type UpdatesBridge = Pick<KizunaApi, 'updates'>
 
-export function useUpdates(bridge: UpdatesBridge): {
+export interface UpdatesController {
   snapshot: UpdateState
   modal: ReturnType<typeof updateModal>
   statusText: string | null
@@ -23,7 +23,21 @@ export function useUpdates(bridge: UpdatesBridge): {
   install(): void
   retry(): void
   checkManually(): void
-} {
+}
+
+export interface UseUpdatesOptions {
+  /**
+   * False leaves the updater completely alone: no subscription, no hydration
+   * and no automatic check. Used by a surface that reads the shell-owned
+   * controller instead of running one of its own (see `updatesContext.tsx`).
+   */
+  active?: boolean
+}
+
+export function useUpdates(
+  bridge: UpdatesBridge,
+  { active = true }: UseUpdatesOptions = {}
+): UpdatesController {
   const [workflow, dispatch] = useReducer(updateWorkflowReducer, initialUpdateWorkflowState)
   const [settings, setSettings] = useState<UpdateSettings>({ checkAutomatically: true })
   const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -31,15 +45,16 @@ export function useUpdates(bridge: UpdatesBridge): {
   const automaticRequested = useRef(false)
 
   useEffect(() => {
-    let active = true
+    if (!active) return
+    let mounted = true
     let pushed = false
     const unsubscribe = bridge.updates.onStateChange((snapshot) => {
       pushed = true
-      if (active) dispatch({ type: 'snapshot', snapshot })
+      if (mounted) dispatch({ type: 'snapshot', snapshot })
     })
     void bridge.updates.getState().then(
       (snapshot) => {
-        if (!active) return
+        if (!mounted) return
         if (!pushed) dispatch({ type: 'snapshot', snapshot })
         setSnapshotLoaded(true)
       },
@@ -47,17 +62,17 @@ export function useUpdates(bridge: UpdatesBridge): {
     )
     void bridge.updates.getSettings().then(
       (value) => {
-        if (!active) return
+        if (!mounted) return
         setSettings(value)
         setSettingsLoaded(true)
       },
       () => undefined
     )
     return () => {
-      active = false
+      mounted = false
       unsubscribe()
     }
-  }, [bridge.updates])
+  }, [active, bridge.updates])
 
   useEffect(() => {
     if (!settingsLoaded || !snapshotLoaded || automaticRequested.current) return
