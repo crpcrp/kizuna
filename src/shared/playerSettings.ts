@@ -337,7 +337,7 @@ export interface PlayerSettings {
   rightClickTogglePause: boolean
   /** Whether EOF automatically opens the next video file in the folder. */
   autoPlayNext: boolean
-  /** Subtitle auto-pause timing; behavior is added by a later feature. */
+  /** Subtitle auto-pause timing at each cue boundary. */
   subtitleAutoPauseTiming: SubtitleAutoPauseTiming
   subtitleOffsets: Record<string, number>
   /** Per-folder subtitle offsets (ms), keyed by `subtitleOffsetFolderKey`. Used

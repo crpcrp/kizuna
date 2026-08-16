@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import { APP_NAME } from '../../../../shared/appInfo'
 import { audioDeviceMenuList, type AudioDevice } from '../../../../shared/audioDevice'
-import { MPV_EXTRA_ARG_MAX_LENGTH } from '../../../../shared/playerSettings'
+import {
+  MPV_EXTRA_ARG_MAX_LENGTH,
+  type SubtitleAutoPauseTiming
+} from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
@@ -11,6 +14,7 @@ export interface PlaybackTabProps {
   skipSeconds: number
   rightClickTogglePause: boolean
   autoPlayNext: boolean
+  subtitleAutoPauseTiming: SubtitleAutoPauseTiming
   audioDevices: AudioDevice[]
   selectedAudioDevice: string
   onSelectAudioDevice: (name: string) => void
@@ -23,6 +27,7 @@ export interface PlaybackTabProps {
   onChangeSkipSeconds: (value: number) => void
   onChangeRightClickTogglePause: (value: boolean) => void
   onChangeAutoPlayNext: (value: boolean) => void
+  onChangeSubtitleAutoPauseTiming: (value: SubtitleAutoPauseTiming) => void
   onChangeScreenshotFolder: (value: string | null) => void
   onChangeMpvUserConfig: (value: boolean) => void
   onChangeMpvExtraArgs: (value: string[]) => void
@@ -60,6 +65,13 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
     category: 'playback',
     keywords: ['mouse', 'pause'],
     targetId: 'right-click-toggle-pause-checkbox'
+  },
+  {
+    id: 'subtitle-auto-pause-timing',
+    label: 'Auto-pause subtitles',
+    category: 'playback',
+    keywords: ['auto pause', 'subtitle', 'line study', 'before', 'after'],
+    targetId: 'subtitle-auto-pause-timing-select'
   },
   {
     id: 'screenshot-folder',
@@ -112,6 +124,7 @@ export default function PlaybackTab({
   skipSeconds,
   rightClickTogglePause,
   autoPlayNext,
+  subtitleAutoPauseTiming,
   audioDevices,
   selectedAudioDevice,
   onSelectAudioDevice,
@@ -124,6 +137,7 @@ export default function PlaybackTab({
   onChangeSkipSeconds,
   onChangeRightClickTogglePause,
   onChangeAutoPlayNext,
+  onChangeSubtitleAutoPauseTiming,
   onChangeScreenshotFolder,
   onChangeMpvUserConfig,
   onChangeMpvExtraArgs,
@@ -190,6 +204,28 @@ export default function PlaybackTab({
           checked={rightClickTogglePause}
           onChange={onChangeRightClickTogglePause}
         />
+        <div className="options-row">
+          <label htmlFor="subtitle-auto-pause-timing-select" className="options-row-label">
+            Auto-pause subtitles
+            <span className="options-row-description">
+              Pauses once at the chosen subtitle boundary and resumes past it.
+            </span>
+          </label>
+          <select
+            id="subtitle-auto-pause-timing-select"
+            value={subtitleAutoPauseTiming}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === 'off' || value === 'before' || value === 'after') {
+                onChangeSubtitleAutoPauseTiming(value)
+              }
+            }}
+          >
+            <option value="off">Off</option>
+            <option value="before">Before each subtitle</option>
+            <option value="after">After each subtitle</option>
+          </select>
+        </div>
         <div className="options-row">
           <label htmlFor="screenshot-folder-input" className="options-row-label">
             Screenshot folder

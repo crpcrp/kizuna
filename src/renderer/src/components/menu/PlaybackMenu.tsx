@@ -1,4 +1,5 @@
 import type { AbLoopState } from '../../state/playerState'
+import type { SubtitleAutoPauseTiming } from '../../../../shared/playerSettings'
 import { Menu, MenuItem } from './primitives'
 import { SPEED_PRESETS, abLoopPhaseLabel } from './utils'
 export interface PlaybackMenuProps {
@@ -9,6 +10,8 @@ export interface PlaybackMenuProps {
   onCycleAbLoop?: () => void
   onFrameStep?: () => void
   onFrameBack?: () => void
+  subtitleAutoPauseTiming?: SubtitleAutoPauseTiming
+  onChangeSubtitleAutoPauseTiming?: (value: SubtitleAutoPauseTiming) => void
 }
 export function PlaybackMenu({
   open,
@@ -20,7 +23,9 @@ export function PlaybackMenu({
   onSetSpeed,
   onCycleAbLoop,
   onFrameStep,
-  onFrameBack
+  onFrameBack,
+  subtitleAutoPauseTiming = 'off',
+  onChangeSubtitleAutoPauseTiming
 }: PlaybackMenuProps & {
   open: boolean
   onToggle: () => void
@@ -39,6 +44,23 @@ export function PlaybackMenu({
         />
       ))}
       {!speedIsPreset && <MenuItem label={`${speed}×`} checked disabled />}
+      <div className="menu-separator" />
+      <div className="menu-section-label">Auto-pause</div>
+      <MenuItem
+        label="Off"
+        checked={subtitleAutoPauseTiming === 'off'}
+        onClick={run(() => onChangeSubtitleAutoPauseTiming?.('off'))}
+      />
+      <MenuItem
+        label="Before each subtitle"
+        checked={subtitleAutoPauseTiming === 'before'}
+        onClick={run(() => onChangeSubtitleAutoPauseTiming?.('before'))}
+      />
+      <MenuItem
+        label="After each subtitle"
+        checked={subtitleAutoPauseTiming === 'after'}
+        onClick={run(() => onChangeSubtitleAutoPauseTiming?.('after'))}
+      />
       <div className="menu-separator" />
       <MenuItem
         label={abLoopPhaseLabel(abLoop)}
