@@ -9,10 +9,21 @@ interface PlayerBridge {
   setMuted: (muted: boolean) => Promise<unknown>
 }
 
+export interface PlayerAdapter extends PlayerApi {
+  /** Auto-pause's correction seek must not reset its own baseline. */
+  seekWithoutUserNotification: (seconds: number, absolute?: boolean) => Promise<unknown>
+}
+
 export function buildPlayerAdapter(
   dispatch: (action: PlayerAction) => void,
-  resolvePlayer: () => PlayerBridge = () => window.kizuna.player
-): PlayerApi {
+  resolvePlayer: () => PlayerBridge = () => window.kizuna.player,
+  onUserSeek?: () => void
+): PlayerAdapter {
+  const seekWithoutUserNotification = async (
+    seconds: number,
+    absolute?: boolean
+  ): Promise<unknown> => resolvePlayer().seek(seconds, absolute)
+
   return {
     setPause: async (paused: boolean) => {
       const result = await resolvePlayer().setPause(paused)
@@ -20,8 +31,10 @@ export function buildPlayerAdapter(
       return result
     },
     seek: async (seconds: number, absolute?: boolean) => {
-      return resolvePlayer().seek(seconds, absolute)
+      onUserSeek?.()
+      return seekWithoutUserNotification(seconds, absolute)
     },
+    seekWithoutUserNotification,
     setVolume: async (volume: number) => {
       const result = await resolvePlayer().setVolume(volume)
       dispatch({ type: 'setVolume', value: volume })

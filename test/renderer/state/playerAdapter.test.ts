@@ -44,4 +44,17 @@ describe('buildPlayerAdapter', () => {
     expect(player.seek).toHaveBeenCalledWith(10, true)
     expect(dispatch).not.toHaveBeenCalled()
   })
+
+  it('notifies user seeks but leaves correction seeks silent', async () => {
+    const player = makePlayer()
+    const onUserSeek = vi.fn()
+    const adapter = buildPlayerAdapter(vi.fn(), () => player, onUserSeek)
+
+    await adapter.seek(10, true)
+    await adapter.seekWithoutUserNotification(2, true)
+
+    expect(onUserSeek).toHaveBeenCalledOnce()
+    expect(player.seek).toHaveBeenNthCalledWith(1, 10, true)
+    expect(player.seek).toHaveBeenNthCalledWith(2, 2, true)
+  })
 })

@@ -23,6 +23,7 @@ import { cueKey } from './state/tokenization'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
 import { appClassName, toggleFromRightClick } from './state/appChrome'
 import { buildPlayerAdapter } from './state/playerAdapter'
+import { createSubtitleAutoPauseController, useSubtitleAutoPause } from './state/subtitleAutoPause'
 import { miniPlayerSubtitleStyle } from './state/miniPlayer'
 import { usePlayerEvents } from './state/usePlayerEvents'
 import { usePlaybackWindow } from './state/usePlaybackWindow'
@@ -104,7 +105,24 @@ export default function App({
     updates,
     modifiers
   } = optionsController
-  const playerAdapter = useMemo(() => buildPlayerAdapter(dispatch), [dispatch])
+  const subtitleAutoPauseController = useMemo(() => createSubtitleAutoPauseController(), [])
+  const playerAdapter = useMemo(
+    () =>
+      buildPlayerAdapter(dispatch, undefined, () => subtitleAutoPauseController.notifyUserSeek()),
+    [dispatch, subtitleAutoPauseController]
+  )
+  useSubtitleAutoPause({
+    controller: subtitleAutoPauseController,
+    player: playerAdapter,
+    timing: state.subtitleAutoPauseTiming,
+    cues: state.cues,
+    selectedSubtitleId: state.selectedSubtitleId,
+    filePath: state.filePath,
+    loadGeneration: state.loadGeneration,
+    subtitleOffsetMs: state.subtitleOffsetMs,
+    timePos: state.timePos,
+    paused: state.paused
+  })
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
   const cursorHidden = useFullscreenCursor(state.fullscreen)
@@ -221,8 +239,8 @@ export default function App({
   useEffect(() => {
     if (!loopCue) return
     const target = loopSeekTarget(loopCue, state.timePos, state.subtitleOffsetMs)
-    if (target !== undefined) void window.kizuna.player.seek(target, true)
-  }, [state.timePos, loopCue, state.subtitleOffsetMs])
+    if (target !== undefined) void playerAdapter.seek(target, true)
+  }, [state.timePos, loopCue, state.subtitleOffsetMs, playerAdapter])
 
   const handleToggleLoopLine = (): void => {
     if (loopCue) {
@@ -301,7 +319,7 @@ export default function App({
   // respecting the current subtitle offset the same way the overlay's active
   // cue is resolved (see seekTargetForCue).
   const handleSelectSidebarCue = (cue: Cue): void => {
-    window.kizuna.player.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
+    void playerAdapter.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
   }
 
   const closeOptions = options.closeDialog
@@ -370,7 +388,10 @@ export default function App({
               speed: state.speed,
               onSetSpeed: (speed) => void playerAdapter.setSpeed(speed),
               abLoop: state.abLoopState,
-              onCycleAbLoop: handleCycleAbLoop
+              onCycleAbLoop: handleCycleAbLoop,
+              subtitleAutoPauseTiming: state.subtitleAutoPauseTiming,
+              onChangeSubtitleAutoPauseTiming: (value) =>
+                dispatch({ type: 'setSubtitleAutoPauseTiming', value })
             }}
             vocabulary={vocabulary.vocabularyMenu}
             onOpenOptions={options.openDialog}

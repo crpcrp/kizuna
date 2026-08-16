@@ -115,6 +115,17 @@ describe('buildOptionsMenuProps', () => {
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
+  it('routes auto-pause timing through the reducer lifecycle', () => {
+    const input = buildInput()
+    buildOptionsMenuProps(input).playback.onChangeSubtitleAutoPauseTiming('after')
+
+    expect(input.dispatch).toHaveBeenCalledWith({
+      type: 'setSubtitleAutoPauseTiming',
+      value: 'after'
+    })
+    expect(input.actions.persist).not.toHaveBeenCalled()
+  })
+
   it('persists the translation policy row while other rows only dispatch', () => {
     const input = buildInput()
     const props = buildOptionsMenuProps(input)

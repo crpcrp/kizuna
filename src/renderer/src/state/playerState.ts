@@ -97,7 +97,7 @@ export interface PlayerState {
   rightClickTogglePause: boolean
   /** EOF opens the next same-folder video when true. */
   autoPlayNext: boolean
-  /** Subtitle auto-pause timing preference; behavior is added by a later feature. */
+  /** Subtitle auto-pause timing preference. */
   subtitleAutoPauseTiming: SubtitleAutoPauseTiming
   /** Whether right-clicked subtitle text may use the experimental online translator. */
   translationEnabled: boolean

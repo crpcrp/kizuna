@@ -139,6 +139,30 @@ describe('OptionsMenu mpv config section', () => {
   })
 })
 
+describe('OptionsMenu subtitle auto-pause', () => {
+  it('shows the shared timing value and forwards a changed option', () => {
+    const onChangeSubtitleAutoPauseTiming = vi.fn()
+    const base = baseOptionsMenuProps()
+    render(
+      <OptionsMenu
+        {...base}
+        playback={{
+          ...base.playback,
+          subtitleAutoPauseTiming: 'before',
+          onChangeSubtitleAutoPauseTiming
+        }}
+      />
+    )
+
+    const select = screen.getByRole('combobox', {
+      name: /Auto-pause subtitles/
+    }) as HTMLSelectElement
+    expect(select.value).toBe('before')
+    fireEvent.change(select, { target: { value: 'after' } })
+    expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith('after')
+  })
+})
+
 describe('OptionsMenu experimental translation', () => {
   it('shows the persistent disclosure and reports controlled checkbox changes', () => {
     const onChangeTranslationEnabled = vi.fn()
