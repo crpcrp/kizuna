@@ -85,6 +85,18 @@ describe('subtitle auto-pause controller', () => {
     expect(controller.observe(observation({ timePos: 4.1 }))).toBeUndefined()
   })
 
+  it('ignores noisy origin updates until a user seek reaches its destination', () => {
+    const skipped: Cue = { start: 5, end: 6, text: 'skipped' }
+    const controller = createSubtitleAutoPauseController()
+    controller.observe(observation({ cues: [skipped], timePos: 1 }))
+
+    controller.notifyUserSeek(10, true)
+    expect(controller.observe(observation({ cues: [skipped], timePos: 1 }))).toBeUndefined()
+    expect(controller.observe(observation({ cues: [skipped], timePos: 1.1 }))).toBeUndefined()
+    expect(controller.observe(observation({ cues: [skipped], timePos: 10 }))).toBeUndefined()
+    expect(controller.observe(observation({ cues: [skipped], timePos: 10.1 }))).toBeUndefined()
+  })
+
   it('applies positive and negative subtitle offsets to the correction target', () => {
     const positive = createSubtitleAutoPauseController()
     positive.observe(observation({ timePos: 0, subtitleOffsetMs: 500 }))
