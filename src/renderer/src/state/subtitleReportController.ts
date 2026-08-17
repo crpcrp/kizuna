@@ -5,6 +5,7 @@ import { errorMessage } from '../util/errorMessage'
 import { buildSubtitleReport, reportLemmas, type SubtitleReport } from './subtitleReport'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 import type { KnowledgeDetailsBridge } from './wordPopupActions'
+import { cueHasUnknownVocabulary } from './vocabularyUnits'
 
 export type SubtitleReportPhase =
   | { kind: 'idle' }
@@ -124,14 +125,22 @@ function snapshotFor(
   if ('snapshot' in input) return input.snapshot
   if (!input.japaneseSubtitleSelected || input.cues.length === 0)
     return Promise.resolve({ kind: 'stale' })
+  const cueTokens = input.cues.map((cue) => ({
+    cueKey: `${cue.start}:${cue.end}:${cue.text}`,
+    tokens: input.tokenCache.get(`${cue.start}:${cue.end}:${cue.text}`) ?? []
+  }))
+  const spansByCue = input.acceptedSpansByCue ?? {}
   return Promise.resolve({
     kind: 'ready',
     snapshot: {
-      cueTokens: input.cues.map((cue) => ({
-        cueKey: `${cue.start}:${cue.end}:${cue.text}`,
-        tokens: input.tokenCache.get(`${cue.start}:${cue.end}:${cue.text}`) ?? []
-      })),
-      spansByCue: input.acceptedSpansByCue ?? {}
+      cueTokens,
+      spansByCue,
+      cueHasUnknown: Object.fromEntries(
+        cueTokens.map((cue) => [
+          cue.cueKey,
+          cueHasUnknownVocabulary({ ...cue, spans: spansByCue[cue.cueKey] ?? [] }, {})
+        ])
+      )
     }
   })
 }

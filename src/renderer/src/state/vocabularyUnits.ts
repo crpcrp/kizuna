@@ -332,3 +332,16 @@ export function vocabularyLevelsByToken(
   }
   return byOffset
 }
+
+/** Whether one cue contains an accepted vocabulary occurrence at exactly the unknown level. */
+export function cueHasUnknownVocabulary(
+  cue: VocabularyUnitCue,
+  levels: Record<string, KnowledgeLevel>
+): boolean {
+  const occurrences = cueOccurrences(
+    { cue, spans: acceptedSpans(cue) },
+    (identity) => levels[identity] ?? 'unknown',
+    new Map()
+  )
+  return occurrences.some((occurrence) => occurrence.level === 'unknown')
+}

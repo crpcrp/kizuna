@@ -96,7 +96,11 @@ describe('createBulkMiningController', () => {
     expect(controller.getState()).toEqual({ kind: 'preparing' })
     gate.resolve({
       kind: 'ready',
-      snapshot: { cueTokens: [{ cueKey: '0|1|one', tokens: [token('one')] }], spansByCue: {} }
+      snapshot: {
+        cueTokens: [{ cueKey: '0|1|one', tokens: [token('one')] }],
+        spansByCue: {},
+        cueHasUnknown: { '0|1|one': false }
+      }
     })
     await opening
 
@@ -837,7 +841,11 @@ describe('createBulkMiningController sentence-audio media context', () => {
       bridges: { ...bridges, knowledge: { detailsFor: vi.fn().mockResolvedValue({}) } },
       snapshot: Promise.resolve({
         kind: 'ready',
-        snapshot: { cueTokens: [{ cueKey: '10|12|one', tokens: [token('one')] }], spansByCue: {} }
+        snapshot: {
+          cueTokens: [{ cueKey: '10|12|one', tokens: [token('one')] }],
+          spansByCue: {},
+          cueHasUnknown: { '10|12|one': false }
+        }
       }),
       cues: [{ start: 10, end: 12, text: 'one' }],
       frequencyDictId: 1

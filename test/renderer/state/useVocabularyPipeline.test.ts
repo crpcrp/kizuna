@@ -258,7 +258,10 @@ describe('useVocabularyPipeline', () => {
 
     reportController.close()
     await act(async () => {
-      first.resolve({ kind: 'ready', snapshot: { cueTokens: [], spansByCue: {} } })
+      first.resolve({
+        kind: 'ready',
+        snapshot: { cueTokens: [], spansByCue: {}, cueHasUnknown: {} }
+      })
       await Promise.resolve()
     })
 

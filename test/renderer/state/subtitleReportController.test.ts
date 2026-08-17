@@ -15,7 +15,11 @@ function token(lemma: string): Token {
 function readySnapshot(): WholeTrackVocabularyResult {
   return {
     kind: 'ready',
-    snapshot: { cueTokens: [{ cueKey: 'cue', tokens: [token('word')] }], spansByCue: {} }
+    snapshot: {
+      cueTokens: [{ cueKey: 'cue', tokens: [token('word')] }],
+      spansByCue: {},
+      cueHasUnknown: { cue: true }
+    }
   }
 }
 
