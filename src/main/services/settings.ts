@@ -12,6 +12,7 @@ import {
   normalizeMpvExtraArgs,
   normalizePopupSettings,
   normalizeStartupBehavior,
+  normalizeSubtitleAutoPauseScope,
   normalizeSubtitleAutoPauseTiming,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
@@ -141,6 +142,7 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
         ? obj.autoPlayNext
         : DEFAULT_PLAYER_SETTINGS.autoPlayNext,
     subtitleAutoPauseTiming: normalizeSubtitleAutoPauseTiming(obj.subtitleAutoPauseTiming),
+    subtitleAutoPauseScope: normalizeSubtitleAutoPauseScope(obj.subtitleAutoPauseScope),
     subtitleOffsets: mergeOffsetMap(obj.subtitleOffsets),
     folderSubtitleOffsets: mergeOffsetMap(obj.folderSubtitleOffsets),
     audioDelays: mergeOffsetMap(obj.audioDelays),

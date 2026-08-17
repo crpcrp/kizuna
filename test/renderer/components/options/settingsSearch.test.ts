@@ -54,6 +54,11 @@ describe('SETTING_ENTRIES', () => {
       label: 'Skip back/ahead seconds',
       category: 'playback'
     })
+    expect(found('unknown')).toContainEqual({ label: 'Pause on', category: 'playback' })
+    expect(found('known words')).toContainEqual({ label: 'Pause on', category: 'playback' })
+    expect(found('Japanese')).toContainEqual({ label: 'Pause on', category: 'playback' })
+    expect(found('line study')).toContainEqual({ label: 'Pause on', category: 'playback' })
+    expect(found('filter')).toContainEqual({ label: 'Pause on', category: 'playback' })
     expect(found('a-b')).toContainEqual({ label: 'A–B loop', category: 'keybindings' })
     expect(found('onnx')).toContainEqual({
       label: 'PP-OCR / ONNX Runtime status',

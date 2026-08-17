@@ -59,6 +59,7 @@ describe('initialPlayerState', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
+      subtitleAutoPauseScope: 'all',
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -204,6 +205,7 @@ describe('playerReducer', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       subtitleAutoPauseTiming: 'before',
+      subtitleAutoPauseScope: 'all',
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -550,6 +552,16 @@ describe('playerReducer', () => {
     expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
   })
 
+  it('setSubtitleAutoPauseScope changes only the scope preference', () => {
+    const next = playerReducer(initialPlayerState, {
+      type: 'setSubtitleAutoPauseScope',
+      value: 'unknown'
+    })
+
+    expect(next.subtitleAutoPauseScope).toBe('unknown')
+    expect(next.subtitleAutoPauseTiming).toBe(initialPlayerState.subtitleAutoPauseTiming)
+  })
+
   it('setSubtitleOffset sets subtitleOffsetMs', () => {
     const next = playerReducer(initialPlayerState, { type: 'setSubtitleOffset', value: 250 })
     expect(next.subtitleOffsetMs).toBe(250)
@@ -644,6 +656,7 @@ describe('playerReducer', () => {
         rightClickTogglePause: false,
         autoPlayNext: false,
         subtitleAutoPauseTiming: 'before',
+        subtitleAutoPauseScope: 'all',
         translationEnabled: true,
         appearance: 'light',
         levelColors,

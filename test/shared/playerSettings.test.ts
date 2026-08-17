@@ -5,6 +5,7 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_PLAYER_SETTINGS,
   DEFAULT_POPUP_SETTINGS,
+  DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   DEFAULT_SUBTITLE_STYLE,
   isKeyModifier,
@@ -15,6 +16,7 @@ import {
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePopupSettings,
+  normalizeSubtitleAutoPauseScope,
   normalizeSubtitleAutoPauseTiming,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
@@ -90,6 +92,23 @@ describe('normalizeSubtitleAutoPauseTiming', () => {
 
   it('uses off as the shared player default', () => {
     expect(DEFAULT_PLAYER_SETTINGS.subtitleAutoPauseTiming).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING)
+  })
+})
+
+describe('normalizeSubtitleAutoPauseScope', () => {
+  it.each(['all', 'unknown'] as const)('accepts %s', (scope) => {
+    expect(normalizeSubtitleAutoPauseScope(scope)).toBe(scope)
+  })
+
+  it.each([undefined, null, {}, 42, '', 'All', 'known'])(
+    'defaults malformed value %j to all',
+    (scope) => {
+      expect(normalizeSubtitleAutoPauseScope(scope)).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE)
+    }
+  )
+
+  it('uses all as the shared player default', () => {
+    expect(DEFAULT_PLAYER_SETTINGS.subtitleAutoPauseScope).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE)
   })
 })
 

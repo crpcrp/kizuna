@@ -17,6 +17,7 @@ import { useLatestCallback } from './useLatestRef'
 import { useSubtitleReport } from './useSubtitleReport'
 import { useVocabularyCaches } from './useVocabularyCaches'
 import { useWordPopup, type CardImageDialogViewModel } from './useWordPopup'
+import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 
 export type { BulkMiningViewModel } from './useBulkMining'
 export type { VocabularyKnowledgeOptions } from './useKnowledgeOptions'
@@ -86,6 +87,10 @@ export interface UseVocabularyMiningResult {
   /** True while one of this feature's modals owns keyboard input, so the
    * composition root can suspend the global shortcuts. */
   modalOpen: boolean
+  /** Narrow preparation seam for consumers that need cue-level eligibility. */
+  autoPause: {
+    prepareCueEligibility: () => Promise<WholeTrackVocabularyResult>
+  }
 }
 
 /**
@@ -222,6 +227,7 @@ export function useVocabularyMining({
     },
     mining,
     knowledgeOptions: knowledge.options,
-    modalOpen: report.open || popup.cardImageOpen || mining.presentation === 'modal'
+    modalOpen: report.open || popup.cardImageOpen || mining.presentation === 'modal',
+    autoPause: { prepareCueEligibility: caches.prepareWholeTrackVocabulary }
   }
 }

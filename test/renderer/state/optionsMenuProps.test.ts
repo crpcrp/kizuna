@@ -126,6 +126,17 @@ describe('buildOptionsMenuProps', () => {
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
+  it('routes auto-pause scope through the reducer lifecycle', () => {
+    const input = buildInput()
+    buildOptionsMenuProps(input).playback.onChangeSubtitleAutoPauseScope('unknown')
+
+    expect(input.dispatch).toHaveBeenCalledWith({
+      type: 'setSubtitleAutoPauseScope',
+      value: 'unknown'
+    })
+    expect(input.actions.persist).not.toHaveBeenCalled()
+  })
+
   it('persists the translation policy row while other rows only dispatch', () => {
     const input = buildInput()
     const props = buildOptionsMenuProps(input)

@@ -14,8 +14,10 @@ function observation(
 ): SubtitleAutoPauseObservation {
   return {
     timing: 'before',
+    scope: 'all',
     cues: CUES,
     selectedSubtitleId: 1,
+    japaneseSubtitleSelected: true,
     filePath: 'episode.mkv',
     loadGeneration: 1,
     subtitleOffsetMs: 0,
@@ -59,6 +61,104 @@ describe('subtitle auto-pause controller', () => {
       seekTarget: 2
     })
     expect(controller.observe(observation({ timePos: 2.2 }))).toBeUndefined()
+  })
+
+  it('uses only a complete true eligibility result in unknown scope', () => {
+    const unknown: Cue = { start: 2, end: 3, text: 'unknown' }
+    const known: Cue = { start: 4, end: 5, text: 'known' }
+    const cues = [unknown, known]
+    const eligible = (cue: Cue): boolean => cue === unknown
+    const controller = createSubtitleAutoPauseController()
+
+    controller.observe(
+      observation({
+        scope: 'unknown',
+        cues,
+        cueEligibility: eligible,
+        timePos: 0
+      })
+    )
+    expect(
+      controller.observe(
+        observation({
+          scope: 'unknown',
+          cues,
+          cueEligibility: eligible,
+          timePos: 2.1
+        })
+      )?.cue
+    ).toBe(unknown)
+
+    controller.observe(
+      observation({
+        scope: 'unknown',
+        cues,
+        cueEligibility: eligible,
+        timePos: 3.5
+      })
+    )
+    expect(
+      controller.observe(
+        observation({
+          scope: 'unknown',
+          cues,
+          cueEligibility: eligible,
+          timePos: 5.1
+        })
+      )
+    ).toBeUndefined()
+  })
+
+  it('does not pause unknown scope without Japanese eligibility or a map', () => {
+    const controller = createSubtitleAutoPauseController()
+    controller.observe(observation({ scope: 'unknown', timePos: 0 }))
+    expect(controller.observe(observation({ scope: 'unknown', timePos: 2.1 }))).toBeUndefined()
+
+    const nonJapanese = createSubtitleAutoPauseController()
+    nonJapanese.observe(
+      observation({
+        scope: 'unknown',
+        japaneseSubtitleSelected: false,
+        cueEligibility: () => true,
+        timePos: 0
+      })
+    )
+    expect(
+      nonJapanese.observe({
+        ...observation({
+          scope: 'unknown',
+          japaneseSubtitleSelected: false,
+          cueEligibility: () => true,
+          timePos: 2.1
+        })
+      })
+    ).toBeUndefined()
+  })
+
+  it('establishes a fresh baseline when the current eligibility result changes', () => {
+    const firstEligibility = (): boolean => false
+    const secondEligibility = (): boolean => true
+    const controller = createSubtitleAutoPauseController()
+
+    controller.observe(
+      observation({ scope: 'unknown', cueEligibility: firstEligibility, timePos: 0 })
+    )
+    expect(
+      controller.observe(
+        observation({ scope: 'unknown', cueEligibility: firstEligibility, timePos: 2.1 })
+      )
+    ).toBeUndefined()
+
+    expect(
+      controller.observe(
+        observation({ scope: 'unknown', cueEligibility: secondEligibility, timePos: 0 })
+      )
+    ).toBeUndefined()
+    expect(
+      controller.observe(
+        observation({ scope: 'unknown', cueEligibility: secondEligibility, timePos: 2.1 })
+      )?.cue
+    ).toBe(CUE)
   })
 
   it('pauses after a cue and seeks inside it by the shared inset', () => {

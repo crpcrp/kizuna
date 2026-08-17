@@ -3,6 +3,7 @@ import { APP_NAME } from '../../../../shared/appInfo'
 import { audioDeviceMenuList, type AudioDevice } from '../../../../shared/audioDevice'
 import {
   MPV_EXTRA_ARG_MAX_LENGTH,
+  type SubtitleAutoPauseScope,
   type SubtitleAutoPauseTiming
 } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
@@ -15,6 +16,7 @@ export interface PlaybackTabProps {
   rightClickTogglePause: boolean
   autoPlayNext: boolean
   subtitleAutoPauseTiming: SubtitleAutoPauseTiming
+  subtitleAutoPauseScope: SubtitleAutoPauseScope
   audioDevices: AudioDevice[]
   selectedAudioDevice: string
   onSelectAudioDevice: (name: string) => void
@@ -28,6 +30,7 @@ export interface PlaybackTabProps {
   onChangeRightClickTogglePause: (value: boolean) => void
   onChangeAutoPlayNext: (value: boolean) => void
   onChangeSubtitleAutoPauseTiming: (value: SubtitleAutoPauseTiming) => void
+  onChangeSubtitleAutoPauseScope: (value: SubtitleAutoPauseScope) => void
   onChangeScreenshotFolder: (value: string | null) => void
   onChangeMpvUserConfig: (value: boolean) => void
   onChangeMpvExtraArgs: (value: string[]) => void
@@ -72,6 +75,13 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
     category: 'playback',
     keywords: ['auto pause', 'subtitle', 'line study', 'before', 'after'],
     targetId: 'subtitle-auto-pause-timing-select'
+  },
+  {
+    id: 'subtitle-auto-pause-scope',
+    label: 'Pause on',
+    category: 'playback',
+    keywords: ['unknown', 'known words', 'Japanese', 'line study', 'filter'],
+    targetId: 'subtitle-auto-pause-scope-select'
   },
   {
     id: 'screenshot-folder',
@@ -125,6 +135,7 @@ export default function PlaybackTab({
   rightClickTogglePause,
   autoPlayNext,
   subtitleAutoPauseTiming,
+  subtitleAutoPauseScope,
   audioDevices,
   selectedAudioDevice,
   onSelectAudioDevice,
@@ -138,6 +149,7 @@ export default function PlaybackTab({
   onChangeRightClickTogglePause,
   onChangeAutoPlayNext,
   onChangeSubtitleAutoPauseTiming,
+  onChangeSubtitleAutoPauseScope,
   onChangeScreenshotFolder,
   onChangeMpvUserConfig,
   onChangeMpvExtraArgs,
@@ -224,6 +236,26 @@ export default function PlaybackTab({
             <option value="off">Off</option>
             <option value="before">Before each subtitle</option>
             <option value="after">After each subtitle</option>
+          </select>
+        </div>
+        <div className="options-row">
+          <label htmlFor="subtitle-auto-pause-scope-select" className="options-row-label">
+            Pause on
+            <span className="options-row-description">
+              Unknown-word filtering uses Japanese subtitles and your current Kizuna knowledge
+              levels.
+            </span>
+          </label>
+          <select
+            id="subtitle-auto-pause-scope-select"
+            value={subtitleAutoPauseScope}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === 'all' || value === 'unknown') onChangeSubtitleAutoPauseScope(value)
+            }}
+          >
+            <option value="all">All subtitle lines</option>
+            <option value="unknown">Lines with unknown words</option>
           </select>
         </div>
         <div className="options-row">

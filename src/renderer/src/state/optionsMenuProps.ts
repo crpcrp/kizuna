@@ -22,6 +22,7 @@ export type OptionsSettingsState = Pick<
   | 'screenshotFolder'
   | 'skipSeconds'
   | 'startupBehavior'
+  | 'subtitleAutoPauseScope'
   | 'subtitleAutoPauseTiming'
   | 'subtitleDragEnabled'
   | 'subtitleStyle'
@@ -105,6 +106,7 @@ export function buildOptionsMenuProps({
       rightClickTogglePause: settings.rightClickTogglePause,
       autoPlayNext: settings.autoPlayNext,
       subtitleAutoPauseTiming: settings.subtitleAutoPauseTiming,
+      subtitleAutoPauseScope: settings.subtitleAutoPauseScope,
       screenshotFolder: settings.screenshotFolder,
       mpvUserConfig: settings.mpvUserConfig,
       mpvExtraArgs: settings.mpvExtraArgs,
@@ -114,6 +116,8 @@ export function buildOptionsMenuProps({
       onChangeAutoPlayNext: (value) => dispatch({ type: 'setAutoPlayNext', value }),
       onChangeSubtitleAutoPauseTiming: (value) =>
         dispatch({ type: 'setSubtitleAutoPauseTiming', value }),
+      onChangeSubtitleAutoPauseScope: (value) =>
+        dispatch({ type: 'setSubtitleAutoPauseScope', value }),
       onChangeScreenshotFolder: (value) => dispatch({ type: 'setScreenshotFolder', value }),
       onChangeMpvUserConfig: (value) => dispatch({ type: 'setMpvUserConfig', value }),
       onChangeMpvExtraArgs: (value) => dispatch({ type: 'setMpvExtraArgs', value }),

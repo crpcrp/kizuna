@@ -22,6 +22,7 @@ export const SYNCED_SETTING_KEYS = [
   'rightClickTogglePause',
   'autoPlayNext',
   'subtitleAutoPauseTiming',
+  'subtitleAutoPauseScope',
   'appearance',
   'levelColors',
   'screenshotFolder',
