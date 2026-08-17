@@ -10,6 +10,7 @@ import {
   tokenizeAllCues
 } from './tokenization'
 import { type DictLookupBridge } from './wordLookup'
+import { cueHasUnknownVocabulary } from './vocabularyUnits'
 import {
   createVocabularySpanController,
   type VocabularySpanController,
@@ -20,6 +21,7 @@ import type { VocabularySpan } from './vocabularySpans'
 export interface WholeTrackVocabularySnapshot {
   cueTokens: { cueKey: string; tokens: Token[] }[]
   spansByCue: Record<string, VocabularySpan[]>
+  cueHasUnknown: Record<string, boolean>
 }
 
 export type WholeTrackVocabularyResult =
@@ -132,7 +134,28 @@ async function prepareSnapshot(
       epoch: input.epoch
     })
     if (getGeneration() !== requestGeneration || spans.kind === 'stale') return { kind: 'stale' }
-    return { kind: 'ready', snapshot: { cueTokens, spansByCue: spans.spansByCue } }
+    const levels = Object.fromEntries(input.knownLevelsCache)
+    const cueHasUnknown = Object.fromEntries(
+      input.cues.map((cue) => {
+        const key = cueKey(cue)
+        return [
+          key,
+          cueHasUnknownVocabulary(
+            {
+              cueKey: key,
+              text: cue.text,
+              tokens: tokenSnapshot[key] ?? [],
+              spans: spans.spansByCue[key] ?? []
+            },
+            levels
+          )
+        ] as const
+      })
+    )
+    return {
+      kind: 'ready',
+      snapshot: { cueTokens, spansByCue: spans.spansByCue, cueHasUnknown }
+    }
   } catch {
     return getGeneration() === requestGeneration
       ? { kind: 'error', message: 'Could not prepare whole-track vocabulary.' }

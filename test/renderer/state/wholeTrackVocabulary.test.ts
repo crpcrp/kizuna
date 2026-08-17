@@ -9,7 +9,8 @@ import {
 } from '@src/renderer/src/state/wholeTrackVocabulary'
 import type {
   VocabularySpanController,
-  VocabularySpanEpoch
+  VocabularySpanEpoch,
+  VocabularySpanResolveResult
 } from '@src/renderer/src/state/vocabularySpanController'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -71,7 +72,8 @@ describe('whole-track vocabulary coordinator', () => {
       kind: 'ready',
       snapshot: {
         cueTokens: [{ cueKey: '0|1|word', tokens }],
-        spansByCue: { '0|1|word': [] }
+        spansByCue: { '0|1|word': [] },
+        cueHasUnknown: { '0|1|word': true }
       }
     })
     expect(request.mecab.tokenizeBatch).toHaveBeenCalledOnce()
@@ -82,7 +84,7 @@ describe('whole-track vocabulary coordinator', () => {
     const spans = spanController()
     const coordinator = createWholeTrackVocabularyCoordinator(spans)
     const first = input()
-    await coordinator.prepare(first)
+    const prepared = await coordinator.prepare(first)
 
     const ankiRefresh = Object.assign(
       { ...first },
@@ -90,8 +92,81 @@ describe('whole-track vocabulary coordinator', () => {
         ankiSettings: { duplicatePolicy: 'overwrite', deck: 'Target', tags: ['tag'] }
       }
     )
-    await coordinator.prepare(ankiRefresh)
+    const cached = await coordinator.prepare(ankiRefresh)
+    expect(cached).toBe(prepared)
     expect(first.mecab.tokenizeBatch).toHaveBeenCalledOnce()
+    expect(spans.resolve).toHaveBeenCalledOnce()
+  })
+
+  it('classifies every cue from prepared spans and cached levels', async () => {
+    const trackCues: Cue[] = [
+      { start: 0, end: 2, text: '棒人間' },
+      { start: 2, end: 3, text: '神' }
+    ]
+    const compoundTokens = [
+      makeToken({ surface: '棒', lemma: '棒', pos: 'noun' }),
+      makeToken({ surface: '人間', lemma: '人間', pos: 'noun', startOffset: 1 })
+    ]
+    const knownTokens = [makeToken({ surface: '神', lemma: '神', pos: 'noun' })]
+    const compoundKey = '0|2|棒人間'
+    const knownKey = '2|3|神'
+    const spans = spanController()
+    const spansByCue = {
+      [compoundKey]: [
+        {
+          cueKey: compoundKey,
+          startOffset: 0,
+          endOffset: 3,
+          memberTokenOffsets: [0, 1],
+          expression: '棒人間',
+          matchedSurface: '棒人間',
+          level: 'unknown' as const
+        }
+      ],
+      [knownKey]: [
+        {
+          cueKey: knownKey,
+          startOffset: 0,
+          endOffset: 1,
+          memberTokenOffsets: [0],
+          expression: '神',
+          matchedSurface: '神',
+          level: 'known' as const
+        }
+      ]
+    }
+    spans.resolve.mockResolvedValue({ kind: 'resolved', spansByCue })
+    const request = input({
+      cues: trackCues,
+      mecab: { tokenizeBatch: vi.fn().mockResolvedValue([compoundTokens, knownTokens]) },
+      knownLevelsCache: new Map<string, KnowledgeLevel>([
+        ['棒', 'unknown'],
+        ['人間', 'known'],
+        ['神', 'known']
+      ])
+    })
+    const coordinator = createWholeTrackVocabularyCoordinator(spans)
+
+    const prepared = await coordinator.prepare(request)
+
+    expect(prepared).toEqual({
+      kind: 'ready',
+      snapshot: {
+        cueTokens: [
+          { cueKey: compoundKey, tokens: compoundTokens },
+          { cueKey: knownKey, tokens: knownTokens }
+        ],
+        spansByCue,
+        cueHasUnknown: { [compoundKey]: true, [knownKey]: false }
+      }
+    })
+    expect(request.knowledge.levelsFor).not.toHaveBeenCalled()
+    expect(request.knowledge.detailsFor).not.toHaveBeenCalled()
+    expect(request.dict.lookup).not.toHaveBeenCalled()
+
+    const cached = await coordinator.prepare(request)
+    expect(cached).toBe(prepared)
+    expect(request.mecab.tokenizeBatch).toHaveBeenCalledOnce()
     expect(spans.resolve).toHaveBeenCalledOnce()
   })
 
@@ -121,6 +196,48 @@ describe('whole-track vocabulary coordinator', () => {
     resolveBatch([tokens])
 
     await expect(pending).resolves.toEqual({ kind: 'stale' })
+  })
+
+  it('discards cue classification when span resolution becomes stale', async () => {
+    let resolveSpans!: (value: VocabularySpanResolveResult) => void
+    const pendingSpans = new Promise<VocabularySpanResolveResult>((resolve) => {
+      resolveSpans = resolve
+    })
+    const spans = spanController()
+    spans.resolve.mockReturnValue(pendingSpans)
+    const coordinator = createWholeTrackVocabularyCoordinator(spans)
+    const pending = coordinator.prepare(
+      input({ knownLevelsCache: new Map<string, KnowledgeLevel>([['word', 'unknown']]) })
+    )
+
+    await vi.waitFor(() => expect(spans.resolve).toHaveBeenCalledOnce())
+    coordinator.invalidate()
+    resolveSpans({ kind: 'resolved', spansByCue: { '0|1|word': [] } })
+
+    await expect(pending).resolves.toEqual({ kind: 'stale' })
+  })
+
+  it('recomputes cue classification after invalidation', async () => {
+    const spans = spanController()
+    const coordinator = createWholeTrackVocabularyCoordinator(spans)
+    const knownLevelsCache = new Map<string, KnowledgeLevel>([['word', 'unknown']])
+    const request = input({ knownLevelsCache })
+
+    const first = await coordinator.prepare(request)
+    expect(first).toMatchObject({
+      kind: 'ready',
+      snapshot: { cueHasUnknown: { '0|1|word': true } }
+    })
+
+    knownLevelsCache.set('word', 'known')
+    coordinator.invalidate()
+    const second = await coordinator.prepare(request)
+
+    expect(second).toMatchObject({
+      kind: 'ready',
+      snapshot: { cueHasUnknown: { '0|1|word': false } }
+    })
+    expect(spans.resolve).toHaveBeenCalledTimes(2)
   })
 
   it('does not rejoin an old request after the snapshot key changes away and back', async () => {

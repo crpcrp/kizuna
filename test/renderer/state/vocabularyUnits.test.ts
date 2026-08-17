@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { KnowledgeDetails } from '@src/shared/knowledge'
+import type { KnowledgeDetails, KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import {
+  cueHasUnknownVocabulary,
   deriveVocabularyUnits,
   vocabularyLevelsByToken
 } from '@src/renderer/src/state/vocabularyUnits'
@@ -229,6 +230,89 @@ describe('deriveVocabularyUnits', () => {
     )
 
     expect(units[0].level).toBe('wellKnown')
+  })
+})
+
+describe('cueHasUnknownVocabulary', () => {
+  const cases: [string, Token[], Record<string, KnowledgeLevel>, boolean][] = [
+    ['one unknown ordinary token', [token({ surface: '猫', lemma: '猫' })], {}, true],
+    ['only known vocabulary', [token({ surface: '猫', lemma: '猫' })], { 猫: 'known' }, false],
+    [
+      'only well-known vocabulary',
+      [token({ surface: '猫', lemma: '猫' })],
+      { 猫: 'wellKnown' },
+      false
+    ],
+    ['inDeck vocabulary', [token({ surface: '猫', lemma: '猫' })], { 猫: 'inDeck' }, false],
+    ['learning vocabulary', [token({ surface: '猫', lemma: '猫' })], { 猫: 'learning' }, false],
+    [
+      'grammar and punctuation only',
+      [
+        token({ surface: 'の', lemma: 'の', pos: '助詞' }),
+        token({ surface: '。', lemma: '。', pos: '記号', startOffset: 1 })
+      ],
+      { の: 'unknown' },
+      false
+    ],
+    [
+      'mixed known and unknown vocabulary',
+      [
+        token({ surface: '猫', lemma: '猫' }),
+        token({ surface: '犬', lemma: '犬', startOffset: 1 })
+      ],
+      { 猫: 'known', 犬: 'unknown' },
+      true
+    ]
+  ]
+
+  it.each(cases)('%s', (_name, tokens, levels, expected) => {
+    expect(cueHasUnknownVocabulary({ cueKey: 'cue-1', tokens }, levels)).toBe(expected)
+  })
+
+  it('uses the accepted compound level instead of member-token levels', () => {
+    const cue = {
+      cueKey: 'cue-1',
+      tokens: [
+        token({ surface: '棒', lemma: '棒' }),
+        token({ surface: '人間', lemma: '人間', startOffset: 1 })
+      ],
+      spans: [
+        span({
+          expression: '棒人間',
+          matchedSurface: '棒人間',
+          endOffset: 3,
+          level: 'unknown'
+        })
+      ]
+    }
+
+    expect(cueHasUnknownVocabulary(cue, { 人間: 'known' })).toBe(true)
+    expect(
+      cueHasUnknownVocabulary({ ...cue, spans: [span({ ...cue.spans[0], level: 'known' })] }, {})
+    ).toBe(false)
+  })
+
+  it('uses expression, lemma, and surface aliases for a single-token projection', () => {
+    const cue = {
+      cueKey: 'cue-1',
+      tokens: [token({ surface: 'ヤツ', lemma: 'ヤツ' })],
+      spans: [span({ memberTokenOffsets: [0], expression: '奴', matchedSurface: 'ヤツ' })]
+    }
+
+    expect(cueHasUnknownVocabulary(cue, { 奴: 'known' })).toBe(false)
+  })
+
+  it('returns false for an empty cue and does not mutate its inputs', () => {
+    const cue = {
+      cueKey: 'cue-1',
+      tokens: [token({ surface: '猫', lemma: '猫' })],
+      spans: [span({ memberTokenOffsets: [0], endOffset: 1 })]
+    }
+    const before = JSON.stringify(cue)
+
+    expect(cueHasUnknownVocabulary({ cueKey: 'empty', tokens: [] }, {})).toBe(false)
+    expect(cueHasUnknownVocabulary(cue, {})).toBe(true)
+    expect(JSON.stringify(cue)).toBe(before)
   })
 })
 
