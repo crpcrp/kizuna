@@ -80,6 +80,33 @@ describe('PlaybackMenu auto-pause', () => {
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'After each subtitle' }))
     expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith('after')
   })
+
+  it('checks and toggles unknown-word scope, disabled while timing is off', () => {
+    const onChangeSubtitleAutoPauseScope = vi.fn()
+    const { rerender } = render(
+      menu({
+        subtitleAutoPauseTiming: 'before',
+        subtitleAutoPauseScope: 'unknown',
+        onChangeSubtitleAutoPauseScope
+      })
+    )
+
+    const item = screen.getByRole('menuitemradio', { name: 'Only lines with unknown words' })
+    expect(item.getAttribute('aria-checked')).toBe('true')
+    fireEvent.click(item)
+    expect(onChangeSubtitleAutoPauseScope).toHaveBeenCalledWith('all')
+
+    rerender(
+      menu({
+        subtitleAutoPauseTiming: 'off',
+        subtitleAutoPauseScope: 'unknown',
+        onChangeSubtitleAutoPauseScope
+      })
+    )
+    expect(
+      screen.getByRole('menuitemradio', { name: 'Only lines with unknown words' })
+    ).toHaveProperty('disabled', true)
+  })
 })
 
 describe('PlaybackMenu frame stepping', () => {

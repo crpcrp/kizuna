@@ -1,5 +1,8 @@
 import type { AbLoopState } from '../../state/playerState'
-import type { SubtitleAutoPauseTiming } from '../../../../shared/playerSettings'
+import type {
+  SubtitleAutoPauseScope,
+  SubtitleAutoPauseTiming
+} from '../../../../shared/playerSettings'
 import { Menu, MenuItem } from './primitives'
 import { SPEED_PRESETS, abLoopPhaseLabel } from './utils'
 export interface PlaybackMenuProps {
@@ -12,6 +15,8 @@ export interface PlaybackMenuProps {
   onFrameBack?: () => void
   subtitleAutoPauseTiming?: SubtitleAutoPauseTiming
   onChangeSubtitleAutoPauseTiming?: (value: SubtitleAutoPauseTiming) => void
+  subtitleAutoPauseScope?: SubtitleAutoPauseScope
+  onChangeSubtitleAutoPauseScope?: (value: SubtitleAutoPauseScope) => void
 }
 export function PlaybackMenu({
   open,
@@ -25,7 +30,9 @@ export function PlaybackMenu({
   onFrameStep,
   onFrameBack,
   subtitleAutoPauseTiming = 'off',
-  onChangeSubtitleAutoPauseTiming
+  onChangeSubtitleAutoPauseTiming,
+  subtitleAutoPauseScope = 'all',
+  onChangeSubtitleAutoPauseScope
 }: PlaybackMenuProps & {
   open: boolean
   onToggle: () => void
@@ -60,6 +67,14 @@ export function PlaybackMenu({
         label="After each subtitle"
         checked={subtitleAutoPauseTiming === 'after'}
         onClick={run(() => onChangeSubtitleAutoPauseTiming?.('after'))}
+      />
+      <MenuItem
+        label="Only lines with unknown words"
+        checked={subtitleAutoPauseScope === 'unknown'}
+        disabled={subtitleAutoPauseTiming === 'off'}
+        onClick={run(() =>
+          onChangeSubtitleAutoPauseScope?.(subtitleAutoPauseScope === 'unknown' ? 'all' : 'unknown')
+        )}
       />
       <div className="menu-separator" />
       <MenuItem

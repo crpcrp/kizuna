@@ -161,6 +161,26 @@ describe('OptionsMenu subtitle auto-pause', () => {
     fireEvent.change(select, { target: { value: 'after' } })
     expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith('after')
   })
+
+  it('shows and changes the unknown-word scope independently of timing', () => {
+    const onChangeSubtitleAutoPauseScope = vi.fn()
+    const base = baseOptionsMenuProps()
+    render(
+      <OptionsMenu
+        {...base}
+        playback={{
+          ...base.playback,
+          subtitleAutoPauseScope: 'unknown',
+          onChangeSubtitleAutoPauseScope
+        }}
+      />
+    )
+
+    const select = screen.getByRole('combobox', { name: /Pause on/ }) as HTMLSelectElement
+    expect(select.value).toBe('unknown')
+    fireEvent.change(select, { target: { value: 'all' } })
+    expect(onChangeSubtitleAutoPauseScope).toHaveBeenCalledWith('all')
+  })
 })
 
 describe('OptionsMenu experimental translation', () => {

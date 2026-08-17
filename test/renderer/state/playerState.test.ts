@@ -16,6 +16,7 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SKIP_SECONDS,
+  DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
   DEFAULT_SUBTITLE_STYLE,
   DEFAULT_VIDEO_ADJUSTMENTS
@@ -59,6 +60,7 @@ describe('initialPlayerState', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
+      subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -204,6 +206,7 @@ describe('playerReducer', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       subtitleAutoPauseTiming: 'before',
+      subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
       translationEnabled: false,
       subtitleOffsetMs: 0,
       audioDelayMs: 0,
@@ -644,6 +647,7 @@ describe('playerReducer', () => {
         rightClickTogglePause: false,
         autoPlayNext: false,
         subtitleAutoPauseTiming: 'before',
+        subtitleAutoPauseScope: 'unknown',
         translationEnabled: true,
         appearance: 'light',
         levelColors,
@@ -671,6 +675,7 @@ describe('playerReducer', () => {
     expect(next.subtitleDragEnabled).toBe(false)
     expect(next.rightClickTogglePause).toBe(false)
     expect(next.subtitleAutoPauseTiming).toBe('before')
+    expect(next.subtitleAutoPauseScope).toBe('unknown')
     expect(next.translationEnabled).toBe(true)
     expect(next.appearance).toBe('light')
     expect(next.levelColors).toBe(levelColors)
@@ -701,6 +706,16 @@ describe('playerReducer', () => {
       value: true
     })
     expect(norm.loudnessNormalization).toBe(true)
+  })
+
+  it('setSubtitleAutoPauseScope changes only the scope preference', () => {
+    const next = playerReducer(initialPlayerState, {
+      type: 'setSubtitleAutoPauseScope',
+      value: 'unknown'
+    })
+
+    expect(next.subtitleAutoPauseScope).toBe('unknown')
+    expect(next.subtitleAutoPauseTiming).toBe(initialPlayerState.subtitleAutoPauseTiming)
   })
 
   it('setVideoAdjustments replaces the whole adjustments block', () => {

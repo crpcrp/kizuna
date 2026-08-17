@@ -313,6 +313,22 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     expect(merged.player.skipSeconds).toBe(12)
   })
 
+  it.each(['all', 'unknown'] as const)('preserves valid subtitle auto-pause scope %s', (scope) => {
+    expect(mergeSettings({ player: { subtitleAutoPauseScope: scope } }).player).toHaveProperty(
+      'subtitleAutoPauseScope',
+      scope
+    )
+  })
+
+  it('defaults malformed subtitle auto-pause scope without resetting other settings', () => {
+    const merged = mergeSettings({
+      player: { subtitleAutoPauseScope: 'Unknown', skipSeconds: 12 }
+    })
+
+    expect(merged.player.subtitleAutoPauseScope).toBe('all')
+    expect(merged.player.skipSeconds).toBe(12)
+  })
+
   it('fills a partial keyBindings with defaults for the missing actions', () => {
     const merged = mergeSettings({ player: { keyBindings: { togglePause: 'KeyK' } } })
     expect(merged.player.keyBindings).toEqual({
@@ -457,6 +473,7 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
       rightClickTogglePause: false,
       autoPlayNext: true,
       subtitleAutoPauseTiming: 'after' as const,
+      subtitleAutoPauseScope: 'unknown' as const,
       subtitleOffsets: { '/videos/a.mkv': 250 },
       folderSubtitleOffsets: { '/videos': -100 },
       audioDelays: { '/videos/a.mkv': -75 },
