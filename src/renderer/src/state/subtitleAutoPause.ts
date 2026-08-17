@@ -1,14 +1,22 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Cue } from '../../../shared/cue'
 import { offsetTimePos } from '../../../shared/cue'
-import type { SubtitleAutoPauseTiming } from '../../../shared/playerSettings'
+import { cueKey } from './tokenization'
+import type {
+  SubtitleAutoPauseScope,
+  SubtitleAutoPauseTiming
+} from '../../../shared/playerSettings'
 import type { PlayerAdapter } from './playerAdapter'
+import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 
 /** Keeps an automatically paused completed subtitle visible by about 10 ms. */
 export const AUTO_PAUSE_END_INSET_SECONDS = 0.01
+export const UNKNOWN_WORD_AUTO_PAUSE_ERROR = 'Could not prepare unknown-word auto-pause.'
 
 export interface SubtitleAutoPauseObservation {
   timing: SubtitleAutoPauseTiming
+  scope?: SubtitleAutoPauseScope
+  cueEligibility?: (cue: Cue) => boolean
   cues: Cue[]
   selectedSubtitleId: number | null
   filePath?: string
@@ -26,6 +34,8 @@ export interface SubtitleAutoPauseEffect {
 
 interface ControllerConfig {
   timing: SubtitleAutoPauseTiming
+  scope: SubtitleAutoPauseScope
+  cueEligibility?: (cue: Cue) => boolean
   cues: Cue[]
   selectedSubtitleId: number | null
   filePath?: string
@@ -50,6 +60,8 @@ function activeCueAt(cues: Cue[], time: number): Cue | undefined {
 function sameConfig(left: ControllerConfig, right: ControllerConfig): boolean {
   return (
     left.timing === right.timing &&
+    left.scope === right.scope &&
+    left.cueEligibility === right.cueEligibility &&
     left.cues === right.cues &&
     left.selectedSubtitleId === right.selectedSubtitleId &&
     left.filePath === right.filePath &&
@@ -105,8 +117,11 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
 
   const observe = (input: SubtitleAutoPauseObservation): SubtitleAutoPauseEffect | undefined => {
     const timing = input.timing
+    const scope = input.scope ?? 'all'
     const nextConfig: ControllerConfig = {
       timing,
+      scope,
+      cueEligibility: input.cueEligibility,
       cues: input.cues,
       selectedSubtitleId: input.selectedSubtitleId,
       filePath: input.filePath,
@@ -154,6 +169,7 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
       .filter(
         ({ cue, boundary }) =>
           isUsableCue(cue) &&
+          (scope === 'all' || input.cueEligibility?.(cue) === true) &&
           !consumed.has(cue) &&
           Number.isFinite(boundary) &&
           previousSubtitleTime! < boundary &&
@@ -180,21 +196,91 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
 export interface UseSubtitleAutoPauseInput extends SubtitleAutoPauseObservation {
   controller: SubtitleAutoPauseController
   player: Pick<PlayerAdapter, 'setPause' | 'seekWithoutUserNotification'>
+  scope: SubtitleAutoPauseScope
+  japaneseSubtitleSelected: boolean
+  prepareCueEligibility: () => Promise<WholeTrackVocabularyResult>
+  reportError: (message: string) => void
 }
 
 /** Runs the pure controller from reducer-driven time-pos updates. */
 export function useSubtitleAutoPause({
   controller,
   player,
+  scope,
+  japaneseSubtitleSelected,
+  prepareCueEligibility,
+  reportError,
   ...input
 }: UseSubtitleAutoPauseInput): void {
+  const cueHasUnknownRef = useRef<Record<string, boolean> | undefined>(undefined)
+  const [, setEligibilityVersion] = useState(0)
+  const requestGeneration = useRef(0)
+  const cueEligibility = useCallback(
+    (cue: Cue): boolean =>
+      scope === 'all' ? true : cueHasUnknownRef.current?.[cueKey(cue)] === true,
+    [scope]
+  )
+
   useEffect(() => {
-    const effect = controller.observe(input)
+    const generation = requestGeneration.current + 1
+    requestGeneration.current = generation
+    let active = true
+
+    cueHasUnknownRef.current = undefined
+    controller.reset()
+
+    if (
+      input.timing === 'off' ||
+      scope === 'all' ||
+      !japaneseSubtitleSelected ||
+      input.cues.length === 0
+    ) {
+      return () => {
+        active = false
+      }
+    }
+
+    const installResult = (result: WholeTrackVocabularyResult): void => {
+      if (!active || requestGeneration.current !== generation) return
+      if (result.kind === 'ready') {
+        cueHasUnknownRef.current = result.snapshot.cueHasUnknown
+        setEligibilityVersion((version) => version + 1)
+        controller.reset()
+      } else if (result.kind === 'error') {
+        reportError(UNKNOWN_WORD_AUTO_PAUSE_ERROR)
+      }
+    }
+
+    void prepareCueEligibility().then(installResult, () => {
+      if (active && requestGeneration.current === generation) {
+        reportError(UNKNOWN_WORD_AUTO_PAUSE_ERROR)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [
+    controller,
+    input.cues,
+    input.filePath,
+    input.loadGeneration,
+    input.selectedSubtitleId,
+    input.subtitleOffsetMs,
+    input.timing,
+    japaneseSubtitleSelected,
+    prepareCueEligibility,
+    reportError,
+    scope
+  ])
+
+  useEffect(() => {
+    const effect = controller.observe({ ...input, scope, cueEligibility })
     if (!effect) return
 
     void player
       .setPause(true)
       .then(() => player.seekWithoutUserNotification(effect.seekTarget, true))
       .catch(() => undefined)
-  }, [controller, input, player])
+  }, [controller, cueEligibility, input, player, scope])
 }

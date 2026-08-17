@@ -44,6 +44,18 @@ describe('OptionsMenu setting search', () => {
     ).toBeTruthy()
   })
 
+  it('finds unknown-word auto-pause scope terms', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} />)
+
+    fireEvent.change(searchBox(), { target: { value: 'known words filter' } })
+
+    expect(
+      within(screen.getByRole('listbox', { name: 'Setting search results' })).getByRole('option', {
+        name: /Pause on/
+      })
+    ).toBeTruthy()
+  })
+
   it('says so when nothing matches', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
 

@@ -111,18 +111,6 @@ export default function App({
       buildPlayerAdapter(dispatch, undefined, () => subtitleAutoPauseController.notifyUserSeek()),
     [dispatch, subtitleAutoPauseController]
   )
-  useSubtitleAutoPause({
-    controller: subtitleAutoPauseController,
-    player: playerAdapter,
-    timing: state.subtitleAutoPauseTiming,
-    cues: state.cues,
-    selectedSubtitleId: state.selectedSubtitleId,
-    filePath: state.filePath,
-    loadGeneration: state.loadGeneration,
-    subtitleOffsetMs: state.subtitleOffsetMs,
-    timePos: state.timePos,
-    paused: state.paused
-  })
   const pausedRef = useLatestRef(state.paused)
   const reveal = useFullscreenReveal(state.fullscreen)
   const cursorHidden = useFullscreenCursor(state.fullscreen)
@@ -185,6 +173,22 @@ export default function App({
     optionsData: options.controller,
     dictionarySettings: options.data.dictionaries,
     targetDeckName: options.data.anki?.settings.deckName
+  })
+  useSubtitleAutoPause({
+    controller: subtitleAutoPauseController,
+    player: playerAdapter,
+    timing: state.subtitleAutoPauseTiming,
+    scope: state.subtitleAutoPauseScope,
+    cues: state.cues,
+    selectedSubtitleId: state.selectedSubtitleId,
+    filePath: state.filePath,
+    loadGeneration: state.loadGeneration,
+    subtitleOffsetMs: state.subtitleOffsetMs,
+    timePos: state.timePos,
+    paused: state.paused,
+    japaneseSubtitleSelected,
+    prepareCueEligibility: vocabulary.autoPause.prepareCueEligibility,
+    reportError: mediaSession.banner.reportError
   })
   // Bulk mining's compact surface reserves right-stack width like a panel, so
   // the window-sizing feature below has to know which surface is showing.
@@ -391,7 +395,10 @@ export default function App({
               onCycleAbLoop: handleCycleAbLoop,
               subtitleAutoPauseTiming: state.subtitleAutoPauseTiming,
               onChangeSubtitleAutoPauseTiming: (value) =>
-                dispatch({ type: 'setSubtitleAutoPauseTiming', value })
+                dispatch({ type: 'setSubtitleAutoPauseTiming', value }),
+              subtitleAutoPauseScope: state.subtitleAutoPauseScope,
+              onChangeSubtitleAutoPauseScope: (value) =>
+                dispatch({ type: 'setSubtitleAutoPauseScope', value })
             }}
             vocabulary={vocabulary.vocabularyMenu}
             onOpenOptions={options.openDialog}

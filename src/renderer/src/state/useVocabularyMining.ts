@@ -17,6 +17,7 @@ import { useLatestCallback } from './useLatestRef'
 import { useSubtitleReport } from './useSubtitleReport'
 import { useVocabularyCaches } from './useVocabularyCaches'
 import { useWordPopup, type CardImageDialogViewModel } from './useWordPopup'
+import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 
 export type { BulkMiningViewModel } from './useBulkMining'
 export type { VocabularyKnowledgeOptions } from './useKnowledgeOptions'
@@ -63,6 +64,9 @@ export interface UseVocabularyMiningInput {
 }
 
 export interface UseVocabularyMiningResult {
+  autoPause: {
+    prepareCueEligibility: () => Promise<WholeTrackVocabularyResult>
+  }
   subtitleOverlay: Pick<
     SubtitleOverlayProps,
     'highlightedTokens' | 'onWordClick' | 'onWordHover' | 'onWordLeave' | 'vocabularySpans'
@@ -191,6 +195,9 @@ export function useVocabularyMining({
   const translationEnabled = state.translationEnabled
 
   return {
+    autoPause: {
+      prepareCueEligibility: caches.prepareWholeTrackVocabulary
+    },
     subtitleOverlay: {
       vocabularySpans: caches.spansForCue(activeCueKey),
       ...popup.handlers

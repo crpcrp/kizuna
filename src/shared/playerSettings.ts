@@ -224,6 +224,14 @@ export function normalizeSubtitleAutoPauseTiming(raw: unknown): SubtitleAutoPaus
     : DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING
 }
 
+export type SubtitleAutoPauseScope = 'all' | 'unknown'
+
+export const DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE: SubtitleAutoPauseScope = 'all'
+
+export function normalizeSubtitleAutoPauseScope(raw: unknown): SubtitleAutoPauseScope {
+  return raw === 'all' || raw === 'unknown' ? raw : DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE
+}
+
 /** Shared bounds and UI step for the persisted subtitle font scale. */
 export const SUBTITLE_FONT_SCALE_MIN = 0.5
 export const SUBTITLE_FONT_SCALE_MAX = 3
@@ -339,6 +347,8 @@ export interface PlayerSettings {
   autoPlayNext: boolean
   /** Subtitle auto-pause timing at each cue boundary. */
   subtitleAutoPauseTiming: SubtitleAutoPauseTiming
+  /** Whether auto-pause applies to every subtitle line or unknown-word lines only. */
+  subtitleAutoPauseScope: SubtitleAutoPauseScope
   subtitleOffsets: Record<string, number>
   /** Per-folder subtitle offsets (ms), keyed by `subtitleOffsetFolderKey`. Used
    * for any file in that folder without its own `subtitleOffsets` entry — see
@@ -392,6 +402,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   rightClickTogglePause: true,
   autoPlayNext: false,
   subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
+  subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   subtitleOffsets: {},
   folderSubtitleOffsets: {},
   audioDelays: {},
