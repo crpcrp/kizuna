@@ -17,7 +17,7 @@ export interface PlayerAdapter extends PlayerApi {
 export function buildPlayerAdapter(
   dispatch: (action: PlayerAction) => void,
   resolvePlayer: () => PlayerBridge = () => window.kizuna.player,
-  onUserSeek?: () => void
+  onUserSeek?: (seconds: number, absolute?: boolean) => void
 ): PlayerAdapter {
   const seekWithoutUserNotification = async (
     seconds: number,
@@ -31,7 +31,7 @@ export function buildPlayerAdapter(
       return result
     },
     seek: async (seconds: number, absolute?: boolean) => {
-      onUserSeek?.()
+      onUserSeek?.(seconds, absolute)
       return seekWithoutUserNotification(seconds, absolute)
     },
     seekWithoutUserNotification,

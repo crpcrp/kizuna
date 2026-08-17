@@ -108,7 +108,9 @@ export default function App({
   const subtitleAutoPauseController = useMemo(() => createSubtitleAutoPauseController(), [])
   const playerAdapter = useMemo(
     () =>
-      buildPlayerAdapter(dispatch, undefined, () => subtitleAutoPauseController.notifyUserSeek()),
+      buildPlayerAdapter(dispatch, undefined, (seconds, absolute) =>
+        subtitleAutoPauseController.notifyUserSeek(seconds, absolute)
+      ),
     [dispatch, subtitleAutoPauseController]
   )
   const pausedRef = useLatestRef(state.paused)

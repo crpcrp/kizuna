@@ -54,6 +54,7 @@ describe('buildPlayerAdapter', () => {
     await adapter.seekWithoutUserNotification(2, true)
 
     expect(onUserSeek).toHaveBeenCalledOnce()
+    expect(onUserSeek).toHaveBeenCalledWith(10, true)
     expect(player.seek).toHaveBeenNthCalledWith(1, 10, true)
     expect(player.seek).toHaveBeenNthCalledWith(2, 2, true)
   })

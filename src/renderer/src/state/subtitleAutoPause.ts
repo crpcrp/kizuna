@@ -12,6 +12,8 @@ import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 /** Keeps an automatically paused completed subtitle visible by about 10 ms. */
 export const AUTO_PAUSE_END_INSET_SECONDS = 0.01
 export const UNKNOWN_WORD_AUTO_PAUSE_ERROR = 'Could not prepare unknown-word auto-pause.'
+const USER_SEEK_TARGET_TOLERANCE_SECONDS = 0.25
+const USER_SEEK_JUMP_THRESHOLD_SECONDS = 1
 
 export interface SubtitleAutoPauseObservation {
   timing: SubtitleAutoPauseTiming
@@ -91,7 +93,7 @@ function probeTimeFor(cue: Cue, timing: Exclude<SubtitleAutoPauseTiming, 'off'>)
 
 export interface SubtitleAutoPauseController {
   observe(input: SubtitleAutoPauseObservation): SubtitleAutoPauseEffect | undefined
-  notifyUserSeek(): void
+  notifyUserSeek(seconds?: number, absolute?: boolean): void
   reset(): void
 }
 
@@ -99,11 +101,15 @@ export interface SubtitleAutoPauseController {
 export function createSubtitleAutoPauseController(): SubtitleAutoPauseController {
   let config: ControllerConfig | undefined
   let previousSubtitleTime: number | undefined
+  let latestSubtitleTime: number | undefined
   let consumed = new Set<Cue>()
+  let pendingUserSeek: { origin?: number; target?: number } | undefined
 
   const resetState = (): void => {
     previousSubtitleTime = undefined
+    latestSubtitleTime = undefined
     consumed = new Set<Cue>()
+    pendingUserSeek = undefined
   }
 
   const reset = (): void => {
@@ -111,8 +117,22 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
     resetState()
   }
 
-  const notifyUserSeek = (): void => {
-    resetState()
+  const notifyUserSeek = (seconds?: number, absolute?: boolean): void => {
+    const origin = latestSubtitleTime ?? previousSubtitleTime
+    const offsetSeconds = (config?.subtitleOffsetMs ?? 0) / 1000
+    const finiteSeconds =
+      typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : undefined
+    const target =
+      finiteSeconds !== undefined
+        ? absolute
+          ? finiteSeconds - offsetSeconds
+          : origin === undefined
+            ? undefined
+            : origin + finiteSeconds
+        : undefined
+    previousSubtitleTime = undefined
+    consumed = new Set<Cue>()
+    pendingUserSeek = { origin, target }
   }
 
   const observe = (input: SubtitleAutoPauseObservation): SubtitleAutoPauseEffect | undefined => {
@@ -139,14 +159,34 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
       input.selectedSubtitleId === null ||
       input.cues.length === 0 ||
       !Number.isFinite(input.timePos) ||
-      !Number.isFinite(input.subtitleOffsetMs) ||
-      input.paused
+      !Number.isFinite(input.subtitleOffsetMs)
     ) {
       return undefined
     }
 
     const subtitleTime = offsetTimePos(input.timePos, input.subtitleOffsetMs)
     if (!Number.isFinite(subtitleTime)) return undefined
+    latestSubtitleTime = subtitleTime
+
+    if (pendingUserSeek) {
+      const { origin, target } = pendingUserSeek
+      const reachedTarget =
+        target === undefined ||
+        Math.abs(subtitleTime - target) <= USER_SEEK_TARGET_TOLERANCE_SECONDS ||
+        (origin !== undefined &&
+          ((target > origin && subtitleTime >= target) ||
+            (target < origin && subtitleTime <= target)))
+      // A relative seek may be clamped at the media edge and never reach its
+      // requested target. A discontinuity still identifies the destination,
+      // while ordinary pre-seek time-pos noise remains suppressed.
+      const movedFarFromOrigin =
+        origin !== undefined && Math.abs(subtitleTime - origin) >= USER_SEEK_JUMP_THRESHOLD_SECONDS
+      previousSubtitleTime = subtitleTime
+      if (reachedTarget || movedFarFromOrigin) pendingUserSeek = undefined
+      return undefined
+    }
+
+    if (input.paused) return undefined
 
     if (previousSubtitleTime === undefined) {
       previousSubtitleTime = subtitleTime
