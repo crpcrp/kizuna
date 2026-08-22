@@ -337,18 +337,26 @@ describe('preload translation contract', () => {
       translate: {
         translate(text: string, requestId: string): Promise<string>
         cancel(requestId: string): void
+        getSettings(): Promise<unknown>
+        setSettings(patch: { azureSubscriptionKey?: string }): Promise<unknown>
       }
     }
     const requestId = 'translation-1'
 
     api.translate.translate('猫です。', requestId)
     api.translate.cancel(requestId)
+    api.translate.getSettings()
+    api.translate.setSettings({ azureSubscriptionKey: 'test-azure-key' })
 
     expect(electron.invoke).toHaveBeenCalledWith(TRANSLATE_CHANNELS.translate, {
       text: '猫です。',
       requestId
     })
     expect(electron.send).toHaveBeenCalledWith(TRANSLATE_CHANNELS.cancel, { requestId })
+    expect(electron.invoke).toHaveBeenCalledWith(TRANSLATE_CHANNELS.getSettings)
+    expect(electron.invoke).toHaveBeenCalledWith(TRANSLATE_CHANNELS.setSettings, {
+      azureSubscriptionKey: 'test-azure-key'
+    })
   })
 })
 

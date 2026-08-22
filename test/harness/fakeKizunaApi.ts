@@ -213,7 +213,15 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     },
     translate: {
       translate: vi.fn(async (text) => text),
-      cancel: vi.fn()
+      cancel: vi.fn(),
+      getSettings: vi.fn(async () => ({
+        hasAzureKey: false,
+        encryptionAvailable: false
+      })),
+      setSettings: vi.fn(async () => ({
+        hasAzureKey: false,
+        encryptionAvailable: false
+      }))
     },
     files: {
       pathForFile: vi.fn(() => '')

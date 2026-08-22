@@ -80,7 +80,9 @@ import { startMpvWithConfig } from './mpvStartup'
 import { registerClipboardBridge } from './clipboardBridge'
 import { httpFetch } from './services/http'
 import { registerTranslateBridge } from './translateBridge'
+import { registerTranslationSettingsBridge } from './translationSettingsBridge'
 import { createGoogleTranslator } from './services/translate/googleTranslate'
+import { createTranslationSettingsService } from './services/translate/translationSettings'
 import { createSafeStorageCodec } from './services/secrets'
 import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
@@ -586,6 +588,14 @@ function startKnowledge(settings: SettingsStore): void {
     .catch((e) => console.error('[knowledge] startup sync failed', e))
 }
 
+function startTranslation(settings: SettingsStore): void {
+  const translationSettings = createTranslationSettingsService({
+    settings,
+    secrets: createSafeStorageCodec(safeStorage)
+  })
+  registerTranslationSettingsBridge(ipcMain, translationSettings)
+}
+
 /**
  * Registers the player-settings IPC bridge (getSettings/setSettings for the
  * Options menu's contents: keybindings, skip amount, popup/subtitle display),
@@ -862,6 +872,7 @@ if (!gotSingleInstanceLock) {
     startDict()
     startAnki(settings, binaryPaths.ffmpegPath)
     startKnowledge(settings)
+    startTranslation(settings)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
     startAppInfo()

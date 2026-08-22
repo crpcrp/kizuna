@@ -37,6 +37,10 @@ export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
 }
 
+export interface TranslationSettings {
+  azureSubscriptionKeyEnc: string
+}
+
 export interface Settings {
   mecabDictId: 'ipadic' | 'unidic'
   dictOrder: number[]
@@ -45,6 +49,7 @@ export interface Settings {
   updates: UpdateSettings
   player: PlayerSettings
   gameOcr: GameOcrSettings
+  translation: TranslationSettings
   mediaHistory: MediaHistory
 }
 
@@ -57,6 +62,10 @@ export const defaultUpdateSettings: UpdateSettings = {
   checkAutomatically: true
 }
 
+export const defaultTranslationSettings: TranslationSettings = {
+  azureSubscriptionKeyEnc: ''
+}
+
 export const defaultSettings: Settings = {
   mecabDictId: 'ipadic',
   dictOrder: [],
@@ -65,6 +74,7 @@ export const defaultSettings: Settings = {
   updates: defaultUpdateSettings,
   player: DEFAULT_PLAYER_SETTINGS,
   gameOcr: DEFAULT_GAME_OCR_SETTINGS,
+  translation: defaultTranslationSettings,
   mediaHistory: normalizeMediaHistory(undefined)
 }
 
@@ -98,7 +108,18 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     updates: mergeUpdateSettings(obj.updates),
     player: mergePlayerSettings(obj.player),
     gameOcr: mergeGameOcrSettings(obj.gameOcr),
+    translation: mergeTranslationSettings(obj.translation),
     mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
+  }
+}
+
+function mergeTranslationSettings(raw: unknown): TranslationSettings {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    azureSubscriptionKeyEnc:
+      typeof obj.azureSubscriptionKeyEnc === 'string'
+        ? obj.azureSubscriptionKeyEnc
+        : defaultTranslationSettings.azureSubscriptionKeyEnc
   }
 }
 

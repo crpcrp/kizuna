@@ -67,6 +67,7 @@ import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
 import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { OcrResult } from '../shared/ocr'
 import type { AppSurface } from '../shared/appShell'
+import type { PublicTranslationSettings, TranslationSettingsPatch } from '../shared/translation'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -381,7 +382,11 @@ const api = {
   translate: {
     translate: (text: string, requestId: string): Promise<string> =>
       ipcRenderer.invoke(TRANSLATE_CHANNELS.translate, { text, requestId }),
-    cancel: (requestId: string): void => ipcRenderer.send(TRANSLATE_CHANNELS.cancel, { requestId })
+    cancel: (requestId: string): void => ipcRenderer.send(TRANSLATE_CHANNELS.cancel, { requestId }),
+    getSettings: (): Promise<PublicTranslationSettings> =>
+      ipcRenderer.invoke(TRANSLATE_CHANNELS.getSettings),
+    setSettings: (patch: TranslationSettingsPatch): Promise<PublicTranslationSettings> =>
+      ipcRenderer.invoke(TRANSLATE_CHANNELS.setSettings, patch)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the
