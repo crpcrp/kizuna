@@ -318,5 +318,7 @@ export const CLIPBOARD_CHANNELS = {
  * main-process translator so the renderer never performs network access. */
 export const TRANSLATE_CHANNELS = {
   translate: 'translate:translate',
-  cancel: 'translate:cancel'
+  cancel: 'translate:cancel',
+  getSettings: 'translate:getSettings',
+  setSettings: 'translate:setSettings'
 } as const

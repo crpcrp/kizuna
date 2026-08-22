@@ -13,6 +13,7 @@ import type {
   StoredTrackSelection
 } from '@src/shared/mediaHistory'
 import type { FileAvailability } from '@src/shared/preloadApi'
+import type { PublicTranslationSettings, TranslationSettingsPatch } from '@src/shared/translation'
 
 // Compile-time contract checks: these guard against `window.kizuna` and the
 // preload `satisfies KizunaApi` implementation silently diverging in
@@ -85,6 +86,18 @@ describe('KizunaApi', () => {
     expectTypeOf<KizunaApi['knowledge']['detailsFor']>().parameters.toEqualTypeOf<[string[]]>()
     expectTypeOf<KizunaApi['knowledge']['detailsFor']>().returns.toEqualTypeOf<
       Promise<Record<string, KnowledgeDetails>>
+    >()
+  })
+
+  it('translate exposes the public credential settings contract', () => {
+    expectTypeOf<KizunaApi['translate']['getSettings']>().returns.toEqualTypeOf<
+      Promise<PublicTranslationSettings>
+    >()
+    expectTypeOf<KizunaApi['translate']['setSettings']>().parameters.toEqualTypeOf<
+      [TranslationSettingsPatch]
+    >()
+    expectTypeOf<KizunaApi['translate']['setSettings']>().returns.toEqualTypeOf<
+      Promise<PublicTranslationSettings>
     >()
   })
 

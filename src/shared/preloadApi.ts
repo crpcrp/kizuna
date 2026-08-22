@@ -55,6 +55,7 @@ import type {
 import type { GameOcrSettings } from './gameOcrSettings'
 import type { OcrResult } from './ocr'
 import type { AppSurface } from './appShell'
+import type { PublicTranslationSettings, TranslationSettingsPatch } from './translation'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -279,6 +280,8 @@ export interface KizunaApi {
   translate: {
     translate(text: string, requestId: string): Promise<string>
     cancel(requestId: string): void
+    getSettings(): Promise<PublicTranslationSettings>
+    setSettings(patch: TranslationSettingsPatch): Promise<PublicTranslationSettings>
   }
   files: {
     /** Real filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`). */

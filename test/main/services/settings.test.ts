@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   defaultSettings,
   defaultKnowledgeSettings,
+  defaultTranslationSettings,
   mergeSettings,
   selectDict,
   createSettingsStore,
@@ -41,6 +42,36 @@ describe('mergeSettings', () => {
       defaultSettings
     )
     expect(mergeSettings({ mecabDictId: 123, dictOrder: 'nope' })).toEqual(defaultSettings)
+  })
+})
+
+describe('mergeSettings — translation settings', () => {
+  it('defaults the Azure credential block and key', () => {
+    expect(mergeSettings({}).translation).toEqual(defaultTranslationSettings)
+  })
+
+  it('normalizes malformed or missing translation values', () => {
+    expect(mergeSettings({ translation: undefined }).translation).toEqual(
+      defaultTranslationSettings
+    )
+    expect(mergeSettings({ translation: null }).translation).toEqual(defaultTranslationSettings)
+    expect(mergeSettings({ translation: { azureSubscriptionKeyEnc: 42 } }).translation).toEqual(
+      defaultTranslationSettings
+    )
+  })
+
+  it('round-trips a valid encrypted value and preserves unrelated settings', () => {
+    const io = fakeIo(undefined)
+    const store = createSettingsStore(io)
+    store.set({ translation: { azureSubscriptionKeyEnc: 'encrypted-key' } })
+    store.set({ mecabDictId: 'unidic' })
+
+    expect(createSettingsStore(io).get().translation).toEqual({
+      azureSubscriptionKeyEnc: 'encrypted-key'
+    })
+    expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
+    expect(createSettingsStore(io).get().player).toEqual(defaultSettings.player)
+    expect(createSettingsStore(io).get().knowledge).toEqual(defaultSettings.knowledge)
   })
 })
 
