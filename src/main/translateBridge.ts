@@ -1,5 +1,5 @@
 import { TRANSLATE_CHANNELS } from '../shared/ipcChannels'
-import type { Translator } from './services/translate/googleTranslate'
+import type { Translator } from './services/translate/translator'
 
 export const TRANSLATE_TIMEOUT_MS = 10_000
 

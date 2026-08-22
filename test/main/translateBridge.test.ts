@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { registerTranslateBridge } from '@src/main/translateBridge'
 import { TRANSLATE_CHANNELS } from '@src/shared/ipcChannels'
-import type { Translator } from '@src/main/services/translate/googleTranslate'
+import type { Translator } from '@src/main/services/translate/translator'
 import { fakeIpc } from '@test/harness/fakeIpcMain'
 import { deferred } from '@test/harness/deferred'
 

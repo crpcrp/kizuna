@@ -1,4 +1,5 @@
 import type { HttpFetch } from '../http'
+import type { Translator } from './translator'
 
 /** Conservative worst-case cap for the gtx GET URL (Japanese text expands
  * heavily when URL encoded), counted in Unicode code points — not UTF-16 units
@@ -7,18 +8,6 @@ export const MAX_TRANSLATE_CHARS = 1750
 
 const GOOGLE_TRANSLATE_ENDPOINT = 'https://translate.googleapis.com/translate_a/single'
 const UNEXPECTED_RESPONSE_MESSAGE = 'Translation returned an unexpected response.'
-
-export interface Translator {
-  /** Translates `text` (default ja→en). Rejects with a sanitized Error on
-   * HTTP failure or malformed payload; resolves '' for blank input without
-   * touching the network. */
-  translate(
-    text: string,
-    sourceLang?: string,
-    targetLang?: string,
-    signal?: AbortSignal
-  ): Promise<string>
-}
 
 /** Pure: the first `max` Unicode code points of `text`, so a surrogate pair is
  * never split (a lone surrogate makes encodeURIComponent throw). A non-finite or
