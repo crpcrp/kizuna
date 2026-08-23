@@ -418,8 +418,11 @@ OCR is local. The PP-OCR worker and CPU-only ONNX Runtime are bundled, the model
 with the application, and nothing about a capture leaves the machine.
 
 The one exception is explicit: right-clicking a selection with experimental
-translation enabled sends **that selected text** to the same online Google
-endpoint the subtitle sidebar uses. Translation is opt-in and off by default.
+translation enabled sends **that selected text** to the official Microsoft Azure
+Translator service. Translation is opt-in and off by default; no text is sent
+when it is disabled. Kizuna supports a single-service Global Azure resource
+using standard NMT text translation on the F0 or paid tier. Quota, billing, and
+provider availability belong to the user's Azure subscription.
 
 ## Limitations
 

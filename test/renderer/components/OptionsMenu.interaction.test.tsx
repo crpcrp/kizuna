@@ -193,7 +193,7 @@ describe('OptionsMenu experimental translation', () => {
       name: 'Enable experimental translation for subtitles and OCR'
     })
     expect((checkbox as HTMLInputElement).checked).toBe(false)
-    expect(screen.getByText(/configured translation provider/)).not.toBeNull()
+    expect(screen.getByText(/official Microsoft Azure Translator resource/)).not.toBeNull()
     expect(screen.getByText(/sent to Microsoft Azure/)).not.toBeNull()
 
     fireEvent.click(checkbox)
@@ -208,7 +208,7 @@ describe('OptionsMenu experimental translation', () => {
       })
     )
     expect(onChangeTranslationEnabled).toHaveBeenLastCalledWith(false)
-    expect(screen.getByText(/configured translation provider/)).not.toBeNull()
+    expect(screen.getByText(/official Microsoft Azure Translator resource/)).not.toBeNull()
   })
 })
 

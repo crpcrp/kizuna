@@ -81,7 +81,7 @@ import { registerClipboardBridge } from './clipboardBridge'
 import { httpFetch } from './services/http'
 import { registerTranslateBridge } from './translateBridge'
 import { registerTranslationSettingsBridge } from './translationSettingsBridge'
-import { createGoogleTranslator } from './services/translate/googleTranslate'
+import { createAzureTranslator } from './services/translate/azureTranslate'
 import { createTranslationSettingsService } from './services/translate/translationSettings'
 import { createSafeStorageCodec } from './services/secrets'
 import { createSettingsStore, type SettingsStore } from './services/settings'
@@ -572,10 +572,12 @@ function startAnki(settings: SettingsStore, ffmpegPath: string): void {
  * `syncIfStale()` runs once, fire-and-forget, so a stale cache colors
  * subtitles from a fresh sync without the user having to click "Sync now".
  */
-function startKnowledge(settings: SettingsStore): void {
+function startKnowledge(
+  settings: SettingsStore,
+  secrets: ReturnType<typeof createSafeStorageCodec>
+): void {
   const db = new Database(join(app.getPath('userData'), 'knowledge.db'))
   initSchema(db)
-  const secrets = createSafeStorageCodec(safeStorage)
   const knowledgeService = createKnowledgeService({
     db: db as unknown as KnowledgeDb,
     settings,
@@ -588,12 +590,22 @@ function startKnowledge(settings: SettingsStore): void {
     .catch((e) => console.error('[knowledge] startup sync failed', e))
 }
 
-function startTranslation(settings: SettingsStore): void {
+function startTranslation(
+  settings: SettingsStore,
+  secrets: ReturnType<typeof createSafeStorageCodec>
+): void {
   const translationSettings = createTranslationSettingsService({
     settings,
-    secrets: createSafeStorageCodec(safeStorage)
+    secrets
   })
   registerTranslationSettingsBridge(ipcMain, translationSettings)
+  registerTranslateBridge(
+    ipcMain,
+    createAzureTranslator({
+      fetch: httpFetch,
+      getSubscriptionKey: () => translationSettings.getAzureSubscriptionKey()
+    })
+  )
 }
 
 /**
@@ -849,6 +861,7 @@ if (!gotSingleInstanceLock) {
     })
     migrateLegacyUnidicFromResources(binaryPaths, userUnidic)
     const settings = createAppSettingsStore()
+    const secrets = createSafeStorageCodec(safeStorage)
     const decision = resolveStartupDecision({
       startupBehavior: settings.get().player.startupBehavior,
       hasLaunchPath: initialLaunchPath !== undefined,
@@ -871,13 +884,12 @@ if (!gotSingleInstanceLock) {
     startMecab(binaryPaths, settings, userUnidic)
     startDict()
     startAnki(settings, binaryPaths.ffmpegPath)
-    startKnowledge(settings)
-    startTranslation(settings)
+    startKnowledge(settings, secrets)
+    startTranslation(settings, secrets)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
     startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
-    registerTranslateBridge(ipcMain, createGoogleTranslator(httpFetch))
     createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
 
     // macOS dock re-activation. This path is dead on Windows (the primary
