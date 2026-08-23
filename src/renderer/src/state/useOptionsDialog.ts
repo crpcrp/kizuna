@@ -12,7 +12,7 @@ import {
   loadCategoryDomains,
   removeYomitanDict,
   reorderYomitanDicts,
-  saveAzureTranslationKey,
+  saveAzureTranslationSettings,
   setYomitanEnabled,
   setYomitanFallbackOnly
 } from './integrationActions'
@@ -79,6 +79,7 @@ export interface OptionsDialogActions {
   ankiPing(): Promise<AnkiPing>
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
   onSaveAzureTranslationKey(key: string): Promise<boolean>
+  onSaveAzureTranslationRegion(region: string): Promise<boolean>
   onOpenMpvConfigDir(): void
   onOpenUserUnidicDir(): void
   /** Schedules a debounced settings write for a row the settings lifecycle
@@ -193,7 +194,18 @@ export function useOptionsDialog({
       onChangeAnkiSettings: (patch) => changeAnkiSettings(bridge.anki, controller, patch),
       onSaveAzureTranslationKey: async (key) => {
         try {
-          await saveAzureTranslationKey(bridge.translate, controller, key)
+          await saveAzureTranslationSettings(bridge.translate, controller, {
+            azureSubscriptionKey: key
+          })
+          return true
+        } catch (error: unknown) {
+          reportError(errorMessage(error))
+          return false
+        }
+      },
+      onSaveAzureTranslationRegion: async (region) => {
+        try {
+          await saveAzureTranslationSettings(bridge.translate, controller, { azureRegion: region })
           return true
         } catch (error: unknown) {
           reportError(errorMessage(error))

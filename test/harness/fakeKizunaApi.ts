@@ -216,10 +216,12 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       cancel: vi.fn(),
       getSettings: vi.fn(async () => ({
         hasAzureKey: false,
+        azureRegion: '',
         encryptionAvailable: false
       })),
       setSettings: vi.fn(async () => ({
         hasAzureKey: false,
+        azureRegion: '',
         encryptionAvailable: false
       }))
     },

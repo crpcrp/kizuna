@@ -17,11 +17,12 @@ function renderTab(
       subtitleStyle={DEFAULT_SUBTITLE_STYLE}
       subtitleDragEnabled={true}
       translationEnabled={false}
-      translationSettings={{ hasAzureKey: false }}
+      translationSettings={{ hasAzureKey: false, azureRegion: '' }}
       onChangeSubtitleStyle={vi.fn()}
       onChangeSubtitleDragEnabled={vi.fn()}
       onChangeTranslationEnabled={vi.fn()}
       onSaveAzureTranslationKey={vi.fn(async () => true)}
+      onSaveAzureTranslationRegion={vi.fn(async () => true)}
       {...overrides}
     />
   )
@@ -64,7 +65,7 @@ describe('SubtitlesTab Azure Translator controls', () => {
 
   it('shows only a fixed mask for a configured key', () => {
     renderTab({
-      translationSettings: { hasAzureKey: true, encryptionAvailable: true }
+      translationSettings: { hasAzureKey: true, azureRegion: '', encryptionAvailable: true }
     })
 
     const input = screen.getByLabelText('Azure Translator API key') as HTMLInputElement
@@ -97,7 +98,7 @@ describe('SubtitlesTab Azure Translator controls', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
     renderTab({
-      translationSettings: { hasAzureKey: true },
+      translationSettings: { hasAzureKey: true, azureRegion: '' },
       onSaveAzureTranslationKey
     })
 
@@ -110,6 +111,23 @@ describe('SubtitlesTab Azure Translator controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     await waitFor(() => expect(onSaveAzureTranslationKey).toHaveBeenLastCalledWith(''))
     expect(input.value).toBe('')
+  })
+
+  it('saves and clears the regional-resource header independently of the key', async () => {
+    const onSaveAzureTranslationRegion = vi.fn(async () => true)
+    renderTab({
+      translationSettings: { hasAzureKey: true, azureRegion: 'westeurope' },
+      onSaveAzureTranslationRegion
+    })
+
+    const input = screen.getByLabelText(/^Azure resource region/) as HTMLInputElement
+    expect(document.body.textContent).toContain('enter northeurope')
+    expect(document.body.textContent).toContain('North Europe')
+    expect(input.value).toBe('westeurope')
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save region' }))
+
+    await waitFor(() => expect(onSaveAzureTranslationRegion).toHaveBeenCalledWith(''))
   })
 
   it('renders translation load errors', () => {

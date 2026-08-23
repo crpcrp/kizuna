@@ -12,6 +12,7 @@ const TEXT_TOO_LONG_MESSAGE = "Translation text exceeds Azure's 50,000-character
 export interface CreateAzureTranslatorOptions {
   fetch: HttpFetch
   getSubscriptionKey: () => string
+  getSubscriptionRegion?: () => string
 }
 
 export function azureTranslateUrl(sourceLang: string, targetLang: string): string {
@@ -50,7 +51,8 @@ export function parseAzureTranslateResponse(raw: unknown): string {
 
 export function createAzureTranslator({
   fetch,
-  getSubscriptionKey
+  getSubscriptionKey,
+  getSubscriptionRegion = () => ''
 }: CreateAzureTranslatorOptions): Translator {
   return {
     async translate(text, sourceLang = 'ja', targetLang = 'en', signal): Promise<string> {
@@ -59,16 +61,22 @@ export function createAzureTranslator({
 
       const subscriptionKey = getSubscriptionKey().trim()
       if (subscriptionKey === '') throw new Error(NOT_CONFIGURED_MESSAGE)
+      const subscriptionRegion = getSubscriptionRegion().trim()
       if ([...query].length > MAX_AZURE_TRANSLATE_CHARS) {
         throw new Error(TEXT_TOO_LONG_MESSAGE)
       }
 
+      const headers: Record<string, string> = {
+        'Ocp-Apim-Subscription-Key': subscriptionKey,
+        'Content-Type': 'application/json; charset=UTF-8'
+      }
+      if (subscriptionRegion !== '') {
+        headers['Ocp-Apim-Subscription-Region'] = subscriptionRegion
+      }
+
       const init: HttpRequest = {
         method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': subscriptionKey,
-          'Content-Type': 'application/json; charset=UTF-8'
-        },
+        headers,
         body: JSON.stringify([{ Text: query }])
       }
       if (signal !== undefined) init.signal = signal

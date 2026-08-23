@@ -24,6 +24,7 @@ export interface SubtitlesTabProps {
   onChangeSubtitleDragEnabled: (value: boolean) => void
   onChangeTranslationEnabled: (enabled: boolean) => void
   onSaveAzureTranslationKey: (key: string) => boolean | Promise<boolean>
+  onSaveAzureTranslationRegion: (region: string) => boolean | Promise<boolean>
 }
 
 export function parseFontScalePercent(rawValue: string): number | null {
@@ -120,6 +121,13 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
     category: 'subtitles',
     keywords: ['Azure', 'translator', 'API key', 'translation key'],
     targetId: 'azure-translator-key-input'
+  },
+  {
+    id: 'azure-translator-region',
+    label: 'Azure Translator resource region',
+    category: 'subtitles',
+    keywords: ['Azure', 'translator', 'location', 'regional resource'],
+    targetId: 'azure-translator-region-input'
   }
 ]
 
@@ -134,10 +142,12 @@ export default function SubtitlesTab({
   onChangeSubtitleStyle,
   onChangeSubtitleDragEnabled,
   onChangeTranslationEnabled,
-  onSaveAzureTranslationKey
+  onSaveAzureTranslationKey,
+  onSaveAzureTranslationRegion
 }: SubtitlesTabProps): React.JSX.Element {
   const [fontScaleDraft, setFontScaleDraft] = useState<string | null>(null)
   const [azureKeyDraft, setAzureKeyDraft] = useState('')
+  const [azureRegionDraft, setAzureRegionDraft] = useState<string | null>(null)
 
   const submitAzureKey = (key: string): void => {
     let result: boolean | Promise<boolean>
@@ -149,6 +159,21 @@ export default function SubtitlesTab({
     void Promise.resolve(result).then(
       (saved) => {
         if (saved !== false) setAzureKeyDraft('')
+      },
+      () => undefined
+    )
+  }
+
+  const submitAzureRegion = (region: string): void => {
+    let result: boolean | Promise<boolean>
+    try {
+      result = onSaveAzureTranslationRegion(region)
+    } catch {
+      return
+    }
+    void Promise.resolve(result).then(
+      (saved) => {
+        if (saved !== false) setAzureRegionDraft(null)
       },
       () => undefined
     )
@@ -291,9 +316,9 @@ export default function SubtitlesTab({
           translation is disabled.
         </p>
         <p className="options-hint">
-          Configure an Azure Translator key from a single-service Global resource using standard NMT
-          text translation. F0 and paid tiers are supported; quota, billing, and provider
-          availability belong to your Azure subscription.
+          Configure the key from your Azure Translator resource. For a regional or multi-service
+          resource, also enter the resource region shown under Keys and Endpoint. Leave the region
+          blank only for a single-service Global resource.
         </p>
         <div className="options-row">
           <label htmlFor="azure-translator-key-input" className="options-row-label">
@@ -307,6 +332,35 @@ export default function SubtitlesTab({
             value={azureKeyDraft}
             onChange={(e) => setAzureKeyDraft(e.target.value)}
           />
+        </div>
+        <div className="options-row">
+          <label htmlFor="azure-translator-region-input" className="options-row-label">
+            Azure resource region
+            <span className="options-row-description">
+              Use the lowercase Azure identifier without spaces: for example, enter northeurope for
+              the portal location North Europe. Leave blank for a Global resource.
+            </span>
+          </label>
+          <input
+            type="text"
+            id="azure-translator-region-input"
+            autoComplete="off"
+            placeholder="Global (no region header)"
+            value={azureRegionDraft ?? translationSettings.azureRegion}
+            onChange={(e) => setAzureRegionDraft(e.target.value)}
+          />
+          <button
+            type="button"
+            id="azure-translator-region-save"
+            className="options-keybind-button"
+            disabled={
+              azureRegionDraft === null ||
+              azureRegionDraft.trim() === translationSettings.azureRegion
+            }
+            onClick={() => submitAzureRegion(azureRegionDraft ?? '')}
+          >
+            Save region
+          </button>
         </div>
         <div className="options-row">
           <span

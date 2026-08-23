@@ -420,9 +420,24 @@ with the application, and nothing about a capture leaves the machine.
 The one exception is explicit: right-clicking a selection with experimental
 translation enabled sends **that selected text** to the official Microsoft Azure
 Translator service. Translation is opt-in and off by default; no text is sent
-when it is disabled. Kizuna supports a single-service Global Azure resource
-using standard NMT text translation on the F0 or paid tier. Quota, billing, and
-provider availability belong to the user's Azure subscription.
+when it is disabled. Kizuna supports Global and regional single-service Azure
+Translator resources, plus multi-service resources, using standard NMT text
+translation on the F0 or paid tier. Regional and multi-service resources require
+their Azure resource region in Options so Kizuna can send the required
+authentication header. Quota, billing, and provider availability belong to the
+user's Azure subscription.
+
+Configure translation under **Options → Subtitles → Experimental translation**:
+
+1. Copy Key 1 or Key 2 from the Azure Translator resource's **Keys and Endpoint** page.
+2. For a regional Translator or multi-service resource, enter the Azure **region identifier**,
+   not the portal's display name. The identifier is lowercase with no spaces—for example,
+   enter `northeurope` when the portal shows **North Europe**.
+3. Leave the region blank only for a single-service resource whose location is **Global**.
+
+Kizuna sends the key in `Ocp-Apim-Subscription-Key` and, when configured, the region identifier
+in `Ocp-Apim-Subscription-Region`. The key and region must belong to the same Azure resource;
+otherwise Azure rejects the request with HTTP 401.
 
 ## Limitations
 
@@ -483,6 +498,7 @@ given environment.
 | 13 | Hover/click lookup | Dictionary popup opens with knowledge coloring |
 | 14 | Selection and Ctrl+C | Selected OCR text reaches the clipboard |
 | 15 | Right-click translation (enabled) | Translation popup opens for the selection only |
+| 15a | Regional Translator configured with its identifier (for example, `northeurope`) | Translation succeeds; a portal display name containing spaces is not used as the header value |
 | 16 | Worker failure and Retry | Error is reported in Options; Retry recovers without restarting Kizuna |
 | 17 | Quit Kizuna from tray | Shortcut, worker process, frozen window, screenshot, and tray are all released |
 | 18 | Recognition timing, full 2560×1440 display vs a 1024×768 window | Record both; the window should be substantially faster |

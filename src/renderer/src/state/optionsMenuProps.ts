@@ -141,7 +141,8 @@ export function buildOptionsMenuProps({
         dispatch({ type: 'setTranslationEnabled', value })
         actions.persist({ translationEnabled: value })
       },
-      onSaveAzureTranslationKey: actions.onSaveAzureTranslationKey
+      onSaveAzureTranslationKey: actions.onSaveAzureTranslationKey,
+      onSaveAzureTranslationRegion: actions.onSaveAzureTranslationRegion
     },
     dictionaries: {
       mecabDicts: data.dictionaries.mecabDicts,

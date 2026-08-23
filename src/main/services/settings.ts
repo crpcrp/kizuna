@@ -39,6 +39,7 @@ export interface KnowledgeSettings extends KnowledgeTuning {
 
 export interface TranslationSettings {
   azureSubscriptionKeyEnc: string
+  azureRegion: string
 }
 
 export interface Settings {
@@ -63,7 +64,8 @@ export const defaultUpdateSettings: UpdateSettings = {
 }
 
 export const defaultTranslationSettings: TranslationSettings = {
-  azureSubscriptionKeyEnc: ''
+  azureSubscriptionKeyEnc: '',
+  azureRegion: ''
 }
 
 export const defaultSettings: Settings = {
@@ -119,7 +121,11 @@ function mergeTranslationSettings(raw: unknown): TranslationSettings {
     azureSubscriptionKeyEnc:
       typeof obj.azureSubscriptionKeyEnc === 'string'
         ? obj.azureSubscriptionKeyEnc
-        : defaultTranslationSettings.azureSubscriptionKeyEnc
+        : defaultTranslationSettings.azureSubscriptionKeyEnc,
+    azureRegion:
+      typeof obj.azureRegion === 'string'
+        ? obj.azureRegion.trim()
+        : defaultTranslationSettings.azureRegion
   }
 }
 
