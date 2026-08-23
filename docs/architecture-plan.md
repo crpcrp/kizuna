@@ -203,7 +203,9 @@ cannot provide encrypted storage.
 
 Network access is limited to user-initiated features such as subtitle
 translation, WaniKani sync, and AnkiConnect.
-Translation uses Google's unofficial endpoint and is explicitly opt-in.
+Translation uses the official Microsoft Azure Translator service and is explicitly opt-in.
+Only explicitly selected subtitle or OCR text is sent. Kizuna supports a single-service
+Global Azure resource using standard NMT text translation on the F0 or paid tier.
 
 Application updates are also main-process-owned. One service uses the packaged
 electron-builder GitHub configuration, keeps download and installation behind

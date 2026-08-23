@@ -286,8 +286,14 @@ export default function SubtitlesTab({
           onChange={onChangeTranslationEnabled}
         />
         <p className="options-hint">
-          Right-clicked subtitle text or explicitly selected OCR text is sent to the configured
-          translation provider only when you explicitly request translation.
+          Translation uses your official Microsoft Azure Translator resource. Only explicitly
+          right-clicked subtitle text or selected OCR text is sent, and nothing is sent while
+          translation is disabled.
+        </p>
+        <p className="options-hint">
+          Configure an Azure Translator key from a single-service Global resource using standard NMT
+          text translation. F0 and paid tiers are supported; quota, billing, and provider
+          availability belong to your Azure subscription.
         </p>
         <div className="options-row">
           <label htmlFor="azure-translator-key-input" className="options-row-label">
