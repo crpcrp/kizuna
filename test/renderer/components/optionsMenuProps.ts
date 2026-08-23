@@ -74,6 +74,8 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       subtitleStyle: DEFAULT_SUBTITLE_STYLE,
       subtitleDragEnabled: true,
       translationEnabled: false,
+      translationSettings: { hasAzureKey: false },
+      onSaveAzureTranslationKey: async () => true,
       onChangeSubtitleStyle: noop,
       onChangeSubtitleDragEnabled: noop,
       onChangeTranslationEnabled: noop

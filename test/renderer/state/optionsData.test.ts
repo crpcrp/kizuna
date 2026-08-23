@@ -5,6 +5,7 @@ import {
 } from '@src/renderer/src/state/optionsData'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { SyncStatus } from '@src/shared/knowledge'
+import type { PublicTranslationSettings } from '@src/shared/translation'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 function deferred<T>(): {
@@ -57,6 +58,12 @@ function fakeBridge(overrides: BridgeOverrides = {}): OptionsDataBridge {
       syncStatus: vi.fn().mockResolvedValue(syncStatus),
       ...overrides.knowledge
     },
+    translate: {
+      getSettings: vi
+        .fn()
+        .mockResolvedValue({ hasAzureKey: false } satisfies PublicTranslationSettings),
+      ...overrides.translate
+    },
     integration: {
       binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true }),
       ...overrides.integration
@@ -74,6 +81,7 @@ describe('createOptionsDataController', () => {
     })
     expect(controller.getState('anki').status).toBe('idle')
     expect(controller.getState('knowledge').status).toBe('idle')
+    expect(controller.getState('translation').status).toBe('idle')
   })
 
   it('loads a domain and caches it: a second load() does not refetch', async () => {
@@ -146,6 +154,43 @@ describe('createOptionsDataController', () => {
     await Promise.all([controller.load('anki'), controller.load('knowledge')])
 
     expect(controller.getState('anki').status).toBe('error')
+    expect(controller.getState('knowledge').status).toBe('ready')
+  })
+
+  it('loads and caches only the local translation settings', async () => {
+    const getSettings = vi.fn().mockResolvedValue({
+      hasAzureKey: true,
+      encryptionAvailable: true
+    } satisfies PublicTranslationSettings)
+    const bridge = fakeBridge({ translate: { getSettings } })
+    const controller = createOptionsDataController(bridge)
+
+    await controller.load('translation')
+    await controller.load('translation')
+
+    expect(getSettings).toHaveBeenCalledTimes(1)
+    expect(controller.getState('translation')).toEqual({
+      status: 'ready',
+      data: { hasAzureKey: true, encryptionAvailable: true },
+      error: undefined
+    })
+  })
+
+  it('isolates translation settings failures from other domains', async () => {
+    const bridge = fakeBridge({
+      translate: {
+        getSettings: vi.fn().mockRejectedValue(new Error('translation settings failed'))
+      }
+    })
+    const controller = createOptionsDataController(bridge)
+
+    await Promise.all([controller.load('translation'), controller.load('knowledge')])
+
+    expect(controller.getState('translation')).toEqual({
+      status: 'error',
+      data: undefined,
+      error: 'translation settings failed'
+    })
     expect(controller.getState('knowledge').status).toBe('ready')
   })
 

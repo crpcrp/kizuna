@@ -7,6 +7,7 @@ import type {
   SyncStatus
 } from '../../../shared/knowledge'
 import type { ImportResult } from '../../../shared/dictionary'
+import type { PublicTranslationSettings } from '../../../shared/translation'
 import {
   invalidateTokenizationForDictionaryChange,
   type TokenizationInvalidationArgs
@@ -14,7 +15,8 @@ import {
 import { syncAndRefreshKnowledge, type SyncAndRefreshKnowledgeArgs } from './knowledgeActions'
 
 /** Which options-data domain(s) a category needs loaded when it's shown.
- * Keybindings/playback/subtitles need none. Known Words also loads the
+ * Keybindings/playback need none. Subtitles loads its local translation
+ * settings. Known Words also loads the
  * (cached, unforced) Anki domain for its deck checkboxes and field select. */
 export function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
   switch (category) {
@@ -24,6 +26,8 @@ export function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
       return ['anki']
     case 'knowledge':
       return ['knowledge', 'anki']
+    case 'subtitles':
+      return ['translation']
     // The read-only status page reports on all three: its own live signals
     // (bundled binaries, AnkiConnect ping), plus the dictionary and WaniKani
     // state the other tabs already load.
@@ -151,6 +155,19 @@ export async function saveWanikaniToken(
 ): Promise<void> {
   await knowledge.setSettings({ wanikaniToken: token })
   await optionsData.load('knowledge', { force: true })
+}
+
+export interface AzureTranslationKeyBridge {
+  setSettings(patch: { azureSubscriptionKey: string }): Promise<PublicTranslationSettings>
+}
+
+export async function saveAzureTranslationKey(
+  translate: AzureTranslationKeyBridge,
+  optionsData: OptionsDataController,
+  key: string
+): Promise<void> {
+  await translate.setSettings({ azureSubscriptionKey: key })
+  await optionsData.load('translation', { force: true })
 }
 
 export interface AnkiSettingsBridge {

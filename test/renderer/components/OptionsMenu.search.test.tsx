@@ -94,6 +94,18 @@ describe('OptionsMenu setting search', () => {
     expect(screen.getByLabelText('Personal access token')).toBeTruthy()
   })
 
+  it('finds the Azure Translator key row by provider and credential terms', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} />)
+
+    fireEvent.change(searchBox(), { target: { value: 'Azure translation key' } })
+
+    expect(
+      within(screen.getByRole('listbox', { name: 'Setting search results' })).getByRole('option', {
+        name: /Azure Translator API key/
+      })
+    ).toBeTruthy()
+  })
+
   it('reaches the Startup selector from search', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
 

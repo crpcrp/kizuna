@@ -4,6 +4,7 @@ import type { ImportProgress } from '../../../shared/dictionary'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
 import type { PlayerSettings } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
+import type { PublicTranslationSettings } from '../../../shared/translation'
 import type { OptionsCategory } from '../components/options/types'
 import {
   changeAnkiSettings,
@@ -11,6 +12,7 @@ import {
   loadCategoryDomains,
   removeYomitanDict,
   reorderYomitanDicts,
+  saveAzureTranslationKey,
   setYomitanEnabled,
   setYomitanFallbackOnly
 } from './integrationActions'
@@ -19,6 +21,7 @@ import {
   DEFAULT_DICTIONARIES_DATA,
   DEFAULT_KNOWLEDGE_SETTINGS,
   DEFAULT_SYNC_STATUS,
+  DEFAULT_TRANSLATION_SETTINGS,
   optionsDataBridge,
   type AnkiData,
   type DictionariesData,
@@ -26,11 +29,15 @@ import {
   type SetupData
 } from './optionsData'
 import type { SettingsPersistence } from './settingsPersistence'
+import { errorMessage } from '../util/errorMessage'
 
 /** The bridge slice the dialog's own actions use. Everything the *data*
  * controller reads goes through `optionsDataBridge` instead (see
  * state/optionsData.ts), which reaches `window.kizuna` lazily. */
-export type OptionsDialogBridge = Pick<KizunaApi, 'anki' | 'dict' | 'mecab' | 'playerSettings'>
+export type OptionsDialogBridge = Pick<
+  KizunaApi,
+  'anki' | 'dict' | 'mecab' | 'playerSettings' | 'translate'
+>
 
 export interface UseOptionsDialogInput {
   bridge: OptionsDialogBridge
@@ -54,6 +61,8 @@ export interface OptionsDialogData {
   knowledgeSettings: PublicKnowledgeSettings
   syncStatus: SyncStatus
   knowledgeError: string | undefined
+  translationSettings: PublicTranslationSettings
+  translationError: string | undefined
   setup: SetupData | undefined
 }
 
@@ -69,6 +78,7 @@ export interface OptionsDialogActions {
   onRemoveYomitanDict(id: number): Promise<void>
   ankiPing(): Promise<AnkiPing>
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
+  onSaveAzureTranslationKey(key: string): Promise<boolean>
   onOpenMpvConfigDir(): void
   onOpenUserUnidicDir(): void
   /** Schedules a debounced settings write for a row the settings lifecycle
@@ -121,6 +131,11 @@ export function useOptionsDialog({
     controller.subscribe,
     () => controller.getState('knowledge'),
     () => controller.getState('knowledge')
+  )
+  const translationState = useSyncExternalStore(
+    controller.subscribe,
+    () => controller.getState('translation'),
+    () => controller.getState('translation')
   )
   const setupState = useSyncExternalStore(
     controller.subscribe,
@@ -176,11 +191,27 @@ export function useOptionsDialog({
       onRemoveYomitanDict: (id) => removeYomitanDict(bridge.dict, controller, id),
       ankiPing: () => bridge.anki.ping(),
       onChangeAnkiSettings: (patch) => changeAnkiSettings(bridge.anki, controller, patch),
+      onSaveAzureTranslationKey: async (key) => {
+        try {
+          await saveAzureTranslationKey(bridge.translate, controller, key)
+          return true
+        } catch (error: unknown) {
+          reportError(errorMessage(error))
+          return false
+        }
+      },
       onOpenMpvConfigDir,
       onOpenUserUnidicDir,
       persist: (patch) => settingsPersistenceRef.current.schedule(patch)
     }),
-    [bridge, controller, onOpenMpvConfigDir, onOpenUserUnidicDir, settingsPersistenceRef]
+    [
+      bridge,
+      controller,
+      onOpenMpvConfigDir,
+      onOpenUserUnidicDir,
+      reportError,
+      settingsPersistenceRef
+    ]
   )
 
   return {
@@ -196,6 +227,8 @@ export function useOptionsDialog({
       knowledgeSettings: knowledgeState.data?.settings ?? DEFAULT_KNOWLEDGE_SETTINGS,
       syncStatus: knowledgeState.data?.syncStatus ?? DEFAULT_SYNC_STATUS,
       knowledgeError: knowledgeState.error,
+      translationSettings: translationState.data ?? DEFAULT_TRANSLATION_SETTINGS,
+      translationError: translationState.error,
       setup: setupState.data
     },
     actions,
