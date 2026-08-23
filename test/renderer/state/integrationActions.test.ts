@@ -9,7 +9,7 @@ import {
   reorderYomitanDicts,
   removeYomitanDict,
   saveWanikaniToken,
-  saveAzureTranslationKey,
+  saveAzureTranslationSettings,
   changeAnkiSettings,
   changeKnowledgeSettings,
   shouldResyncAnkiForKnowledgePatch,
@@ -163,13 +163,19 @@ describe('wanikani/anki/knowledge settings actions', () => {
     expect(optionsData.load).toHaveBeenCalledWith('knowledge', { force: true })
   })
 
-  it('saveAzureTranslationKey saves the key then force-refreshes translation', async () => {
+  it('saveAzureTranslationSettings saves the patch then force-refreshes translation', async () => {
     const optionsData = fakeOptionsData()
     const translate = { setSettings: vi.fn().mockResolvedValue({}) }
 
-    await saveAzureTranslationKey(translate, optionsData, 'key123')
+    await saveAzureTranslationSettings(translate, optionsData, {
+      azureSubscriptionKey: 'key123',
+      azureRegion: 'westeurope'
+    })
 
-    expect(translate.setSettings).toHaveBeenCalledWith({ azureSubscriptionKey: 'key123' })
+    expect(translate.setSettings).toHaveBeenCalledWith({
+      azureSubscriptionKey: 'key123',
+      azureRegion: 'westeurope'
+    })
     expect(optionsData.load).toHaveBeenCalledWith('translation', { force: true })
   })
 
@@ -179,9 +185,9 @@ describe('wanikani/anki/knowledge settings actions', () => {
       setSettings: vi.fn().mockRejectedValue(new Error('save failed'))
     }
 
-    await expect(saveAzureTranslationKey(translate, optionsData, 'key123')).rejects.toThrow(
-      'save failed'
-    )
+    await expect(
+      saveAzureTranslationSettings(translate, optionsData, { azureSubscriptionKey: 'key123' })
+    ).rejects.toThrow('save failed')
     expect(optionsData.load).not.toHaveBeenCalled()
   })
 

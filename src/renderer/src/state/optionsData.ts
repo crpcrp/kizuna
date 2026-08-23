@@ -108,7 +108,8 @@ export const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
 }
 
 export const DEFAULT_TRANSLATION_SETTINGS: PublicTranslationSettings = {
-  hasAzureKey: false
+  hasAzureKey: false,
+  azureRegion: ''
 }
 
 export const DEFAULT_SYNC_STATUS: SyncStatus = {

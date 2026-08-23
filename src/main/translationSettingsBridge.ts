@@ -19,13 +19,20 @@ function parseSettingsPatch(value: unknown): TranslationSettingsPatch {
   }
 
   const object = value as Record<string, unknown>
-  if (Object.keys(object).some((key) => key !== 'azureSubscriptionKey')) {
+  if (Object.keys(object).some((key) => !['azureSubscriptionKey', 'azureRegion'].includes(key))) {
     throw invalidSettings()
   }
-  if (!Object.prototype.hasOwnProperty.call(object, 'azureSubscriptionKey')) return {}
-  if (typeof object.azureSubscriptionKey !== 'string') throw invalidSettings()
 
-  return { azureSubscriptionKey: object.azureSubscriptionKey }
+  const patch: TranslationSettingsPatch = {}
+  if (Object.prototype.hasOwnProperty.call(object, 'azureSubscriptionKey')) {
+    if (typeof object.azureSubscriptionKey !== 'string') throw invalidSettings()
+    patch.azureSubscriptionKey = object.azureSubscriptionKey
+  }
+  if (Object.prototype.hasOwnProperty.call(object, 'azureRegion')) {
+    if (typeof object.azureRegion !== 'string') throw invalidSettings()
+    patch.azureRegion = object.azureRegion
+  }
+  return patch
 }
 
 export function registerTranslationSettingsBridge<E>(

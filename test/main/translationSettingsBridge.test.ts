@@ -6,6 +6,7 @@ import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 
 const PUBLIC_SETTINGS: PublicTranslationSettings = {
   hasAzureKey: true,
+  azureRegion: 'westeurope',
   encryptionAvailable: true
 }
 
@@ -22,15 +23,19 @@ describe('registerTranslationSettingsBridge', () => {
     expect(handlers.get(TRANSLATE_CHANNELS.getSettings)!(event)).toEqual(PUBLIC_SETTINGS)
     expect(
       handlers.get(TRANSLATE_CHANNELS.setSettings)!(event, {
-        azureSubscriptionKey: 'test-azure-key'
+        azureSubscriptionKey: 'test-azure-key',
+        azureRegion: 'westeurope'
       })
     ).toEqual(PUBLIC_SETTINGS)
 
     expect(service.getSettings).toHaveBeenCalledOnce()
-    expect(service.setSettings).toHaveBeenCalledWith({ azureSubscriptionKey: 'test-azure-key' })
+    expect(service.setSettings).toHaveBeenCalledWith({
+      azureSubscriptionKey: 'test-azure-key',
+      azureRegion: 'westeurope'
+    })
   })
 
-  it.each([null, [], { azureSubscriptionKey: 42 }, { unexpected: 'value' }])(
+  it.each([null, [], { azureSubscriptionKey: 42 }, { azureRegion: 42 }, { unexpected: 'value' }])(
     'rejects malformed setSettings payload %j without leaking it',
     (payload) => {
       const { ipc, handlers } = fakeIpc()

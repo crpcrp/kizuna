@@ -58,16 +58,22 @@ describe('mergeSettings — translation settings', () => {
     expect(mergeSettings({ translation: { azureSubscriptionKeyEnc: 42 } }).translation).toEqual(
       defaultTranslationSettings
     )
+    expect(
+      mergeSettings({
+        translation: { azureSubscriptionKeyEnc: 'encrypted', azureRegion: '  eastus  ' }
+      }).translation
+    ).toEqual({ azureSubscriptionKeyEnc: 'encrypted', azureRegion: 'eastus' })
   })
 
   it('round-trips a valid encrypted value and preserves unrelated settings', () => {
     const io = fakeIo(undefined)
     const store = createSettingsStore(io)
-    store.set({ translation: { azureSubscriptionKeyEnc: 'encrypted-key' } })
+    store.set({ translation: { azureSubscriptionKeyEnc: 'encrypted-key', azureRegion: 'eastus' } })
     store.set({ mecabDictId: 'unidic' })
 
     expect(createSettingsStore(io).get().translation).toEqual({
-      azureSubscriptionKeyEnc: 'encrypted-key'
+      azureSubscriptionKeyEnc: 'encrypted-key',
+      azureRegion: 'eastus'
     })
     expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
     expect(createSettingsStore(io).get().player).toEqual(defaultSettings.player)

@@ -9,6 +9,7 @@ export interface TranslationSettingsService {
   getSettings(): PublicTranslationSettings
   setSettings(patch: TranslationSettingsPatch): PublicTranslationSettings
   getAzureSubscriptionKey(): string
+  getAzureRegion(): string
 }
 
 export interface CreateTranslationSettingsServiceDeps {
@@ -31,6 +32,7 @@ export function createTranslationSettingsService(
 
   const getSettings = (): PublicTranslationSettings => ({
     hasAzureKey: readAzureSubscriptionKey() !== '',
+    azureRegion: deps.settings.get().translation.azureRegion,
     encryptionAvailable: deps.secrets.isAvailable()
   })
 
@@ -38,14 +40,22 @@ export function createTranslationSettingsService(
     getSettings,
 
     setSettings(patch: TranslationSettingsPatch): PublicTranslationSettings {
-      if (patch.azureSubscriptionKey === undefined) return getSettings()
+      if (patch.azureSubscriptionKey === undefined && patch.azureRegion === undefined) {
+        return getSettings()
+      }
 
-      const key = patch.azureSubscriptionKey.trim()
+      const current = deps.settings.get().translation
       try {
         deps.settings.set({
           translation: {
-            ...deps.settings.get().translation,
-            azureSubscriptionKeyEnc: key === '' ? '' : deps.secrets.encrypt(key)
+            ...current,
+            azureSubscriptionKeyEnc:
+              patch.azureSubscriptionKey === undefined
+                ? current.azureSubscriptionKeyEnc
+                : patch.azureSubscriptionKey.trim() === ''
+                  ? ''
+                  : deps.secrets.encrypt(patch.azureSubscriptionKey.trim()),
+            azureRegion: patch.azureRegion?.trim() ?? current.azureRegion
           }
         })
       } catch {
@@ -56,6 +66,10 @@ export function createTranslationSettingsService(
 
     getAzureSubscriptionKey(): string {
       return readAzureSubscriptionKey()
+    },
+
+    getAzureRegion(): string {
+      return deps.settings.get().translation.azureRegion
     }
   }
 }

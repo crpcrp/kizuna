@@ -59,9 +59,10 @@ function fakeBridge(overrides: BridgeOverrides = {}): OptionsDataBridge {
       ...overrides.knowledge
     },
     translate: {
-      getSettings: vi
-        .fn()
-        .mockResolvedValue({ hasAzureKey: false } satisfies PublicTranslationSettings),
+      getSettings: vi.fn().mockResolvedValue({
+        hasAzureKey: false,
+        azureRegion: ''
+      } satisfies PublicTranslationSettings),
       ...overrides.translate
     },
     integration: {
@@ -160,6 +161,7 @@ describe('createOptionsDataController', () => {
   it('loads and caches only the local translation settings', async () => {
     const getSettings = vi.fn().mockResolvedValue({
       hasAzureKey: true,
+      azureRegion: 'westeurope',
       encryptionAvailable: true
     } satisfies PublicTranslationSettings)
     const bridge = fakeBridge({ translate: { getSettings } })
@@ -171,7 +173,7 @@ describe('createOptionsDataController', () => {
     expect(getSettings).toHaveBeenCalledTimes(1)
     expect(controller.getState('translation')).toEqual({
       status: 'ready',
-      data: { hasAzureKey: true, encryptionAvailable: true },
+      data: { hasAzureKey: true, azureRegion: 'westeurope', encryptionAvailable: true },
       error: undefined
     })
   })

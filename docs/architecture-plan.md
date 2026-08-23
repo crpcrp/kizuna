@@ -205,7 +205,12 @@ Network access is limited to user-initiated features such as subtitle
 translation, WaniKani sync, and AnkiConnect.
 Translation uses the official Microsoft Azure Translator service and is explicitly opt-in.
 Only explicitly selected subtitle or OCR text is sent. Kizuna supports a single-service
-Global Azure resource using standard NMT text translation on the F0 or paid tier.
+Global or regional Azure Translator resource, or a multi-service resource, using standard
+NMT text translation on the F0 or paid tier. Regional resources persist their non-secret
+resource region and send it through Azure's required subscription-region header. The persisted
+value is Azure's lowercase, no-spaces identifier (for example, `northeurope`), not the portal
+display name (for example, **North Europe**); Global single-service resources store an empty
+region and omit that header.
 
 Application updates are also main-process-owned. One service uses the packaged
 electron-builder GitHub configuration, keeps download and installation behind

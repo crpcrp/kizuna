@@ -72,6 +72,24 @@ describe('createAzureTranslator', () => {
     ])
   })
 
+  it('adds the required authentication header for a regional resource', async () => {
+    const http = fakeHttp({
+      [AZURE_URL]: { json: [{ translations: [{ text: 'Hello', to: 'en' }] }] }
+    })
+    const translator = createAzureTranslator({
+      fetch: http.fetch,
+      getSubscriptionKey: () => AZURE_KEY,
+      getSubscriptionRegion: () => '  westeurope  '
+    })
+
+    await expect(translator.translate('こんにちは')).resolves.toBe('Hello')
+    expect(http.calls[0].init?.headers).toEqual({
+      'Ocp-Apim-Subscription-Key': AZURE_KEY,
+      'Ocp-Apim-Subscription-Region': 'westeurope',
+      'Content-Type': 'application/json; charset=UTF-8'
+    })
+  })
+
   it('honors explicit source and target languages', async () => {
     const url = azureTranslateUrl('ja-JP', 'en-US')
     const http = fakeHttp({ [url]: { json: [{ translations: [{ text: 'Hello' }] }] } })

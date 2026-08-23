@@ -7,7 +7,10 @@ import type {
   SyncStatus
 } from '../../../shared/knowledge'
 import type { ImportResult } from '../../../shared/dictionary'
-import type { PublicTranslationSettings } from '../../../shared/translation'
+import type {
+  PublicTranslationSettings,
+  TranslationSettingsPatch
+} from '../../../shared/translation'
 import {
   invalidateTokenizationForDictionaryChange,
   type TokenizationInvalidationArgs
@@ -157,16 +160,16 @@ export async function saveWanikaniToken(
   await optionsData.load('knowledge', { force: true })
 }
 
-export interface AzureTranslationKeyBridge {
-  setSettings(patch: { azureSubscriptionKey: string }): Promise<PublicTranslationSettings>
+export interface AzureTranslationSettingsBridge {
+  setSettings(patch: TranslationSettingsPatch): Promise<PublicTranslationSettings>
 }
 
-export async function saveAzureTranslationKey(
-  translate: AzureTranslationKeyBridge,
+export async function saveAzureTranslationSettings(
+  translate: AzureTranslationSettingsBridge,
   optionsData: OptionsDataController,
-  key: string
+  patch: TranslationSettingsPatch
 ): Promise<void> {
-  await translate.setSettings({ azureSubscriptionKey: key })
+  await translate.setSettings(patch)
   await optionsData.load('translation', { force: true })
 }
 

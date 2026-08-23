@@ -13,6 +13,7 @@ describe('createTranslationSettingsService', () => {
 
     expect(service.setSettings({ azureSubscriptionKey: '  test-azure-key  ' })).toEqual({
       hasAzureKey: true,
+      azureRegion: '',
       encryptionAvailable: true
     })
     expect(service.getAzureSubscriptionKey()).toBe('test-azure-key')
@@ -30,6 +31,7 @@ describe('createTranslationSettingsService', () => {
 
     expect(service.getSettings()).toEqual({
       hasAzureKey: true,
+      azureRegion: '',
       encryptionAvailable: false
     })
     expect(service.getAzureSubscriptionKey()).toBe('test-azure-key')
@@ -42,6 +44,7 @@ describe('createTranslationSettingsService', () => {
 
     expect(service.setSettings({ azureSubscriptionKey: '   ' })).toEqual({
       hasAzureKey: false,
+      azureRegion: '',
       encryptionAvailable: true
     })
     expect(settings.get().translation.azureSubscriptionKeyEnc).toBe('')
@@ -50,7 +53,11 @@ describe('createTranslationSettingsService', () => {
 
   it('reports a failed decrypt as not configured', () => {
     const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ translation: { azureSubscriptionKeyEnc: 'corrupt-blob' } }))
+      fakeIo(
+        JSON.stringify({
+          translation: { azureSubscriptionKeyEnc: 'corrupt-blob', azureRegion: '' }
+        })
+      )
     )
     const secrets: SecretCodec = {
       encrypt: (value) => value,
@@ -61,7 +68,11 @@ describe('createTranslationSettingsService', () => {
     }
     const service = createTranslationSettingsService({ settings, secrets })
 
-    expect(service.getSettings()).toEqual({ hasAzureKey: false, encryptionAvailable: true })
+    expect(service.getSettings()).toEqual({
+      hasAzureKey: false,
+      azureRegion: '',
+      encryptionAvailable: true
+    })
     expect(service.getAzureSubscriptionKey()).toBe('')
   })
 
@@ -69,13 +80,34 @@ describe('createTranslationSettingsService', () => {
     const settings = createSettingsStore(fakeIo(undefined))
     const service = createTranslationSettingsService({ settings, secrets: reversingCodec })
 
-    settings.set({ translation: { azureSubscriptionKeyEnc: reversingCodec.encrypt('first-key') } })
+    settings.set({
+      translation: { azureSubscriptionKeyEnc: reversingCodec.encrypt('first-key'), azureRegion: '' }
+    })
     expect(service.getAzureSubscriptionKey()).toBe('first-key')
 
-    settings.set({ translation: { azureSubscriptionKeyEnc: reversingCodec.encrypt('second-key') } })
+    settings.set({
+      translation: {
+        azureSubscriptionKeyEnc: reversingCodec.encrypt('second-key'),
+        azureRegion: ''
+      }
+    })
     expect(service.getAzureSubscriptionKey()).toBe('second-key')
 
-    settings.set({ translation: { azureSubscriptionKeyEnc: '' } })
+    settings.set({ translation: { azureSubscriptionKeyEnc: '', azureRegion: '' } })
     expect(service.getSettings().hasAzureKey).toBe(false)
+  })
+
+  it('stores a trimmed region without replacing the encrypted key', () => {
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createTranslationSettingsService({ settings, secrets: reversingCodec })
+    service.setSettings({ azureSubscriptionKey: 'test-azure-key' })
+
+    expect(service.setSettings({ azureRegion: '  westeurope  ' })).toEqual({
+      hasAzureKey: true,
+      azureRegion: 'westeurope',
+      encryptionAvailable: true
+    })
+    expect(service.getAzureSubscriptionKey()).toBe('test-azure-key')
+    expect(service.getAzureRegion()).toBe('westeurope')
   })
 })

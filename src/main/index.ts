@@ -603,7 +603,8 @@ function startTranslation(
     ipcMain,
     createAzureTranslator({
       fetch: httpFetch,
-      getSubscriptionKey: () => translationSettings.getAzureSubscriptionKey()
+      getSubscriptionKey: () => translationSettings.getAzureSubscriptionKey(),
+      getSubscriptionRegion: () => translationSettings.getAzureRegion()
     })
   )
 }
