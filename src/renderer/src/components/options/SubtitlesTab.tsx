@@ -9,6 +9,7 @@ import {
   SUBTITLE_OUTLINE_SIZE_STEP,
   type SubtitleStyleSettings
 } from '../../../../shared/playerSettings'
+import type { PublicTranslationSettings } from '../../../../shared/translation'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
@@ -17,9 +18,12 @@ export interface SubtitlesTabProps {
   subtitleStyle: SubtitleStyleSettings
   subtitleDragEnabled: boolean
   translationEnabled: boolean
+  translationSettings: PublicTranslationSettings
+  translationLoadError?: string
   onChangeSubtitleStyle: (value: Partial<SubtitleStyleSettings>) => void
   onChangeSubtitleDragEnabled: (value: boolean) => void
   onChangeTranslationEnabled: (enabled: boolean) => void
+  onSaveAzureTranslationKey: (key: string) => boolean | Promise<boolean>
 }
 
 export function parseFontScalePercent(rawValue: string): number | null {
@@ -34,6 +38,24 @@ export function parseFontScalePercent(rawValue: string): number | null {
 export function parsePositionPercent(rawValue: string): number | null {
   const value = Number(rawValue)
   return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null
+}
+
+export function describeTranslationKeyStorage(encryptionAvailable: boolean | undefined): string {
+  const transmission =
+    'Selected subtitle/OCR text is sent to Microsoft Azure only when you explicitly request translation.'
+  if (encryptionAvailable === undefined) {
+    return `The key is stored locally. ${transmission}`
+  }
+  if (encryptionAvailable) {
+    return (
+      "The key is stored locally and encrypted with your operating system's secure store when available. " +
+      transmission
+    )
+  }
+  return (
+    'The key is stored locally; the fallback is unencrypted when secure storage is unavailable. ' +
+    transmission
+  )
 }
 
 export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
@@ -89,8 +111,15 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
     id: 'translation-enabled',
     label: 'Enable experimental translation for subtitles and OCR',
     category: 'subtitles',
-    keywords: ['translate', 'google', 'english', 'ocr', 'selected text'],
+    keywords: ['translate', 'provider', 'english', 'ocr', 'selected text'],
     targetId: 'translation-enabled'
+  },
+  {
+    id: 'azure-translator-key',
+    label: 'Azure Translator API key',
+    category: 'subtitles',
+    keywords: ['Azure', 'translator', 'API key', 'translation key'],
+    targetId: 'azure-translator-key-input'
   }
 ]
 
@@ -100,11 +129,30 @@ export default function SubtitlesTab({
   subtitleStyle,
   subtitleDragEnabled,
   translationEnabled,
+  translationSettings,
+  translationLoadError,
   onChangeSubtitleStyle,
   onChangeSubtitleDragEnabled,
-  onChangeTranslationEnabled
+  onChangeTranslationEnabled,
+  onSaveAzureTranslationKey
 }: SubtitlesTabProps): React.JSX.Element {
   const [fontScaleDraft, setFontScaleDraft] = useState<string | null>(null)
+  const [azureKeyDraft, setAzureKeyDraft] = useState('')
+
+  const submitAzureKey = (key: string): void => {
+    let result: boolean | Promise<boolean>
+    try {
+      result = onSaveAzureTranslationKey(key)
+    } catch {
+      return
+    }
+    void Promise.resolve(result).then(
+      (saved) => {
+        if (saved !== false) setAzureKeyDraft('')
+      },
+      () => undefined
+    )
+  }
 
   return (
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
@@ -226,6 +274,11 @@ export default function SubtitlesTab({
       </div>
       <div className="options-section">
         <h3>Experimental translation</h3>
+        {translationLoadError && (
+          <p className="options-error" id="translation-load-error" role="alert">
+            {translationLoadError}
+          </p>
+        )}
         <OptionsToggleRow
           id="translation-enabled"
           title="Enable experimental translation for subtitles and OCR"
@@ -233,8 +286,51 @@ export default function SubtitlesTab({
           onChange={onChangeTranslationEnabled}
         />
         <p className="options-hint">
-          Right-clicked subtitle text or explicitly selected OCR text is sent to Google&apos;s
-          unofficial online endpoint. Requests may fail or be rate-limited; no API key is used.
+          Right-clicked subtitle text or explicitly selected OCR text is sent to the configured
+          translation provider only when you explicitly request translation.
+        </p>
+        <div className="options-row">
+          <label htmlFor="azure-translator-key-input" className="options-row-label">
+            Azure Translator API key
+          </label>
+          <input
+            type="password"
+            id="azure-translator-key-input"
+            autoComplete="off"
+            placeholder={translationSettings.hasAzureKey ? '••••••••' : 'Paste your API key'}
+            value={azureKeyDraft}
+            onChange={(e) => setAzureKeyDraft(e.target.value)}
+          />
+        </div>
+        <div className="options-row">
+          <span
+            id="azure-translator-key-status"
+            className="options-row-label"
+            data-configured={translationSettings.hasAzureKey}
+          >
+            {translationSettings.hasAzureKey ? 'Configured ✓' : 'Not set'}
+          </span>
+          <button
+            type="button"
+            id="azure-translator-key-save"
+            className="options-keybind-button"
+            disabled={azureKeyDraft === ''}
+            onClick={() => submitAzureKey(azureKeyDraft)}
+          >
+            Save
+          </button>
+          <button
+            type="button"
+            id="azure-translator-key-clear"
+            className="options-keybind-button"
+            disabled={!translationSettings.hasAzureKey}
+            onClick={() => submitAzureKey('')}
+          >
+            Clear
+          </button>
+        </div>
+        <p className="options-hint">
+          {describeTranslationKeyStorage(translationSettings.encryptionAvailable)}
         </p>
       </div>
     </section>

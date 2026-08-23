@@ -7,11 +7,12 @@ import {
   type PublicKnowledgeSettings,
   type SyncStatus
 } from '../../../shared/knowledge'
+import type { PublicTranslationSettings } from '../../../shared/translation'
 import { errorMessage } from '../util/errorMessage'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
-export type OptionsDomain = 'dictionaries' | 'anki' | 'knowledge' | 'setup'
+export type OptionsDomain = 'dictionaries' | 'anki' | 'knowledge' | 'translation' | 'setup'
 
 export interface DomainState<T> {
   status: LoadState
@@ -50,6 +51,7 @@ export interface OptionsDomainData {
   dictionaries: DictionariesData
   anki: AnkiData
   knowledge: KnowledgeData
+  translation: PublicTranslationSettings
   setup: SetupData
 }
 
@@ -72,6 +74,9 @@ export interface OptionsDataBridge {
   knowledge: {
     getSettings(): Promise<PublicKnowledgeSettings>
     syncStatus(): Promise<SyncStatus>
+  }
+  translate: {
+    getSettings(): Promise<PublicTranslationSettings>
   }
   integration: {
     binaryStatus(): Promise<BundledBinaryStatus>
@@ -102,6 +107,10 @@ export const DEFAULT_KNOWLEDGE_SETTINGS: PublicKnowledgeSettings = {
   ...DEFAULT_KNOWLEDGE_TUNING
 }
 
+export const DEFAULT_TRANSLATION_SETTINGS: PublicTranslationSettings = {
+  hasAzureKey: false
+}
+
 export const DEFAULT_SYNC_STATUS: SyncStatus = {
   wanikani: { lastSyncAt: null, count: 0, configured: false },
   anki: { lastSyncAt: null, count: 0, configured: false }
@@ -125,6 +134,9 @@ export const optionsDataBridge: OptionsDataBridge = {
   knowledge: {
     getSettings: () => window.kizuna.knowledge.getSettings(),
     syncStatus: () => window.kizuna.knowledge.syncStatus()
+  },
+  translate: {
+    getSettings: () => window.kizuna.translate.getSettings()
   },
   integration: {
     binaryStatus: () => window.kizuna.integration.binaryStatus()
@@ -166,6 +178,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
     dictionaries: idleState(),
     anki: idleState(),
     knowledge: idleState(),
+    translation: idleState(),
     setup: idleState()
   }
   const inFlight: Partial<Record<OptionsDomain, Promise<void>>> = {}
@@ -273,6 +286,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
       ])
       return { data: { settings, syncStatus } }
     },
+    translation: async () => ({ data: await bridge.translate.getSettings() }),
     // A down Anki is the *normal* answer this tab exists to report, not a
     // failure of the load: the ping's rejection is folded into an `ok: false`
     // reading so the binary statuses still render and the tab never shows an

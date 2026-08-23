@@ -133,12 +133,15 @@ export function buildOptionsMenuProps({
       subtitleStyle: settings.subtitleStyle,
       subtitleDragEnabled: settings.subtitleDragEnabled,
       translationEnabled: settings.translationEnabled,
+      translationSettings: data.translationSettings,
+      translationLoadError: data.translationError,
       onChangeSubtitleStyle: (value) => dispatch({ type: 'setSubtitleStyle', value }),
       onChangeSubtitleDragEnabled: (value) => dispatch({ type: 'setSubtitleDragEnabled', value }),
       onChangeTranslationEnabled: (value) => {
         dispatch({ type: 'setTranslationEnabled', value })
         actions.persist({ translationEnabled: value })
-      }
+      },
+      onSaveAzureTranslationKey: actions.onSaveAzureTranslationKey
     },
     dictionaries: {
       mecabDicts: data.dictionaries.mecabDicts,

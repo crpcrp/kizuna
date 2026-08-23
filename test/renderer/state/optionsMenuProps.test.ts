@@ -30,6 +30,7 @@ function actionsFake(): OptionsDialogActions {
     onRemoveYomitanDict: vi.fn(async () => {}),
     ankiPing: vi.fn(async () => ({ ok: true })),
     onChangeAnkiSettings: vi.fn(async () => {}),
+    onSaveAzureTranslationKey: vi.fn(async () => true),
     onOpenMpvConfigDir: vi.fn(),
     onOpenUserUnidicDir: vi.fn(),
     persist: vi.fn()
@@ -60,6 +61,8 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
       knowledgeSettings: DEFAULT_KNOWLEDGE_SETTINGS,
       syncStatus: DEFAULT_SYNC_STATUS,
       knowledgeError: undefined,
+      translationSettings: { hasAzureKey: false },
+      translationError: undefined,
       setup: undefined
     },
     actions: actionsFake(),
@@ -157,6 +160,7 @@ describe('buildOptionsMenuProps', () => {
     expect(props.knowledge.onSyncNow).toBe(input.knowledge.onSyncNow)
     expect(props.dictionaries.onRemoveYomitanDict).toBe(input.actions.onRemoveYomitanDict)
     expect(props.anki.onChangeAnkiSettings).toBe(input.actions.onChangeAnkiSettings)
+    expect(props.subtitles.onSaveAzureTranslationKey).toBe(input.actions.onSaveAzureTranslationKey)
     expect(props.playback.onOpenMpvConfigDir).toBe(input.actions.onOpenMpvConfigDir)
     expect(props.dictionaries.onOpenUserUnidicDir).toBe(input.actions.onOpenUserUnidicDir)
     expect(props.playback.onSelectAudioDevice).toBe(playback.onSelectAudioDevice)

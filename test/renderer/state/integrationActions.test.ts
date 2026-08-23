@@ -9,6 +9,7 @@ import {
   reorderYomitanDicts,
   removeYomitanDict,
   saveWanikaniToken,
+  saveAzureTranslationKey,
   changeAnkiSettings,
   changeKnowledgeSettings,
   shouldResyncAnkiForKnowledgePatch,
@@ -26,10 +27,13 @@ function fakeOptionsData(): OptionsDataController & { load: ReturnType<typeof vi
 }
 
 describe('domainsForCategory / loadCategoryDomains', () => {
-  it('loads no domain for keybindings, playback, or subtitles', () => {
+  it('loads no domain for keybindings or playback', () => {
     expect(domainsForCategory('keybindings')).toEqual([])
     expect(domainsForCategory('playback')).toEqual([])
-    expect(domainsForCategory('subtitles')).toEqual([])
+  })
+
+  it('loads translation settings for Subtitles', () => {
+    expect(domainsForCategory('subtitles')).toEqual(['translation'])
   })
 
   it('loads only dictionaries for the Parser & Dictionaries category', () => {
@@ -157,6 +161,28 @@ describe('wanikani/anki/knowledge settings actions', () => {
 
     expect(knowledge.setSettings).toHaveBeenCalledWith({ wanikaniToken: 'tok123' })
     expect(optionsData.load).toHaveBeenCalledWith('knowledge', { force: true })
+  })
+
+  it('saveAzureTranslationKey saves the key then force-refreshes translation', async () => {
+    const optionsData = fakeOptionsData()
+    const translate = { setSettings: vi.fn().mockResolvedValue({}) }
+
+    await saveAzureTranslationKey(translate, optionsData, 'key123')
+
+    expect(translate.setSettings).toHaveBeenCalledWith({ azureSubscriptionKey: 'key123' })
+    expect(optionsData.load).toHaveBeenCalledWith('translation', { force: true })
+  })
+
+  it('does not refresh translation after a rejected save', async () => {
+    const optionsData = fakeOptionsData()
+    const translate = {
+      setSettings: vi.fn().mockRejectedValue(new Error('save failed'))
+    }
+
+    await expect(saveAzureTranslationKey(translate, optionsData, 'key123')).rejects.toThrow(
+      'save failed'
+    )
+    expect(optionsData.load).not.toHaveBeenCalled()
   })
 
   it('resyncs only when a deck or Anki word-field changes', () => {
