@@ -673,7 +673,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     displays: createProductionDisplaySources(process.platform),
     screen
   })
-  const controller = createGameOcrController({
+  const gameOcrController = createGameOcrController({
     shortcut: globalShortcut,
     accelerator: settings.get().gameOcr.captureShortcut,
     targets,
@@ -701,7 +701,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   })
   const runtime = createGameOcrRuntimeService({
     settings,
-    controller,
+    controller: gameOcrController,
     worker,
     preflight: () => missingResourceMessage(requiredGameOcrResources(ocrPaths), probeResourceKind)
   })
@@ -717,6 +717,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     tray: createElectronGameOcrTrayFactory(
       nativeImage.createFromPath(join(resourcesBase, 'icons', 'play.png'))
     ),
+    stopPlayer: () => controller.stopPlayback(),
     quit: () => app.quit()
   })
   registerGameOcrBridge(

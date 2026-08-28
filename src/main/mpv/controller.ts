@@ -385,6 +385,11 @@ export class MpvController {
     return this.client.sendCommand(['set_property', 'pause', paused])
   }
 
+  /** Unloads the current file while keeping the idle player ready for a later launch. */
+  stopPlayback(): Promise<unknown> {
+    return this.client.sendCommand(['stop'])
+  }
+
   seek(seconds: number, absolute = true): Promise<unknown> {
     return this.client.sendCommand(['seek', seconds, absolute ? 'absolute' : 'relative'])
   }

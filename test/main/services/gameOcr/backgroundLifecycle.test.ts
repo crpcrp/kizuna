@@ -44,10 +44,12 @@ function setup(initial: GameOcrRuntimeStatus['game']['state'] = 'stopped') {
     })
   }
   const quit = vi.fn()
+  const stopPlayer = vi.fn(async () => {})
   const lifecycle = createGameOcrBackgroundLifecycle({
     runtime,
     window,
     tray: trayFactory,
+    stopPlayer,
     quit
   })
 
@@ -62,6 +64,7 @@ function setup(initial: GameOcrRuntimeStatus['game']['state'] = 'stopped') {
     window,
     tray,
     trayFactory,
+    stopPlayer,
     quit,
     get actions() {
       return actions
@@ -99,7 +102,16 @@ describe('Game OCR background lifecycle', () => {
 
     expect(fake.lifecycle.handleWindowClose(closeEvent)).toBe(false)
     expect(closeEvent.preventDefault).toHaveBeenCalledOnce()
+    expect(fake.stopPlayer).toHaveBeenCalledOnce()
     expect(fake.window.hide).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not stop the player when closing outside Game OCR mode', () => {
+    const fake = setup()
+
+    expect(fake.lifecycle.handleWindowClose({ preventDefault: vi.fn() })).toBe(true)
+
+    expect(fake.stopPlayer).not.toHaveBeenCalled()
   })
 
   it('dismisses tray-opened Options back to hidden state without stopping OCR', async () => {
