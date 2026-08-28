@@ -18,7 +18,7 @@
 // through explicit directory arguments, so `test/scripts/notices.test.ts`
 // exercises the whole flow against temp directories with no network.
 
-import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, posix } from 'node:path'
 
 import {
@@ -46,8 +46,9 @@ import {
  * @property {string} [version]
  * @property {string} license SPDX identifier, or the closest honest description.
  * @property {string} copyright
- * @property {'resources' | 'optional' | 'node_modules'} bundled Where the shipped files come from.
+ * @property {'resources' | 'optional' | 'node_modules' | 'source'} bundled Where the shipped files come from.
  * @property {string} [resourceRoot] Path under `resources/` the component owns.
+ * @property {string} [sourceRoot] Repository-relative path under `src/` for bundled application data.
  * @property {string} [packageName] `node_modules/<packageName>`, for `bundled: 'node_modules'`.
  * @property {string[]} [licenseFiles] Licence texts to copy into the bundle.
  * @property {Record<string, NoticePlatformOverride>} [platforms] Platform-specific metadata.
@@ -134,6 +135,10 @@ export function resolvePlatformNotices(notices, platformKey) {
 /** Filenames npm packages use for their licence text, most specific first. */
 const LICENSE_FILE_PATTERN = /^(licen[sc]e|copying|notice)([-_.].*)?(\.(md|txt))?$/i
 
+/** @param {unknown} value @returns {boolean} */
+const isSafeSourceRoot = (value) =>
+  isSafeRelativePath(value) && /** @type {string} */ (value).startsWith('src/')
+
 /**
  * Structural validation of `third-party.json`, independent of any other file.
  * Returns the reasons rather than throwing so callers can report them together.
@@ -185,7 +190,7 @@ export function noticesProblems(notices) {
     }
     if (!component?.license) problems.push(`component "${label}" has no license`)
     if (!component?.copyright) problems.push(`component "${label}" has no copyright`)
-    if (!['resources', 'optional', 'node_modules'].includes(component?.bundled)) {
+    if (!['resources', 'optional', 'node_modules', 'source'].includes(component?.bundled)) {
       problems.push(`component "${label}" has an unknown bundled kind "${component?.bundled}"`)
     }
     if (component?.bundled === 'resources') {
@@ -196,6 +201,28 @@ export function noticesProblems(notices) {
       }
       // A copyleft binary without a source pointer is the single failure this
       // whole file exists to prevent.
+      if (component.copyleft && !component.source?.code) {
+        problems.push(`copyleft component "${label}" has no source.code URL`)
+      }
+    }
+    if (component?.bundled === 'source') {
+      if (!component.version) problems.push(`component "${label}" has no version`)
+      if (!component.sourceRoot) {
+        problems.push(`component "${label}" has no sourceRoot`)
+      } else if (!isSafeSourceRoot(component.sourceRoot)) {
+        problems.push(
+          `component "${label}" has an unsafe sourceRoot ${String(component.sourceRoot)}`
+        )
+      }
+      if (!Array.isArray(component.licenseFiles) || component.licenseFiles.length === 0) {
+        problems.push(`component "${label}" ships as source data but lists no licenseFiles`)
+      } else {
+        for (const path of component.licenseFiles) {
+          if (!isSafeRelativePath(path)) {
+            problems.push(`component "${label}" has an unsafe license path ${String(path)}`)
+          }
+        }
+      }
       if (component.copyleft && !component.source?.code) {
         problems.push(`copyleft component "${label}" has no source.code URL`)
       }
@@ -253,6 +280,21 @@ export function noticesProblems(notices) {
           }
           const effective = { ...component, ...override }
           if (component.bundled === 'resources') {
+            if (!effective.version) {
+              problems.push('component "' + label + '" platform "' + key + '" has no version')
+            }
+            if (!effective.licenseFiles?.length) {
+              problems.push(
+                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
+              )
+            }
+            if (effective.copyleft && !effective.source?.code) {
+              problems.push(
+                'copyleft component "' + label + '" platform "' + key + '" has no source.code URL'
+              )
+            }
+          }
+          if (component.bundled === 'source') {
             if (!effective.version) {
               problems.push('component "' + label + '" platform "' + key + '" has no version')
             }
@@ -505,7 +547,9 @@ export function renderThirdPartyNotices({ notices, packages, packageLicenseNames
     if (component.version) lines.push(`- Version: \`${component.version}\``)
     lines.push(`- License: ${component.license}`)
     lines.push(`- ${component.copyright}`)
-    if (component.bundled === 'optional') {
+    if (component.bundled === 'source') {
+      lines.push(`- Bundled application data from \`${component.sourceRoot}\`.`)
+    } else if (component.bundled === 'optional') {
       lines.push('- Bundled only when present at packaging time.')
     }
     for (const path of component.licenseFiles ?? []) {
@@ -618,9 +662,9 @@ export function licenseCopyPlan({
   const plan = []
   for (const component of notices.components) {
     for (const path of component.licenseFiles ?? []) {
-      // `resources` paths are staged by resources.lock.json; `optional`
-      // components point at texts committed under the repository's `licenses/`,
-      // because their binary is a manual drop-in that may not be present.
+      // `resources` paths are staged by resources.lock.json; `optional` and
+      // `source` components point at texts committed in the repository because
+      // their files are not staged under resources/.
       const base = component.bundled === 'resources' ? resourcesDir : repoRoot
       plan.push({ from: join(base, path), to: componentLicensePath(component, path) })
     }
@@ -777,10 +821,25 @@ export async function generateNotices({
     }
   }
 
-  const notices = resolveComponentVersions(
-    resolvePlatformNotices(declared, selectedPlatformKey),
-    packageLock
-  )
+  const platformNotices = resolvePlatformNotices(declared, selectedPlatformKey)
+  const missingSourceRoots = []
+  for (const component of platformNotices.components) {
+    if (component.bundled !== 'source' || typeof component.sourceRoot !== 'string') continue
+    try {
+      if (!(await stat(join(repoRoot, component.sourceRoot))).isDirectory()) {
+        missingSourceRoots.push(`${component.name}: ${component.sourceRoot} is not a directory`)
+      }
+    } catch {
+      missingSourceRoots.push(`${component.name}: ${component.sourceRoot}`)
+    }
+  }
+  if (missingSourceRoots.length > 0) {
+    throw new Error(
+      `Source roots named by third-party.json are missing or invalid:\n  ${missingSourceRoots.join('\n  ')}`
+    )
+  }
+
+  const notices = resolveComponentVersions(platformNotices, packageLock)
   const packages = productionPackages(packageLock)
   /** @type {Record<string, string[]>} */
   const packageLicenseNames = {}

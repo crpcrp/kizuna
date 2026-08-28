@@ -23,6 +23,17 @@ mpv, FFmpeg/ffprobe, and MeCab run as separate processes; Kizuna does
 not link their libraries into Electron. Revisit the licensing setup before
 changing that boundary or adding a redistributed component.
 
+## Source-bundled datasets
+
+Use `bundled: "source"` for third-party data committed under `src/` and
+compiled into the application bundle. Set `sourceRoot` to the shipped data
+subtree and list its committed licence texts in `licenseFiles`, using
+repository-relative paths. This kind is for application data, not runtime
+files staged from `resources/`, npm packages, or optional user-supplied
+components. It is not compared with `resources.lock.json`; it still requires a
+version and complete licence metadata, including `source.code` for copyleft
+data.
+
 ## Generate notices
 
 ```powershell
