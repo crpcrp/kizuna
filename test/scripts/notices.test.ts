@@ -61,6 +61,17 @@ const MPV: NoticeComponent = {
   source: { code: 'https://example.invalid/mpv-source.zip' }
 }
 
+const SOURCE_DATA: NoticeComponent = {
+  id: 'vocabulary-data',
+  name: 'Vocabulary data',
+  version: '1.0.0',
+  license: 'CC-BY-4.0',
+  copyright: 'Copyright the vocabulary data contributors.',
+  bundled: 'source',
+  sourceRoot: 'src/data/vocabulary',
+  licenseFiles: ['licenses/vocabulary-data/LICENSE.txt']
+}
+
 const LOCK = {
   schemaVersion: 1,
   platform: 'win32-x64',
@@ -164,6 +175,40 @@ describe('noticesProblems', () => {
     expect(problems.join()).toContain('lists no licenseFiles')
   })
 
+  it('accepts a valid source component', () => {
+    expect(noticesProblems(noticesWith(SOURCE_DATA))).toEqual([])
+  })
+
+  it.each([
+    ['version', { version: undefined }, 'has no version'],
+    ['sourceRoot', { sourceRoot: undefined }, 'has no sourceRoot'],
+    ['licenseFiles', { licenseFiles: [] }, 'lists no licenseFiles']
+  ])('requires source component %s', (_field, changes, message) => {
+    expect(noticesProblems(noticesWith(invalid({ ...SOURCE_DATA, ...changes }))).join()).toContain(
+      message
+    )
+  })
+
+  it('requires a source offer for copyleft source data', () => {
+    const component = invalid({ ...SOURCE_DATA, copyleft: true, source: {} })
+    expect(noticesProblems(noticesWith(component)).join()).toContain('has no source.code URL')
+  })
+
+  it.each(['/src/data/vocabulary', '../src/data/vocabulary', 'src\\data\\vocabulary', 'docs/data'])(
+    'rejects an unsafe source root %s',
+    (sourceRoot) => {
+      const problems = noticesProblems(noticesWith(invalid({ ...SOURCE_DATA, sourceRoot }))).join()
+      expect(problems).toContain('unsafe sourceRoot')
+    }
+  )
+
+  it('rejects an unsafe source-component licence path', () => {
+    const problems = noticesProblems(
+      noticesWith(invalid({ ...SOURCE_DATA, licenseFiles: ['../LICENSE.txt'] }))
+    )
+    expect(problems.join()).toContain('unsafe license path')
+  })
+
   it('rejects a component with an unknown bundled kind', () => {
     expect(
       noticesProblems(noticesWith(invalid({ ...MPV, bundled: 'somewhere' }))).join()
@@ -231,6 +276,10 @@ describe('resolvePlatformNotices', () => {
 describe('lockAgreementProblems', () => {
   it('accepts notices that describe exactly the locked tree', () => {
     expect(lockAgreementProblems(noticesWith(MPV), LOCK)).toEqual([])
+  })
+
+  it('ignores source components and their repository paths', () => {
+    expect(lockAgreementProblems(noticesWith(MPV, SOURCE_DATA), LOCK)).toEqual([])
   })
 
   // The acceptance criterion: bumping a binary is a lock bump, and a lock bump
@@ -369,6 +418,20 @@ describe('licenseCopyPlan', () => {
     })
   })
 
+  it('reads a source component licence from the repository root', () => {
+    const sourcePlan = licenseCopyPlan({
+      notices: noticesWith(SOURCE_DATA),
+      repoRoot: join('/repo'),
+      resourcesDir: join('/repo', 'resources'),
+      packages: [],
+      packageLicenseNames: {}
+    })
+    expect(sourcePlan).toContainEqual({
+      from: join('/repo', 'licenses/vocabulary-data/LICENSE.txt'),
+      to: 'licenses/vocabulary-data/LICENSE.txt'
+    })
+  })
+
   it('reads each npm dependency licence from its own package directory', () => {
     expect(plan).toContainEqual({
       from: join('/repo', 'node_modules/react', 'LICENSE'),
@@ -417,6 +480,17 @@ describe('renderThirdPartyNotices', () => {
     expect(markdown).toContain('- Version: `0.41.0`')
     expect(markdown).toContain('- License: GPL-3.0-or-later')
     expect(markdown).toContain('- License text: `licenses/mpv/LICENSE.GPLv3.txt`')
+  })
+
+  it('describes source data as bundled application data, not optional content', () => {
+    const sourceMarkdown = renderThirdPartyNotices({
+      notices: noticesWith(SOURCE_DATA),
+      packages: [],
+      packageLicenseNames: {},
+      productName: 'Kizuna'
+    })
+    expect(sourceMarkdown).toContain('Bundled application data from `src/data/vocabulary`.')
+    expect(sourceMarkdown).not.toContain('Bundled only when present at packaging time.')
   })
 
   it('keeps the component notes, which carry the build-configuration caveats', () => {
@@ -594,6 +668,25 @@ describe('generateNotices', () => {
     const repoRoot = await makeRepo(repoFiles)
     const stale = { ...noticesWith(MPV), vendorCommit: 'd'.repeat(40) }
     await expect(run(repoRoot, stale)).rejects.toThrow('third-party.json is unusable')
+  })
+
+  it('refuses to generate notices when a source root is missing', async () => {
+    const repoRoot = await makeRepo(repoFiles)
+    await expect(run(repoRoot, noticesWith(MPV, SOURCE_DATA))).rejects.toThrow(
+      'Source roots named by third-party.json are missing or invalid'
+    )
+  })
+
+  it('copies source-data licence texts from the repository root', async () => {
+    const repoRoot = await makeRepo({
+      ...repoFiles,
+      'src/data/vocabulary/snapshot.json': '{}',
+      'licenses/vocabulary-data/LICENSE.txt': 'data licence'
+    })
+    await run(repoRoot, noticesWith(MPV, SOURCE_DATA))
+    expect(
+      await readFile(join(repoRoot, 'build/notices/licenses/vocabulary-data/LICENSE.txt'), 'utf-8')
+    ).toBe('data licence')
   })
 
   // The failure mode this catches: packaging before `npm run resources`, which
