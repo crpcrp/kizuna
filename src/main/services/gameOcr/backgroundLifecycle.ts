@@ -34,6 +34,7 @@ export interface GameOcrBackgroundLifecycleOptions {
   }
   window: GameOcrBackgroundWindow
   tray: GameOcrTrayFactory
+  stopPlayer(): Promise<unknown>
   quit: () => void
 }
 
@@ -211,6 +212,9 @@ export function createGameOcrBackgroundLifecycle(
     handleWindowClose(event): boolean {
       if (!ARMED_STATES.has(options.runtime.getStatus().game.state)) return true
       reportSurfaceFailure(() => event.preventDefault())
+      reportSurfaceFailure(() => {
+        void options.stopPlayer().catch(() => {})
+      })
       hiddenForOcr = true
       hideWindow()
       return false

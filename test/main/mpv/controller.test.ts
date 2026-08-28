@@ -507,6 +507,7 @@ describe('MpvController (fake spawn + fake client)', () => {
     client.emit('file-loaded', { event: 'file-loaded' })
     await load
     await controller.setPause(true)
+    await controller.stopPlayback()
     await controller.seek(93.5, true)
     await controller.seek(-5, false)
     await controller.setVolume(80)
@@ -545,6 +546,7 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(client.sent).toEqual([
       ['loadfile', 'E:\\anime\\ep1.mkv'],
       ['set_property', 'pause', true],
+      ['stop'],
       ['seek', 93.5, 'absolute'],
       ['seek', -5, 'relative'],
       ['set_property', 'volume', 80],
