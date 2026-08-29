@@ -2,6 +2,7 @@ import { CommandItem, Menu } from './primitives'
 export interface VocabularyMenuProps {
   onOpenWordReport?: () => void
   onOpenJlptCoverage?: () => void
+  onOpenJlptBulkExport?: () => void
   onOpenBulkMining?: () => void
 }
 export function VocabularyMenu({
@@ -10,6 +11,7 @@ export function VocabularyMenu({
   run,
   onOpenWordReport,
   onOpenJlptCoverage,
+  onOpenJlptBulkExport,
   onOpenBulkMining
 }: VocabularyMenuProps & {
   open: boolean
@@ -29,6 +31,12 @@ export function VocabularyMenu({
         ariaLabel="JLPT coverage"
         id="open-jlpt-coverage"
         onClick={run(() => onOpenJlptCoverage?.())}
+      />
+      <CommandItem
+        label="JLPT bulk export…"
+        ariaLabel="JLPT bulk export"
+        id="open-jlpt-bulk-export"
+        onClick={run(() => onOpenJlptBulkExport?.())}
       />
       <CommandItem
         label="Bulk Anki mining…"

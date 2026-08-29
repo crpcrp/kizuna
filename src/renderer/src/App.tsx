@@ -12,6 +12,7 @@ import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
 import SubtitleReport from './components/SubtitleReport'
 import JlptCoverageReport from './components/JlptCoverageReport'
+import JlptBulkExportModal from './components/JlptBulkExportModal'
 import BulkMiningModal from './components/BulkMiningModal'
 import VideoAdjustments from './components/VideoAdjustments'
 import CardImageCropDialog from './components/CardImageCropDialog'
@@ -35,16 +36,18 @@ import { useFullscreenReveal } from './state/useFullscreenReveal'
 import { useFullscreenCursor } from './state/useFullscreenCursor'
 import { useLinuxWindowShape } from './state/useLinuxWindowShape'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
-import { useLatestRef } from './state/useLatestRef'
+import { useLatestCallback, useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
 import { useJlptCoverageReport } from './state/useJlptCoverageReport'
+import { useJlptBulkExport } from './state/useJlptBulkExport'
 import { useOptionsController } from './state/useOptionsController'
 import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
 import { findActiveCue, offsetTimePos } from '../../shared/cue'
 import type { Cue } from '../../shared/cue'
+import type { JlptLevel } from '../../shared/jlpt'
 import { type AudioDevice } from '../../shared/audioDevice'
 
 // Root React component: the runnable player shell. Wires the reducer + the
@@ -179,6 +182,36 @@ export default function App({
     optionsData: options.controller,
     dictionarySettings: options.data.dictionaries,
     targetDeckName: options.data.anki?.settings.deckName
+  })
+  const jlptBulkExport = useJlptBulkExport({
+    bridge: kizuna,
+    frequencyDictId: state.popupSettings.frequencyDictId,
+    sortOrder: state.popupSettings.sortOrder,
+    targetDeckName: options.data.anki?.settings.deckName,
+    syncNow: vocabulary.syncNow
+  })
+
+  const openJlptBulkExport = useLatestCallback(
+    (options: { throughLevel?: JlptLevel } = {}): void => {
+      jlptCoverage.closeReport()
+      vocabulary.report.onClose()
+      vocabulary.mining.modal.onClose()
+      jlptBulkExport.openExport({
+        throughLevel: options.throughLevel ?? jlptCoverage.selectedLevel
+      })
+    }
+  )
+  const openJlptCoverage = useLatestCallback((): void => {
+    jlptBulkExport.onClose()
+    jlptCoverage.openReport()
+  })
+  const openWordReport = useLatestCallback((): void => {
+    jlptBulkExport.onClose()
+    vocabulary.vocabularyMenu.onOpenWordReport?.()
+  })
+  const openBulkMining = useLatestCallback((): void => {
+    jlptBulkExport.onClose()
+    vocabulary.vocabularyMenu.onOpenBulkMining?.()
   })
   useSubtitleAutoPause({
     controller: subtitleAutoPauseController,
@@ -327,7 +360,8 @@ export default function App({
       about.open ||
       updates.modal !== null ||
       vocabulary.modalOpen ||
-      jlptCoverage.open
+      jlptCoverage.open ||
+      jlptBulkExport.open
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -413,7 +447,10 @@ export default function App({
             }}
             vocabulary={{
               ...vocabulary.vocabularyMenu,
-              onOpenJlptCoverage: jlptCoverage.openReport
+              onOpenWordReport: openWordReport,
+              onOpenJlptCoverage: openJlptCoverage,
+              onOpenJlptBulkExport: () => openJlptBulkExport(),
+              onOpenBulkMining: openBulkMining
             }}
             onOpenOptions={options.openDialog}
             onOpenAbout={about.openDialog}
@@ -571,7 +608,10 @@ export default function App({
         onClose={jlptCoverage.closeReport}
         onTargetLevelChange={jlptCoverage.setSelectedLevel}
         onRetry={jlptCoverage.retry}
+        onExportUnknowns={() => openJlptBulkExport({ throughLevel: jlptCoverage.selectedLevel })}
       />
+
+      <JlptBulkExportModal {...jlptBulkExport} />
 
       {miningPresentation === 'modal' && <BulkMiningModal {...vocabulary.mining.modal} />}
       {vocabulary.mining.completion && (

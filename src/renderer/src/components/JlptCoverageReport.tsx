@@ -25,6 +25,7 @@ export interface JlptCoverageReportProps {
   onClose: () => void
   onTargetLevelChange: (level: JlptLevel) => void
   onRetry: () => void
+  onExportUnknowns: () => void
   /** Safe, user-facing text supplied by the controller. */
   errorText?: string
 }
@@ -129,11 +130,13 @@ function CoverageBar({ counts }: { counts: DisplayCounts }): React.JSX.Element {
 function TargetSummary({
   data,
   selectedLevel,
-  onTargetLevelChange
+  onTargetLevelChange,
+  onExportUnknowns
 }: {
   data: JlptCoverageReportData
   selectedLevel: JlptLevel
   onTargetLevelChange: (level: JlptLevel) => void
+  onExportUnknowns: () => void
 }): React.JSX.Element {
   const counts = countsFor(data.throughLevels[selectedLevel])
 
@@ -152,6 +155,14 @@ function TargetSummary({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          className="jlpt-coverage-export"
+          aria-label={`Export unknown items through ${selectedLevel}`}
+          onClick={onExportUnknowns}
+        >
+          Export unknowns…
+        </button>
       </div>
       <p className="jlpt-coverage-percentage">
         {percent(counts.mastered, counts.total).toFixed(1)}%
@@ -379,11 +390,13 @@ function ReadyBody({
   data,
   selectedLevel,
   onTargetLevelChange,
+  onExportUnknowns,
   nowMs
 }: {
   data: JlptCoverageReportData
   selectedLevel: JlptLevel
   onTargetLevelChange: (level: JlptLevel) => void
+  onExportUnknowns: () => void
   nowMs: number
 }): React.JSX.Element {
   const sourceStatus = data.sourceStatus ?? {
@@ -404,6 +417,7 @@ function ReadyBody({
         data={data}
         selectedLevel={selectedLevel}
         onTargetLevelChange={onTargetLevelChange}
+        onExportUnknowns={onExportUnknowns}
       />
       <CoverageTable data={data} selectedLevel={selectedLevel} />
       <ProvenanceSection data={data} selectedLevel={selectedLevel} />
@@ -447,6 +461,7 @@ export default function JlptCoverageReport({
   onClose,
   onTargetLevelChange,
   onRetry,
+  onExportUnknowns,
   errorText
 }: JlptCoverageReportProps): React.JSX.Element {
   const loading = phase === 'loading' || (phase === 'ready' && data === null)
@@ -460,6 +475,7 @@ export default function JlptCoverageReport({
         data={data!}
         selectedLevel={selectedLevel}
         onTargetLevelChange={onTargetLevelChange}
+        onExportUnknowns={onExportUnknowns}
         nowMs={Date.parse(data!.generatedAt)}
       />
     )
