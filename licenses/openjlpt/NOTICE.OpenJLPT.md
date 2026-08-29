@@ -1,6 +1,6 @@
 # NOTICE — Data Sources & Attribution
 
-OpenJLPT is a **derived work**. The dataset is assembled from the open sources below.
+OpenJLPT is a **derived work** containing vocabulary and kanji classifications. The dataset is assembled from the open sources below.
 Because it incorporates data licensed under **CC BY-SA 4.0** (a share-alike / copyleft
 license), the entire OpenJLPT dataset is released under **CC BY-SA 4.0** (see `LICENSE`).
 
@@ -15,13 +15,17 @@ If you use OpenJLPT, you must:
 | Source | Used for | License | Link |
 |---|---|---|---|
 | **JMdict / EDICT** — Electronic Dictionary Research and Development Group (EDRDG) | Vocabulary readings & glosses (via Waller's decks, which build on EDICT) | CC BY-SA 4.0 | https://www.edrdg.org/ |
-| **KANJIDIC2** — EDRDG | Kanji readings, meanings, stroke counts, grade, frequency | CC BY-SA 4.0 | https://www.edrdg.org/wiki/KANJIDIC_Project.html |
+| **KANJIDIC2** — Electronic Dictionary Research and Development Group (EDRDG) | Kanji readings, meanings, stroke counts, grade, and frequency ranks | CC BY-SA 4.0 | https://www.edrdg.org/wiki/KANJIDIC_Project.html |
 | **Jonathan Waller's JLPT Resources** (tanos.co.uk) | The **N5–N1 level assignments** for vocabulary and kanji | CC BY | https://www.tanos.co.uk/jlpt/ |
 | **Tatoeba** | Example sentences (Japanese + English translations) attached to vocabulary | CC BY 2.0 FR | https://tatoeba.org |
 
 The EDRDG files (JMdict, KANJIDIC2) are the property of the Electronic Dictionary Research
 and Development Group, and are used in conformance with the Group's
 [licence](https://www.edrdg.org/edrdg/licence.html).
+
+Kizuna's bundled projection retains only each vocabulary entry's expression, reading, and
+level, and each kanji entry's character, level, and nullable KANJIDIC2 frequency rank. It does
+not redistribute meanings, readings, examples, stroke diagrams, or other upstream metadata.
 
 Example sentences come from [Tatoeba](https://tatoeba.org) and are licensed
 [CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/); combining CC BY material

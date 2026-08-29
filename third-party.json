@@ -245,7 +245,7 @@
     },
     {
       "id": "openjlpt-vocabulary",
-      "name": "OpenJLPT vocabulary classifications",
+      "name": "OpenJLPT vocabulary and kanji classifications",
       "version": "0.2.0",
       "license": "CC-BY-SA-4.0",
       "copyright": "Copyright (c) OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources.",
@@ -256,8 +256,9 @@
         "licenses/openjlpt/NOTICE.OpenJLPT.md"
       ],
       "notes": [
-        "Unofficial community-sourced JLPT vocabulary classifications derived from Jonathan Waller's lists; the Japan Foundation does not publish official vocabulary lists.",
-        "Kizuna ships only each entry's expression, reading, and level fields; meanings, examples, and other upstream data are omitted."
+        "Unofficial community-sourced JLPT vocabulary and kanji classifications derived from Jonathan Waller's lists; the Japan Foundation does not publish official vocabulary or kanji lists.",
+        "Kizuna ships only each vocabulary entry's expression, reading, and level and each kanji entry's character, level, and nullable frequency; meanings, examples, and other upstream data are omitted.",
+        "Kanji frequency ranks originate from KANJIDIC2, maintained by the Electronic Dictionary Research and Development Group (EDRDG)."
       ],
       "copyleft": true,
       "source": {
