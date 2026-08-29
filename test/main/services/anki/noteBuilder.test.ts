@@ -370,6 +370,7 @@ describe('buildNote frequency field', () => {
         sentence: 'Sentence',
         frequency: 'Frequency',
         pitchAccent: '',
+        jlptLevel: '',
         wordAudio: 'WordAudio',
         picture: 'Picture',
         sentenceAudio: 'SentenceAudio'
@@ -388,6 +389,30 @@ describe('buildNote frequency field', () => {
       Picture: '',
       SentenceAudio: ''
     })
+  })
+})
+
+describe('buildNote JLPT level field', () => {
+  const mapped: AnkiSettings = {
+    ...settings,
+    fieldMap: { ...settings.fieldMap, jlptLevel: 'JLPT' }
+  }
+  const sourceWith = (jlptLevel: LookupResult['jlptLevel']): NoteSource => ({
+    token,
+    result: { ...lookupResult, jlptLevel },
+    sentence: '私は食べるのが好き。'
+  })
+
+  it('writes the canonical approximate level from the mined result', () => {
+    expect(buildNote(sourceWith('N3'), mapped).fields.JLPT).toBe('N3')
+  })
+
+  it('keeps a mapped field present but empty when the result is unclassified', () => {
+    expect(buildNote(sourceWith(null), mapped).fields.JLPT).toBe('')
+  })
+
+  it('omits the field entirely when JLPT level is unmapped', () => {
+    expect(buildNote(sourceWith('N3'), settings).fields).not.toHaveProperty('JLPT')
   })
 })
 

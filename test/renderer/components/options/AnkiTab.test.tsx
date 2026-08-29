@@ -70,8 +70,9 @@ describe('AnkiTab markup', () => {
     expect(html).toContain('id="anki-field-sentenceAudio-select"')
     expect(html).toContain('id="anki-field-frequency-select"')
     expect(html).toContain('id="anki-field-pitchAccent-select"')
+    expect(html).toContain('id="anki-field-jlptLevel-select"')
     const frontOptions = html.match(/<option value="Front">Front<\/option>/g) ?? []
-    expect(frontOptions).toHaveLength(9)
+    expect(frontOptions).toHaveLength(10)
   })
 
   it('renders the tags input joined by ", " and the include-audio checkbox', () => {
@@ -314,6 +315,35 @@ describe('AnkiTab sentence-audio mapping', () => {
     expect(merged.fieldMap.sentenceAudio).toBe('')
     expect(renderTab({ ankiSettings: merged })).toMatch(
       /id="anki-field-sentenceAudio-select"[\s\S]*?<option value="" selected/
+    )
+  })
+})
+
+describe('AnkiTab JLPT level mapping', () => {
+  it('renders an approximate JLPT level mapping row', () => {
+    const html = renderTab({ ankiModelFields: ['Word', 'JLPT'] })
+
+    expect(html).toContain('id="anki-field-jlptLevel-select"')
+    expect(html).toContain('>JLPT level (approx.)</label>')
+  })
+
+  it('binds the JLPT level select to the persisted mapping', () => {
+    const html = renderTab({
+      ankiSettings: makeAnkiSettings({
+        fieldMap: { jlptLevel: 'JLPT' }
+      }),
+      ankiModelFields: ['JLPT']
+    })
+
+    expect(html).toMatch(/id="anki-field-jlptLevel-select"[\s\S]*?<option value="JLPT" selected/)
+  })
+
+  it('defaults the JLPT level mapping to unset for a pre-feature settings file', () => {
+    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
+
+    expect(merged.fieldMap.jlptLevel).toBe('')
+    expect(renderTab({ ankiSettings: merged })).toMatch(
+      /id="anki-field-jlptLevel-select"[\s\S]*?<option value="" selected/
     )
   })
 })
