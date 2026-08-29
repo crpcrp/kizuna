@@ -60,6 +60,8 @@ describe('buildJlptCoverageInventory', () => {
       snapshotId: 'snapshot-test',
       license: 'CC-BY-SA-4.0',
       licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      attribution:
+        "OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources.",
       rawRecordCount: 7,
       deduplicatedExpressionCount: 3,
       duplicateCount: 3,
@@ -77,6 +79,20 @@ describe('buildJlptCoverageInventory', () => {
     expect(buildJlptCoverageInventory(snapshot([...entries].reverse()))).toEqual(
       buildJlptCoverageInventory(snapshot(entries))
     )
+  })
+
+  it('rejects incompatible schemas and non-tuple entries', () => {
+    expect(() => buildJlptCoverageInventory({ ...snapshot([]), schemaVersion: 2 })).toThrow(
+      'Invalid JLPT vocabulary snapshot'
+    )
+    expect(() =>
+      buildJlptCoverageInventory({
+        ...snapshot([]),
+        entries: [
+          ['猫', 'ねこ', 'N5', 'unexpected']
+        ] as unknown as JlptVocabularySnapshot['entries']
+      })
+    ).toThrow('Invalid JLPT vocabulary entry at index 0')
   })
 })
 

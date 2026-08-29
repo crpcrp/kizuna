@@ -34,6 +34,8 @@ export interface AggregateJlptCoverageInput {
 }
 
 const OPENJLPT_LICENSE_URL = 'https://creativecommons.org/licenses/by-sa/4.0/'
+const OPENJLPT_ATTRIBUTION =
+  "OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources."
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
 
 function isJlptLevel(value: unknown): value is JlptLevel {
@@ -44,7 +46,7 @@ function validateSnapshot(snapshot: JlptVocabularySnapshot): void {
   if (
     !snapshot ||
     typeof snapshot !== 'object' ||
-    !Number.isInteger(snapshot.schemaVersion) ||
+    snapshot.schemaVersion !== 1 ||
     !Number.isInteger(snapshot.inputRecordCount) ||
     snapshot.inputRecordCount < 0 ||
     !Array.isArray(snapshot.entries)
@@ -79,6 +81,7 @@ export function buildJlptCoverageInventory(
   for (const [index, rawEntry] of snapshot.entries.entries()) {
     if (
       !Array.isArray(rawEntry) ||
+      rawEntry.length !== 3 ||
       typeof rawEntry[0] !== 'string' ||
       typeof rawEntry[1] !== 'string' ||
       !isJlptLevel(rawEntry[2])
@@ -111,6 +114,7 @@ export function buildJlptCoverageInventory(
       snapshotId: snapshot.source.commit,
       license: snapshot.source.license,
       licenseUrl: OPENJLPT_LICENSE_URL,
+      attribution: OPENJLPT_ATTRIBUTION,
       rawRecordCount: snapshot.inputRecordCount,
       deduplicatedExpressionCount: entries.length,
       duplicateCount: nonEmptyRecordCount - entries.length,
