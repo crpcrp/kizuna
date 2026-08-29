@@ -42,6 +42,7 @@ const ANKI_FIELD_ROWS: { field: AnkiField; label: string }[] = [
   { field: 'sentence', label: 'Sentence' },
   { field: 'frequency', label: 'Frequency' },
   { field: 'pitchAccent', label: 'Pitch accent' },
+  { field: 'jlptLevel', label: 'JLPT level (approx.)' },
   { field: 'wordAudio', label: 'Word audio' },
   { field: 'picture', label: 'Picture' },
   { field: 'sentenceAudio', label: 'Sentence audio' }
@@ -100,7 +101,17 @@ export const ANKI_SETTING_ENTRIES: SettingEntry[] = [
     id: 'anki-fields',
     label: 'Anki field mapping',
     category: 'anki',
-    keywords: ['word', 'reading', 'sentence', 'audio', 'screenshot', 'frequency', 'pitch accent']
+    keywords: [
+      'word',
+      'reading',
+      'sentence',
+      'audio',
+      'screenshot',
+      'frequency',
+      'pitch accent',
+      'jlpt',
+      'approximate'
+    ]
   },
   {
     id: 'anki-duplicate-policy',

@@ -192,6 +192,7 @@ export function buildNote(
     sentence: boldTarget(sentence, token),
     frequency: frequencyValue(result),
     pitchAccent: pitchAccentValue(result),
+    jlptLevel: result.jlptLevel ?? '',
     // Attachment-only fields: AnkiConnect fills them from the media arrays, so
     // the mapped field is created empty and never carries a value itself.
     wordAudio: '',

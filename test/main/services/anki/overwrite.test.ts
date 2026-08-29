@@ -32,6 +32,7 @@ const configuredAnkiSettings = {
     sentence: 'Sentence',
     frequency: '',
     pitchAccent: '',
+    jlptLevel: '',
     wordAudio: 'WordAudio',
     picture: '',
     sentenceAudio: ''
@@ -183,6 +184,31 @@ describe('applyOverwrite', () => {
       'addTags',
       'notesInfo'
     ])
+  })
+
+  it('writes the same mapped JLPT value on overwrite', async () => {
+    const settings = {
+      ...configuredAnkiSettings,
+      includeWordAudio: false,
+      fieldMap: { ...configuredAnkiSettings.fieldMap, jlptLevel: 'JLPT' }
+    }
+    const target = overwriteNote(8, token.lemma, { JLPT: { value: 'N5', order: 5 } })
+    const note = buildNote({ ...mineRequest, result: { ...result, jlptLevel: 'N3' } }, settings)
+    const { anki, ankiClient } = client({
+      notesInfo: { result: [target] },
+      updateNoteFields: { result: null },
+      addTags: { result: null }
+    })
+
+    await applyOverwrite(ankiClient, settings, target, note, undefined)
+
+    expect(target.fields.JLPT?.value).toBe('N3')
+    expect(anki.calls[0]).toEqual({
+      action: 'updateNoteFields',
+      params: {
+        note: expect.objectContaining({ fields: expect.objectContaining({ JLPT: 'N3' }) })
+      }
+    })
   })
 
   it('omits an audio update when word audio is disabled or unmapped', async () => {

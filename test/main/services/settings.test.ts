@@ -184,6 +184,7 @@ describe('mergeSettings — anki/knowledge sub-objects', () => {
       sentence: '',
       frequency: '',
       pitchAccent: '',
+      jlptLevel: '',
       wordAudio: '',
       picture: '',
       sentenceAudio: ''
@@ -201,6 +202,7 @@ describe('mergeSettings — anki/knowledge sub-objects', () => {
       sentence: '',
       frequency: '',
       pitchAccent: '',
+      jlptLevel: '',
       wordAudio: '',
       picture: '',
       sentenceAudio: ''
@@ -235,6 +237,14 @@ describe('mergeSettings — anki/knowledge sub-objects', () => {
 
     expect(mapped.anki.fieldMap.pitchAccent).toBe('Pitch')
     expect(nonString.anki.fieldMap.pitchAccent).toBe('')
+  })
+
+  it('keeps a persisted JLPT mapping and rejects a non-string one', () => {
+    const mapped = mergeSettings({ anki: { fieldMap: { jlptLevel: 'JLPT' } } })
+    const nonString = mergeSettings({ anki: { fieldMap: { jlptLevel: 7 } } })
+
+    expect(mapped.anki.fieldMap.jlptLevel).toBe('JLPT')
+    expect(nonString.anki.fieldMap.jlptLevel).toBe('')
   })
 
   it('clamps negative/NaN interval thresholds back to defaults', () => {

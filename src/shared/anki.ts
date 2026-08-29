@@ -11,6 +11,7 @@ export type AnkiField =
   | 'sentence'
   | 'frequency'
   | 'pitchAccent'
+  | 'jlptLevel'
   | 'wordAudio'
   | 'picture'
   | 'sentenceAudio'
@@ -30,7 +31,8 @@ export interface AnkiSettings {
    * separate include-toggle: the earlier `includeScreenshot` /
    * `includeSentenceAudio` toggles defaulted off, so mapping the field and
    * mining still produced a card with no picture and no clip. `frequency` and
-   * `pitchAccent` follow the same rule: mapping the row *is* the opt-in.
+   * `pitchAccent` and `jlptLevel` follow the same rule: mapping the row *is*
+   * the opt-in.
    */
   fieldMap: Record<AnkiField, string>
   tags: string[]
@@ -46,6 +48,7 @@ export const ANKI_FIELDS: AnkiField[] = [
   'sentence',
   'frequency',
   'pitchAccent',
+  'jlptLevel',
   'wordAudio',
   'picture',
   'sentenceAudio'
@@ -69,6 +72,7 @@ export const defaultAnkiSettings: AnkiSettings = {
     sentence: '',
     frequency: '',
     pitchAccent: '',
+    jlptLevel: '',
     wordAudio: '',
     picture: '',
     sentenceAudio: ''
