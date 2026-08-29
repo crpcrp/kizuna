@@ -44,6 +44,7 @@ import type {
   SyncStatus
 } from './knowledge'
 import type { JlptCoverageReportResult } from './jlptCoverage'
+import type { JlptExportRequest, JlptExportResult } from './jlptExport'
 import type {
   MediaPlaybackHistory,
   RecentMediaFile,
@@ -250,6 +251,7 @@ export interface KizunaApi {
     levelsFor(lemmas: string[]): Promise<Record<string, KnowledgeLevel>>
     detailsFor(lemmas: string[]): Promise<Record<string, KnowledgeDetails>>
     jlptCoverageReport(): Promise<JlptCoverageReportResult>
+    jlptUnknownItems(request: JlptExportRequest): Promise<JlptExportResult>
     sync(source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus>
     syncStatus(): Promise<SyncStatus>
     getSettings(): Promise<PublicKnowledgeSettings>

@@ -259,7 +259,7 @@ export const ANKI_CHANNELS = {
 
 /**
  * Knowledge bridge: renderer→main invoke/handle channels for querying known-
- * word levels, building the local JLPT coverage report, triggering a
+ * word levels, building the local JLPT coverage report/export candidates, triggering a
  * WaniKani/Anki sync, reading sync status, and reading/writing the `knowledge`
  * settings block (WaniKani token encrypted at rest, see knowledgeBridge.ts).
  * `syncIfStale` is not a channel — it runs once from index.ts at startup, never
@@ -269,6 +269,7 @@ export const KNOWLEDGE_CHANNELS = {
   levelsFor: 'knowledge:levelsFor',
   detailsFor: 'knowledge:detailsFor',
   jlptCoverageReport: 'knowledge:jlptCoverageReport',
+  jlptUnknownItems: 'knowledge:jlptUnknownItems',
   sync: 'knowledge:sync',
   syncStatus: 'knowledge:syncStatus',
   getSettings: 'knowledge:getSettings',

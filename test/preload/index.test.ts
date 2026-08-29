@@ -581,12 +581,20 @@ describe('preload knowledge contract', () => {
 
   it('requests the local JLPT coverage report through its dedicated IPC channel', () => {
     const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
-      knowledge: { jlptCoverageReport(): Promise<unknown> }
+      knowledge: {
+        jlptCoverageReport(): Promise<unknown>
+        jlptUnknownItems(request: unknown): Promise<unknown>
+      }
     }
 
     api.knowledge.jlptCoverageReport()
+    api.knowledge.jlptUnknownItems({ throughLevel: 'N3', mode: 'both' })
 
     expect(electron.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.jlptCoverageReport)
+    expect(electron.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.jlptUnknownItems, {
+      throughLevel: 'N3',
+      mode: 'both'
+    })
   })
 })
 
