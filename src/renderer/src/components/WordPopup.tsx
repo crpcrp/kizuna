@@ -2,7 +2,11 @@ import './WordPopup.css'
 import type { WordPopupPosition } from '../state/wordLookup'
 import { Fragment } from 'react'
 import { pitchAccentValue, priorityWeight, type LookupResult } from '../../../shared/dictionary'
-import type { KnowledgeDetails } from '../../../shared/knowledge'
+import {
+  isKnowledgeSourceDetail,
+  type KnowledgeDetails,
+  type KnowledgeSource
+} from '../../../shared/knowledge'
 import {
   capGlossarySenses,
   glossaryDataAttributes,
@@ -138,6 +142,52 @@ export function posAttributes(rules: string, defTags: string): string[] {
     }
   }
   return labels
+}
+
+export interface KnowledgeSourceBadge {
+  source: KnowledgeSource
+  label: string
+  detailed: boolean
+}
+
+const KNOWLEDGE_SOURCE_ORDER = ['wanikani', 'anki'] as const
+
+/**
+ * Builds the source badges shown for one word. `sourceKinds` is authoritative
+ * because detailed metadata is optional and may be absent or malformed.
+ */
+export function knowledgeSourceBadges(
+  provenance: KnowledgeDetails | undefined
+): KnowledgeSourceBadge[] {
+  if (!provenance) return []
+
+  return KNOWLEDGE_SOURCE_ORDER.flatMap((sourceKind): KnowledgeSourceBadge[] => {
+    if (!provenance.sourceKinds.includes(sourceKind)) return []
+
+    const details = provenance.sources.filter(
+      (source) => source.source === sourceKind && isKnowledgeSourceDetail(source)
+    )
+    if (details.length === 0) {
+      return [
+        {
+          source: sourceKind,
+          label: sourceKind === 'wanikani' ? 'WaniKani' : 'Anki',
+          detailed: false
+        }
+      ]
+    }
+
+    return details.map((source) => ({
+      source: sourceKind,
+      label:
+        source.source === 'wanikani'
+          ? `WaniKani${
+              source.curriculumLevel === undefined ? '' : ` - Level ${source.curriculumLevel}`
+            } - ${source.proficiency}`
+          : `Anki - ${source.deck} - ${source.intervalDays}d`,
+      detailed: true
+    }))
+  })
 }
 
 function renderGlossaryNode(
@@ -280,6 +330,7 @@ export default function WordPopup({
             ).slice(0, maxMeanings)
             const priority = isHighPriority(result.termTags, result.defTags)
             const provenance = provenanceByExpression?.[result.expression]
+            const sourceBadges = knowledgeSourceBadges(provenance)
             return (
               <div
                 className="word-popup-row"
@@ -363,20 +414,14 @@ export default function WordPopup({
                       </button>
                     ))}
                 </div>
-                {provenance?.sources.length ? (
+                {sourceBadges.length > 0 ? (
                   <div className="word-popup-provenance" aria-label="Word knowledge sources">
-                    {provenance.sources.map((source, sourceIndex) => (
+                    {sourceBadges.map((badge, badgeIndex) => (
                       <span
-                        className={`word-popup-provenance-badge word-popup-provenance-badge--${source.source}`}
-                        key={`${source.source}-${sourceIndex}`}
+                        className={`word-popup-provenance-badge word-popup-provenance-badge--${badge.source}`}
+                        key={`${badge.source}-${badgeIndex}`}
                       >
-                        {source.source === 'wanikani'
-                          ? `WaniKani${
-                              source.curriculumLevel === undefined
-                                ? ''
-                                : ` - Level ${source.curriculumLevel}`
-                            } - ${source.proficiency}`
-                          : `Anki - ${source.deck} - ${source.intervalDays}d`}
+                        {badge.label}
                       </span>
                     ))}
                   </div>
