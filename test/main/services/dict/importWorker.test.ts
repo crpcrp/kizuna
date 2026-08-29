@@ -12,6 +12,9 @@ import {
 import { fixture } from '@test/paths'
 
 const ZIP_FIXTURE = readFileSync(fixture('yomitan-sample.zip'))
+// Windows CI can take longer than Vitest's 5s default for real SQLite
+// VACUUM/checkpoint filesystem work. Keep the limit local to those tests.
+const SQLITE_FILE_TEST_TIMEOUT_MS = 15_000
 
 /**
  * `auto_vacuum` and `wal_checkpoint` are properties of a database *file* — an
@@ -138,7 +141,7 @@ describe('migrateAutoVacuum', () => {
   })
 })
 
-describe('reclaimAfterImport', () => {
+describe('reclaimAfterImport', { timeout: SQLITE_FILE_TEST_TIMEOUT_MS }, () => {
   it('retries a busy WAL checkpoint', () => {
     const pragma = vi
       .fn()
@@ -199,7 +202,7 @@ describe('reclaimAfterImport', () => {
   })
 })
 
-describe('runImportInWorker migration', () => {
+describe('runImportInWorker migration', { timeout: SQLITE_FILE_TEST_TIMEOUT_MS }, () => {
   it('migrates a legacy database and truncates the WAL around the import', () => {
     const path = tempDbPath()
     const setup = new Database(path)
