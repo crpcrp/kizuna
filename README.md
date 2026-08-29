@@ -148,7 +148,9 @@ In Options > Parser & Dictionaries, choose **Import dictionaries…** under
 **Yomitan dictionaries**, select the ZIP, and wait for the import to finish.
 Enable the imported dictionaries and use the arrows to set their order. Term
 dictionaries provide definitions, while frequency dictionaries can improve
-word-popup ordering and pitch dictionaries can add pitch-accent metadata.
+word-popup ordering and pitch dictionaries can add pitch-accent metadata. Word
+details may also show community-sourced approximate JLPT vocabulary levels; the
+JLPT does not publish official vocabulary lists.
 
 Kizuna imports the Yomitan dictionary format directly; the Yomitan browser
 extension is not required. Only Yomitan-format ZIPs with files Kizuna supports

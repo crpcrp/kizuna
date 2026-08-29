@@ -118,7 +118,7 @@ describe('GameOcrInteraction', () => {
     const lookup = vi
       .fn()
       .mockResolvedValue([
-        makeLookupResult({ expression: '前', reading: 'まえ', glossary: 'front' })
+        makeLookupResult({ expression: '前', reading: 'まえ', glossary: 'front', jlptLevel: 'N3' })
       ])
     const { container } = render(
       <GameOcrFrame onClose={vi.fn()}>
@@ -146,6 +146,7 @@ describe('GameOcrInteraction', () => {
     expect(container.querySelector('[data-region-id="first"] [data-highlighted]')).not.toBeNull()
     expect(container.querySelector('[data-region-id="second"] [data-highlighted]')).toBeNull()
     expect(container.querySelector('#word-popup')?.getAttribute('data-placement')).toBe('below')
+    expect(container.querySelector('.word-popup-jlpt-level')?.textContent).toBe('JLPT N3 · approx.')
   })
 
   it('keeps popup use and close presses inside the frozen frame', async () => {
