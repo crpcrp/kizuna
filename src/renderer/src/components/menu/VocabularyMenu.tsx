@@ -1,6 +1,7 @@
 import { CommandItem, Menu } from './primitives'
 export interface VocabularyMenuProps {
   onOpenWordReport?: () => void
+  onOpenJlptCoverage?: () => void
   onOpenBulkMining?: () => void
 }
 export function VocabularyMenu({
@@ -8,6 +9,7 @@ export function VocabularyMenu({
   onToggle,
   run,
   onOpenWordReport,
+  onOpenJlptCoverage,
   onOpenBulkMining
 }: VocabularyMenuProps & {
   open: boolean
@@ -21,6 +23,12 @@ export function VocabularyMenu({
         ariaLabel="Word report"
         id="open-word-report"
         onClick={run(() => onOpenWordReport?.())}
+      />
+      <CommandItem
+        label="JLPT coverage…"
+        ariaLabel="JLPT coverage"
+        id="open-jlpt-coverage"
+        onClick={run(() => onOpenJlptCoverage?.())}
       />
       <CommandItem
         label="Bulk Anki mining…"

@@ -115,6 +115,7 @@ describe('MenuBar grouped prop forwarding', () => {
     expect(subtitle).toContain('value="-75"')
     expect(playback).toContain('2.75×')
     expect(vocabulary).toContain('id="open-word-report"')
+    expect(vocabulary).toContain('id="open-jlpt-coverage"')
     expect(vocabulary).toContain('id="open-bulk-mining"')
 
     // Track lists stay in their own menus.

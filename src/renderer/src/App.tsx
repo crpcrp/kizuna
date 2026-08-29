@@ -11,6 +11,7 @@ import SubtitleOverlay from './components/SubtitleOverlay'
 import SubtitleSidebar from './components/SubtitleSidebar'
 import PlaylistSidebar from './components/PlaylistSidebar'
 import SubtitleReport from './components/SubtitleReport'
+import JlptCoverageReport from './components/JlptCoverageReport'
 import BulkMiningModal from './components/BulkMiningModal'
 import VideoAdjustments from './components/VideoAdjustments'
 import CardImageCropDialog from './components/CardImageCropDialog'
@@ -37,6 +38,7 @@ import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useK
 import { useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
 import { useVocabularyMining } from './state/useVocabularyMining'
+import { useJlptCoverageReport } from './state/useJlptCoverageReport'
 import { useOptionsController } from './state/useOptionsController'
 import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
@@ -158,6 +160,8 @@ export default function App({
     japaneseSubtitleSelected && options.data.knowledgeSettings.coloringEnabled
       ? state.knownLevels
       : undefined
+
+  const jlptCoverage = useJlptCoverageReport({ bridge: kizuna })
 
   // Vocabulary and mining lifecycle: tokenization/knowledge caches, the word
   // popup and its Anki mine, the subtitle report, bulk mining, and the
@@ -318,7 +322,12 @@ export default function App({
   useKeyboardShortcuts({
     keyContextRef,
     modifiers,
-    suspended: optionsOpen || about.open || updates.modal !== null || vocabulary.modalOpen
+    suspended:
+      optionsOpen ||
+      about.open ||
+      updates.modal !== null ||
+      vocabulary.modalOpen ||
+      jlptCoverage.open
   })
 
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
@@ -402,7 +411,10 @@ export default function App({
               onChangeSubtitleAutoPauseScope: (value) =>
                 dispatch({ type: 'setSubtitleAutoPauseScope', value })
             }}
-            vocabulary={vocabulary.vocabularyMenu}
+            vocabulary={{
+              ...vocabulary.vocabularyMenu,
+              onOpenJlptCoverage: jlptCoverage.openReport
+            }}
             onOpenOptions={options.openDialog}
             onOpenAbout={about.openDialog}
             onOpenChange={setMenuBarOpen}
@@ -549,6 +561,17 @@ export default function App({
       )}
 
       <SubtitleReport {...vocabulary.report} />
+
+      <JlptCoverageReport
+        open={jlptCoverage.open}
+        phase={jlptCoverage.phase}
+        data={jlptCoverage.report}
+        selectedLevel={jlptCoverage.selectedLevel}
+        errorText={jlptCoverage.error ?? undefined}
+        onClose={jlptCoverage.closeReport}
+        onTargetLevelChange={jlptCoverage.setSelectedLevel}
+        onRetry={jlptCoverage.retry}
+      />
 
       {miningPresentation === 'modal' && <BulkMiningModal {...vocabulary.mining.modal} />}
       {vocabulary.mining.completion && (
