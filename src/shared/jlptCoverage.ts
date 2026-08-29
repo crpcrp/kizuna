@@ -1,5 +1,5 @@
 import type { JlptLevel } from './jlpt'
-import type { KnowledgeLevel } from './knowledge'
+import type { KnowledgeLevel, KnowledgeSource } from './knowledge'
 
 /** Counts for the canonical knowledge states; `inDeck` is shown as Queued. */
 export type KnowledgeBucketCounts = Record<KnowledgeLevel, number>
@@ -40,6 +40,25 @@ export interface JlptCoverageReport {
   unclassifiedByDataset: CoverageSlice
   generatedAt: string
 }
+
+export interface JlptCoverageSourceStatus {
+  configured: boolean
+  syncing: boolean
+  lastSuccessfulSyncAt: string | null
+  lastError?: string
+}
+
+export interface JlptCoverageReportReady extends JlptCoverageReport {
+  status: 'ready'
+  sourceStatus: Record<KnowledgeSource, JlptCoverageSourceStatus>
+}
+
+export interface JlptCoverageReportError {
+  status: 'error'
+  message: string
+}
+
+export type JlptCoverageReportResult = JlptCoverageReportReady | JlptCoverageReportError
 
 export function masteredCount(buckets: Pick<KnowledgeBucketCounts, 'known' | 'wellKnown'>): number {
   return buckets.known + buckets.wellKnown

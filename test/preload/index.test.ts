@@ -4,6 +4,7 @@ import {
   APP_SHELL_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
+  KNOWLEDGE_CHANNELS,
   LAUNCH_CHANNELS,
   MEDIA_CHANNELS,
   MEDIA_HISTORY_CHANNELS,
@@ -570,6 +571,22 @@ describe('preload Anki contract', () => {
     await api.anki.addNote(request)
 
     expect(electron.invoke).toHaveBeenCalledWith(ANKI_CHANNELS.addNote, request)
+  })
+})
+
+describe('preload knowledge contract', () => {
+  beforeEach(() => {
+    electron.invoke.mockReset()
+  })
+
+  it('requests the local JLPT coverage report through its dedicated IPC channel', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      knowledge: { jlptCoverageReport(): Promise<unknown> }
+    }
+
+    api.knowledge.jlptCoverageReport()
+
+    expect(electron.invoke).toHaveBeenCalledWith(KNOWLEDGE_CHANNELS.jlptCoverageReport)
   })
 })
 

@@ -5,6 +5,8 @@
 import type { DbLike } from './schema'
 import {
   isKnowledgeSourceDetail,
+  maxKnowledgeLevel,
+  normalizeKnowledgeLemma,
   type KnowledgeDetails,
   type KnowledgeLevel,
   type KnowledgeSource,
@@ -114,7 +116,9 @@ export function detailsFor(db: KnowledgeDb, lemmas: string[]): Record<string, Kn
     const placeholders = batch.map(() => '?').join(', ')
     const rows = db
       .prepare(
-        `SELECT source, lemma, level, metadata_json FROM known_words WHERE lemma IN (${placeholders})`
+        `SELECT source, lemma, level, metadata_json FROM known_words
+         WHERE lemma IN (${placeholders})
+         ORDER BY lemma, CASE source WHEN 'wanikani' THEN 0 WHEN 'anki' THEN 1 ELSE 2 END, reading`
       )
       .all(...batch) as Array<{
       source: string
@@ -122,20 +126,60 @@ export function detailsFor(db: KnowledgeDb, lemmas: string[]): Record<string, Kn
       level: KnowledgeLevel
       metadata_json: string | null
     }>
-    for (const row of rows) {
-      const existing = result[row.lemma]
-      const details = existing ?? { level: row.level, sourceKinds: [], sources: [] }
-      details.level = existing ? mergeLevel(existing.level, row.level) : row.level
-      const sourceKind = toKnowledgeSource(row.source)
-      if (sourceKind && !details.sourceKinds.includes(sourceKind)) {
-        details.sourceKinds.push(sourceKind)
-        details.sourceKinds.sort(sourceKindOrder)
-      }
-      details.sources.push(...parseSourceDetails(row.metadata_json))
-      result[row.lemma] = details
+    mergeKnowledgeRows(result, rows)
+  }
+  return sortDetails(result)
+}
+
+/** Returns one merged, normalized details value for every tracked lemma. */
+export function detailsForAll(db: KnowledgeDb): Record<string, KnowledgeDetails> {
+  const rows = db
+    .prepare(
+      `SELECT source, lemma, level, metadata_json FROM known_words
+       ORDER BY lemma, CASE source WHEN 'wanikani' THEN 0 WHEN 'anki' THEN 1 ELSE 2 END, reading`
+    )
+    .all() as Array<{
+    source: string
+    lemma: string
+    level: KnowledgeLevel
+    metadata_json: string | null
+  }>
+  const result: Record<string, KnowledgeDetails> = {}
+  mergeKnowledgeRows(result, rows)
+  return sortDetails(result)
+}
+
+type KnowledgeDetailsRow = {
+  source: string
+  lemma: string
+  level: KnowledgeLevel
+  metadata_json: string | null
+}
+
+function mergeKnowledgeRows(
+  result: Record<string, KnowledgeDetails>,
+  rows: KnowledgeDetailsRow[]
+): void {
+  for (const row of rows) {
+    const lemma = normalizeKnowledgeLemma(row.lemma)
+    if (lemma === '') continue
+
+    const existing = result[lemma]
+    const sourceKind = toKnowledgeSource(row.source)
+    result[lemma] = {
+      level: existing ? maxKnowledgeLevel(existing.level, row.level) : row.level,
+      sourceKinds: sourceKind
+        ? [...new Set([...(existing?.sourceKinds ?? []), sourceKind])].sort(sourceKindOrder)
+        : [...(existing?.sourceKinds ?? [])],
+      sources: [...(existing?.sources ?? []), ...parseSourceDetails(row.metadata_json)]
     }
   }
-  return result
+}
+
+function sortDetails(details: Record<string, KnowledgeDetails>): Record<string, KnowledgeDetails> {
+  return Object.fromEntries(
+    Object.entries(details).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1))
+  )
 }
 
 function toKnowledgeSource(source: string): KnowledgeSource | undefined {

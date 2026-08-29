@@ -567,7 +567,8 @@ function startAnki(settings: SettingsStore, ffmpegPath: string): void {
 }
 
 /**
- * Registers the knowledge IPC bridge (levelsFor/sync/syncStatus/settings),
+ * Registers the knowledge IPC bridge (levelsFor/detailsFor/jlptCoverageReport/
+ * sync/syncStatus/settings),
  * backed by a separate `knowledge.db` (kept apart from `dict.db` since they
  * have unrelated lifecycles) and the shared settings store. The WaniKani
  * token is encrypted via Electron's `safeStorage` (Windows DPAPI).

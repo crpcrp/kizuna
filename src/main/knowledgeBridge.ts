@@ -16,6 +16,7 @@ import type {
   SyncOutcome,
   SyncStatus
 } from '../shared/knowledge'
+import type { JlptCoverageReportResult, JlptCoverageSourceStatus } from '../shared/jlptCoverage'
 import type { KnowledgeDb } from './services/knowledge/store'
 import {
   detailsFor as detailsForDb,
@@ -30,6 +31,11 @@ import { createWaniKaniClient, WaniKaniAuthError } from './services/wanikani/cli
 import { syncWaniKani } from './services/wanikani/sync'
 import { syncAnki } from './services/knowledge/ankiSource'
 import { createAnkiClient } from './services/anki/ankiConnect'
+import {
+  createJlptCoverageReportService,
+  type JlptCoverageReportService
+} from './services/jlpt/coverageService'
+import type { JlptVocabularySnapshot } from './services/jlpt/classifier'
 
 /**
  * Floor between two actual syncs of the same source, applied regardless of
@@ -43,6 +49,7 @@ const MIN_MANUAL_SYNC_INTERVAL_MS = 60 * 1000
 export interface KnowledgeServiceLike {
   levelsFor(lemmas: string[]): Promise<Record<string, KnowledgeLevel>>
   detailsFor(lemmas: string[]): Promise<Record<string, KnowledgeDetails>>
+  jlptCoverageReport(): Promise<JlptCoverageReportResult>
   sync(source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus>
   syncStatus(): Promise<SyncStatus>
   syncIfStale(): Promise<SyncStatus>
@@ -63,6 +70,7 @@ export function registerKnowledgeBridge<E>(
 ): void {
   ipc.handle(KNOWLEDGE_CHANNELS.levelsFor, (_e, lemmas) => service.levelsFor(lemmas))
   ipc.handle(KNOWLEDGE_CHANNELS.detailsFor, (_e, lemmas) => service.detailsFor(lemmas))
+  ipc.handle(KNOWLEDGE_CHANNELS.jlptCoverageReport, () => service.jlptCoverageReport())
   ipc.handle(KNOWLEDGE_CHANNELS.sync, (_e, source, opts) => service.sync(source, opts))
   ipc.handle(KNOWLEDGE_CHANNELS.syncStatus, () => service.syncStatus())
   ipc.handle(KNOWLEDGE_CHANNELS.getSettings, () => service.getSettings())
@@ -75,6 +83,8 @@ export interface CreateKnowledgeServiceDeps {
   secrets: SecretCodec
   fetch: HttpFetch
   now?: () => number
+  /** Defaults to the pinned bundled snapshot; injected for report tests. */
+  jlptSnapshot?: JlptVocabularySnapshot
 }
 
 function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSettings {
@@ -251,6 +261,33 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     return wkStale || ankiStale ? sync(undefined) : syncStatus()
   }
 
+  function syncStatusForReport(): Record<KnowledgeSource, JlptCoverageSourceStatus> {
+    const k = settings.get().knowledge
+    return {
+      wanikani: reportSourceStatus('wanikani', k),
+      anki: reportSourceStatus('anki', k)
+    }
+  }
+
+  const coverageReportService: JlptCoverageReportService = createJlptCoverageReportService({
+    db,
+    snapshot: deps.jlptSnapshot,
+    now,
+    sourceStatus: syncStatusForReport
+  })
+
+  function reportSourceStatus(
+    source: KnowledgeSource,
+    k: KnowledgeSettings
+  ): JlptCoverageSourceStatus {
+    const status = currentStatus(source, k)
+    return {
+      configured: status.configured,
+      syncing: inFlight[source] !== undefined,
+      lastSuccessfulSyncAt: status.lastSyncAt
+    }
+  }
+
   async function getSettings(): Promise<PublicKnowledgeSettings> {
     return toPublic(settings.get().knowledge, secrets)
   }
@@ -283,6 +320,7 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
   return {
     levelsFor: (lemmas: string[]) => Promise.resolve(levelsForDb(db, lemmas)),
     detailsFor: (lemmas: string[]) => Promise.resolve(detailsForDb(db, lemmas)),
+    jlptCoverageReport: coverageReportService.jlptCoverageReport,
     sync,
     syncStatus,
     syncIfStale,

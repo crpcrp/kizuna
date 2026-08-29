@@ -60,6 +60,7 @@ import type {
   PublicKnowledgeSettings,
   SyncStatus
 } from '../shared/knowledge'
+import type { JlptCoverageReportResult } from '../shared/jlptCoverage'
 import type { KizunaApi } from '../shared/preloadApi'
 import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
 import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
@@ -342,6 +343,8 @@ const api = {
       ipcRenderer.invoke(KNOWLEDGE_CHANNELS.levelsFor, lemmas),
     detailsFor: (lemmas: string[]): Promise<Record<string, KnowledgeDetails>> =>
       ipcRenderer.invoke(KNOWLEDGE_CHANNELS.detailsFor, lemmas),
+    jlptCoverageReport: (): Promise<JlptCoverageReportResult> =>
+      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jlptCoverageReport),
     sync: (source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus> =>
       ipcRenderer.invoke(KNOWLEDGE_CHANNELS.sync, source, opts),
     syncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.syncStatus),

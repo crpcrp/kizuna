@@ -22,6 +22,7 @@ import { WANIKANI_BASE } from '@src/main/services/wanikani/client'
 import type { HttpFetch } from '@src/main/services/http'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
+import type { JlptVocabularySnapshot } from '@src/main/services/jlpt/classifier'
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
   let resolve!: () => void
@@ -315,6 +316,38 @@ describe('createKnowledgeService', () => {
         sources: [{ source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 }]
       }
     })
+  })
+
+  it('jlptCoverageReport uses current local status without starting a sync', async () => {
+    const http = fakeHttp({})
+    const snapshot: JlptVocabularySnapshot = {
+      schemaVersion: 1,
+      source: {
+        name: 'OpenJLPT',
+        version: 'test-version',
+        commit: 'snapshot-test',
+        license: 'CC-BY-SA-4.0'
+      },
+      inputRecordCount: 1,
+      entries: [['猫', 'ねこ', 'N5']]
+    }
+    const settings = createSettingsStore(fakeIo())
+    const service = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings,
+      secrets: identityCodec,
+      fetch: http.fetch,
+      jlptSnapshot: snapshot
+    })
+    await service.setSettings({ wanikaniToken: 'token' })
+
+    const result = await service.jlptCoverageReport()
+
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    expect(result.sourceStatus.wanikani).toMatchObject({ configured: true, syncing: false })
+    expect(result.sourceStatus.anki).toMatchObject({ configured: false, syncing: false })
+    expect(http.calls).toHaveLength(0)
   })
 
   it('sync() pulls both sources when configured and one failing does not abort the other', async () => {

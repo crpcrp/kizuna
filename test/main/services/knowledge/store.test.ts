@@ -4,6 +4,7 @@ import { initSchema } from '@src/main/services/knowledge/schema'
 import {
   replaceSource,
   detailsFor,
+  detailsForAll,
   levelsFor,
   getSyncState,
   setSyncState,
@@ -192,6 +193,58 @@ describe('detailsFor', () => {
 
     expect(detailsFor(asKnowledgeDb(db), ['犬'])).toEqual({
       犬: { level: 'known', sourceKinds: ['wanikani'], sources: [] }
+    })
+  })
+})
+
+describe('detailsForAll', () => {
+  it('normalizes and deterministically merges duplicate readings and sources', () => {
+    replaceSource(
+      asKnowledgeDb(db),
+      'wanikani',
+      [
+        {
+          source: 'wanikani',
+          lemma: '  e\u0301 ',
+          reading: 'first',
+          level: 'learning',
+          metadata: { source: 'wanikani', curriculumLevel: 5, proficiency: 'Apprentice' }
+        }
+      ],
+      '2026-07-09T00:00:00.000Z'
+    )
+    replaceSource(
+      asKnowledgeDb(db),
+      'anki',
+      [
+        {
+          source: 'anki',
+          lemma: 'é',
+          reading: 'first',
+          level: 'known',
+          metadata: { source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 }
+        },
+        {
+          source: 'anki',
+          lemma: 'é',
+          reading: 'second',
+          level: 'wellKnown',
+          metadata: { source: 'anki', deck: 'Mining', intervalDays: 90, cardId: 3, noteId: 4 }
+        }
+      ],
+      '2026-07-09T00:00:00.000Z'
+    )
+
+    expect(detailsForAll(asKnowledgeDb(db))).toEqual({
+      é: {
+        level: 'wellKnown',
+        sourceKinds: ['wanikani', 'anki'],
+        sources: [
+          { source: 'wanikani', curriculumLevel: 5, proficiency: 'Apprentice' },
+          { source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 },
+          { source: 'anki', deck: 'Mining', intervalDays: 90, cardId: 3, noteId: 4 }
+        ]
+      }
     })
   })
 })
