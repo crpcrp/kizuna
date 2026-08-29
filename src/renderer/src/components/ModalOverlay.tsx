@@ -1,11 +1,12 @@
 import './ModalOverlay.css'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
 // Shared chrome for the app's centered modal dialogs: the backdrop, the panel,
 // a header with a title and caller-supplied actions, and a scrolling body.
-// Owns the three behaviors every one of them needs and none of them should
-// re-implement: Escape closes, a backdrop click closes, and the whole overlay
-// is hidden from assistive tech while closed.
+// Owns the behaviors every one of them needs and none of them should
+// re-implement: Escape closes, a backdrop click closes, keyboard focus stays in
+// the dialog and returns to its previous owner, and the whole overlay is hidden
+// from assistive tech while closed.
 //
 // Always rendered (CSS toggles visibility via the `open` class) so callers stay
 // testable without a live DOM — the same pattern MenuBar's dropdown panels and
@@ -13,6 +14,9 @@ import { useEffect } from 'react'
 
 /** Which gesture asked the dialog to close. */
 export type ModalCloseSource = 'escape' | 'backdrop' | 'button'
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 export interface ModalOverlayProps {
   open: boolean
@@ -47,6 +51,24 @@ export default function ModalOverlay({
   id,
   children
 }: ModalOverlayProps): React.JSX.Element {
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const firstFocusable = overlayRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+    firstFocusable?.focus()
+
+    return () => {
+      const previous = previousFocusRef.current
+      previousFocusRef.current = null
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [open])
+
   // Escape-to-close, active only while open — same pattern as MenuBar's
   // outside-click/Escape listener. Not exercisable under SSR (no jsdom).
   useEffect(() => {
@@ -60,8 +82,27 @@ export default function ModalOverlay({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
+  const trapFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (!open || event.key !== 'Tab') return
+    const focusable = Array.from(
+      overlayRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []
+    )
+    if (focusable.length === 0) return
+
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
   return (
     <div
+      ref={overlayRef}
       id={id}
       className={open ? 'modal-overlay open' : 'modal-overlay'}
       role="dialog"
@@ -69,6 +110,7 @@ export default function ModalOverlay({
       aria-modal="true"
       aria-hidden={!open}
       onClick={() => onClose('backdrop')}
+      onKeyDown={trapFocus}
     >
       <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
