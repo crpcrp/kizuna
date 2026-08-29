@@ -33,6 +33,13 @@ function actionsFake(): OptionsDialogActions {
       status: 'already-configured' as const,
       modelName: 'Basic'
     })),
+    onPreviewJlptBackfill: vi.fn(async () => ({
+      status: 'preflight-failure' as const,
+      modelName: 'Basic',
+      message: 'Not configured'
+    })),
+    onApplyJlptBackfill: vi.fn(async () => ({ updated: 0, skipped: 0, failed: 0 })),
+    onJlptBackfillProgress: vi.fn(() => () => {}),
     onChangeAnkiSettings: vi.fn(async () => {}),
     onSaveAzureTranslationKey: vi.fn(async () => true),
     onSaveAzureTranslationRegion: vi.fn(async () => true),

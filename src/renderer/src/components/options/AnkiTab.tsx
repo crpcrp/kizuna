@@ -1,5 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
+  type AnkiJlptBackfillApplyRequest,
+  type AnkiJlptBackfillPreview,
+  type AnkiJlptBackfillProgress,
+  type AnkiJlptBackfillResult,
   defaultAnkiSettings,
   type AnkiJlptSetupResult,
   type AnkiField,
@@ -8,6 +12,7 @@ import {
 } from '../../../../shared/anki'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
+import AnkiJlptBackfillDialog, { type AnkiJlptBackfillDialogPhase } from './AnkiJlptBackfillDialog'
 
 /** Splits a comma-separated tags input into trimmed, non-empty tags. */
 export function parseTagsInput(rawValue: string): string[] {
@@ -57,6 +62,9 @@ export interface AnkiTabProps {
   ankiModelFields?: string[]
   ankiPing: () => Promise<AnkiPing>
   onSetupJlptField: () => Promise<AnkiJlptSetupResult>
+  onPreviewJlptBackfill: () => Promise<AnkiJlptBackfillPreview>
+  onApplyJlptBackfill: (request: AnkiJlptBackfillApplyRequest) => Promise<AnkiJlptBackfillResult>
+  onJlptBackfillProgress: (cb: (value: AnkiJlptBackfillProgress) => void) => () => void
   onChangeAnkiSettings: (patch: Partial<AnkiSettings>) => void
   /** User-facing error from the last anki-domain load (e.g. "Is Anki
    * running?"). Undefined when there is none. */
@@ -116,6 +124,13 @@ export const ANKI_SETTING_ENTRIES: SettingEntry[] = [
     ]
   },
   {
+    id: 'anki-jlpt-backfill',
+    label: 'Backfill JLPT levels',
+    category: 'anki',
+    keywords: ['existing notes', 'preview', 'bulk', 'approximate'],
+    targetId: 'anki-jlpt-backfill'
+  },
+  {
     id: 'anki-duplicate-policy',
     label: 'Duplicate policy',
     category: 'anki',
@@ -142,6 +157,9 @@ export default function AnkiTab({
   ankiModelFields = [],
   ankiPing,
   onSetupJlptField,
+  onPreviewJlptBackfill,
+  onApplyJlptBackfill,
+  onJlptBackfillProgress,
   onChangeAnkiSettings,
   loadError
 }: AnkiTabProps): React.JSX.Element {
@@ -198,6 +216,76 @@ export default function AnkiTab({
     jlptSetupResult?.status === 'preflight-failure' ||
     jlptSetupResult?.status === 'api-failure' ||
     jlptSetupResult?.status === 'verification-failure'
+
+  const [backfillOpen, setBackfillOpen] = useState(false)
+  const [backfillPhase, setBackfillPhase] = useState<AnkiJlptBackfillDialogPhase>({ kind: 'idle' })
+
+  useEffect(() => {
+    return onJlptBackfillProgress((progress) => {
+      setBackfillPhase((current) => {
+        if (
+          current.kind !== 'applying' ||
+          current.preview.operationToken !== progress.operationToken
+        ) {
+          return current
+        }
+        return {
+          ...current,
+          completed: Math.min(progress.completed, current.preview.candidates.length)
+        }
+      })
+    })
+  }, [onJlptBackfillProgress])
+
+  const startBackfill = async (): Promise<void> => {
+    if (backfillPhase.kind === 'applying' || backfillPhase.kind === 'loading') return
+    setBackfillOpen(true)
+    setBackfillPhase({ kind: 'loading' })
+    try {
+      const preview = await onPreviewJlptBackfill()
+      if (preview.status === 'ready') {
+        setBackfillPhase({ kind: 'preview', preview })
+      } else {
+        setBackfillPhase({
+          kind: 'error',
+          message: preview.message,
+          setupRequired: preview.setupRequired === true
+        })
+      }
+    } catch (error: unknown) {
+      setBackfillPhase({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not prepare the JLPT preview.',
+        setupRequired: false
+      })
+    }
+  }
+
+  const closeBackfill = (): void => {
+    if (backfillPhase.kind === 'applying') return
+    setBackfillOpen(false)
+    setBackfillPhase({ kind: 'idle' })
+  }
+
+  const applyBackfill = (request: AnkiJlptBackfillApplyRequest): void => {
+    if (backfillPhase.kind !== 'preview') return
+    const preview = backfillPhase.preview
+    setBackfillPhase({ kind: 'applying', preview, completed: 0 })
+    void onApplyJlptBackfill(request).then(
+      (result) => setBackfillPhase({ kind: 'done', preview, result }),
+      (error: unknown) =>
+        setBackfillPhase({
+          kind: 'error',
+          message: error instanceof Error ? error.message : 'Could not apply the JLPT backfill.',
+          setupRequired: false
+        })
+    )
+  }
+
+  const setupBackfillField = (): void => {
+    closeBackfill()
+    void setupJlptField()
+  }
 
   return (
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
@@ -384,6 +472,23 @@ export default function AnkiTab({
             </select>
           </div>
         ))}
+        <div className="options-row" id="anki-jlpt-backfill">
+          <span className="options-row-label">
+            Existing notes
+            <span className="options-row-description">
+              Preview and fill empty JLPT fields on notes already in the selected deck.
+            </span>
+          </span>
+          <button
+            type="button"
+            id="anki-jlpt-backfill-button"
+            className="options-button"
+            disabled={backfillPhase.kind === 'loading' || backfillPhase.kind === 'applying'}
+            onClick={() => void startBackfill()}
+          >
+            {backfillPhase.kind === 'loading' ? 'Preparing…' : 'Backfill JLPT levels…'}
+          </button>
+        </div>
       </div>
 
       <div className="options-section">
@@ -429,6 +534,14 @@ export default function AnkiTab({
           the word and reading in the request URL.
         </p>
       </div>
+      <AnkiJlptBackfillDialog
+        open={backfillOpen}
+        phase={backfillPhase}
+        onClose={closeBackfill}
+        onRetry={() => void startBackfill()}
+        onApply={applyBackfill}
+        onSetup={setupBackfillField}
+      />
     </section>
   )
 }

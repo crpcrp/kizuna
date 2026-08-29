@@ -21,6 +21,13 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof AnkiTab>> = {}
       ankiModelFields={[]}
       ankiPing={async () => ({ ok: false })}
       onSetupJlptField={async () => ({ status: 'already-configured', modelName: 'Kizuna' })}
+      onPreviewJlptBackfill={async () => ({
+        status: 'preflight-failure',
+        modelName: 'Kizuna',
+        message: 'Not configured'
+      })}
+      onApplyJlptBackfill={async () => ({ updated: 0, skipped: 0, failed: 0 })}
+      onJlptBackfillProgress={() => () => undefined}
       onChangeAnkiSettings={noop}
       {...overrides}
     />

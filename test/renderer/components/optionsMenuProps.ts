@@ -98,6 +98,13 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
     anki: {
       ankiPing: async () => ({ ok: false }),
       onSetupJlptField: async () => ({ status: 'already-configured', modelName: '' }),
+      onPreviewJlptBackfill: async () => ({
+        status: 'preflight-failure',
+        modelName: '',
+        message: 'Not configured'
+      }),
+      onApplyJlptBackfill: async () => ({ updated: 0, skipped: 0, failed: 0 }),
+      onJlptBackfillProgress: () => () => undefined,
       onChangeAnkiSettings: noop
     },
     knowledge: {

@@ -23,6 +23,13 @@ function renderTab(
       ankiSettings={makeAnkiSettings({ modelName: 'Kaishi 1.5k' })}
       ankiPing={async () => ({ ok: false })}
       onSetupJlptField={onSetupJlptField}
+      onPreviewJlptBackfill={async () => ({
+        status: 'preflight-failure',
+        modelName: 'Kaishi 1.5k',
+        message: 'Not configured'
+      })}
+      onApplyJlptBackfill={async () => ({ updated: 0, skipped: 0, failed: 0 })}
+      onJlptBackfillProgress={() => () => undefined}
       onChangeAnkiSettings={vi.fn()}
     />
   )

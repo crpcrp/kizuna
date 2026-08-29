@@ -167,6 +167,9 @@ export function buildOptionsMenuProps({
       ankiModelFields: data.anki?.modelFields,
       ankiPing: actions.ankiPing,
       onSetupJlptField: actions.onSetupAnkiJlptField,
+      onPreviewJlptBackfill: actions.onPreviewJlptBackfill,
+      onApplyJlptBackfill: actions.onApplyJlptBackfill,
+      onJlptBackfillProgress: actions.onJlptBackfillProgress,
       onChangeAnkiSettings: actions.onChangeAnkiSettings,
       loadError: data.ankiError
     },

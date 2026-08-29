@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { registerAnkiBridge, type AnkiServiceLike } from '@src/main/ankiBridge'
 import { ANKI_CHANNELS } from '@src/shared/ipcChannels'
 import type {
+  AnkiJlptBackfillApplyRequest,
+  AnkiJlptBackfillPreview,
+  AnkiJlptBackfillProgress,
+  AnkiJlptBackfillResult,
   AnkiJlptSetupResult,
   AnkiMineResult,
   AnkiSettings,
@@ -59,6 +63,18 @@ function fakeService() {
       calls.setupJlptField = []
       return { status: 'already-configured', modelName: 'Kizuna' } satisfies AnkiJlptSetupResult
     }),
+    previewJlptBackfill: vi.fn(async () => {
+      calls.previewJlptBackfill = []
+      return {
+        status: 'preflight-failure',
+        modelName: 'Kizuna',
+        message: 'Not configured'
+      } satisfies AnkiJlptBackfillPreview
+    }),
+    applyJlptBackfill: vi.fn(async () => {
+      calls.applyJlptBackfill = []
+      return { updated: 0, skipped: 0, failed: 0 } satisfies AnkiJlptBackfillResult
+    }),
     addNote: vi.fn(async (req: MineRequest) => {
       calls.addNote = [req]
       return { noteId: 12345, operation: 'added', changedFields: ['Word'] } satisfies AnkiMineResult
@@ -101,6 +117,8 @@ describe('registerAnkiBridge', () => {
         ANKI_CHANNELS.modelNames,
         ANKI_CHANNELS.modelFieldNames,
         ANKI_CHANNELS.setupJlptField,
+        ANKI_CHANNELS.previewJlptBackfill,
+        ANKI_CHANNELS.applyJlptBackfill,
         ANKI_CHANNELS.addNote,
         ANKI_CHANNELS.findExisting,
         ANKI_CHANNELS.findTargetDeckMembership,
@@ -153,6 +171,46 @@ describe('registerAnkiBridge', () => {
     expect(service.setupJlptField).toHaveBeenCalled()
     expect(calls.setupJlptField).toEqual([])
     expect(result).toEqual({ status: 'already-configured', modelName: 'Kizuna' })
+  })
+
+  it('forwards the JLPT backfill preview action', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+    registerAnkiBridge(ipc, service)
+
+    const result = await handlers.get(ANKI_CHANNELS.previewJlptBackfill)!(event)
+
+    expect(service.previewJlptBackfill).toHaveBeenCalled()
+    expect(result).toEqual({
+      status: 'preflight-failure',
+      modelName: 'Kizuna',
+      message: 'Not configured'
+    })
+  })
+
+  it('forwards backfill progress from the service to the renderer sender', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+    const request: AnkiJlptBackfillApplyRequest = {
+      operationToken: 'token',
+      candidates: [{ noteId: 7, expectedTargetValue: '' }]
+    }
+    const progress: AnkiJlptBackfillProgress = {
+      operationToken: 'token',
+      completed: 1,
+      total: 1
+    }
+    service.applyJlptBackfill = vi.fn(async (_request, onProgress) => {
+      onProgress?.(progress)
+      return { updated: 1, skipped: 0, failed: 0 } satisfies AnkiJlptBackfillResult
+    })
+    const send = vi.fn()
+    registerAnkiBridge(ipc, service, send)
+
+    await handlers.get(ANKI_CHANNELS.applyJlptBackfill)!(event, request)
+
+    expect(service.applyJlptBackfill).toHaveBeenCalledWith(request, expect.any(Function))
+    expect(send).toHaveBeenCalledWith(ANKI_CHANNELS.jlptBackfillProgress, progress)
   })
 
   it('forwards addNote with the mine request and returns its verified operation result', async () => {

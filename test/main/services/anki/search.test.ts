@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { duplicateScope, findExistingQuery } from '@src/main/services/anki/search'
+import {
+  duplicateScope,
+  findBackfillQuery,
+  findExistingQuery
+} from '@src/main/services/anki/search'
 
 describe('findExistingQuery', () => {
   it('builds a deck-scoped exact field query without turning the field clause into plain text', () => {
@@ -30,5 +34,19 @@ describe('duplicateScope', () => {
     expect(duplicateScope('prevent-global')).toBe('global')
     expect(duplicateScope('allow')).toBe('global')
     expect(duplicateScope('overwrite')).toBe('global')
+  })
+})
+
+describe('findBackfillQuery', () => {
+  it('restricts the search to the configured deck and note type', () => {
+    expect(findBackfillQuery('Kaishi 1.5k', 'Kaishi Note')).toBe(
+      'deck:"Kaishi 1.5k" note:"Kaishi Note"'
+    )
+  })
+
+  it('escapes spaces, quotes, and backslashes in both values', () => {
+    expect(findBackfillQuery('Deck "A" \\B', 'Note "C" \\D')).toBe(
+      'deck:"Deck \\"A\\" \\\\B" note:"Note \\"C\\" \\\\D"'
+    )
   })
 })

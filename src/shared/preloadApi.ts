@@ -23,6 +23,10 @@ import type { MediaKeyCommand } from './mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from './windowBounds'
 import type { WindowShapeRect } from './windowShape'
 import type {
+  AnkiJlptBackfillApplyRequest,
+  AnkiJlptBackfillPreview,
+  AnkiJlptBackfillProgress,
+  AnkiJlptBackfillResult,
   AnkiExistingMatch,
   AnkiJlptSetupResult,
   AnkiMembershipMatches,
@@ -231,6 +235,9 @@ export interface KizunaApi {
     modelNames(): Promise<string[]>
     modelFieldNames(modelName: string): Promise<string[]>
     setupJlptField(): Promise<AnkiJlptSetupResult>
+    previewJlptBackfill(): Promise<AnkiJlptBackfillPreview>
+    applyJlptBackfill(request: AnkiJlptBackfillApplyRequest): Promise<AnkiJlptBackfillResult>
+    onJlptBackfillProgress(cb: (value: AnkiJlptBackfillProgress) => void): () => void
     addNote(req: MineRequest): Promise<AnkiMineResult>
     findExisting(token: Token, word?: string): Promise<AnkiExistingMatch | null>
     findTargetDeckMembership(expressions: string[]): Promise<AnkiMembershipMatches>

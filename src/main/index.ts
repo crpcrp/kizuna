@@ -541,7 +541,7 @@ function startDict(): void {
 
 /**
  * Registers the anki IPC bridge (ping/deckNames/modelNames/modelFieldNames/
- * addNote/getSettings/setSettings), backed by the shared settings store, the
+ * JLPT setup/backfill/addNote/getSettings/setSettings), backed by the shared settings store, the
  * global `fetch` boundary, and the bundled ffmpeg used to clip
  * sentence audio out of the loaded media file.
  */
@@ -561,7 +561,9 @@ function startAnki(settings: SettingsStore, ffmpegPath: string): void {
       }
     })
   })
-  registerAnkiBridge(ipcMain, ankiService)
+  registerAnkiBridge(ipcMain, ankiService, (channel, value) =>
+    sendToWindow(mainWindow, channel, value)
+  )
 }
 
 /**

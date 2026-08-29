@@ -40,6 +40,10 @@ import type { MediaKeyCommand } from '../shared/mediaKey'
 import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBounds'
 import type { WindowShapeRect } from '../shared/windowShape'
 import type {
+  AnkiJlptBackfillApplyRequest,
+  AnkiJlptBackfillPreview,
+  AnkiJlptBackfillProgress,
+  AnkiJlptBackfillResult,
   AnkiExistingMatch,
   AnkiJlptSetupResult,
   AnkiMembershipMatches,
@@ -313,6 +317,12 @@ const api = {
       ipcRenderer.invoke(ANKI_CHANNELS.modelFieldNames, modelName),
     setupJlptField: (): Promise<AnkiJlptSetupResult> =>
       ipcRenderer.invoke(ANKI_CHANNELS.setupJlptField),
+    previewJlptBackfill: (): Promise<AnkiJlptBackfillPreview> =>
+      ipcRenderer.invoke(ANKI_CHANNELS.previewJlptBackfill),
+    applyJlptBackfill: (request: AnkiJlptBackfillApplyRequest): Promise<AnkiJlptBackfillResult> =>
+      ipcRenderer.invoke(ANKI_CHANNELS.applyJlptBackfill, request),
+    onJlptBackfillProgress: (cb: (value: AnkiJlptBackfillProgress) => void): (() => void) =>
+      subscribe(ANKI_CHANNELS.jlptBackfillProgress, cb),
     addNote: (req: MineRequest): Promise<AnkiMineResult> =>
       ipcRenderer.invoke(ANKI_CHANNELS.addNote, req),
     findExisting: (token: Token, word?: string): Promise<AnkiExistingMatch | null> =>
