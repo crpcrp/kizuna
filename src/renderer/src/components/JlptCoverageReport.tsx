@@ -11,7 +11,7 @@ import type { KnowledgeSource } from '../../../shared/knowledge'
 import ModalOverlay from './ModalOverlay'
 import './JlptCoverageReport.css'
 
-export type JlptCoverageReportPhase = 'loading' | 'ready' | 'error'
+export type JlptCoverageReportPhase = 'idle' | 'loading' | 'ready' | 'error'
 
 /** The ready DTO also carries source freshness from the knowledge bridge. */
 export type JlptCoverageReportData = JlptCoverageReport & {
@@ -466,18 +466,19 @@ export default function JlptCoverageReport({
 }: JlptCoverageReportProps): React.JSX.Element {
   const [nowMs] = useState(() => Date.now())
   const loading = phase === 'loading' || (phase === 'ready' && data === null)
-  const body = loading ? (
-    <LoadingBody />
-  ) : phase === 'error' ? (
-    <ErrorBody errorText={errorText} onRetry={onRetry} />
-  ) : (
-    <ReadyBody
-      data={data!}
-      selectedLevel={selectedLevel}
-      onTargetLevelChange={onTargetLevelChange}
-      nowMs={nowMs}
-    />
-  )
+  const body =
+    phase === 'idle' ? null : loading ? (
+      <LoadingBody />
+    ) : phase === 'error' ? (
+      <ErrorBody errorText={errorText} onRetry={onRetry} />
+    ) : (
+      <ReadyBody
+        data={data!}
+        selectedLevel={selectedLevel}
+        onTargetLevelChange={onTargetLevelChange}
+        nowMs={nowMs}
+      />
+    )
 
   return (
     <ModalOverlay

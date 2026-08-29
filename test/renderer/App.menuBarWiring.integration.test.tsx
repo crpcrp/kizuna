@@ -86,6 +86,26 @@ function openMenu(label: string): void {
 
 afterEach(appTeardown)
 
+describe('JLPT coverage menu wiring', () => {
+  it('opens independently of player state and starts in a loading state', async () => {
+    const api = installFakeKizunaApi()
+    render(<App />)
+
+    openMenu('Vocabulary')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'JLPT coverage' }))
+
+    expect(api.knowledge.jlptCoverageReport).toHaveBeenCalledOnce()
+    expect(screen.getByRole('dialog', { name: 'JLPT vocabulary coverage' })).toBeTruthy()
+    expect(screen.getByText(/Loading JLPT vocabulary coverage/)).toBeTruthy()
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain(
+        'Could not load the JLPT coverage report.'
+      )
+    )
+  })
+})
+
 describe('MenuBar exit command', () => {
   it('calls the app-shell quit command once and closes Media', () => {
     const fakes = installBridge()
