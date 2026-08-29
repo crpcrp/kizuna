@@ -103,20 +103,17 @@ function renderReport(overrides: Partial<React.ComponentProps<typeof JlptCoverag
 }
 
 describe('JlptCoverageReport ready state', () => {
-  it('renders cumulative N3 math, a distinct per-level table, and text-backed bar segments', () => {
+  it('renders the target percentage and per-level table without the removed summaries', () => {
     renderReport()
 
     expect(screen.getByRole('dialog', { name: 'JLPT vocabulary coverage' })).toBeTruthy()
     expect(screen.getByRole('heading', { name: 'JLPT vocabulary coverage' })).toBeTruthy()
-    expect(screen.getByText('5 / 9 mastered through N3')).toBeTruthy()
     expect(screen.getByText('55.6%')).toBeTruthy()
     expect(screen.getAllByText('1 / 9 (11.1%)').length).toBeGreaterThan(0)
     expect(screen.getByRole('img', { name: /Mastered 5 \/ 9 \(55\.6%\)/ })).toBeTruthy()
-
-    const select = screen.getByRole('combobox', { name: 'Target level' })
-    expect(
-      Array.from(select.querySelectorAll('option')).map((option) => option.textContent)
-    ).toEqual([...JLPT_LEVELS])
+    expect(screen.queryByText('5 / 9 mastered through N3')).toBeNull()
+    expect(document.querySelector('.jlpt-coverage-supporting-counts')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'By JLPT level' })).toBeNull()
 
     const n3 = screen.getByRole('row', { name: /N3/ })
     expect(n3.getAttribute('aria-current')).toBe('true')
@@ -126,6 +123,11 @@ describe('JlptCoverageReport ready state', () => {
     expect(screen.getByRole('table').querySelector('caption')?.textContent).toContain(
       'Individual JLPT bands and cumulative mastered-through-level counts.'
     )
+
+    const select = screen.getByRole('combobox', { name: 'Target level' })
+    expect(
+      Array.from(select.querySelectorAll('option')).map((option) => option.textContent)
+    ).toEqual([...JLPT_LEVELS])
   })
 
   it('shows mutually exclusive provenance, unclassified counts, dataset identity, and freshness', () => {

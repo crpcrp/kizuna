@@ -138,7 +138,7 @@ function TargetSummary({
   const counts = countsFor(data.throughLevels[selectedLevel])
 
   return (
-    <section className="jlpt-coverage-section" aria-labelledby="jlpt-coverage-target-heading">
+    <section className="jlpt-coverage-section" aria-label="Target level coverage">
       <div className="jlpt-coverage-target-control">
         <label htmlFor="jlpt-coverage-target">Target level</label>
         <select
@@ -153,23 +153,9 @@ function TargetSummary({
           ))}
         </select>
       </div>
-      <h3 id="jlpt-coverage-target-heading" className="jlpt-coverage-headline">
-        {formatCount(counts.mastered)} / {formatCount(counts.total)} mastered through{' '}
-        {selectedLevel}
-      </h3>
       <p className="jlpt-coverage-percentage">
         {percent(counts.mastered, counts.total).toFixed(1)}%
       </p>
-      <dl className="jlpt-coverage-supporting-counts">
-        {(['learning', 'queued', 'unknown'] as const).map((key) => (
-          <div key={key}>
-            <dt>{key === 'queued' ? 'Queued' : key[0].toUpperCase() + key.slice(1)}</dt>
-            <dd>
-              <Metric label={key} count={counts[key]} total={counts.total} />
-            </dd>
-          </div>
-        ))}
-      </dl>
       <CoverageBar counts={counts} />
     </section>
   )
@@ -183,8 +169,7 @@ function CoverageTable({
   selectedLevel: JlptLevel
 }): React.JSX.Element {
   return (
-    <section className="jlpt-coverage-section" aria-labelledby="jlpt-coverage-levels-heading">
-      <h3 id="jlpt-coverage-levels-heading">By JLPT level</h3>
+    <section className="jlpt-coverage-section" aria-label="JLPT level coverage table">
       <div className="jlpt-coverage-table-wrap">
         <table className="jlpt-coverage-table">
           <caption>
