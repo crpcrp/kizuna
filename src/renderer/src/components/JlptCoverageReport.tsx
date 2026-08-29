@@ -161,6 +161,74 @@ function TargetSummary({
   )
 }
 
+function CoverageTable({
+  data,
+  selectedLevel
+}: {
+  data: JlptCoverageReportData
+  selectedLevel: JlptLevel
+}): React.JSX.Element {
+  return (
+    <section className="jlpt-coverage-section" aria-label="JLPT level coverage table">
+      <div className="jlpt-coverage-table-wrap">
+        <table className="jlpt-coverage-table">
+          <caption>
+            Individual JLPT bands and cumulative mastered-through-level counts. Percentages show
+            count over that row&apos;s vocabulary total.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Level</th>
+              <th scope="col">Vocabulary</th>
+              <th scope="col">Mastered</th>
+              <th scope="col">Learning</th>
+              <th scope="col">Queued</th>
+              <th scope="col">Unknown</th>
+              <th scope="col">Mastered through level</th>
+            </tr>
+          </thead>
+          <tbody>
+            {JLPT_LEVELS.map((level) => {
+              const band = countsFor(data.bands[level])
+              const through = countsFor(data.throughLevels[level])
+              const selected = level === selectedLevel
+              return (
+                <tr
+                  key={level}
+                  className={selected ? 'selected' : undefined}
+                  aria-current={selected}
+                >
+                  <th scope="row">{level}</th>
+                  <td>{formatCount(band.total)}</td>
+                  <td>
+                    <Metric label={`${level} mastered`} count={band.mastered} total={band.total} />
+                  </td>
+                  <td>
+                    <Metric label={`${level} learning`} count={band.learning} total={band.total} />
+                  </td>
+                  <td>
+                    <Metric label={`${level} queued`} count={band.queued} total={band.total} />
+                  </td>
+                  <td>
+                    <Metric label={`${level} unknown`} count={band.unknown} total={band.total} />
+                  </td>
+                  <td>
+                    <Metric
+                      label={`${level} mastered through level`}
+                      count={through.mastered}
+                      total={through.total}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 function ProvenanceSection({
   data,
   selectedLevel
@@ -337,6 +405,7 @@ function ReadyBody({
         selectedLevel={selectedLevel}
         onTargetLevelChange={onTargetLevelChange}
       />
+      <CoverageTable data={data} selectedLevel={selectedLevel} />
       <ProvenanceSection data={data} selectedLevel={selectedLevel} />
       <UnclassifiedSection data={data} />
       <DatasetSection data={data} nowMs={nowMs} />

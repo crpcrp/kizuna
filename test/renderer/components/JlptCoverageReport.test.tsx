@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import JlptCoverageReport, {
   type JlptCoverageReportData
@@ -103,7 +103,7 @@ function renderReport(overrides: Partial<React.ComponentProps<typeof JlptCoverag
 }
 
 describe('JlptCoverageReport ready state', () => {
-  it('renders the target percentage and text-backed bar segments without the removed summaries', () => {
+  it('renders the target percentage and per-level table without the removed summaries', () => {
     renderReport()
 
     expect(screen.getByRole('dialog', { name: 'JLPT vocabulary coverage' })).toBeTruthy()
@@ -114,7 +114,15 @@ describe('JlptCoverageReport ready state', () => {
     expect(screen.queryByText('5 / 9 mastered through N3')).toBeNull()
     expect(document.querySelector('.jlpt-coverage-supporting-counts')).toBeNull()
     expect(screen.queryByRole('heading', { name: 'By JLPT level' })).toBeNull()
-    expect(screen.queryByRole('table')).toBeNull()
+
+    const n3 = screen.getByRole('row', { name: /N3/ })
+    expect(n3.getAttribute('aria-current')).toBe('true')
+    expect(within(n3).getByText('4')).toBeTruthy()
+    expect(within(n3).getByText('2 / 4 (50.0%)')).toBeTruthy()
+    expect(within(n3).getByText('5 / 9 (55.6%)')).toBeTruthy()
+    expect(screen.getByRole('table').querySelector('caption')?.textContent).toContain(
+      'Individual JLPT bands and cumulative mastered-through-level counts.'
+    )
 
     const select = screen.getByRole('combobox', { name: 'Target level' })
     expect(
