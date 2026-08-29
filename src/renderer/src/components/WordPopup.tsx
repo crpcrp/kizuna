@@ -308,6 +308,16 @@ export default function WordPopup({
                       &#x2605; common
                     </span>
                   )}
+                  {result.jlptLevel !== null && (
+                    <span
+                      className="word-popup-jlpt-level"
+                      role="note"
+                      aria-label={`Approximate JLPT vocabulary level: ${result.jlptLevel}`}
+                      title="Community-sourced estimate; the JLPT does not publish official vocabulary lists."
+                    >
+                      JLPT {result.jlptLevel} · approx.
+                    </span>
+                  )}
                   {result.frequency !== null && (
                     <span className="word-popup-frequency">
                       {result.frequencyDisplay ?? String(result.frequency)}

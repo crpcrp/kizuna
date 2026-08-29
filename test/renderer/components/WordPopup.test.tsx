@@ -113,6 +113,85 @@ describe('WordPopup markup', () => {
     expect(html).not.toContain('Level undefined')
   })
 
+  it('renders an accessible approximate JLPT badge with the row metadata', () => {
+    const result = makeResult({
+      jlptLevel: 'N3',
+      termTags: 'P',
+      frequency: 12,
+      frequencyDisplay: '12㋕',
+      pitchAccent: [1]
+    })
+    const html = renderToStaticMarkup(
+      <WordPopup
+        results={[result]}
+        position={{ x: 0, y: 0 }}
+        onClose={noop}
+        onAddToAnki={noop}
+        provenanceByExpression={{
+          [result.expression]: {
+            level: 'unknown',
+            sourceKinds: ['wanikani'],
+            sources: [{ source: 'wanikani', proficiency: 'Apprentice' }]
+          }
+        }}
+      />
+    )
+
+    expect(html).toContain('JLPT N3 · approx.')
+    expect(html).toContain('role="note"')
+    expect(html).toContain('aria-label="Approximate JLPT vocabulary level: N3"')
+    expect(html).toContain(
+      'title="Community-sourced estimate; the JLPT does not publish official vocabulary lists."'
+    )
+    expect(html).toContain('word-popup-priority')
+    expect(html).toContain('12㋕')
+    expect(html).toContain('Pitch 1')
+    expect(html).toContain('word-popup-dict-badge')
+    expect(html).toContain('word-popup-anki-button')
+    expect(html).toContain('WaniKani - Apprentice')
+
+    expect(html.indexOf('word-popup-priority')).toBeLessThan(html.indexOf('word-popup-jlpt-level'))
+    expect(html.indexOf('word-popup-jlpt-level')).toBeLessThan(html.indexOf('word-popup-frequency'))
+    expect(html.indexOf('word-popup-frequency')).toBeLessThan(
+      html.indexOf('word-popup-pitch-accent')
+    )
+    expect(html.indexOf('word-popup-pitch-accent')).toBeLessThan(
+      html.indexOf('word-popup-dict-badge')
+    )
+  })
+
+  it('renders each result level, including without provenance or with unknown knowledge', () => {
+    const html = renderToStaticMarkup(
+      <WordPopup
+        results={[
+          makeResult({ expression: '猫', jlptLevel: 'N4' }),
+          makeResult({ expression: '犬', jlptLevel: 'N2' }),
+          makeResult({ expression: '鳥', jlptLevel: null })
+        ]}
+        position={{ x: 0, y: 0 }}
+        provenanceByExpression={{
+          犬: { level: 'unknown', sourceKinds: [], sources: [] }
+        }}
+      />
+    )
+
+    expect(html).toContain('JLPT N4 · approx.')
+    expect(html).toContain('JLPT N2 · approx.')
+    expect(html.match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(2)
+    expect(html).not.toContain('JLPT N1')
+    expect(html).not.toContain('JLPT N5')
+  })
+
+  it('does not duplicate a badge when rendered again with the same props', () => {
+    const render = () =>
+      renderToStaticMarkup(
+        <WordPopup results={[makeResult({ jlptLevel: 'N5' })]} position={{ x: 0, y: 0 }} />
+      )
+
+    expect(render().match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(1)
+    expect(render().match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(1)
+  })
+
   it('is present but hidden (no "open" class) when position is null', () => {
     const html = renderToStaticMarkup(
       <WordPopup results={sampleResults} position={null} onClose={noop} />
