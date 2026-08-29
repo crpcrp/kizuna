@@ -542,6 +542,7 @@ describe('lookup', () => {
     const beforeResults = lookup(db, { lemma: '猫' })
     expect(beforeResults[0].dictId).toBe(dictId)
     expect(beforeResults[0].stylesCss).toBeNull()
+    expect(beforeResults[0].jlptLevel).toBeNull()
 
     db.prepare('UPDATE dictionaries SET styles_css = ? WHERE id = ?').run(
       '[data-sc-content="pos"] { margin-right: 4px; }',

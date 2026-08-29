@@ -490,6 +490,25 @@ describe('preload dictionary contract', () => {
 
     expect(electron.invoke).toHaveBeenCalledWith(DICT_CHANNELS.setFallbackOnly, 7, true)
   })
+
+  it('passes dictionary lookup results through without reshaping JLPT metadata', async () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      dict: { lookup(lemma: string, reading?: string): Promise<unknown> }
+    }
+    const lookupResult = { expression: '猫', reading: 'ねこ', jlptLevel: 'N4' }
+    electron.invoke.mockResolvedValue(lookupResult)
+
+    await expect(api.dict.lookup('猫', 'ねこ')).resolves.toBe(lookupResult)
+    expect(electron.invoke).toHaveBeenCalledWith(
+      DICT_CHANNELS.lookup,
+      '猫',
+      'ねこ',
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    )
+  })
 })
 
 describe('preload Anki contract', () => {

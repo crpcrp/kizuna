@@ -16,6 +16,7 @@ export function makeLookupResult(overrides: Partial<LookupResult> = {}): LookupR
     frequency: null,
     frequencyDisplay: null,
     pitchAccent: null,
+    jlptLevel: null,
     defTags: '',
     termTags: '',
     score: 0,
