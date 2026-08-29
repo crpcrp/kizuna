@@ -138,7 +138,7 @@ function TargetSummary({
   const counts = countsFor(data.throughLevels[selectedLevel])
 
   return (
-    <section className="jlpt-coverage-section" aria-labelledby="jlpt-coverage-target-heading">
+    <section className="jlpt-coverage-section" aria-label="Target level coverage">
       <div className="jlpt-coverage-target-control">
         <label htmlFor="jlpt-coverage-target">Target level</label>
         <select
@@ -153,93 +153,10 @@ function TargetSummary({
           ))}
         </select>
       </div>
-      <h3 id="jlpt-coverage-target-heading" className="jlpt-coverage-headline">
-        {formatCount(counts.mastered)} / {formatCount(counts.total)} mastered through{' '}
-        {selectedLevel}
-      </h3>
       <p className="jlpt-coverage-percentage">
         {percent(counts.mastered, counts.total).toFixed(1)}%
       </p>
-      <dl className="jlpt-coverage-supporting-counts">
-        {(['learning', 'queued', 'unknown'] as const).map((key) => (
-          <div key={key}>
-            <dt>{key === 'queued' ? 'Queued' : key[0].toUpperCase() + key.slice(1)}</dt>
-            <dd>
-              <Metric label={key} count={counts[key]} total={counts.total} />
-            </dd>
-          </div>
-        ))}
-      </dl>
       <CoverageBar counts={counts} />
-    </section>
-  )
-}
-
-function CoverageTable({
-  data,
-  selectedLevel
-}: {
-  data: JlptCoverageReportData
-  selectedLevel: JlptLevel
-}): React.JSX.Element {
-  return (
-    <section className="jlpt-coverage-section" aria-labelledby="jlpt-coverage-levels-heading">
-      <h3 id="jlpt-coverage-levels-heading">By JLPT level</h3>
-      <div className="jlpt-coverage-table-wrap">
-        <table className="jlpt-coverage-table">
-          <caption>
-            Individual JLPT bands and cumulative mastered-through-level counts. Percentages show
-            count over that row&apos;s vocabulary total.
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Level</th>
-              <th scope="col">Vocabulary</th>
-              <th scope="col">Mastered</th>
-              <th scope="col">Learning</th>
-              <th scope="col">Queued</th>
-              <th scope="col">Unknown</th>
-              <th scope="col">Mastered through level</th>
-            </tr>
-          </thead>
-          <tbody>
-            {JLPT_LEVELS.map((level) => {
-              const band = countsFor(data.bands[level])
-              const through = countsFor(data.throughLevels[level])
-              const selected = level === selectedLevel
-              return (
-                <tr
-                  key={level}
-                  className={selected ? 'selected' : undefined}
-                  aria-current={selected}
-                >
-                  <th scope="row">{level}</th>
-                  <td>{formatCount(band.total)}</td>
-                  <td>
-                    <Metric label={`${level} mastered`} count={band.mastered} total={band.total} />
-                  </td>
-                  <td>
-                    <Metric label={`${level} learning`} count={band.learning} total={band.total} />
-                  </td>
-                  <td>
-                    <Metric label={`${level} queued`} count={band.queued} total={band.total} />
-                  </td>
-                  <td>
-                    <Metric label={`${level} unknown`} count={band.unknown} total={band.total} />
-                  </td>
-                  <td>
-                    <Metric
-                      label={`${level} mastered through level`}
-                      count={through.mastered}
-                      total={through.total}
-                    />
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
     </section>
   )
 }
@@ -420,7 +337,6 @@ function ReadyBody({
         selectedLevel={selectedLevel}
         onTargetLevelChange={onTargetLevelChange}
       />
-      <CoverageTable data={data} selectedLevel={selectedLevel} />
       <ProvenanceSection data={data} selectedLevel={selectedLevel} />
       <UnclassifiedSection data={data} />
       <DatasetSection data={data} nowMs={nowMs} />
