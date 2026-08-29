@@ -39,6 +39,19 @@ describe('parseMecab — unidic', () => {
 })
 
 describe('parseMecab — edge cases', () => {
+  it('aligns surfaces after whitespace omitted from MeCab output', () => {
+    const stdout = [
+      '猫\t名詞,一般,*,*,*,*,猫,ネコ,ネコ',
+      '大丈夫\t名詞,形容動詞語幹,*,*,*,*,大丈夫,ダイジョウブ,ダイジョーブ',
+      'EOS'
+    ].join('\n')
+
+    expect(parseMecab('ipadic', stdout, '猫 大丈夫')).toEqual([
+      { surface: '猫', reading: 'ネコ', lemma: '猫', pos: '名詞', startOffset: 0 },
+      { surface: '大丈夫', reading: 'ダイジョウブ', lemma: '大丈夫', pos: '名詞', startOffset: 2 }
+    ])
+  })
+
   it('falls back to surface for an unknown word (lemma "*")', () => {
     const tokens = parseMecab('ipadic', 'ほげ\t名詞,一般,*,*,*,*,*,*,*\nEOS\n')
 
