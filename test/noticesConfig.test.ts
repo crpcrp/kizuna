@@ -32,6 +32,17 @@ type VocabularySnapshot = {
   inputRecordCount: number
   entries: unknown[]
 }
+type KanjiSnapshot = {
+  schemaVersion: number
+  source: {
+    name: string
+    version: string
+    commit: string
+    license: string
+  }
+  inputRecordCount: number
+  entries: unknown[]
+}
 
 const require = createRequire(import.meta.url)
 const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), 'utf-8')
@@ -47,6 +58,7 @@ const components = notices.components as NoticeComponent[]
 const vocabulary = readJson(
   'src/main/services/jlpt/data/vocabulary.json'
 ) as unknown as VocabularySnapshot
+const kanji = readJson('src/main/services/jlpt/data/kanji.json') as unknown as KanjiSnapshot
 
 describe('third-party.json', () => {
   it('is structurally valid', () => {
@@ -117,6 +129,7 @@ describe('licence texts on disk', () => {
   it('covers the committed OpenJLPT data and both upstream licence files', () => {
     const component = components.find((item) => item.id === 'openjlpt-vocabulary')
     expect(component).toMatchObject({
+      name: 'OpenJLPT vocabulary and kanji classifications',
       bundled: 'source',
       version: '0.2.0',
       sourceRoot: 'src/main/services/jlpt/data',
@@ -197,6 +210,36 @@ describe('OpenJLPT vocabulary snapshot', () => {
       expect(typeof reading).toBe('string')
       expect(levels.has(String(level))).toBe(true)
     }
+  })
+})
+
+describe('OpenJLPT kanji snapshot', () => {
+  it('has the pinned source metadata and expected input total', () => {
+    expect(kanji.schemaVersion).toBe(1)
+    expect(kanji.source).toEqual({
+      name: 'OpenJLPT',
+      version: '0.2.0',
+      commit: 'c42fd9fa3777bfc1775446f7c418d549dfd6e4cf',
+      license: 'CC-BY-SA-4.0'
+    })
+    expect(kanji.inputRecordCount).toBe(2211)
+    expect(kanji.entries).toHaveLength(2211)
+  })
+
+  it('contains only character, level, and nullable frequency tuples', () => {
+    const levels = new Set(['N5', 'N4', 'N3', 'N2', 'N1'])
+    for (const entry of kanji.entries) {
+      expect(Array.isArray(entry)).toBe(true)
+      expect(entry).toHaveLength(3)
+      const [character, level, frequency] = entry as [unknown, unknown, unknown]
+      expect(typeof character).toBe('string')
+      expect([...String(character)].length).toBe(1)
+      expect(levels.has(String(level))).toBe(true)
+      expect(
+        frequency === null || (typeof frequency === 'number' && Number.isSafeInteger(frequency))
+      ).toBe(true)
+    }
+    expect(kanji.entries.some((entry) => (entry as unknown[])[2] === null)).toBe(true)
   })
 })
 

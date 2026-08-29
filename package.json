@@ -23,6 +23,7 @@
     "format:check": "prettier --check .",
     "resources": "node scripts/fetch-resources.mjs",
     "jlpt-data:update": "node scripts/update-jlpt-vocabulary.mjs",
+    "jlpt-kanji-data:update": "node scripts/update-jlpt-kanji.mjs",
     "notices": "node scripts/generate-notices.mjs",
     "test": "node scripts/run-tests.mjs",
     "test:watch": "vitest",
