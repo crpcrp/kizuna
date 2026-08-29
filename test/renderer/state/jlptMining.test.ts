@@ -38,7 +38,7 @@ describe('buildJlptMiningCandidates', () => {
         count: 1,
         kind: 'kanji',
         level: 'N5',
-        fallbackFrequency: 12
+        fixedFrequency: 12
       },
       {
         lemma: '猫',
@@ -46,8 +46,7 @@ describe('buildJlptMiningCandidates', () => {
         sentence: '',
         count: 1,
         kind: 'vocabulary',
-        level: 'N4',
-        fallbackFrequency: null
+        level: 'N4'
       }
     ])
   })

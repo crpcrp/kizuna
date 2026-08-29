@@ -187,7 +187,6 @@ export default function App({
     bridge: kizuna,
     frequencyDictId: state.popupSettings.frequencyDictId,
     sortOrder: state.popupSettings.sortOrder,
-    targetDeckName: options.data.anki?.settings.deckName,
     syncNow: vocabulary.syncNow
   })
 

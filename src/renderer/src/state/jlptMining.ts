@@ -6,7 +6,8 @@ import type { MiningCandidate } from './bulkMining'
 export interface JlptMiningCandidate extends MiningCandidate {
   kind: JlptExportItem['kind']
   level: JlptLevel
-  fallbackFrequency: number | null
+  /** Authoritative pinned rank for kanji; absent for vocabulary. */
+  fixedFrequency?: number | null
 }
 
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
@@ -41,7 +42,7 @@ export function buildJlptMiningCandidates(items: readonly JlptExportItem[]): Jlp
         count: 1,
         kind: item.kind,
         level: item.level,
-        fallbackFrequency: item.kind === 'kanji' ? item.frequency : null
+        ...(item.kind === 'kanji' ? { fixedFrequency: item.frequency } : {})
       }
     })
     .sort(compareCandidates)

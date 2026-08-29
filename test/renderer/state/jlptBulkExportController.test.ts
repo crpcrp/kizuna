@@ -80,7 +80,7 @@ async function waitForReady(controller: ReturnType<typeof createJlptBulkExportCo
 }
 
 describe('createJlptBulkExportController', () => {
-  it('opens the default target and mode with frequency ordering and no Anki ping', async () => {
+  it('opens the default target and mode with frequency ordering and no live Anki calls', async () => {
     const current = source([item('一', { frequency: 20 }), item('二', { frequency: 10 })])
     current.frequencyDictId = 42
     const controller = createJlptBulkExportController({ getSource: () => current })
@@ -105,9 +105,10 @@ describe('createJlptBulkExportController', () => {
       sort: 'frequency',
       threshold: null,
       minimumCount: null,
-      hideTargetDeckMatches: true,
+      hideTargetDeckMatches: false,
       selected: { 一: true, 二: true }
     })
+    expect(current.bridge.anki.findTargetDeckMembership).not.toHaveBeenCalled()
   })
 
   it('uses bundled kanji frequency when no frequency dictionary is configured', async () => {
@@ -243,21 +244,14 @@ describe('createJlptBulkExportController', () => {
     expect(refreshKnowledge).toHaveBeenCalledOnce()
   })
 
-  it('delegates target-deck filtering, selection, cancellation, and back-to-list', async () => {
+  it('delegates selection, cancellation, and back-to-list', async () => {
     const current = source([item('一'), item('二')])
-    vi.mocked(current.bridge.anki.findTargetDeckMembership).mockResolvedValue({
-      一: { cardId: 2, deckNames: ['Deck'] },
-      二: null
-    })
     const gate = deferred<{ noteId: number; operation: 'added'; changedFields: string[] }>()
     vi.mocked(current.bridge.anki.addNote).mockReturnValue(gate.promise)
     const controller = createJlptBulkExportController({ getSource: () => current })
 
     controller.open()
     await waitForReady(controller)
-    expect(controller.getState().phase).toMatchObject({ selected: { 一: false, 二: true } })
-    controller.setHideTargetDeckMatches(false)
-    controller.selectAll()
     expect(controller.getState().phase).toMatchObject({ selected: { 一: true, 二: true } })
     controller.toggle('二')
     expect(controller.getState().phase).toMatchObject({ selected: { 一: true, 二: false } })

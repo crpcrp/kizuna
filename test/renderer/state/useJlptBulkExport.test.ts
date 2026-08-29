@@ -84,7 +84,6 @@ describe('useJlptBulkExport', () => {
           bridge: current,
           frequencyDictId,
           sortOrder,
-          targetDeckName: 'Deck',
           syncNow
         }),
       { initialProps: { frequencyDictId: 7, sortOrder: 'auto' as const } }
@@ -105,7 +104,7 @@ describe('useJlptBulkExport', () => {
 
     await vi.waitFor(() => expect(result.result.current.phase).toMatchObject({ kind: 'ready' }))
     expect(current.dict.lookup).toHaveBeenCalledWith('猫', 'ねこ', 7, undefined, undefined, '猫')
-    expect(result.result.current.targetDeckName).toBe('Deck')
+    expect(current.anki.findTargetDeckMembership).not.toHaveBeenCalled()
     expect(result.result.current.frequencyDictConfigured).toBe(true)
   })
 
@@ -121,7 +120,6 @@ describe('useJlptBulkExport', () => {
         bridge: current,
         frequencyDictId: null,
         sortOrder: 'auto',
-        targetDeckName: undefined,
         syncNow: vi.fn().mockResolvedValue({})
       })
     )
