@@ -20,6 +20,7 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof AnkiTab>> = {}
       ankiModelNames={[]}
       ankiModelFields={[]}
       ankiPing={async () => ({ ok: false })}
+      onSetupJlptField={async () => ({ status: 'already-configured', modelName: 'Kizuna' })}
       onChangeAnkiSettings={noop}
       {...overrides}
     />
@@ -51,6 +52,13 @@ describe('AnkiTab markup', () => {
     expect(html).toMatch(/id="anki-api-key-status"[^>]*data-configured="true"[^>]*>Configured ✓/)
     expect(html).toContain('id="anki-api-key-save"')
     expect(html).toContain('id="anki-api-key-clear"')
+  })
+
+  it('renders the explicit JLPT setup action beside the note type', () => {
+    const html = renderTab({ ankiSettings: makeAnkiSettings({ modelName: 'Kaishi 1.5k' }) })
+
+    expect(html).toContain('id="anki-setup-jlpt-field"')
+    expect(html).toContain('>Set up JLPT field</button>')
   })
 
   it('shows the API key as not set with the Clear button disabled when no key is stored', () => {

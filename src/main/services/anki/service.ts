@@ -9,6 +9,7 @@
 import {
   ANKI_MEMBERSHIP_BATCH_LIMIT,
   type AnkiExistingMatch,
+  type AnkiJlptSetupResult,
   type AnkiMembershipMatches,
   type AnkiMineResult,
   type AnkiPing,
@@ -18,7 +19,7 @@ import {
 import type { Token } from '../../../shared/token'
 import type { HttpFetch } from '../http'
 import type { SettingsStore } from '../settings'
-import { createAnkiClient } from './ankiConnect'
+import { createAnkiClient, type AnkiModelTemplates } from './ankiConnect'
 import { pictureFilename, sentenceAudioFilename } from './attachments'
 import { buildNote } from './noteBuilder'
 import type { AnkiMediaAttachment, AnkiNote } from './noteBuilder'
@@ -63,6 +64,36 @@ function changedNewNoteFields(note: AnkiNote): string[] {
   return [...Object.keys(note.fields), ...(note.tags.length > 0 ? ['tags'] : [])]
 }
 
+export const JLPT_LEVEL_FIELD = 'JLPT Level'
+const JLPT_WORD_MEANING_ANCHOR = '{{Word Meaning}}'
+const JLPT_MARKER_START = '<!-- kizuna-jlpt-level:start -->'
+const JLPT_MARKER_END = '<!-- kizuna-jlpt-level:end -->'
+const JLPT_ANSWER_BLOCK = [
+  JLPT_MARKER_START,
+  '{{#JLPT Level}}',
+  '<div class="kizuna-jlpt-level" style="margin:0.5rem 0;opacity:0.8;font-size:0.8em;">',
+  '  JLPT {{JLPT Level}} · approximate',
+  '</div>',
+  '{{/JLPT Level}}',
+  JLPT_MARKER_END
+].join('\n')
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function setupFailure(
+  status: 'preflight-failure' | 'api-failure' | 'verification-failure',
+  modelName: string,
+  message: string
+): AnkiJlptSetupResult {
+  return { status, modelName, message }
+}
+
+function hasCompleteJlptMarker(back: string): boolean {
+  return back.includes(JLPT_MARKER_START) && back.includes(JLPT_MARKER_END)
+}
+
 export function createAnkiService(deps: CreateAnkiServiceDeps) {
   return {
     async ping(): Promise<AnkiPing> {
@@ -84,6 +115,120 @@ export function createAnkiService(deps: CreateAnkiServiceDeps) {
 
     async modelFieldNames(modelName: string): Promise<string[]> {
       return client(deps).modelFieldNames(modelName)
+    },
+
+    async setupJlptField(): Promise<AnkiJlptSetupResult> {
+      const modelName = deps.settings.get().anki.modelName
+      if (modelName.trim() === '') {
+        return setupFailure(
+          'preflight-failure',
+          modelName,
+          'Configure an Anki note type before setting up the JLPT field.'
+        )
+      }
+
+      const anki = client(deps)
+      let fields: string[]
+      let templates: AnkiModelTemplates
+      try {
+        ;[fields, templates] = await Promise.all([
+          anki.modelFieldNames(modelName),
+          anki.modelTemplates(modelName)
+        ])
+      } catch (error: unknown) {
+        return setupFailure('api-failure', modelName, errorText(error))
+      }
+
+      const templateEntries = Object.entries(templates)
+      if (templateEntries.length === 0) {
+        return setupFailure(
+          'preflight-failure',
+          modelName,
+          'The configured Anki note type has no Back template.'
+        )
+      }
+
+      const updatedTemplates: AnkiModelTemplates = {}
+      const updatedTemplateNames: string[] = []
+      for (const [templateName, template] of templateEntries) {
+        const hasStart = template.Back.includes(JLPT_MARKER_START)
+        const hasEnd = template.Back.includes(JLPT_MARKER_END)
+        if (hasStart !== hasEnd) {
+          return setupFailure(
+            'preflight-failure',
+            modelName,
+            `Back template "${templateName}" has an incomplete Kizuna JLPT marker.`
+          )
+        }
+
+        if (hasCompleteJlptMarker(template.Back)) {
+          updatedTemplates[templateName] = template
+          continue
+        }
+
+        const anchorIndex = template.Back.indexOf(JLPT_WORD_MEANING_ANCHOR)
+        if (anchorIndex === -1) {
+          return setupFailure(
+            'preflight-failure',
+            modelName,
+            `Back template "${templateName}" must contain ${JLPT_WORD_MEANING_ANCHOR} or the Kizuna JLPT marker.`
+          )
+        }
+
+        updatedTemplates[templateName] = {
+          ...template,
+          Back:
+            template.Back.slice(0, anchorIndex) +
+            JLPT_ANSWER_BLOCK +
+            '\n' +
+            template.Back.slice(anchorIndex)
+        }
+        updatedTemplateNames.push(templateName)
+      }
+
+      const addedField = !fields.includes(JLPT_LEVEL_FIELD)
+      if (!addedField && updatedTemplateNames.length === 0) {
+        return { status: 'already-configured', modelName }
+      }
+
+      try {
+        if (addedField) await anki.modelFieldAdd(modelName, JLPT_LEVEL_FIELD)
+        if (updatedTemplateNames.length > 0) {
+          await anki.updateModelTemplates(modelName, updatedTemplates)
+        }
+      } catch (error: unknown) {
+        return setupFailure('api-failure', modelName, errorText(error))
+      }
+
+      try {
+        const [verifiedFields, verifiedTemplates] = await Promise.all([
+          anki.modelFieldNames(modelName),
+          anki.modelTemplates(modelName)
+        ])
+        const verifiedMarkers = Object.values(verifiedTemplates).every((template) =>
+          hasCompleteJlptMarker(template.Back)
+        )
+        if (
+          !verifiedFields.includes(JLPT_LEVEL_FIELD) ||
+          Object.keys(verifiedTemplates).length === 0 ||
+          !verifiedMarkers
+        ) {
+          return setupFailure(
+            'verification-failure',
+            modelName,
+            'Anki accepted the setup, but the JLPT field or answer-template marker was not found during verification.'
+          )
+        }
+      } catch (error: unknown) {
+        return setupFailure('verification-failure', modelName, errorText(error))
+      }
+
+      return {
+        status: 'changed',
+        modelName,
+        addedField,
+        updatedTemplates: updatedTemplateNames
+      }
     },
 
     async addNote(req: MineRequest): Promise<AnkiMineResult> {

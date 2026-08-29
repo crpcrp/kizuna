@@ -60,6 +60,45 @@ export interface AnkiNoteInfo {
   fields: Record<string, { value: string; order: number }>
 }
 
+export interface AnkiModelTemplate {
+  Front: string
+  Back: string
+}
+
+export type AnkiModelTemplates = Record<string, AnkiModelTemplate>
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function parseStringArray(raw: unknown, action: string): string[] {
+  if (!Array.isArray(raw) || !raw.every((value): value is string => typeof value === 'string')) {
+    throw new AnkiConnectError(`AnkiConnect: malformed ${action} response`)
+  }
+  return raw
+}
+
+function parseModelTemplates(raw: unknown): AnkiModelTemplates {
+  if (!isRecord(raw)) {
+    throw new AnkiConnectError('AnkiConnect: malformed modelTemplates response')
+  }
+
+  const templates: AnkiModelTemplates = {}
+  for (const [name, value] of Object.entries(raw)) {
+    if (!isRecord(value) || typeof value.Front !== 'string' || typeof value.Back !== 'string') {
+      throw new AnkiConnectError('AnkiConnect: malformed modelTemplates response')
+    }
+    templates[name] = { Front: value.Front, Back: value.Back }
+  }
+  return templates
+}
+
+function expectNoResult(raw: unknown, action: string): void {
+  if (raw !== null && raw !== undefined) {
+    throw new AnkiConnectError(`AnkiConnect: malformed ${action} response`)
+  }
+}
+
 export interface AnkiClient {
   invoke<T>(action: string, params?: unknown): Promise<T>
   multi<T>(actions: Array<{ action: string; params?: unknown }>): Promise<T[]>
@@ -67,6 +106,9 @@ export interface AnkiClient {
   deckNames(): Promise<string[]>
   modelNames(): Promise<string[]>
   modelFieldNames(modelName: string): Promise<string[]>
+  modelFieldAdd(modelName: string, fieldName: string): Promise<void>
+  modelTemplates(modelName: string): Promise<AnkiModelTemplates>
+  updateModelTemplates(modelName: string, templates: AnkiModelTemplates): Promise<void>
   addNote(note: AnkiNote): Promise<number>
   canAddNotes(notes: AnkiNote[]): Promise<boolean[]>
   findCards(query: string): Promise<number[]>
@@ -135,7 +177,24 @@ export function createAnkiClient(deps: {
     version: () => invoke<number>('version'),
     deckNames: () => invoke<string[]>('deckNames'),
     modelNames: () => invoke<string[]>('modelNames'),
-    modelFieldNames: (modelName: string) => invoke<string[]>('modelFieldNames', { modelName }),
+    modelFieldNames: async (modelName: string) =>
+      parseStringArray(await invoke<unknown>('modelFieldNames', { modelName }), 'modelFieldNames'),
+    modelFieldAdd: async (modelName: string, fieldName: string) => {
+      expectNoResult(
+        await invoke<unknown>('modelFieldAdd', { modelName, fieldName }),
+        'modelFieldAdd'
+      )
+    },
+    modelTemplates: async (modelName: string) =>
+      parseModelTemplates(await invoke<unknown>('modelTemplates', { modelName })),
+    updateModelTemplates: async (modelName: string, templates: AnkiModelTemplates) => {
+      expectNoResult(
+        await invoke<unknown>('updateModelTemplates', {
+          model: { modelName, templates }
+        }),
+        'updateModelTemplates'
+      )
+    },
     addNote: (note: AnkiNote) => invoke<number>('addNote', { note }),
     canAddNotes: (notes: AnkiNote[]) => invoke<boolean[]>('canAddNotes', { notes }),
     findCards: (query: string) => invoke<number[]>('findCards', { query }),

@@ -531,6 +531,16 @@ describe('preload Anki contract', () => {
     )
   })
 
+  it('forwards JLPT setup through its dedicated IPC channel', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      anki: { setupJlptField(): Promise<unknown> }
+    }
+
+    api.anki.setupJlptField()
+
+    expect(electron.invoke).toHaveBeenCalledWith(ANKI_CHANNELS.setupJlptField)
+  })
+
   it('forwards addNote through the dedicated IPC channel without reshaping its result', async () => {
     const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
       anki: { addNote(request: unknown): Promise<unknown> }

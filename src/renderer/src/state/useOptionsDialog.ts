@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type RefObject } from 'react'
-import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
+import type { AnkiJlptSetupResult, AnkiPing, AnkiSettings } from '../../../shared/anki'
 import type { ImportProgress } from '../../../shared/dictionary'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
 import type { PlayerSettings } from '../../../shared/playerSettings'
@@ -77,6 +77,7 @@ export interface OptionsDialogActions {
   onReorderYomitanDicts(orderedIds: number[]): Promise<void>
   onRemoveYomitanDict(id: number): Promise<void>
   ankiPing(): Promise<AnkiPing>
+  onSetupAnkiJlptField(): Promise<AnkiJlptSetupResult>
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
   onSaveAzureTranslationKey(key: string): Promise<boolean>
   onSaveAzureTranslationRegion(region: string): Promise<boolean>
@@ -191,6 +192,11 @@ export function useOptionsDialog({
         reorderYomitanDicts(bridge.dict, controller, orderedIds),
       onRemoveYomitanDict: (id) => removeYomitanDict(bridge.dict, controller, id),
       ankiPing: () => bridge.anki.ping(),
+      onSetupAnkiJlptField: async () => {
+        const result = await bridge.anki.setupJlptField()
+        await controller.load('anki', { force: true })
+        return result
+      },
       onChangeAnkiSettings: (patch) => changeAnkiSettings(bridge.anki, controller, patch),
       onSaveAzureTranslationKey: async (key) => {
         try {

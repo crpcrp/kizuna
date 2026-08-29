@@ -207,6 +207,55 @@ describe('createAnkiClient', () => {
     expect(anki.calls).toEqual([{ action: 'modelFieldNames', params: { modelName: 'Kizuna' } }])
   })
 
+  it('modelFieldAdd() posts the exact model and field names', async () => {
+    const anki = fakeAnkiConnect({ modelFieldAdd: { result: null } })
+    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+
+    await client.modelFieldAdd('Kaishi 1.5k', 'JLPT Level')
+
+    expect(anki.calls).toEqual([
+      { action: 'modelFieldAdd', params: { modelName: 'Kaishi 1.5k', fieldName: 'JLPT Level' } }
+    ])
+  })
+
+  it('modelTemplates() validates and returns every card template', async () => {
+    const templates = {
+      'Card 1': { Front: '{{Word}}', Back: '{{Word Meaning}}' },
+      'Card 2': { Front: '{{Word}}', Back: '{{Back Extra}}' }
+    }
+    const anki = fakeAnkiConnect({ modelTemplates: { result: templates } })
+    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+
+    await expect(client.modelTemplates('Kaishi 1.5k')).resolves.toEqual(templates)
+    expect(anki.calls).toEqual([{ action: 'modelTemplates', params: { modelName: 'Kaishi 1.5k' } }])
+  })
+
+  it('modelTemplates() rejects malformed template results', async () => {
+    const anki = fakeAnkiConnect({ modelTemplates: { result: { 'Card 1': { Front: 7 } } } })
+    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+
+    await expect(client.modelTemplates('Kaishi 1.5k')).rejects.toThrow(
+      'malformed modelTemplates response'
+    )
+  })
+
+  it('updateModelTemplates() preserves the full template payload', async () => {
+    const templates = {
+      'Card 1': { Front: '{{Word}}', Back: '<p>JLPT</p>{{Word Meaning}}' }
+    }
+    const anki = fakeAnkiConnect({ updateModelTemplates: { result: null } })
+    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+
+    await client.updateModelTemplates('Kaishi 1.5k', templates)
+
+    expect(anki.calls).toEqual([
+      {
+        action: 'updateModelTemplates',
+        params: { model: { modelName: 'Kaishi 1.5k', templates } }
+      }
+    ])
+  })
+
   it('addNote() posts the note and returns the new note id', async () => {
     const anki = fakeAnkiConnect({ addNote: { result: 12345 } })
     const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })

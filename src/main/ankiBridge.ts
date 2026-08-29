@@ -4,6 +4,7 @@
 import { ANKI_CHANNELS } from '../shared/ipcChannels'
 import type {
   AnkiExistingMatch,
+  AnkiJlptSetupResult,
   AnkiMembershipMatches,
   AnkiMineResult,
   AnkiPing,
@@ -19,6 +20,7 @@ export interface AnkiServiceLike {
   deckNames(): Promise<string[]>
   modelNames(): Promise<string[]>
   modelFieldNames(modelName: string): Promise<string[]>
+  setupJlptField(): Promise<AnkiJlptSetupResult>
   addNote(req: MineRequest): Promise<AnkiMineResult>
   findExisting(token: Token, word?: string): Promise<AnkiExistingMatch | null>
   findTargetDeckMembership(expressions: string[]): Promise<AnkiMembershipMatches>
@@ -36,6 +38,7 @@ export function registerAnkiBridge<E>(ipc: IpcMainHandleLike<E>, service: AnkiSe
   ipc.handle(ANKI_CHANNELS.deckNames, () => service.deckNames())
   ipc.handle(ANKI_CHANNELS.modelNames, () => service.modelNames())
   ipc.handle(ANKI_CHANNELS.modelFieldNames, (_e, modelName) => service.modelFieldNames(modelName))
+  ipc.handle(ANKI_CHANNELS.setupJlptField, () => service.setupJlptField())
   ipc.handle(ANKI_CHANNELS.addNote, (_e, req) => service.addNote(req))
   ipc.handle(ANKI_CHANNELS.findExisting, async (_e, token, word) => {
     try {

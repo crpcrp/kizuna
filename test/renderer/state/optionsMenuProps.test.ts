@@ -29,6 +29,10 @@ function actionsFake(): OptionsDialogActions {
     onReorderYomitanDicts: vi.fn(async () => {}),
     onRemoveYomitanDict: vi.fn(async () => {}),
     ankiPing: vi.fn(async () => ({ ok: true })),
+    onSetupAnkiJlptField: vi.fn(async () => ({
+      status: 'already-configured' as const,
+      modelName: 'Basic'
+    })),
     onChangeAnkiSettings: vi.fn(async () => {}),
     onSaveAzureTranslationKey: vi.fn(async () => true),
     onSaveAzureTranslationRegion: vi.fn(async () => true),
@@ -161,6 +165,7 @@ describe('buildOptionsMenuProps', () => {
     expect(props.knowledge.onSyncNow).toBe(input.knowledge.onSyncNow)
     expect(props.dictionaries.onRemoveYomitanDict).toBe(input.actions.onRemoveYomitanDict)
     expect(props.anki.onChangeAnkiSettings).toBe(input.actions.onChangeAnkiSettings)
+    expect(props.anki.onSetupJlptField).toBe(input.actions.onSetupAnkiJlptField)
     expect(props.subtitles.onSaveAzureTranslationKey).toBe(input.actions.onSaveAzureTranslationKey)
     expect(props.subtitles.onSaveAzureTranslationRegion).toBe(
       input.actions.onSaveAzureTranslationRegion

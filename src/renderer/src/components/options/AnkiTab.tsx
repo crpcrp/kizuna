@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
   defaultAnkiSettings,
+  type AnkiJlptSetupResult,
   type AnkiField,
   type AnkiSettings,
   type AnkiPing
@@ -55,6 +56,7 @@ export interface AnkiTabProps {
   ankiModelNames?: string[]
   ankiModelFields?: string[]
   ankiPing: () => Promise<AnkiPing>
+  onSetupJlptField: () => Promise<AnkiJlptSetupResult>
   onChangeAnkiSettings: (patch: Partial<AnkiSettings>) => void
   /** User-facing error from the last anki-domain load (e.g. "Is Anki
    * running?"). Undefined when there is none. */
@@ -139,11 +141,14 @@ export default function AnkiTab({
   ankiModelNames = [],
   ankiModelFields = [],
   ankiPing,
+  onSetupJlptField,
   onChangeAnkiSettings,
   loadError
 }: AnkiTabProps): React.JSX.Element {
   ankiSettings ??= defaultAnkiSettings
   const [ankiPingResult, setAnkiPingResult] = useState<AnkiPing | null>(null)
+  const [jlptSetupResult, setJlptSetupResult] = useState<AnkiJlptSetupResult | null>(null)
+  const [jlptSetupPending, setJlptSetupPending] = useState(false)
   // The API key is a secret credential whose change triggers a network reload
   // (deckNames/modelNames). Mirroring the WaniKani token field, it lives in a
   // local draft committed only on "Save" — never per keystroke. Otherwise, when
@@ -152,6 +157,47 @@ export default function AnkiTab({
   // the previous value, making the key impossible to type in.
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const apiKeyConfigured = ankiSettings.apiKey !== ''
+
+  const setupJlptField = async (): Promise<void> => {
+    if (
+      !window.confirm(
+        `Set up the JLPT field on "${ankiSettings.modelName}"?\n\n` +
+          'This changes the configured note type for every note that uses it. ' +
+          'Let Anki create its normal backup or export the note type first.\n\n' +
+          'This adds presentation only and does not populate existing notes.'
+      )
+    ) {
+      return
+    }
+
+    setJlptSetupPending(true)
+    setJlptSetupResult(null)
+    try {
+      setJlptSetupResult(await onSetupJlptField())
+    } catch {
+      setJlptSetupResult({
+        status: 'api-failure',
+        modelName: ankiSettings.modelName,
+        message: 'Could not complete the JLPT field setup.'
+      })
+    } finally {
+      setJlptSetupPending(false)
+    }
+  }
+
+  const jlptSetupMessage =
+    jlptSetupResult === null
+      ? null
+      : jlptSetupResult.status === 'changed'
+        ? `JLPT field set up on ${jlptSetupResult.modelName}.`
+        : jlptSetupResult.status === 'already-configured'
+          ? `JLPT field is already set up on ${jlptSetupResult.modelName}.`
+          : jlptSetupResult.message
+
+  const jlptSetupFailed =
+    jlptSetupResult?.status === 'preflight-failure' ||
+    jlptSetupResult?.status === 'api-failure' ||
+    jlptSetupResult?.status === 'verification-failure'
 
   return (
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
@@ -269,7 +315,25 @@ export default function AnkiTab({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            id="anki-setup-jlpt-field"
+            className="options-button"
+            disabled={jlptSetupPending || ankiSettings.modelName.trim() === ''}
+            onClick={() => void setupJlptField()}
+          >
+            {jlptSetupPending ? 'Setting up…' : 'Set up JLPT field'}
+          </button>
         </div>
+        {jlptSetupMessage !== null && (
+          <p
+            id="anki-jlpt-setup-result"
+            className={jlptSetupFailed ? 'options-error' : 'options-hint'}
+            role={jlptSetupFailed ? 'alert' : undefined}
+          >
+            {jlptSetupMessage}
+          </p>
+        )}
         <div className="options-row">
           <span className="options-row-label">Connection</span>
           <button

@@ -153,6 +153,10 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       deckNames: vi.fn(async () => []),
       modelNames: vi.fn(async () => []),
       modelFieldNames: vi.fn(async () => []),
+      setupJlptField: vi.fn(async () => ({
+        status: 'already-configured' as const,
+        modelName: ''
+      })),
       addNote: vi.fn(async () => ({
         noteId: 1,
         operation: 'added' as const,
