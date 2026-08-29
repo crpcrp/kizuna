@@ -1,0 +1,21 @@
+.bulk-mining-status[data-status='added'] {
+  color: var(--success-text);
+}
+.bulk-mining-status[data-status='duplicate'],
+.bulk-mining-status[data-status='noEntry'],
+.bulk-mining-status[data-status='cancelled'] {
+  color: var(--text-muted);
+}
+.bulk-mining-status[data-status='error'] {
+  color: var(--danger-text);
+}
+.bulk-mining-status[data-status='mining'] {
+  color: var(--accent-strong);
+}
+.bulk-mining-status {
+  overflow-wrap: anywhere;
+}
+.bulk-mining-summary {
+  margin: 0;
+  font-weight: 600;
+}

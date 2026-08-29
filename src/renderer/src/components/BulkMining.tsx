@@ -1,4 +1,5 @@
 import './BulkMining.css'
+import { BulkMiningStatusMarker, BulkMiningSummary } from './BulkMiningStatus'
 import {
   displayedCandidates,
   hiddenTargetDeckMatchCount,
@@ -35,25 +36,6 @@ function FrequencyCell({ resolved }: { resolved: ResolvedEntry | undefined }): R
   return <span>{resolved.entry?.frequencyDisplay ?? resolved.frequency}</span>
 }
 
-function StatusMarker({ status }: { status: MiningWordStatus | undefined }): React.JSX.Element {
-  const kind = status?.kind ?? 'queued'
-  const text =
-    status?.kind === 'duplicate'
-      ? status.deckNames.length > 0
-        ? `Duplicate in: ${status.deckNames.join(', ')}`
-        : 'Duplicate (deck unavailable)'
-      : kind === 'noEntry'
-        ? 'No entry'
-        : kind === 'updated'
-          ? 'Updated'
-          : kind
-  return (
-    <span className="bulk-mining-status" data-status={kind}>
-      {text}
-    </span>
-  )
-}
-
 function CandidateTable({
   candidates,
   resolved = {},
@@ -88,7 +70,7 @@ function CandidateTable({
               <tr key={candidate.lemma} data-no-entry={noEntry || undefined}>
                 <td>
                   {showStatuses ? (
-                    <StatusMarker status={statuses[candidate.lemma]} />
+                    <BulkMiningStatusMarker status={statuses[candidate.lemma]} />
                   ) : (
                     <input
                       type="checkbox"
@@ -121,29 +103,6 @@ function CandidateTable({
           ) : null
         })}
     </div>
-  )
-}
-
-function Summary({
-  phase
-}: {
-  phase: Extract<BulkMiningPhase, { kind: 'done' }>
-}): React.JSX.Element {
-  const buckets: [keyof typeof phase.summary, string][] = [
-    ['added', 'added'],
-    ['updated', 'updated'],
-    ['duplicate', 'duplicates'],
-    ['noEntry', 'no entry'],
-    ['error', 'errors'],
-    ['cancelled', 'cancelled']
-  ]
-  return (
-    <p className="bulk-mining-summary">
-      {buckets
-        .filter(([key]) => phase.summary[key] > 0)
-        .map(([key, label]) => `${phase.summary[key]} ${label}`)
-        .join(' · ')}
-    </p>
   )
 }
 
@@ -351,7 +310,7 @@ export default function BulkMining(props: BulkMiningProps): React.JSX.Element | 
         </p>
       )}
       <CandidateTable candidates={phase.candidates} statuses={phase.statuses} />
-      <Summary phase={phase} />
+      <BulkMiningSummary summary={phase.summary} />
       <footer className="bulk-mining-footer">
         <button type="button" id="bulk-mining-back" onClick={props.onBackToList}>
           Back to word list
