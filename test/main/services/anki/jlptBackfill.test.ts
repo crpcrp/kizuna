@@ -23,8 +23,15 @@ function note(noteId: number, fields: Record<string, string | undefined>): AnkiN
 const fields = { wordField: 'Word', readingField: 'Reading', targetField: 'JLPT' }
 
 describe('backfill field parsing', () => {
-  it('strips HTML and decodes common entities', () => {
-    expect(stripHtml('<span>猫&nbsp;&amp;犬</span>')).toBe('猫 &犬')
+  it('strips tags and spaces without unescaping entities', () => {
+    expect(stripHtml('<span>猫&nbsp;犬</span>')).toBe('猫 犬')
+    expect(stripHtml('&lt;script&gt;alert(1)&lt;/script&gt;')).toBe(
+      '&lt;script&gt;alert(1)&lt;/script&gt;'
+    )
+  })
+
+  it('repeats tag removal until nested tags are gone', () => {
+    expect(stripHtml('<<script>alert(1)</script>')).toBe('alert(1)')
   })
 
   it('accepts plain kana and converts Anki furigana to one reading', () => {

@@ -16,16 +16,16 @@ export type JlptBackfillClassification =
   | { kind: 'invalid-source' }
   | { kind: 'destination-missing' }
 
-/** Removes markup Anki stores around note-field text and decodes common spaces. */
+/** Removes markup Anki stores around note-field text and normalizes spaces. */
 export function stripHtml(value: string): string {
-  return value
-    .replace(/<[^>]*>/gu, '')
-    .replace(/&nbsp;/giu, ' ')
-    .replace(/&amp;/giu, '&')
-    .replace(/&lt;/giu, '<')
-    .replace(/&gt;/giu, '>')
-    .replace(/&quot;/giu, '"')
-    .replace(/&#39;/gu, "'")
+  let stripped = value
+  let previous: string
+  do {
+    previous = stripped
+    stripped = stripped.replace(/<[^>]*>/gu, '')
+  } while (stripped !== previous)
+
+  return stripped.replace(/&nbsp;/giu, ' ')
 }
 
 const KANA_ONLY = /^[ぁ-ゖァ-ヺーゝゞヽヾ]+$/u
