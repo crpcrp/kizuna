@@ -3,6 +3,7 @@ import { registerKnowledgeBridge, type KnowledgeServiceLike } from '@src/main/kn
 import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
 import type { JlptCoverageReportResult } from '@src/shared/jlptCoverage'
+import type { JlptExportResult } from '@src/shared/jlptExport'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
@@ -25,6 +26,10 @@ function fakeService() {
     jlptCoverageReport: vi.fn(async (): Promise<JlptCoverageReportResult> => ({
       status: 'error',
       message: 'Unavailable'
+    })),
+    jlptUnknownItems: vi.fn(async (): Promise<JlptExportResult> => ({
+      status: 'ready',
+      items: []
     })),
     sync: vi.fn(async () => EMPTY_STATUS),
     syncStatus: vi.fn(async () => EMPTY_STATUS),
@@ -52,6 +57,7 @@ describe('registerKnowledgeBridge', () => {
         KNOWLEDGE_CHANNELS.levelsFor,
         KNOWLEDGE_CHANNELS.detailsFor,
         KNOWLEDGE_CHANNELS.jlptCoverageReport,
+        KNOWLEDGE_CHANNELS.jlptUnknownItems,
         KNOWLEDGE_CHANNELS.sync,
         KNOWLEDGE_CHANNELS.syncStatus,
         KNOWLEDGE_CHANNELS.getSettings,
@@ -92,6 +98,34 @@ describe('registerKnowledgeBridge', () => {
 
     expect(service.jlptCoverageReport).toHaveBeenCalledOnce()
     expect(result).toEqual({ status: 'error', message: 'Unavailable' })
+  })
+
+  it('validates JLPT export requests before calling the service', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+
+    registerKnowledgeBridge(ipc, service)
+
+    const result = await handlers.get(KNOWLEDGE_CHANNELS.jlptUnknownItems)!(event, {
+      throughLevel: 'N6',
+      mode: 'both'
+    })
+
+    expect(result).toEqual({ status: 'error', message: 'Invalid JLPT export request.' })
+    expect(service.jlptUnknownItems).not.toHaveBeenCalled()
+  })
+
+  it('forwards a valid JLPT export request and returns its result', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+
+    registerKnowledgeBridge(ipc, service)
+
+    const request = { throughLevel: 'N3' as const, mode: 'vocabulary' as const }
+    const result = await handlers.get(KNOWLEDGE_CHANNELS.jlptUnknownItems)!(event, request)
+
+    expect(service.jlptUnknownItems).toHaveBeenCalledWith(request)
+    expect(result).toEqual({ status: 'ready', items: [] })
   })
 
   it('forwards sync with its optional source and force setting, and returns its result', async () => {

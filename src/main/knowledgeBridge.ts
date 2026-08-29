@@ -17,6 +17,11 @@ import type {
   SyncStatus
 } from '../shared/knowledge'
 import type { JlptCoverageReportResult, JlptCoverageSourceStatus } from '../shared/jlptCoverage'
+import {
+  isJlptExportRequest,
+  type JlptExportRequest,
+  type JlptExportResult
+} from '../shared/jlptExport'
 import type { KnowledgeDb } from './services/knowledge/store'
 import {
   detailsFor as detailsForDb,
@@ -36,6 +41,8 @@ import {
   type JlptCoverageReportService
 } from './services/jlpt/coverageService'
 import type { JlptVocabularySnapshot } from './services/jlpt/classifier'
+import { createJlptExportService, type JlptExportService } from './services/jlpt/exportService'
+import type { JlptKanjiSnapshot } from './services/jlpt/kanji'
 
 /**
  * Floor between two actual syncs of the same source, applied regardless of
@@ -50,6 +57,7 @@ export interface KnowledgeServiceLike {
   levelsFor(lemmas: string[]): Promise<Record<string, KnowledgeLevel>>
   detailsFor(lemmas: string[]): Promise<Record<string, KnowledgeDetails>>
   jlptCoverageReport(): Promise<JlptCoverageReportResult>
+  jlptUnknownItems(request: JlptExportRequest): Promise<JlptExportResult>
   sync(source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus>
   syncStatus(): Promise<SyncStatus>
   syncIfStale(): Promise<SyncStatus>
@@ -71,6 +79,12 @@ export function registerKnowledgeBridge<E>(
   ipc.handle(KNOWLEDGE_CHANNELS.levelsFor, (_e, lemmas) => service.levelsFor(lemmas))
   ipc.handle(KNOWLEDGE_CHANNELS.detailsFor, (_e, lemmas) => service.detailsFor(lemmas))
   ipc.handle(KNOWLEDGE_CHANNELS.jlptCoverageReport, () => service.jlptCoverageReport())
+  ipc.handle(KNOWLEDGE_CHANNELS.jlptUnknownItems, (_e, request) => {
+    if (!isJlptExportRequest(request)) {
+      return { status: 'error', message: 'Invalid JLPT export request.' } satisfies JlptExportResult
+    }
+    return service.jlptUnknownItems(request)
+  })
   ipc.handle(KNOWLEDGE_CHANNELS.sync, (_e, source, opts) => service.sync(source, opts))
   ipc.handle(KNOWLEDGE_CHANNELS.syncStatus, () => service.syncStatus())
   ipc.handle(KNOWLEDGE_CHANNELS.getSettings, () => service.getSettings())
@@ -85,6 +99,8 @@ export interface CreateKnowledgeServiceDeps {
   now?: () => number
   /** Defaults to the pinned bundled snapshot; injected for report tests. */
   jlptSnapshot?: JlptVocabularySnapshot
+  /** Defaults to the pinned bundled kanji snapshot; injected for export tests. */
+  jlptKanjiSnapshot?: JlptKanjiSnapshot
 }
 
 function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSettings {
@@ -275,6 +291,11 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     now,
     sourceStatus: syncStatusForReport
   })
+  const exportService: JlptExportService = createJlptExportService({
+    db,
+    vocabularySnapshot: deps.jlptSnapshot,
+    kanjiSnapshot: deps.jlptKanjiSnapshot
+  })
 
   function reportSourceStatus(
     source: KnowledgeSource,
@@ -321,6 +342,7 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     levelsFor: (lemmas: string[]) => Promise.resolve(levelsForDb(db, lemmas)),
     detailsFor: (lemmas: string[]) => Promise.resolve(detailsForDb(db, lemmas)),
     jlptCoverageReport: coverageReportService.jlptCoverageReport,
+    jlptUnknownItems: exportService.jlptUnknownItems,
     sync,
     syncStatus,
     syncIfStale,

@@ -4,6 +4,7 @@ import type { AppSurface } from '@src/shared/appShell'
 import type { LookupResult, DictInfo } from '@src/shared/dictionary'
 import type { AnkiJlptSetupResult, AnkiMembershipMatches, AnkiSettings } from '@src/shared/anki'
 import type { KnowledgeDetails, PublicKnowledgeSettings } from '@src/shared/knowledge'
+import type { JlptExportRequest, JlptExportResult } from '@src/shared/jlptExport'
 import type { PlayerSettings } from '@src/shared/playerSettings'
 import type { AppInfoLink, NoticeOpenResult } from '@src/shared/appInfo'
 import type {
@@ -93,6 +94,15 @@ describe('KizunaApi', () => {
     expectTypeOf<KizunaApi['knowledge']['detailsFor']>().parameters.toEqualTypeOf<[string[]]>()
     expectTypeOf<KizunaApi['knowledge']['detailsFor']>().returns.toEqualTypeOf<
       Promise<Record<string, KnowledgeDetails>>
+    >()
+  })
+
+  it('knowledge.jlptUnknownItems exposes the typed export contract', () => {
+    expectTypeOf<KizunaApi['knowledge']['jlptUnknownItems']>().parameters.toEqualTypeOf<
+      [JlptExportRequest]
+    >()
+    expectTypeOf<KizunaApi['knowledge']['jlptUnknownItems']>().returns.toEqualTypeOf<
+      Promise<JlptExportResult>
     >()
   })
 

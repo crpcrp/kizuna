@@ -23,6 +23,8 @@ import type { HttpFetch } from '@src/main/services/http'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import type { JlptVocabularySnapshot } from '@src/main/services/jlpt/classifier'
+import type { JlptKanjiSnapshot } from '@src/main/services/jlpt/kanji'
+import type { JlptLevel } from '@src/shared/jlpt'
 
 function deferred(): { promise: Promise<void>; resolve(): void } {
   let resolve!: () => void
@@ -85,6 +87,20 @@ beforeEach(() => {
 
 function asKnowledgeDb(d: Database.Database): KnowledgeDb {
   return d as unknown as KnowledgeDb
+}
+
+function kanjiSnapshot(entries: Array<[string, JlptLevel, number | null]>): JlptKanjiSnapshot {
+  return {
+    schemaVersion: 1,
+    source: {
+      name: 'OpenJLPT',
+      version: 'test-version',
+      commit: 'snapshot-test',
+      license: 'CC-BY-SA-4.0'
+    },
+    inputRecordCount: entries.length,
+    entries
+  }
 }
 
 describe('createKnowledgeService', () => {
@@ -348,6 +364,163 @@ describe('createKnowledgeService', () => {
     expect(result.sourceStatus.wanikani).toMatchObject({ configured: true, syncing: false })
     expect(result.sourceStatus.anki).toMatchObject({ configured: false, syncing: false })
     expect(http.calls).toHaveLength(0)
+  })
+
+  it('jlptUnknownItems returns current unknown candidates without external calls', async () => {
+    const http = fakeHttp({})
+    const service = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch: http.fetch,
+      jlptSnapshot: {
+        schemaVersion: 1,
+        source: {
+          name: 'OpenJLPT',
+          version: 'test-version',
+          commit: 'snapshot-test',
+          license: 'CC-BY-SA-4.0'
+        },
+        inputRecordCount: 3,
+        entries: [
+          ['猫', 'ねこ', 'N5'],
+          ['語', 'かたり', 'N3'],
+          ['山', 'やま', 'N2']
+        ]
+      },
+      jlptKanjiSnapshot: kanjiSnapshot([
+        ['日', 'N5', 1],
+        ['語', 'N3', 2],
+        ['山', 'N2', 3]
+      ])
+    })
+    replaceSource(
+      asKnowledgeDb(db),
+      'anki',
+      [{ source: 'anki', lemma: '日', reading: '', level: 'known' }],
+      't0'
+    )
+
+    const result = await service.jlptUnknownItems({ throughLevel: 'N3', mode: 'both' })
+
+    expect(result).toEqual({
+      status: 'ready',
+      items: [
+        {
+          id: 'vocabulary:猫',
+          kind: 'vocabulary',
+          expression: '猫',
+          reading: 'ねこ',
+          level: 'N5',
+          frequency: null
+        },
+        {
+          id: 'vocabulary:語',
+          kind: 'vocabulary',
+          expression: '語',
+          reading: 'かたり',
+          level: 'N3',
+          frequency: null
+        }
+      ]
+    })
+    expect(http.calls).toHaveLength(0)
+  })
+
+  it('jlptUnknownItems keeps the local knowledge read bounded by SQLite batches', async () => {
+    const entries = Array.from(
+      { length: 1001 },
+      (_, index) => [`word-${index}`, '', 'N5'] as [string, string, JlptLevel]
+    )
+    const preparedSql: string[] = []
+    const wrappedDb = {
+      exec: db.exec.bind(db),
+      prepare(sql: string) {
+        preparedSql.push(sql)
+        return db.prepare(sql)
+      },
+      transaction: db.transaction.bind(db)
+    } as unknown as KnowledgeDb
+    const service = createKnowledgeService({
+      db: wrappedDb,
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch: fakeHttp({}).fetch,
+      jlptSnapshot: {
+        schemaVersion: 1,
+        source: {
+          name: 'OpenJLPT',
+          version: 'test-version',
+          commit: 'snapshot-test',
+          license: 'CC-BY-SA-4.0'
+        },
+        inputRecordCount: entries.length,
+        entries
+      },
+      jlptKanjiSnapshot: kanjiSnapshot([])
+    })
+
+    const result = await service.jlptUnknownItems({ throughLevel: 'N5', mode: 'vocabulary' })
+
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    expect(result.items).toHaveLength(1001)
+    expect(preparedSql.filter((sql) => sql.includes('WHERE lemma IN'))).toHaveLength(3)
+  })
+
+  it('jlptUnknownItems returns safe typed errors for corrupt data and database failures', async () => {
+    const validKanji = kanjiSnapshot([])
+    const settings = createSettingsStore(fakeIo())
+    const corrupt = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings,
+      secrets: identityCodec,
+      fetch: fakeHttp({}).fetch,
+      jlptSnapshot: {
+        schemaVersion: 2,
+        source: {
+          name: 'OpenJLPT',
+          version: 'test-version',
+          commit: 'snapshot-test',
+          license: 'CC-BY-SA-4.0'
+        },
+        inputRecordCount: 0,
+        entries: []
+      },
+      jlptKanjiSnapshot: validKanji
+    })
+    expect(await corrupt.jlptUnknownItems({ throughLevel: 'N5', mode: 'both' })).toEqual({
+      status: 'error',
+      message: 'The bundled JLPT export data is unavailable or corrupt.'
+    })
+
+    const failingDb = {
+      prepare: () => {
+        throw new Error('secret database details')
+      }
+    } as unknown as KnowledgeDb
+    const failing = createKnowledgeService({
+      db: failingDb,
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch: fakeHttp({}).fetch,
+      jlptSnapshot: {
+        schemaVersion: 1,
+        source: {
+          name: 'OpenJLPT',
+          version: 'test-version',
+          commit: 'snapshot-test',
+          license: 'CC-BY-SA-4.0'
+        },
+        inputRecordCount: 1,
+        entries: [['猫', 'ねこ', 'N5']]
+      },
+      jlptKanjiSnapshot: validKanji
+    })
+    expect(await failing.jlptUnknownItems({ throughLevel: 'N5', mode: 'both' })).toEqual({
+      status: 'error',
+      message: 'Could not read local knowledge data for the JLPT export.'
+    })
   })
 
   it('sync() pulls both sources when configured and one failing does not abort the other', async () => {

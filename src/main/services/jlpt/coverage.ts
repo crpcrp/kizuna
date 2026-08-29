@@ -15,6 +15,7 @@ import type {
   ProvenanceCounts
 } from '../../../shared/jlptCoverage'
 import type { JlptVocabularySnapshot } from './classifier'
+import { buildJlptVocabularyInventory } from './vocabularyInventory'
 
 export interface JlptCoverageInventoryEntry {
   expression: string
@@ -36,76 +37,12 @@ export interface AggregateJlptCoverageInput {
 const OPENJLPT_LICENSE_URL = 'https://creativecommons.org/licenses/by-sa/4.0/'
 const OPENJLPT_ATTRIBUTION =
   "OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources."
-const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
-
-function isJlptLevel(value: unknown): value is JlptLevel {
-  return typeof value === 'string' && JLPT_LEVELS.includes(value as JlptLevel)
-}
-
-function validateSnapshot(snapshot: JlptVocabularySnapshot): void {
-  if (
-    !snapshot ||
-    typeof snapshot !== 'object' ||
-    snapshot.schemaVersion !== 1 ||
-    !Number.isInteger(snapshot.inputRecordCount) ||
-    snapshot.inputRecordCount < 0 ||
-    !Array.isArray(snapshot.entries)
-  ) {
-    throw new Error('Invalid JLPT vocabulary snapshot')
-  }
-
-  const source = snapshot.source
-  if (
-    !source ||
-    typeof source.name !== 'string' ||
-    source.name.trim() === '' ||
-    typeof source.version !== 'string' ||
-    source.version.trim() === '' ||
-    typeof source.commit !== 'string' ||
-    source.commit.trim() === '' ||
-    typeof source.license !== 'string' ||
-    source.license.trim() === ''
-  ) {
-    throw new Error('Invalid JLPT vocabulary snapshot metadata')
-  }
-}
-
 /** Builds the deterministic expression-level inventory used by the report. */
 export function buildJlptCoverageInventory(
   snapshot: JlptVocabularySnapshot
 ): JlptCoverageInventory {
-  validateSnapshot(snapshot)
-
-  const levelsByExpression = new Map<string, Set<JlptLevel>>()
-  let nonEmptyRecordCount = 0
-  for (const [index, rawEntry] of snapshot.entries.entries()) {
-    if (
-      !Array.isArray(rawEntry) ||
-      rawEntry.length !== 3 ||
-      typeof rawEntry[0] !== 'string' ||
-      typeof rawEntry[1] !== 'string' ||
-      !isJlptLevel(rawEntry[2])
-    ) {
-      throw new Error(`Invalid JLPT vocabulary entry at index ${index}`)
-    }
-
-    const expression = normalizeKnowledgeLemma(rawEntry[0])
-    if (expression === '') continue
-    nonEmptyRecordCount++
-
-    const levels = levelsByExpression.get(expression) ?? new Set<JlptLevel>()
-    levels.add(rawEntry[2])
-    levelsByExpression.set(expression, levels)
-  }
-
-  const entries = [...levelsByExpression]
-    .map(([expression, levels]) => ({
-      expression,
-      level: [...levels].sort((left, right) => levelOrder.get(left)! - levelOrder.get(right)!)[0]
-    }))
-    .sort((left, right) =>
-      left.expression === right.expression ? 0 : left.expression < right.expression ? -1 : 1
-    )
+  const canonical = buildJlptVocabularyInventory(snapshot)
+  const entries = canonical.entries.map(({ expression, level }) => ({ expression, level }))
 
   return {
     dataset: {
@@ -117,8 +54,8 @@ export function buildJlptCoverageInventory(
       attribution: OPENJLPT_ATTRIBUTION,
       rawRecordCount: snapshot.inputRecordCount,
       deduplicatedExpressionCount: entries.length,
-      duplicateCount: nonEmptyRecordCount - entries.length,
-      conflictCount: [...levelsByExpression.values()].filter((levels) => levels.size > 1).length
+      duplicateCount: canonical.nonEmptyRecordCount - entries.length,
+      conflictCount: canonical.conflictCount
     },
     entries
   }
