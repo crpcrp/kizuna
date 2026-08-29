@@ -66,6 +66,14 @@ export interface BulkMiningOpenInput {
   sortOrder?: 'auto' | FrequencyMode
 }
 
+export interface BulkMiningCandidatesOpenInput {
+  bridges: Pick<BulkMiningOpenInput['bridges'], 'dict' | 'anki'>
+  /** Candidates already derived by a caller-specific vocabulary source. */
+  candidates: MiningCandidate[]
+  frequencyDictId: number | null
+  sortOrder?: 'auto' | FrequencyMode
+}
+
 export interface BulkMiningSnapshotOpenInput {
   bridges: BulkMiningOpenInput['bridges']
   /** A completed or in-flight whole-track preparation owned by the caller. */
@@ -79,6 +87,7 @@ export interface BulkMiningController {
   getState(): BulkMiningPhase
   subscribe(listener: () => void): () => void
   open(input: BulkMiningOpenInput | BulkMiningSnapshotOpenInput): Promise<void>
+  openCandidates(input: BulkMiningCandidatesOpenInput): Promise<void>
   setThreshold(raw: string): void
   setMinimumCount(raw: string): void
   setSort(sort: BulkMiningSort, frequencyDictConfigured: boolean): void
@@ -89,7 +98,11 @@ export interface BulkMiningController {
   /** Mines the selected rows. `media` is the loaded file each candidate's
    * sentence audio can be clipped from; omit it to mine without clips. */
   start(bridges: BulkMineBridges, media?: MineMediaSource): Promise<void>
-  backToList(bridges: BulkMiningOpenInput['bridges']): Promise<void>
+  backToList(
+    bridges: Pick<BulkMiningOpenInput['bridges'], 'dict' | 'anki'> & {
+      knowledge?: KnowledgeDetailsBridge
+    }
+  ): Promise<void>
   cancel(): void
   close(): void
   getSummaryIfMined(): MiningSummary | null
@@ -109,6 +122,69 @@ export function createBulkMiningController(): BulkMiningController {
   const set = (next: BulkMiningPhase): void => {
     state = next
     listeners.forEach((listener) => listener())
+  }
+
+  const prepareCandidates = ({
+    request,
+    bridges,
+    candidates,
+    frequencyDictId,
+    sortOrder,
+    sort
+  }: {
+    request: number
+    bridges: BulkMiningCandidatesOpenInput['bridges']
+    candidates: MiningCandidate[]
+    frequencyDictId: number | null
+    sortOrder?: 'auto' | FrequencyMode
+    sort: BulkMiningSort
+  }): void => {
+    frequencyDictConfigured = frequencyDictId !== null
+    lastResolveOpts = { frequencyDictId, sortOrder }
+    lastReady = null
+    set({
+      kind: 'ready',
+      candidates,
+      resolved: {},
+      resolving: true,
+      selected: defaultSelection(candidates, {}),
+      threshold: null,
+      minimumCount: null,
+      sort,
+      targetDeckMatches: {},
+      checkingTargetDeck: true,
+      hideTargetDeckMatches: true
+    })
+    void resolveCandidateEntries(
+      bridges.dict,
+      candidates,
+      {},
+      lastResolveOpts,
+      requestToken,
+      (patch) => {
+        if (requestToken.current !== request || state.kind !== 'ready') return
+        const resolved = { ...state.resolved, ...patch }
+        const selected = { ...state.selected }
+        for (const [lemma, entry] of Object.entries(patch))
+          if (entry.entry === null) selected[lemma] = false
+        set({ ...state, resolved, selected })
+      }
+    ).then(async () => {
+      if (requestToken.current !== request || state.kind !== 'ready') return
+      const ready = state
+      set({ ...ready, resolving: false })
+      const identities = [
+        ...new Set(
+          ready.candidates.flatMap((candidate) => membershipIdentities(candidate, ready.resolved))
+        )
+      ]
+      if (identities.length === 0) {
+        if (requestToken.current === request && state.kind === 'ready')
+          set({ ...state, checkingTargetDeck: false })
+        return
+      }
+      await refreshTargetDeckMembership(request, identities, bridges.anki)
+    })
   }
 
   /** Batches membership lookups for `identities` into the live ready phase. */
@@ -174,53 +250,31 @@ export function createBulkMiningController(): BulkMiningController {
         details = await input.bridges.knowledge.detailsFor(identities)
         if (requestToken.current !== request) return
         const candidates = deriveMiningCandidates(cueTokens, details)
-        frequencyDictConfigured = input.frequencyDictId !== null
-        lastResolveOpts = { frequencyDictId: input.frequencyDictId, sortOrder: input.sortOrder }
-        set({
-          kind: 'ready',
+        prepareCandidates({
+          request,
+          bridges: input.bridges,
           candidates,
-          resolved: {},
-          resolving: true,
-          selected: defaultSelection(candidates, {}),
-          threshold: null,
-          minimumCount: null,
-          sort: 'count',
-          targetDeckMatches: {},
-          checkingTargetDeck: true,
-          hideTargetDeckMatches: true
-        })
-        void resolveCandidateEntries(
-          input.bridges.dict,
-          candidates,
-          {},
-          lastResolveOpts,
-          requestToken,
-          (patch) => {
-            if (requestToken.current !== request || state.kind !== 'ready') return
-            const resolved = { ...state.resolved, ...patch }
-            const selected = { ...state.selected }
-            for (const [lemma, entry] of Object.entries(patch))
-              if (entry.entry === null) selected[lemma] = false
-            set({ ...state, resolved, selected })
-          }
-        ).then(async () => {
-          if (requestToken.current !== request || state.kind !== 'ready') return
-          const ready = state
-          set({ ...ready, resolving: false })
-          const identities = [
-            ...new Set(
-              ready.candidates.flatMap((candidate) =>
-                membershipIdentities(candidate, ready.resolved)
-              )
-            )
-          ]
-          await refreshTargetDeckMembership(request, identities, input.bridges.anki)
+          frequencyDictId: input.frequencyDictId,
+          sortOrder: input.sortOrder,
+          sort: 'count'
         })
       } catch (err) {
         if (requestToken.current !== request) return
         set({ kind: 'error', message: errorMessage(err) })
         return
       }
+    },
+    async openCandidates(input): Promise<void> {
+      const request = ++requestToken.current
+      set({ kind: 'preparing' })
+      prepareCandidates({
+        request,
+        bridges: input.bridges,
+        candidates: input.candidates,
+        frequencyDictId: input.frequencyDictId,
+        sortOrder: input.sortOrder,
+        sort: 'frequency'
+      })
     },
     setThreshold(raw): void {
       if (state.kind === 'ready') set({ ...state, threshold: parseThreshold(raw) })
