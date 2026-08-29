@@ -73,6 +73,7 @@ function toResults(rows: unknown[]): LookupResult[] {
     frequency: null,
     frequencyDisplay: null,
     pitchAccent: null,
+    jlptLevel: null,
     defTags: row.def_tags ?? '',
     termTags: row.term_tags ?? '',
     score: row.score ?? 0,

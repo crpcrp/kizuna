@@ -11,7 +11,9 @@ import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 import { makeDictInfo, makeLookupResult } from '@test/harness/dictFixtures'
 
 const sampleImportResult: ImportResult = { dictId: 1, termCount: 6, metaCount: 0 }
-const sampleLookupResults: LookupResult[] = [makeLookupResult({ dictTitle: 'yomitan-sample' })]
+const sampleLookupResults: LookupResult[] = [
+  makeLookupResult({ dictTitle: 'yomitan-sample', jlptLevel: 'N3' })
+]
 const sampleDicts: DictInfo[] = [makeDictInfo({ title: 'yomitan-sample', revision: 'jmdict4' })]
 
 /** Fake dict service: records calls. `onProgressToEmit`, if given, is

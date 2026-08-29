@@ -2,10 +2,15 @@ import { describe, it, expect, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import { createDictService } from '@src/main/dictBridge'
+import type { JlptLevel } from '@src/shared/jlpt'
 import { fixture } from '@test/paths'
 import { fakeDictImporter } from '@test/harness/fakeDictImporter'
 
 const ZIP_FIXTURE = readFileSync(fixture('yomitan-sample.zip'))
+
+function fakeJlptClassifier(levelFor: (expression: string, reading?: string) => JlptLevel | null) {
+  return { levelFor: vi.fn(levelFor) }
+}
 
 describe('createDictService', () => {
   it('listDicts on a brand-new DB (no import yet) returns an empty list', async () => {
@@ -184,6 +189,7 @@ describe('createDictService', () => {
         frequency: null,
         frequencyDisplay: null,
         pitchAccent: null,
+        jlptLevel: 'N5',
         defTags: 'n',
         termTags: '',
         score: 1,
@@ -191,6 +197,55 @@ describe('createDictService', () => {
       }
     ])
 
+    db.close()
+  })
+
+  it('enriches final results without changing their order', async () => {
+    const db = new Database(':memory:')
+    const classifier = fakeJlptClassifier((expression) => (expression === '猫' ? 'N5' : 'N1'))
+    const service = createDictService({ db, jlptClassifier: classifier })
+    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
+    db.prepare(
+      'INSERT INTO terms (dict_id, expression, reading, glossary, sequence) VALUES (?, ?, ?, ?, ?)'
+    ).run(dictId, 'ネコ', 'ねこ', 'cat', 0)
+
+    const results = await service.lookup('猫', 'ねこ')
+    const baseline = await createDictService({
+      db,
+      jlptClassifier: fakeJlptClassifier(() => null)
+    }).lookup('猫', 'ねこ')
+
+    expect(results.map(({ expression }) => expression)).toEqual(
+      baseline.map(({ expression }) => expression)
+    )
+    expect(results.map(({ jlptLevel }) => jlptLevel)).toEqual(['N5', 'N1'])
+    expect(classifier.levelFor).toHaveBeenCalledTimes(2)
+    expect(classifier.levelFor).toHaveBeenNthCalledWith(1, '猫', 'ねこ')
+    expect(classifier.levelFor).toHaveBeenNthCalledWith(2, 'ネコ', 'ねこ')
+
+    db.close()
+  })
+
+  it('preserves null for an unmatched vocabulary entry', async () => {
+    const db = new Database(':memory:')
+    const classifier = fakeJlptClassifier(() => null)
+    const service = createDictService({ db, jlptClassifier: classifier })
+    await service.importDict(new Uint8Array(ZIP_FIXTURE))
+
+    const [result] = await service.lookup('魚')
+
+    expect(result.jlptLevel).toBeNull()
+    expect(classifier.levelFor).toHaveBeenCalledWith('魚', 'さかな')
+    db.close()
+  })
+
+  it('does not classify an empty lookup result', async () => {
+    const db = new Database(':memory:')
+    const classifier = fakeJlptClassifier(() => 'N5')
+    const service = createDictService({ db, jlptClassifier: classifier })
+
+    await expect(service.lookup('存在しない')).resolves.toEqual([])
+    expect(classifier.levelFor).not.toHaveBeenCalled()
     db.close()
   })
 
@@ -287,6 +342,7 @@ describe('createDictService', () => {
         frequency: null,
         frequencyDisplay: null,
         pitchAccent: null,
+        jlptLevel: 'N5',
         defTags: 'n',
         termTags: '',
         score: 1,

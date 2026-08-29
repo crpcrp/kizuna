@@ -1,5 +1,7 @@
 // Shared Yomitan dictionary DTOs, crossing main/preload/renderer. Pure data.
 
+import type { JlptLevel } from './jlpt'
+
 /** How a frequency dict's `term_meta` value should be ranked (see `sortByFrequency`). */
 export type FrequencyMode = 'rank-based' | 'occurrence-based'
 
@@ -71,6 +73,8 @@ export interface LookupResult {
    * it takes no part in lookup ranking — it is enrichment only.
    */
   pitchAccent: number[] | null
+  /** Community-sourced approximate JLPT vocabulary level, or null when no safe match exists. */
+  jlptLevel: JlptLevel | null
   /** terms.def_tags, '' if null. */
   defTags: string
   /** terms.term_tags, '' if null. */

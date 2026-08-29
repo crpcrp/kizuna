@@ -7,6 +7,7 @@ import { pathApiFor } from './platformPath'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './services/dict/schema'
 import { lookup as runLookup } from './services/dict/lookup'
 import { createDbImporter, type DictionaryImporter } from './services/dict/importer'
+import { defaultJlptClassifier, type JlptClassifier } from './services/jlpt/classifier'
 import type { DictInfo, ImportResult, FrequencyMode, LookupResult } from '../shared/dictionary'
 
 /**
@@ -146,6 +147,8 @@ export interface CreateDictServiceDeps {
   db: DictDb
   /** Defaults to an in-process importer; index.ts supplies the worker-backed importer. */
   importer?: DictionaryImporter
+  /** Defaults to the bundled classifier; tests inject a small fixture-backed fake. */
+  jlptClassifier?: JlptClassifier
 }
 
 interface DictRow {
@@ -166,6 +169,7 @@ interface DictRow {
 export function createDictService(deps: CreateDictServiceDeps): DictServiceLike {
   const { db } = deps
   const importer = deps.importer ?? createDbImporter(db)
+  const jlptClassifier = deps.jlptClassifier ?? defaultJlptClassifier
   // Covers callers that hand over a bare connection (tests, in-memory DBs); the
   // main process has already done this via `configureDictConnection`, which has
   // to run before its `journal_mode` pragma. Either way it must precede the
@@ -194,11 +198,15 @@ export function createDictService(deps: CreateDictServiceDeps): DictServiceLike 
       longestMatchCandidates?: string[],
       surface?: string
     ): Promise<LookupResult[]> {
-      return runLookup(
+      const results = runLookup(
         db,
         { lemma, reading, surface, longestMatchCandidates },
         { freqDictId, sortMode }
       )
+      return results.map((result) => ({
+        ...result,
+        jlptLevel: jlptClassifier.levelFor(result.expression, result.reading)
+      }))
     },
 
     async listDicts(): Promise<DictInfo[]> {
