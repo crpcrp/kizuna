@@ -45,7 +45,6 @@ export interface JlptBulkExportController {
   setThroughLevel(level: JlptLevel): void
   setMode(mode: JlptExportMode): void
   toggle(lemma: string): void
-  setHideTargetDeckMatches(hide: boolean): void
   selectAll(): void
   selectNone(): void
   start(): void
@@ -155,7 +154,8 @@ export function createJlptBulkExportController(
         },
         candidates,
         frequencyDictId: source.frequencyDictId,
-        sortOrder: source.sortOrder
+        sortOrder: source.sortOrder,
+        checkTargetDeckMembership: false
       })
     } catch (error) {
       if (isCurrent(request))
@@ -197,9 +197,6 @@ export function createJlptBulkExportController(
     },
     toggle(lemma): void {
       bulkMining.toggle(lemma)
-    },
-    setHideTargetDeckMatches(hide): void {
-      bulkMining.setHideTargetDeckMatches(hide)
     },
     selectAll(): void {
       bulkMining.selectAllVisible(activeSource?.frequencyDictId !== null)

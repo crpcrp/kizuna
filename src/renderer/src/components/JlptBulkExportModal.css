@@ -70,12 +70,6 @@
   outline-offset: 2px;
 }
 
-.jlpt-bulk-export-target-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .jlpt-bulk-export-selection-actions,
 .jlpt-bulk-export-footer {
   display: flex;

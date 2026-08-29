@@ -16,7 +16,6 @@ export interface UseJlptBulkExportInput {
   bridge: Pick<KizunaApi, 'dict' | 'anki' | 'knowledge'>
   frequencyDictId: number | null
   sortOrder: PopupSortOrder
-  targetDeckName: string | undefined
   /** Rebuilds local knowledge after successful Anki additions or updates. */
   syncNow(source: KnowledgeSource, force?: boolean): Promise<SyncStatus>
 }
@@ -28,7 +27,6 @@ export interface JlptBulkExportViewModel {
   mode: JlptExportMode
   phase: BulkMiningPhase
   frequencyDictConfigured: boolean
-  targetDeckName: string | undefined
   onClose(): void
   onRetry(): void
   onThroughLevelChange(level: JlptLevel): void
@@ -36,7 +34,6 @@ export interface JlptBulkExportViewModel {
   onToggle(lemma: string): void
   onSelectAll(): void
   onSelectNone(): void
-  onSetHideTargetDeckMatches(hide: boolean): void
   onStart(): void
   onCancel(): void
   onBackToList(): void
@@ -52,7 +49,6 @@ export function useJlptBulkExport({
   bridge,
   frequencyDictId,
   sortOrder,
-  targetDeckName,
   syncNow
 }: UseJlptBulkExportInput): UseJlptBulkExportResult {
   const getSource = useLatestCallback(() => ({
@@ -85,15 +81,12 @@ export function useJlptBulkExport({
   const toggle = useLatestCallback((lemma: string) => controller.toggle(lemma))
   const selectAll = useLatestCallback(() => controller.selectAll())
   const selectNone = useLatestCallback(() => controller.selectNone())
-  const setHideTargetDeckMatches = useLatestCallback((hide: boolean) =>
-    controller.setHideTargetDeckMatches(hide)
-  )
   const start = useLatestCallback(() => controller.start())
   const cancel = useLatestCallback(() => controller.cancel())
   const backToList = useLatestCallback(() => controller.backToList())
 
   return {
-    ...viewModel(state, frequencyDictId, targetDeckName),
+    ...viewModel(state, frequencyDictId),
     onClose: close,
     onRetry: retry,
     onThroughLevelChange: setThroughLevel,
@@ -101,7 +94,6 @@ export function useJlptBulkExport({
     onToggle: toggle,
     onSelectAll: selectAll,
     onSelectNone: selectNone,
-    onSetHideTargetDeckMatches: setHideTargetDeckMatches,
     onStart: start,
     onCancel: cancel,
     onBackToList: backToList,
@@ -111,17 +103,10 @@ export function useJlptBulkExport({
 
 function viewModel(
   state: JlptBulkExportState,
-  frequencyDictId: number | null,
-  targetDeckName: string | undefined
+  frequencyDictId: number | null
 ): Pick<
   JlptBulkExportViewModel,
-  | 'open'
-  | 'presentation'
-  | 'throughLevel'
-  | 'mode'
-  | 'phase'
-  | 'frequencyDictConfigured'
-  | 'targetDeckName'
+  'open' | 'presentation' | 'throughLevel' | 'mode' | 'phase' | 'frequencyDictConfigured'
 > {
   return {
     open: state.open,
@@ -129,7 +114,6 @@ function viewModel(
     throughLevel: state.throughLevel,
     mode: state.mode,
     phase: state.phase,
-    frequencyDictConfigured: frequencyDictId !== null,
-    targetDeckName
+    frequencyDictConfigured: frequencyDictId !== null
   }
 }

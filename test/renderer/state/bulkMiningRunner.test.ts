@@ -112,6 +112,38 @@ describe('resolveCandidateEntries', () => {
     ])
   })
 
+  it('keeps an authoritative pinned frequency even when dictionary resolution differs or fails', async () => {
+    const dict = fakeDict(async (lemma) => {
+      if (lemma === 'missing') return []
+      if (lemma === 'broken') throw new Error('dictionary unavailable')
+      return [result(lemma, 999)]
+    })
+    const patches: Record<string, ResolvedEntry>[] = []
+
+    await resolveCandidateEntries(
+      dict,
+      [
+        { ...candidate('ranked'), fixedFrequency: 12 },
+        { ...candidate('missing'), fixedFrequency: 13 },
+        { ...candidate('broken'), fixedFrequency: 14 },
+        { ...candidate('unranked'), fixedFrequency: null }
+      ],
+      {},
+      { frequencyDictId: 7 },
+      { current: 0 },
+      (patch) => patches.push(patch)
+    )
+
+    expect(patches).toEqual([
+      {
+        ranked: { entry: result('ranked', 999), frequency: 12 },
+        missing: { entry: null, frequency: 13 },
+        broken: { entry: null, frequency: 14 },
+        unranked: { entry: result('unranked', 999), frequency: null }
+      }
+    ])
+  })
+
   it('skips resolved lemmas, turns empty or rejected lookups into null entries, and continues', async () => {
     const calls: string[] = []
     const dict = fakeDict(async (lemma) => {

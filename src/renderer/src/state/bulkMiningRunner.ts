@@ -1,4 +1,4 @@
-import type { FrequencyMode } from '../../../shared/dictionary'
+import type { FrequencyMode, LookupResult } from '../../../shared/dictionary'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import { errorMessage } from '../util/errorMessage'
 import {
@@ -21,6 +21,26 @@ export interface EntryResolutionOpts {
 
 type CandidateWithFrequencyFallback = MiningCandidate & {
   fallbackFrequency?: number | null
+  fixedFrequency?: number | null
+}
+
+function resolvedFrequency(
+  candidate: CandidateWithFrequencyFallback,
+  entry: LookupResult | null
+): number | null {
+  if (Object.prototype.hasOwnProperty.call(candidate, 'fixedFrequency')) {
+    return typeof candidate.fixedFrequency === 'number' && Number.isFinite(candidate.fixedFrequency)
+      ? candidate.fixedFrequency
+      : null
+  }
+  if (entry === null) return null
+  if (typeof entry.frequency === 'number' && Number.isFinite(entry.frequency)) {
+    return entry.frequency
+  }
+  return typeof candidate.fallbackFrequency === 'number' &&
+    Number.isFinite(candidate.fallbackFrequency)
+    ? candidate.fallbackFrequency
+    : null
 }
 
 export interface BulkMineBridges {
@@ -179,22 +199,16 @@ export async function resolveCandidateEntries(
         if (cancelToken.current !== request) return
         const entry =
           results.find((result) => result.expression === candidate.lemma) ?? results[0] ?? null
-        const dictionaryFrequency = entry?.frequency
-        const fallbackFrequency = candidate.fallbackFrequency
         patch[candidate.lemma] = {
           entry,
-          frequency:
-            entry === null
-              ? null
-              : typeof dictionaryFrequency === 'number' && Number.isFinite(dictionaryFrequency)
-                ? dictionaryFrequency
-                : typeof fallbackFrequency === 'number' && Number.isFinite(fallbackFrequency)
-                  ? fallbackFrequency
-                  : null
+          frequency: resolvedFrequency(candidate, entry)
         }
       } catch {
         if (cancelToken.current !== request) return
-        patch[candidate.lemma] = { entry: null, frequency: null }
+        patch[candidate.lemma] = {
+          entry: null,
+          frequency: resolvedFrequency(candidate, null)
+        }
       }
     }
     if (cancelToken.current !== request) return

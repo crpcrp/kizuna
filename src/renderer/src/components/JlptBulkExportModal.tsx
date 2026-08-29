@@ -3,7 +3,6 @@ import type { JlptExportMode } from '../../../shared/jlptExport'
 import type { JlptBulkExportViewModel } from '../state/useJlptBulkExport'
 import {
   displayedCandidates,
-  hiddenTargetDeckMatchCount,
   miningSet,
   type BulkMiningFilters,
   type MiningCandidate,
@@ -28,13 +27,10 @@ interface ExportControlsProps {
   phase: BulkMiningPhase
   throughLevel: JlptLevel
   mode: JlptExportMode
-  frequencyDictConfigured: boolean
-  targetDeckName: string | undefined
   onThroughLevelChange: (level: JlptLevel) => void
   onModeChange: (mode: JlptExportMode) => void
   onSelectAll: () => void
   onSelectNone: () => void
-  onSetHideTargetDeckMatches: (hide: boolean) => void
 }
 
 function asJlptCandidates(candidates: MiningCandidate[]): JlptMiningCandidate[] {
@@ -58,7 +54,11 @@ function itemType(candidate: JlptMiningCandidate): 'Kanji' | 'Vocabulary' {
   return candidate.kind === 'kanji' ? 'Kanji' : 'Vocabulary'
 }
 
-function frequencyCell(resolved: ResolvedEntry | undefined, noEntry: boolean): React.JSX.Element {
+function frequencyCell(
+  resolved: ResolvedEntry | undefined,
+  noEntry: boolean,
+  fixedFrequency: boolean
+): React.JSX.Element {
   const value =
     resolved === undefined ? (
       <span className="jlpt-bulk-export-pending" aria-label="Frequency pending">
@@ -67,7 +67,11 @@ function frequencyCell(resolved: ResolvedEntry | undefined, noEntry: boolean): R
     ) : resolved.frequency === null ? (
       <span>&mdash;</span>
     ) : (
-      <span>{resolved.entry?.frequencyDisplay ?? resolved.frequency}</span>
+      <span>
+        {fixedFrequency
+          ? resolved.frequency
+          : (resolved.entry?.frequencyDisplay ?? resolved.frequency)}
+      </span>
     )
 
   return (
@@ -142,7 +146,13 @@ function CandidateTable({
                 <td>{candidate.lemma}</td>
                 <td>{candidate.token.reading || <span>&mdash;</span>}</td>
                 <td>{candidate.level}</td>
-                <td>{showStatuses ? <span>&mdash;</span> : frequencyCell(result, noEntry)}</td>
+                <td>
+                  {showStatuses ? (
+                    <span>&mdash;</span>
+                  ) : (
+                    frequencyCell(result, noEntry, candidate.kind === 'kanji')
+                  )}
+                </td>
               </tr>
             )
           })}
@@ -156,26 +166,14 @@ function ExportControls({
   phase,
   throughLevel,
   mode,
-  frequencyDictConfigured,
-  targetDeckName,
   onThroughLevelChange,
   onModeChange,
   onSelectAll,
-  onSelectNone,
-  onSetHideTargetDeckMatches
+  onSelectNone
 }: ExportControlsProps): React.JSX.Element | null {
   const ready = phase.kind === 'ready'
   const locked = phase.kind === 'running' || phase.kind === 'done'
   if (!ready && !locked) return null
-
-  let hiddenTargetDeckCount = 0
-  if (ready) {
-    hiddenTargetDeckCount = hiddenTargetDeckMatchCount(
-      phase.candidates,
-      phase.resolved,
-      filtersFor(phase, frequencyDictConfigured)
-    )
-  }
 
   return (
     <section className="jlpt-bulk-export-controls" aria-label="JLPT export controls">
@@ -212,34 +210,14 @@ function ExportControls({
         </div>
       </div>
       {ready && (
-        <>
-          <label className="jlpt-bulk-export-target-filter">
-            <input
-              type="checkbox"
-              checked={phase.hideTargetDeckMatches}
-              onChange={(event) => onSetHideTargetDeckMatches(event.target.checked)}
-            />
-            Hide items already in target deck
-          </label>
-          {phase.checkingTargetDeck && (
-            <span className="jlpt-bulk-export-hint" role="status">
-              Checking target deck…
-            </span>
-          )}
-          {hiddenTargetDeckCount > 0 && (
-            <span className="jlpt-bulk-export-hint" role="status">
-              {hiddenTargetDeckCount} already in {targetDeckName ?? 'target deck'} hidden
-            </span>
-          )}
-          <div className="jlpt-bulk-export-selection-actions">
-            <button type="button" onClick={onSelectAll}>
-              Select all
-            </button>
-            <button type="button" onClick={onSelectNone}>
-              Select none
-            </button>
-          </div>
-        </>
+        <div className="jlpt-bulk-export-selection-actions">
+          <button type="button" onClick={onSelectAll}>
+            Select all
+          </button>
+          <button type="button" onClick={onSelectNone}>
+            Select none
+          </button>
+        </div>
       )}
     </section>
   )
@@ -301,13 +279,11 @@ function ReadyBody(
     throughLevel,
     mode,
     frequencyDictConfigured,
-    targetDeckName,
     onThroughLevelChange,
     onModeChange,
     onToggle,
     onSelectAll,
     onSelectNone,
-    onSetHideTargetDeckMatches,
     onStart,
     onClose
   } = props
@@ -323,13 +299,10 @@ function ReadyBody(
         phase={phase}
         throughLevel={throughLevel}
         mode={mode}
-        frequencyDictConfigured={frequencyDictConfigured}
-        targetDeckName={targetDeckName}
         onThroughLevelChange={onThroughLevelChange}
         onModeChange={onModeChange}
         onSelectAll={onSelectAll}
         onSelectNone={onSelectNone}
-        onSetHideTargetDeckMatches={onSetHideTargetDeckMatches}
       />
       {!frequencyDictConfigured && (
         <p className="jlpt-bulk-export-hint">

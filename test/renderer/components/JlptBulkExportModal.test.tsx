@@ -23,7 +23,6 @@ function candidate(
     count: 1,
     kind: 'vocabulary',
     level: 'N3',
-    fallbackFrequency: null,
     ...overrides
   }
 }
@@ -73,7 +72,6 @@ function modalProps(
     mode: 'vocabulary',
     phase,
     frequencyDictConfigured: true,
-    targetDeckName: 'Mining',
     onClose: vi.fn(),
     onRetry: vi.fn(),
     onThroughLevelChange: vi.fn(),
@@ -81,7 +79,6 @@ function modalProps(
     onToggle: vi.fn(),
     onSelectAll: vi.fn(),
     onSelectNone: vi.fn(),
-    onSetHideTargetDeckMatches: vi.fn(),
     onStart: vi.fn(),
     onCancel: vi.fn(),
     onBackToList: vi.fn(),
@@ -108,7 +105,7 @@ describe('JlptBulkExportModal ready state', () => {
       resolved: {
         猫: resolved('猫', 30, { frequencyDisplay: '30th' }),
         犬: resolved('犬', 5),
-        日: resolved('日', 12)
+        日: resolved('日', 12, { frequencyDisplay: '999th' })
       }
     })
 
@@ -131,6 +128,8 @@ describe('JlptBulkExportModal ready state', () => {
 
     expect(screen.getByText('Showing 3 of 3 unknown items')).toBeTruthy()
     expect(screen.getByText('30th')).toBeTruthy()
+    expect(screen.getByText('12')).toBeTruthy()
+    expect(screen.queryByText('999th')).toBeNull()
     expect(screen.getByRole('table').querySelector('caption')?.textContent).toBe(
       'Unknown JLPT export candidates'
     )
@@ -146,7 +145,7 @@ describe('JlptBulkExportModal ready state', () => {
     expect(screen.getByRole('button', { name: 'Export 3 items' })).toBeTruthy()
   })
 
-  it('routes target, mode, selection, target-deck, and export actions', () => {
+  it('routes target, mode, selection, and export actions', () => {
     const props = modalProps(readyPhase([candidate('猫')]))
     render(<JlptBulkExportModal {...props} />)
 
@@ -156,7 +155,6 @@ describe('JlptBulkExportModal ready state', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Item type' }), {
       target: { value: 'both' }
     })
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Hide items already in target deck' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
     fireEvent.click(screen.getByRole('button', { name: 'Select none' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Vocabulary 猫' }))
@@ -164,7 +162,6 @@ describe('JlptBulkExportModal ready state', () => {
 
     expect(props.onThroughLevelChange).toHaveBeenCalledWith('N2')
     expect(props.onModeChange).toHaveBeenCalledWith('both')
-    expect(props.onSetHideTargetDeckMatches).toHaveBeenCalledWith(true)
     expect(props.onSelectAll).toHaveBeenCalledOnce()
     expect(props.onSelectNone).toHaveBeenCalledOnce()
     expect(props.onToggle).toHaveBeenCalledWith('猫')
@@ -204,23 +201,6 @@ describe('JlptBulkExportModal ready state', () => {
     expect(missingCheckbox.hasAttribute('disabled')).toBe(true)
     expect(screen.getByText('No entry')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Export 1 items' })).toBeTruthy()
-  })
-
-  it('shows target-deck checking and hidden counts', () => {
-    const cat = candidate('猫')
-    const dog = candidate('犬')
-    const phase = readyPhase([cat, dog], {
-      targetDeckMatches: { 猫: { cardId: 1, deckNames: ['Mining'] }, 犬: null },
-      hideTargetDeckMatches: true,
-      checkingTargetDeck: true,
-      selected: { 猫: false, 犬: true }
-    })
-    render(<JlptBulkExportModal {...modalProps(phase)} />)
-
-    expect(screen.getByText('Checking target deck…')).toBeTruthy()
-    expect(screen.getByText('1 already in Mining hidden')).toBeTruthy()
-    expect(screen.getByText('Showing 1 of 2 unknown items')).toBeTruthy()
-    expect(screen.queryByText('猫')).toBeNull()
   })
 
   it('renders the empty state and disables export', () => {

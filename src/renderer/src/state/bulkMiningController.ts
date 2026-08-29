@@ -72,6 +72,8 @@ export interface BulkMiningCandidatesOpenInput {
   candidates: MiningCandidate[]
   frequencyDictId: number | null
   sortOrder?: 'auto' | FrequencyMode
+  /** Skip the live Anki deck check for local-only candidate lists. */
+  checkTargetDeckMembership?: boolean
 }
 
 export interface BulkMiningSnapshotOpenInput {
@@ -130,7 +132,8 @@ export function createBulkMiningController(): BulkMiningController {
     candidates,
     frequencyDictId,
     sortOrder,
-    sort
+    sort,
+    checkTargetDeckMembership = true
   }: {
     request: number
     bridges: BulkMiningCandidatesOpenInput['bridges']
@@ -138,6 +141,7 @@ export function createBulkMiningController(): BulkMiningController {
     frequencyDictId: number | null
     sortOrder?: 'auto' | FrequencyMode
     sort: BulkMiningSort
+    checkTargetDeckMembership?: boolean
   }): void => {
     frequencyDictConfigured = frequencyDictId !== null
     lastResolveOpts = { frequencyDictId, sortOrder }
@@ -152,8 +156,8 @@ export function createBulkMiningController(): BulkMiningController {
       minimumCount: null,
       sort,
       targetDeckMatches: {},
-      checkingTargetDeck: true,
-      hideTargetDeckMatches: true
+      checkingTargetDeck: checkTargetDeckMembership,
+      hideTargetDeckMatches: checkTargetDeckMembership
     })
     void resolveCandidateEntries(
       bridges.dict,
@@ -173,6 +177,7 @@ export function createBulkMiningController(): BulkMiningController {
       if (requestToken.current !== request || state.kind !== 'ready') return
       const ready = state
       set({ ...ready, resolving: false })
+      if (!checkTargetDeckMembership) return
       const identities = [
         ...new Set(
           ready.candidates.flatMap((candidate) => membershipIdentities(candidate, ready.resolved))
@@ -273,7 +278,8 @@ export function createBulkMiningController(): BulkMiningController {
         candidates: input.candidates,
         frequencyDictId: input.frequencyDictId,
         sortOrder: input.sortOrder,
-        sort: 'frequency'
+        sort: 'frequency',
+        checkTargetDeckMembership: input.checkTargetDeckMembership
       })
     },
     setThreshold(raw): void {
