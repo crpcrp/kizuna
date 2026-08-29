@@ -97,6 +97,7 @@ function renderReport(overrides: Partial<React.ComponentProps<typeof JlptCoverag
     onClose: vi.fn(),
     onTargetLevelChange: vi.fn(),
     onRetry: vi.fn(),
+    onExportUnknowns: vi.fn(),
     ...overrides
   }
   return { ...render(<JlptCoverageReport {...props} />), props }
@@ -188,6 +189,14 @@ describe('JlptCoverageReport ready state', () => {
     expect(props.onTargetLevelChange).toHaveBeenCalledWith('N2')
     expect(props.onClose).toHaveBeenCalledOnce()
   })
+
+  it('routes export through the selected target level action', () => {
+    const { props } = renderReport()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export unknown items through N3' }))
+
+    expect(props.onExportUnknowns).toHaveBeenCalledOnce()
+  })
 })
 
 describe('JlptCoverageReport loading and error states', () => {
@@ -247,5 +256,6 @@ describe('JlptCoverageReport loading and error states', () => {
 
     expect(screen.getByRole('status').textContent).toContain('No knowledge source is configured')
     expect(screen.getByText(/every vocabulary item is counted as unknown/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Export unknown items through N3' })).toBeTruthy()
   })
 })

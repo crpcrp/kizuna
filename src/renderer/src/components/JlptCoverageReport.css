@@ -57,9 +57,28 @@
 }
 
 .jlpt-coverage-target-control select:focus-visible,
+.jlpt-coverage-target-control button:focus-visible,
 .jlpt-coverage-error button:focus-visible {
   outline: 2px solid var(--accent-strong);
   outline-offset: 2px;
+}
+
+.jlpt-coverage-target-control button {
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  background: var(--control-bg);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.jlpt-coverage-target-control button:hover {
+  background: var(--control-hover-bg);
+  border-color: var(--accent-border);
 }
 
 .jlpt-coverage-percentage {

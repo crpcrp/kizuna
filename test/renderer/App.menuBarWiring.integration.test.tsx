@@ -2,6 +2,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
+import { JLPT_LEVELS, type JlptLevel } from '@src/shared/jlpt'
+import type { CoverageSlice, JlptCoverageReportResult } from '@src/shared/jlptCoverage'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
 import type { Track } from '@src/shared/track'
 import { installFakeKizunaApi, type FakeKizunaApi } from '../harness/fakeKizunaApi'
@@ -17,6 +19,43 @@ const AUDIO_JP: Track = { id: 1, kind: 'audio', codec: 'aac', language: 'jpn' }
 const AUDIO_EN: Track = { id: 2, kind: 'audio', codec: 'ac3', language: 'eng' }
 const SUB_JP: Track = { id: 3, kind: 'subtitle', codec: 'ass', title: 'Full', language: 'jpn' }
 const SUB_EN: Track = { id: 4, kind: 'subtitle', codec: 'srt', title: 'Signs', language: 'eng' }
+
+function emptyCoverageSlice(): CoverageSlice {
+  return {
+    total: 0,
+    buckets: { unknown: 0, inDeck: 0, learning: 0, known: 0, wellKnown: 0 },
+    provenance: { wanikaniOnly: 0, ankiOnly: 0, both: 0 }
+  }
+}
+
+function readyCoverageReport(): JlptCoverageReportResult {
+  const levels = Object.fromEntries(
+    JLPT_LEVELS.map((level) => [level, emptyCoverageSlice()])
+  ) as Record<JlptLevel, CoverageSlice>
+  return {
+    status: 'ready',
+    dataset: {
+      name: 'OpenJLPT',
+      version: 'test',
+      snapshotId: 'test',
+      license: 'CC-BY-SA-4.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      attribution: 'Test data',
+      rawRecordCount: 0,
+      deduplicatedExpressionCount: 0,
+      duplicateCount: 0,
+      conflictCount: 0
+    },
+    bands: levels,
+    throughLevels: levels,
+    unclassifiedByDataset: emptyCoverageSlice(),
+    generatedAt: '2026-08-29T11:30:00.000Z',
+    sourceStatus: {
+      anki: { configured: false, syncing: false, lastSuccessfulSyncAt: null },
+      wanikani: { configured: false, syncing: false, lastSuccessfulSyncAt: null }
+    }
+  }
+}
 
 interface Fakes {
   load: FakeKizunaApi['player']['load']
@@ -103,6 +142,76 @@ describe('JLPT coverage menu wiring', () => {
         'Could not load the JLPT coverage report.'
       )
     )
+  })
+})
+
+describe('JLPT bulk export composition', () => {
+  it('opens from Vocabulary without media and does not sync or ping', () => {
+    const api = installFakeKizunaApi({
+      knowledge: {
+        jlptUnknownItems: vi.fn(async () => ({ status: 'ready' as const, items: [] }))
+      }
+    })
+    render(<App />)
+
+    openMenu('Vocabulary')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'JLPT bulk export' }))
+
+    expect(api.knowledge.jlptUnknownItems).toHaveBeenCalledWith({
+      throughLevel: 'N3',
+      mode: 'vocabulary'
+    })
+    expect(screen.getByRole('dialog', { name: 'JLPT unknown-item export' })).toBeTruthy()
+    expect(api.anki.ping).not.toHaveBeenCalled()
+    expect(api.knowledge.sync).not.toHaveBeenCalled()
+  })
+
+  it('forwards the coverage target and closes coverage before opening export', async () => {
+    const api = installFakeKizunaApi({
+      knowledge: {
+        jlptCoverageReport: vi.fn(async () => readyCoverageReport()),
+        jlptUnknownItems: vi.fn(async () => ({ status: 'ready' as const, items: [] }))
+      }
+    })
+    render(<App />)
+
+    openMenu('Vocabulary')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'JLPT coverage' }))
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export unknown items through N3' })).toBeTruthy()
+    )
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Target level' }), {
+      target: { value: 'N2' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Export unknown items through N2' }))
+
+    expect(screen.queryByRole('dialog', { name: 'JLPT vocabulary coverage' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'JLPT unknown-item export' })).toBeTruthy()
+    expect(api.knowledge.jlptUnknownItems).toHaveBeenCalledWith({
+      throughLevel: 'N2',
+      mode: 'vocabulary'
+    })
+  })
+
+  it('closes export when another Vocabulary modal opens', () => {
+    const api = installFakeKizunaApi({
+      knowledge: {
+        jlptUnknownItems: vi.fn(async () => ({ status: 'ready' as const, items: [] }))
+      }
+    })
+    render(<App />)
+
+    openMenu('Vocabulary')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'JLPT bulk export' }))
+    expect(screen.getByRole('dialog', { name: 'JLPT unknown-item export' })).toBeTruthy()
+
+    openMenu('Vocabulary')
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Word report' }))
+
+    expect(screen.queryByRole('dialog', { name: 'JLPT unknown-item export' })).toBeNull()
+    expect(screen.getByRole('dialog', { name: 'Word report' })).toBeTruthy()
+    expect(api.knowledge.jlptUnknownItems).toHaveBeenCalledOnce()
   })
 })
 

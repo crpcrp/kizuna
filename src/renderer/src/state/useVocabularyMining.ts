@@ -1,5 +1,6 @@
 import type { Dispatch, RefObject } from 'react'
 import type { Cue } from '../../../shared/cue'
+import type { KnowledgeSource, SyncStatus } from '../../../shared/knowledge'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { PlayerApi } from '../components/BottomBar'
 import type { VocabularyMenuProps } from '../components/menu/VocabularyMenu'
@@ -87,6 +88,8 @@ export interface UseVocabularyMiningResult {
   /** The Options rows whose effect is to invalidate or rebuild the caches this
    * feature owns; the rest of the dialog's wiring is not this feature's. */
   knowledgeOptions: VocabularyKnowledgeOptions
+  /** Rebuilds local knowledge after a bulk export changes Anki. */
+  syncNow(source: KnowledgeSource, force?: boolean): Promise<SyncStatus>
   /** True while one of this feature's modals owns keyboard input, so the
    * composition root can suspend the global shortcuts. */
   modalOpen: boolean
@@ -229,6 +232,7 @@ export function useVocabularyMining({
     },
     mining,
     knowledgeOptions: knowledge.options,
+    syncNow: knowledge.syncNow,
     modalOpen: report.open || popup.cardImageOpen || mining.presentation === 'modal'
   }
 }
