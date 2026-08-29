@@ -55,16 +55,19 @@ export interface TokenFragment {
   fragmentCount: number
 }
 
-export type TokenSpanItem = ({ type: 'token'; token: Token } & TokenFragment) | { type: 'break' }
+export type TokenSpanItem =
+  | ({ type: 'token'; token: Token } & TokenFragment)
+  | { type: 'break' }
+  | { type: 'text'; text: string; displayStartOffset: number }
 
 /**
  * Pure helper: turns text and ordered tokens into token items and line breaks.
  *
  * Token offsets are analysis offsets (see `shared/textProjection.ts`), so a
  * word split by a line break is one token rendered as several fragments; every
- * fragment keeps the same Token object and semantic data attributes. Line
- * breaks come from the display text rather than from token surfaces, which
- * also preserves blank lines between tokens.
+ * fragment keeps the same Token object and semantic data attributes. Text
+ * gaps come from the display text rather than from token surfaces, so
+ * whitespace omitted by MeCab remains visible without becoming a token.
  */
 export function tokenSpans(
   text: string,
@@ -73,6 +76,7 @@ export function tokenSpans(
 ): TokenSpanItem[] {
   const items: TokenSpanItem[] = []
   let displayCursor = 0
+  let hasTokenRange = false
 
   for (const token of tokens) {
     // Clipped rather than mapped: a cue can render one frame with the
@@ -82,7 +86,8 @@ export function tokenSpans(
       endOffset: token.startOffset + token.surface.length
     })
     ranges.forEach((range, fragmentIndex) => {
-      appendBreaks(projection.displayText, displayCursor, range.startOffset, items)
+      hasTokenRange = true
+      appendDisplayGap(projection.displayText, displayCursor, range.startOffset, items)
       items.push({
         type: 'token',
         token,
@@ -95,7 +100,13 @@ export function tokenSpans(
     })
   }
 
-  appendBreaks(projection.displayText, displayCursor, projection.displayText.length, items)
+  if (hasTokenRange) {
+    appendDisplayGap(projection.displayText, displayCursor, projection.displayText.length, items)
+  } else {
+    // Keep the stale-token behavior: an entirely out-of-date token list should
+    // not make an old cue's plain text appear as if it had been tokenized.
+    appendBreaks(projection.displayText, displayCursor, projection.displayText.length, items)
+  }
   return items
 }
 
@@ -113,6 +124,34 @@ export function tokenLevels(
   if (!levels) return () => undefined
   const byOffset = vocabularyLevelsByToken({ cueKey: id, tokens, spans: vocabularySpans }, levels)
   return (token) => byOffset.get(token.startOffset) ?? 'wellKnown'
+}
+
+function appendDisplayGap(
+  text: string,
+  startOffset: number,
+  endOffset: number,
+  items: TokenSpanItem[]
+): void {
+  let textStartOffset = startOffset
+  for (let offset = startOffset; offset < endOffset; offset++) {
+    if (text[offset] !== '\n') continue
+    if (textStartOffset < offset) {
+      items.push({
+        type: 'text',
+        text: text.slice(textStartOffset, offset),
+        displayStartOffset: textStartOffset
+      })
+    }
+    items.push({ type: 'break' })
+    textStartOffset = offset + 1
+  }
+  if (textStartOffset < endOffset) {
+    items.push({
+      type: 'text',
+      text: text.slice(textStartOffset, endOffset),
+      displayStartOffset: textStartOffset
+    })
+  }
 }
 
 function appendBreaks(
@@ -164,6 +203,8 @@ export default function InteractiveText({
       ? tokenSpans(text, tokens, projection).map((item, itemIndex) =>
           item.type === 'break' ? (
             <br key={itemIndex} />
+          ) : item.type === 'text' ? (
+            item.text
           ) : (
             <span
               key={itemIndex}

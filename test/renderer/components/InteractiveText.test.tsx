@@ -22,6 +22,23 @@ describe('InteractiveText', () => {
     expect(html).not.toContain(' id="second"')
   })
 
+  it('keeps whitespace omitted by MeCab outside the highlighted token span', () => {
+    const first = makeToken({ surface: '猫' })
+    const second = makeToken({ surface: '犬', startOffset: 2 })
+    const html = renderToStaticMarkup(
+      <InteractiveText
+        id="spaced"
+        text="猫 犬"
+        tokens={[first, second]}
+        highlightedTokens={[second]}
+      />
+    )
+
+    expect(html).toContain('<span data-token="">猫</span> ')
+    expect(html).toContain('<span data-token="" data-highlighted="">犬</span>')
+    expect(html).not.toContain('data-highlighted=""> </span>')
+  })
+
   it('keeps plain text fallback and multiline token breaks', () => {
     const plain = renderToStaticMarkup(<InteractiveText id="plain" text={'a\nb'} />)
     // Token offsets skip the line break: 'b' is the second analysis character.

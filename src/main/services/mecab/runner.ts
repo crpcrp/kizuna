@@ -52,7 +52,7 @@ export async function tokenize(
   exec: MecabExec = execMecab
 ): Promise<Token[]> {
   const stdout = await exec(cfg.mecabPath, buildMecabArgs(cfg.dicdir), text)
-  return parseMecab(cfg.flavor, stdout)
+  return parseMecab(cfg.flavor, stdout, text)
 }
 
 /** Batches single-line cues; empty or multiline cues retain the single-cue path. */
@@ -89,8 +89,8 @@ export async function tokenizeBatch(
           }
           if (sections.length !== batch.length || lines.some(Boolean))
             throw new Error('MeCab batch output did not match its input cue count')
-          batch.forEach(({ index }, i) => {
-            results[index] = parseMecab(cfg.flavor, sections[i])
+          batch.forEach(({ index, text }, i) => {
+            results[index] = parseMecab(cfg.flavor, sections[i], text)
           })
         })
 

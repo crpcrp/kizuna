@@ -41,6 +41,31 @@ describe('tokenize', () => {
     })
   })
 
+  it('keeps omitted whitespace in the source offset space', async () => {
+    const fake = fakeMecabSuccess(
+      [
+        '猫\t名詞,一般,*,*,*,*,猫,ネコ,ネコ',
+        '大丈夫\t名詞,形容動詞語幹,*,*,*,*,大丈夫,ダイジョウブ,ダイジョーブ',
+        'EOS'
+      ].join('\n')
+    )
+
+    const tokens = await tokenize(
+      {
+        mecabPath: 'C:\\resources\\mecab\\mecab.exe',
+        dicdir: 'C:\\resources\\mecab\\ipadic',
+        flavor: 'ipadic'
+      },
+      '猫 大丈夫',
+      fake.exec
+    )
+
+    expect(tokens.map(({ surface, startOffset }) => [surface, startOffset])).toEqual([
+      ['猫', 0],
+      ['大丈夫', 2]
+    ])
+  })
+
   it('threads the unidic flavor through to the parser', async () => {
     const fake = fakeMecabSuccess(UNIDIC_FIXTURE)
 
@@ -116,6 +141,20 @@ describe('tokenizeBatch', () => {
       [['鳥', 0]]
     ])
     expect(calls).toEqual(['猫\n犬\n鳥', '二\n行', '', '三\n行', '四\n行'])
+  })
+
+  it('keeps omitted whitespace in each batched cue offset space', async () => {
+    const text = '猫 大丈夫'
+    const tokens = await tokenizeBatch(cfg, [text], fakeMecabSuccess(output('猫', '大丈夫')).exec)
+
+    expect(
+      tokens.map((items) => items.map(({ surface, startOffset }) => [surface, startOffset]))
+    ).toEqual([
+      [
+        ['猫', 0],
+        ['大丈夫', 2]
+      ]
+    ])
   })
 
   it('runs the production service batch path through the injected MeCab exec', async () => {

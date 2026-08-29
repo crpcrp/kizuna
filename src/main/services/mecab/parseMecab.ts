@@ -31,16 +31,20 @@ const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
 /**
  * Parses MeCab's raw stdout for a single cue into `Token[]`, using the
  * feature-column layout for `flavor`. Blank lines and the trailing `EOS`
- * marker are skipped. `startOffset` is a running sum of prior surface
- * lengths, so callers can align tokens back to positions in the original
- * cue text.
+ * marker are skipped. When `sourceText` is supplied, each surface is aligned
+ * against it because MeCab omits ordinary whitespace from its output. Newline
+ * characters are removed before alignment because token offsets refer to the
+ * continuous analysis text, not display line breaks.
  */
-export function parseMecab(flavor: DictFlavor, stdout: string): Token[] {
+export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
   const map = FIELD_MAPS[flavor]
   const tokens: Token[] = []
   const suffixedTokens = new Set<Token>()
   const continuativeVerbTokens = new Set<Token>()
-  let offset = 0
+  const alignmentText = sourceText?.replace(/[\r\n]/g, '')
+  let outputOffset = 0
+  let alignmentOffset = 0
+  let previousSurfaceEnd: number | undefined
 
   for (const line of stdout.split(/\r?\n/)) {
     if (line === '' || line === 'EOS') continue
@@ -51,6 +55,16 @@ export function parseMecab(flavor: DictFlavor, stdout: string): Token[] {
     const surface = line.slice(0, tabIndex)
     const fields = line.slice(tabIndex + 1).split(',')
 
+    const matchedOffset = alignmentText?.indexOf(surface, alignmentOffset)
+    const startOffset =
+      matchedOffset === undefined || matchedOffset < 0 ? outputOffset : matchedOffset
+    if (alignmentText !== undefined) {
+      alignmentOffset =
+        matchedOffset !== undefined && matchedOffset >= 0
+          ? matchedOffset + surface.length
+          : Math.max(alignmentOffset, startOffset + surface.length)
+    }
+
     const rawLemma = fields[map.lemma]
     const rawReading = fields[map.reading]
 
@@ -59,16 +73,18 @@ export function parseMecab(flavor: DictFlavor, stdout: string): Token[] {
       reading: rawReading && rawReading !== '*' ? rawReading : '',
       lemma: rawLemma && rawLemma !== '*' ? rawLemma : surface,
       pos: fields[map.pos] ?? '',
-      startOffset: offset
+      startOffset
     }
 
     const previous = tokens.at(-1)
+    const contiguous = previous !== undefined && previousSurfaceEnd === startOffset
     const isConjugationSuffix =
       token.pos === '助動詞' ||
       (token.pos === '助詞' &&
         fields[1] === '接続助詞' &&
         VERB_CONJUNCTION_SUFFIXES.has(token.surface))
     const extendsVerb =
+      contiguous &&
       previous?.pos === '動詞' &&
       (isConjugationSuffix ||
         (token.pos === '動詞' &&
@@ -87,7 +103,8 @@ export function parseMecab(flavor: DictFlavor, stdout: string): Token[] {
       if (token.pos === '動詞' && fields[5]?.startsWith('連用')) continuativeVerbTokens.add(token)
     }
 
-    offset += surface.length
+    outputOffset += surface.length
+    previousSurfaceEnd = startOffset + surface.length
   }
 
   return tokens
