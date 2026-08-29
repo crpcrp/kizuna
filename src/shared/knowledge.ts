@@ -11,6 +11,11 @@ export type KnowledgeLevel = 'unknown' | 'inDeck' | 'learning' | 'known' | 'well
 /** Ascending; index = rank, used by `maxKnowledgeLevel` to pick the higher one. */
 export const LEVEL_ORDER: KnowledgeLevel[] = ['unknown', 'inDeck', 'learning', 'known', 'wellKnown']
 
+/** Normalizes the lemma identity shared by knowledge lookup and reports. */
+export function normalizeKnowledgeLemma(lemma: string): string {
+  return lemma.normalize('NFC').trim()
+}
+
 /** Higher-ranked (per LEVEL_ORDER) of the two levels wins. */
 export function maxKnowledgeLevel(a: KnowledgeLevel, b: KnowledgeLevel): KnowledgeLevel {
   return LEVEL_ORDER.indexOf(a) >= LEVEL_ORDER.indexOf(b) ? a : b

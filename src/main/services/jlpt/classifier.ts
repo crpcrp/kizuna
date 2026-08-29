@@ -1,8 +1,21 @@
 import vocabulary from './data/vocabulary.json'
 import { normalizeReading } from '../dict/reading'
 import { JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
+import { normalizeKnowledgeLemma } from '../../../shared/knowledge'
 
 export type JlptVocabularyEntry = readonly [expression: string, reading: string, level: JlptLevel]
+
+export interface JlptVocabularySnapshot {
+  schemaVersion: number
+  source: {
+    name: string
+    version: string
+    commit: string
+    license: string
+  }
+  inputRecordCount: number
+  entries: readonly JlptVocabularyEntry[]
+}
 
 export interface JlptClassifier {
   levelFor(expression: string, reading?: string): JlptLevel | null
@@ -16,7 +29,7 @@ interface ClassifierIndex {
 const levelOrder = new Map<JlptLevel, number>(JLPT_LEVELS.map((level, index) => [level, index]))
 
 function normalizeExpression(expression: string): string {
-  return expression.normalize('NFC').trim()
+  return normalizeKnowledgeLemma(expression)
 }
 
 function normalizeJlptReading(reading: string): string {
@@ -75,7 +88,7 @@ export function createJlptClassifier(entries: readonly JlptVocabularyEntry[]): J
   }
 }
 
-const bundledEntries = vocabulary.entries as unknown as readonly JlptVocabularyEntry[]
+export const bundledJlptSnapshot = vocabulary as unknown as JlptVocabularySnapshot
 
 /** Singleton classifier backed by the pinned OpenJLPT snapshot. */
-export const defaultJlptClassifier = createJlptClassifier(bundledEntries)
+export const defaultJlptClassifier = createJlptClassifier(bundledJlptSnapshot.entries)
