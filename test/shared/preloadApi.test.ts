@@ -2,7 +2,7 @@ import { describe, it, expectTypeOf } from 'vitest'
 import type { KizunaApi } from '@src/shared/preloadApi'
 import type { AppSurface } from '@src/shared/appShell'
 import type { LookupResult, DictInfo } from '@src/shared/dictionary'
-import type { AnkiMembershipMatches, AnkiSettings } from '@src/shared/anki'
+import type { AnkiJlptSetupResult, AnkiMembershipMatches, AnkiSettings } from '@src/shared/anki'
 import type { KnowledgeDetails, PublicKnowledgeSettings } from '@src/shared/knowledge'
 import type { PlayerSettings } from '@src/shared/playerSettings'
 import type { AppInfoLink, NoticeOpenResult } from '@src/shared/appInfo'
@@ -60,6 +60,13 @@ describe('KizunaApi', () => {
     >()
     expectTypeOf<KizunaApi['anki']['findTargetDeckMembership']>().returns.toEqualTypeOf<
       Promise<AnkiMembershipMatches>
+    >()
+  })
+
+  it('anki.setupJlptField exposes the structured setup result', () => {
+    expectTypeOf<KizunaApi['anki']['setupJlptField']>().parameters.toEqualTypeOf<[]>()
+    expectTypeOf<KizunaApi['anki']['setupJlptField']>().returns.toEqualTypeOf<
+      Promise<AnkiJlptSetupResult>
     >()
   })
 

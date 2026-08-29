@@ -235,13 +235,15 @@ export const DICT_CHANNELS = {
 /**
  * AnkiConnect bridge: renderer→main invoke/handle channels for testing the
  * connection, populating Options selects (decks/models/fields), adding a
- * note from the WordPopup, and reading/writing the `anki` settings block.
+ * note from the WordPopup, setting up the optional JLPT field/template block,
+ * and reading/writing the `anki` settings block.
  */
 export const ANKI_CHANNELS = {
   ping: 'anki:ping',
   deckNames: 'anki:deckNames',
   modelNames: 'anki:modelNames',
   modelFieldNames: 'anki:modelFieldNames',
+  setupJlptField: 'anki:setupJlptField',
   addNote: 'anki:addNote',
   findExisting: 'anki:findExisting',
   findTargetDeckMembership: 'anki:findTargetDeckMembership',

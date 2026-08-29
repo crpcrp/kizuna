@@ -41,6 +41,7 @@ import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBound
 import type { WindowShapeRect } from '../shared/windowShape'
 import type {
   AnkiExistingMatch,
+  AnkiJlptSetupResult,
   AnkiMembershipMatches,
   AnkiMineResult,
   AnkiSettings,
@@ -310,6 +311,8 @@ const api = {
     modelNames: (): Promise<string[]> => ipcRenderer.invoke(ANKI_CHANNELS.modelNames),
     modelFieldNames: (modelName: string): Promise<string[]> =>
       ipcRenderer.invoke(ANKI_CHANNELS.modelFieldNames, modelName),
+    setupJlptField: (): Promise<AnkiJlptSetupResult> =>
+      ipcRenderer.invoke(ANKI_CHANNELS.setupJlptField),
     addNote: (req: MineRequest): Promise<AnkiMineResult> =>
       ipcRenderer.invoke(ANKI_CHANNELS.addNote, req),
     findExisting: (token: Token, word?: string): Promise<AnkiExistingMatch | null> =>

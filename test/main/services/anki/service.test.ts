@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { findExistingQuery } from '@src/main/services/anki/search'
-import { createAnkiService } from '@src/main/services/anki/service'
+import { createAnkiService, JLPT_LEVEL_FIELD } from '@src/main/services/anki/service'
+import type { AnkiModelTemplates } from '@src/main/services/anki/ankiConnect'
 import { createSettingsStore } from '@src/main/services/settings'
 import {
   ANKI_MEMBERSHIP_BATCH_LIMIT,
@@ -117,6 +118,176 @@ describe('createAnkiService', () => {
     expect(await service.deckNames()).toEqual(['Default', 'Japanese'])
     expect(await service.modelNames()).toEqual(['Basic', 'Kizuna'])
     expect(await service.modelFieldNames('Kizuna')).toEqual(['Word', 'Reading'])
+  })
+
+  it('sets up the JLPT field and every eligible Back template, then verifies both', async () => {
+    const initialTemplates: AnkiModelTemplates = {
+      'Card 1': {
+        Front: '<div class="custom-front">{{Word}}</div>',
+        Back: '<div class="custom-back">{{Word Meaning}}</div>'
+      }
+    }
+    let fieldReads = 0
+    let updatedTemplates: AnkiModelTemplates | undefined
+    const anki = fakeAnkiConnect({
+      modelFieldNames: () => ({
+        result: fieldReads++ === 0 ? ['Word'] : ['Word', JLPT_LEVEL_FIELD]
+      }),
+      modelTemplates: () => ({ result: updatedTemplates ?? initialTemplates }),
+      modelFieldAdd: { result: null },
+      updateModelTemplates: (params) => {
+        updatedTemplates = (params as { model: { templates: AnkiModelTemplates } }).model.templates
+        return { result: null }
+      }
+    })
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
+    const service = createAnkiService({
+      sentenceAudio: noSentenceAudio,
+      settings,
+      fetch: anki.fetch
+    })
+
+    await expect(service.setupJlptField()).resolves.toEqual({
+      status: 'changed',
+      modelName: 'Kizuna',
+      addedField: true,
+      updatedTemplates: ['Card 1']
+    })
+
+    expect(updatedTemplates?.['Card 1'].Front).toBe(initialTemplates['Card 1'].Front)
+    const updatedBack = updatedTemplates?.['Card 1'].Back ?? ''
+    expect(updatedBack).toContain('<!-- kizuna-jlpt-level:start -->')
+    expect(updatedBack).toContain('{{#JLPT Level}}')
+    expect(updatedBack).toContain('JLPT {{JLPT Level}} · approximate')
+    expect(updatedBack.indexOf('<!-- kizuna-jlpt-level:start -->')).toBeLessThan(
+      updatedBack.indexOf('{{Word Meaning}}')
+    )
+    expect(anki.calls.map((call) => call.action)).toEqual([
+      'modelFieldNames',
+      'modelTemplates',
+      'modelFieldAdd',
+      'updateModelTemplates',
+      'modelFieldNames',
+      'modelTemplates'
+    ])
+  })
+
+  it('reuses an existing JLPT field without adding a second one', async () => {
+    const templates: AnkiModelTemplates = {
+      'Card 1': {
+        Front: '{{Word}}',
+        Back: '<!-- kizuna-jlpt-level:start -->\n{{#JLPT Level}}...<!-- kizuna-jlpt-level:end -->'
+      }
+    }
+    const anki = fakeAnkiConnect({
+      modelFieldNames: { result: [JLPT_LEVEL_FIELD] },
+      modelTemplates: { result: templates }
+    })
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
+
+    await expect(
+      createAnkiService({
+        sentenceAudio: noSentenceAudio,
+        settings,
+        fetch: anki.fetch
+      }).setupJlptField()
+    ).resolves.toEqual({ status: 'already-configured', modelName: 'Kizuna' })
+    expect(anki.calls.map((call) => call.action)).toEqual(['modelFieldNames', 'modelTemplates'])
+  })
+
+  it('reports a missing Kaishi anchor before making any change', async () => {
+    const anki = fakeAnkiConnect({
+      modelFieldNames: { result: ['Word'] },
+      modelTemplates: {
+        result: {
+          'Card 1': { Front: '{{Word}}', Back: '<p>custom answer</p>' }
+        }
+      }
+    })
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
+
+    await expect(
+      createAnkiService({
+        sentenceAudio: noSentenceAudio,
+        settings,
+        fetch: anki.fetch
+      }).setupJlptField()
+    ).resolves.toEqual({
+      status: 'preflight-failure',
+      modelName: 'Kizuna',
+      message: 'Back template "Card 1" must contain {{Word Meaning}} or the Kizuna JLPT marker.'
+    })
+    expect(anki.calls.map((call) => call.action)).toEqual(['modelFieldNames', 'modelTemplates'])
+  })
+
+  it('returns an API failure and stops when field creation fails', async () => {
+    const anki = fakeAnkiConnect({
+      modelFieldNames: { result: ['Word'] },
+      modelTemplates: { result: { 'Card 1': { Front: '{{Word}}', Back: '{{Word Meaning}}' } } },
+      modelFieldAdd: { error: 'field already exists' }
+    })
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
+
+    await expect(
+      createAnkiService({
+        sentenceAudio: noSentenceAudio,
+        settings,
+        fetch: anki.fetch
+      }).setupJlptField()
+    ).resolves.toEqual({
+      status: 'api-failure',
+      modelName: 'Kizuna',
+      message: 'field already exists'
+    })
+    expect(anki.calls.map((call) => call.action)).toEqual([
+      'modelFieldNames',
+      'modelTemplates',
+      'modelFieldAdd'
+    ])
+  })
+
+  it('reports a verification failure when Anki does not persist the marker', async () => {
+    let fieldReads = 0
+    const anki = fakeAnkiConnect({
+      modelFieldNames: () => ({
+        result: fieldReads++ === 0 ? ['Word'] : ['Word', JLPT_LEVEL_FIELD]
+      }),
+      modelTemplates: { result: { 'Card 1': { Front: '{{Word}}', Back: '{{Word Meaning}}' } } },
+      modelFieldAdd: { result: null },
+      updateModelTemplates: { result: null }
+    })
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
+
+    await expect(
+      createAnkiService({
+        sentenceAudio: noSentenceAudio,
+        settings,
+        fetch: anki.fetch
+      }).setupJlptField()
+    ).resolves.toEqual({
+      status: 'verification-failure',
+      modelName: 'Kizuna',
+      message:
+        'Anki accepted the setup, but the JLPT field or answer-template marker was not found during verification.'
+    })
+  })
+
+  it('does not call Anki when no note type is configured', async () => {
+    const anki = fakeAnkiConnect({})
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: { modelName: '' } })))
+
+    await expect(
+      createAnkiService({
+        sentenceAudio: noSentenceAudio,
+        settings,
+        fetch: anki.fetch
+      }).setupJlptField()
+    ).resolves.toEqual({
+      status: 'preflight-failure',
+      modelName: '',
+      message: 'Configure an Anki note type before setting up the JLPT field.'
+    })
+    expect(anki.calls).toEqual([])
   })
 
   it('addNote posts a note carrying the audio attachment when includeWordAudio is enabled', async () => {

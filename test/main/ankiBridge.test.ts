@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
 import { registerAnkiBridge, type AnkiServiceLike } from '@src/main/ankiBridge'
 import { ANKI_CHANNELS } from '@src/shared/ipcChannels'
-import type { AnkiMineResult, AnkiSettings, AnkiPing, MineRequest } from '@src/shared/anki'
+import type {
+  AnkiJlptSetupResult,
+  AnkiMineResult,
+  AnkiSettings,
+  AnkiPing,
+  MineRequest
+} from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
@@ -49,6 +55,10 @@ function fakeService() {
       calls.modelFieldNames = [modelName]
       return ['Word', 'Reading']
     }),
+    setupJlptField: vi.fn(async () => {
+      calls.setupJlptField = []
+      return { status: 'already-configured', modelName: 'Kizuna' } satisfies AnkiJlptSetupResult
+    }),
     addNote: vi.fn(async (req: MineRequest) => {
       calls.addNote = [req]
       return { noteId: 12345, operation: 'added', changedFields: ['Word'] } satisfies AnkiMineResult
@@ -90,6 +100,7 @@ describe('registerAnkiBridge', () => {
         ANKI_CHANNELS.deckNames,
         ANKI_CHANNELS.modelNames,
         ANKI_CHANNELS.modelFieldNames,
+        ANKI_CHANNELS.setupJlptField,
         ANKI_CHANNELS.addNote,
         ANKI_CHANNELS.findExisting,
         ANKI_CHANNELS.findTargetDeckMembership,
@@ -130,6 +141,18 @@ describe('registerAnkiBridge', () => {
     expect(service.modelFieldNames).toHaveBeenCalledWith('Kizuna')
     expect(calls.modelFieldNames).toEqual(['Kizuna'])
     expect(result).toEqual(['Word', 'Reading'])
+  })
+
+  it('forwards the JLPT setup action', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service, calls } = fakeService()
+    registerAnkiBridge(ipc, service)
+
+    const result = await handlers.get(ANKI_CHANNELS.setupJlptField)!(event)
+
+    expect(service.setupJlptField).toHaveBeenCalled()
+    expect(calls.setupJlptField).toEqual([])
+    expect(result).toEqual({ status: 'already-configured', modelName: 'Kizuna' })
   })
 
   it('forwards addNote with the mine request and returns its verified operation result', async () => {

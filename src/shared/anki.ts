@@ -143,6 +143,24 @@ export interface AnkiMineResult {
   changedFields: string[]
 }
 
+/** Result of the explicit, user-confirmed JLPT note-type setup action. */
+export type AnkiJlptSetupResult =
+  | {
+      status: 'changed'
+      modelName: string
+      addedField: boolean
+      updatedTemplates: string[]
+    }
+  | {
+      status: 'already-configured'
+      modelName: string
+    }
+  | {
+      status: 'preflight-failure' | 'api-failure' | 'verification-failure'
+      modelName: string
+      message: string
+    }
+
 /** Maximum unique expressions accepted by one target-deck membership request. */
 export const ANKI_MEMBERSHIP_BATCH_LIMIT = 100
 

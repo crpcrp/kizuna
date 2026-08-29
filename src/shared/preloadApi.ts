@@ -24,6 +24,7 @@ import type { SetWindowBoundsRequest, WindowBounds } from './windowBounds'
 import type { WindowShapeRect } from './windowShape'
 import type {
   AnkiExistingMatch,
+  AnkiJlptSetupResult,
   AnkiMembershipMatches,
   AnkiMineResult,
   AnkiSettings,
@@ -229,6 +230,7 @@ export interface KizunaApi {
     deckNames(): Promise<string[]>
     modelNames(): Promise<string[]>
     modelFieldNames(modelName: string): Promise<string[]>
+    setupJlptField(): Promise<AnkiJlptSetupResult>
     addNote(req: MineRequest): Promise<AnkiMineResult>
     findExisting(token: Token, word?: string): Promise<AnkiExistingMatch | null>
     findTargetDeckMembership(expressions: string[]): Promise<AnkiMembershipMatches>

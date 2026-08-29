@@ -97,6 +97,7 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
     },
     anki: {
       ankiPing: async () => ({ ok: false }),
+      onSetupJlptField: async () => ({ status: 'already-configured', modelName: '' }),
       onChangeAnkiSettings: noop
     },
     knowledge: {
