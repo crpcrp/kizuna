@@ -7,7 +7,8 @@ import WordPopup, {
   isHighPriority,
   posAttributes,
   dictStylesheets,
-  scopeDictCss
+  scopeDictCss,
+  knowledgeSourceBadges
 } from '@src/renderer/src/components/WordPopup'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
@@ -56,6 +57,90 @@ const sampleResults: LookupResult[] = [
 ]
 
 describe('WordPopup markup', () => {
+  it('falls back to generic badges for authoritative source kinds without details', () => {
+    expect(
+      knowledgeSourceBadges({ level: 'known', sourceKinds: ['anki', 'wanikani'], sources: [] })
+    ).toEqual([
+      { source: 'wanikani', label: 'WaniKani', detailed: false },
+      { source: 'anki', label: 'Anki', detailed: false }
+    ])
+  })
+
+  it('renders generic provenance badges when optional details are unavailable', () => {
+    const result = makeResult()
+    const html = renderToStaticMarkup(
+      <WordPopup
+        results={[result]}
+        position={{ x: 0, y: 0 }}
+        provenanceByExpression={{
+          [result.expression]: { level: 'known', sourceKinds: ['anki', 'wanikani'], sources: [] }
+        }}
+      />
+    )
+
+    expect(html).toContain('>WaniKani</span>')
+    expect(html).toContain('>Anki</span>')
+    expect(html.indexOf('>WaniKani</span>')).toBeLessThan(html.indexOf('>Anki</span>'))
+  })
+
+  it('keeps only valid details whose source is authoritative', () => {
+    const sourceKinds = ['wanikani'] as const
+    const sources = [
+      { source: 'wanikani' as const, curriculumLevel: 12, proficiency: 'Apprentice' },
+      { source: 'anki' as const, deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 },
+      { source: 'anki' as const, deck: 'Ignored', intervalDays: 1, cardId: 3, noteId: 4 }
+    ]
+    const badges = knowledgeSourceBadges({
+      level: 'known',
+      sourceKinds: [...sourceKinds],
+      sources
+    })
+
+    expect(badges).toEqual([
+      { source: 'wanikani', label: 'WaniKani - Level 12 - Apprentice', detailed: true }
+    ])
+    expect(sources).toEqual([
+      { source: 'wanikani', curriculumLevel: 12, proficiency: 'Apprentice' },
+      { source: 'anki', deck: 'Japanese', intervalDays: 21, cardId: 1, noteId: 2 },
+      { source: 'anki', deck: 'Ignored', intervalDays: 1, cardId: 3, noteId: 4 }
+    ])
+    expect(sourceKinds).toEqual(['wanikani'])
+  })
+
+  it('falls back when source metadata is malformed', () => {
+    const provenance = {
+      level: 'known' as const,
+      sourceKinds: ['wanikani', 'anki'] as const,
+      sources: [
+        { source: 'wanikani', proficiency: 4 },
+        { source: 'anki', deck: 'Japanese', intervalDays: '21', cardId: 1, noteId: 2 }
+      ]
+    } as unknown as KnowledgeDetails
+
+    expect(knowledgeSourceBadges(provenance)).toEqual([
+      { source: 'wanikani', label: 'WaniKani', detailed: false },
+      { source: 'anki', label: 'Anki', detailed: false }
+    ])
+  })
+
+  it('falls back per source when only one source has valid details', () => {
+    expect(
+      knowledgeSourceBadges({
+        level: 'known',
+        sourceKinds: ['wanikani', 'anki'],
+        sources: [{ source: 'wanikani', proficiency: 'Guru II' }]
+      })
+    ).toEqual([
+      { source: 'wanikani', label: 'WaniKani - Guru II', detailed: true },
+      { source: 'anki', label: 'Anki', detailed: false }
+    ])
+  })
+
+  it('returns no badges without provenance or source kinds', () => {
+    expect(knowledgeSourceBadges(undefined)).toEqual([])
+    expect(knowledgeSourceBadges({ level: 'unknown', sourceKinds: [], sources: [] })).toEqual([])
+  })
+
   it('renders all WaniKani and Anki provenance badges directly below the headword', () => {
     const provenance: KnowledgeDetails = {
       level: 'known',
