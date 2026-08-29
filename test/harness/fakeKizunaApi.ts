@@ -3,6 +3,7 @@ import { defaultAnkiSettings } from '@src/shared/anki'
 import type { KizunaApi } from '@src/shared/preloadApi'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import type { SyncStatus } from '@src/shared/knowledge'
+import type { JlptCoverageReportResult } from '@src/shared/jlptCoverage'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
@@ -178,6 +179,10 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
     knowledge: {
       levelsFor: vi.fn(async () => ({})),
       detailsFor: vi.fn(async () => ({})),
+      jlptCoverageReport: vi.fn(async (): Promise<JlptCoverageReportResult> => ({
+        status: 'error',
+        message: 'Not configured'
+      })),
       sync: vi.fn(async () => DEFAULT_SYNC_STATUS),
       syncStatus: vi.fn(async () => DEFAULT_SYNC_STATUS),
       getSettings: vi.fn(async () => DEFAULT_KNOWLEDGE_SETTINGS),

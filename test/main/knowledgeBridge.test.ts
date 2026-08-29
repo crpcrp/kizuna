@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { registerKnowledgeBridge, type KnowledgeServiceLike } from '@src/main/knowledgeBridge'
 import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
+import type { JlptCoverageReportResult } from '@src/shared/jlptCoverage'
 import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
@@ -21,6 +22,10 @@ function fakeService() {
       Object.fromEntries(lemmas.map((l) => [l, 'known' as const]))
     ),
     detailsFor: vi.fn(async () => DETAILS),
+    jlptCoverageReport: vi.fn(async (): Promise<JlptCoverageReportResult> => ({
+      status: 'error',
+      message: 'Unavailable'
+    })),
     sync: vi.fn(async () => EMPTY_STATUS),
     syncStatus: vi.fn(async () => EMPTY_STATUS),
     syncIfStale: vi.fn(async () => EMPTY_STATUS),
@@ -46,6 +51,7 @@ describe('registerKnowledgeBridge', () => {
       [
         KNOWLEDGE_CHANNELS.levelsFor,
         KNOWLEDGE_CHANNELS.detailsFor,
+        KNOWLEDGE_CHANNELS.jlptCoverageReport,
         KNOWLEDGE_CHANNELS.sync,
         KNOWLEDGE_CHANNELS.syncStatus,
         KNOWLEDGE_CHANNELS.getSettings,
@@ -74,6 +80,18 @@ describe('registerKnowledgeBridge', () => {
 
     expect(service.detailsFor).toHaveBeenCalledWith(['word'])
     expect(result).toEqual(DETAILS)
+  })
+
+  it('forwards the JLPT coverage report request and returns its result', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+
+    registerKnowledgeBridge(ipc, service)
+
+    const result = await handlers.get(KNOWLEDGE_CHANNELS.jlptCoverageReport)!(event)
+
+    expect(service.jlptCoverageReport).toHaveBeenCalledOnce()
+    expect(result).toEqual({ status: 'error', message: 'Unavailable' })
   })
 
   it('forwards sync with its optional source and force setting, and returns its result', async () => {
