@@ -19,6 +19,10 @@ export interface EntryResolutionOpts {
   chunkSize?: number
 }
 
+type CandidateWithFrequencyFallback = MiningCandidate & {
+  fallbackFrequency?: number | null
+}
+
 export interface BulkMineBridges {
   dict: DictLookupBridge
   anki: AnkiMineBridge &
@@ -149,7 +153,7 @@ export async function runBulkMining(
 /** Resolves candidate entries in bounded sequential chunks without blocking a later mining run. */
 export async function resolveCandidateEntries(
   dict: DictLookupBridge,
-  candidates: MiningCandidate[],
+  candidates: CandidateWithFrequencyFallback[],
   resolved: Record<string, ResolvedEntry>,
   opts: EntryResolutionOpts,
   cancelToken: SubtitleRequestToken,
@@ -175,9 +179,18 @@ export async function resolveCandidateEntries(
         if (cancelToken.current !== request) return
         const entry =
           results.find((result) => result.expression === candidate.lemma) ?? results[0] ?? null
+        const dictionaryFrequency = entry?.frequency
+        const fallbackFrequency = candidate.fallbackFrequency
         patch[candidate.lemma] = {
           entry,
-          frequency: entry?.frequency ?? null
+          frequency:
+            entry === null
+              ? null
+              : typeof dictionaryFrequency === 'number' && Number.isFinite(dictionaryFrequency)
+                ? dictionaryFrequency
+                : typeof fallbackFrequency === 'number' && Number.isFinite(fallbackFrequency)
+                  ? fallbackFrequency
+                  : null
         }
       } catch {
         if (cancelToken.current !== request) return

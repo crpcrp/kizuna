@@ -69,6 +69,49 @@ describe('resolveCandidateEntries', () => {
     ])
   })
 
+  it('uses a finite JLPT fallback only when the resolved entry has no finite frequency', async () => {
+    const dict = fakeDict(async (lemma) => {
+      if (lemma === 'missing') return []
+      const frequencies: Record<string, number | null> = {
+        dictionary: 11,
+        fallback: null,
+        invalid: Number.NaN,
+        infinite: Number.POSITIVE_INFINITY,
+        none: null
+      }
+      return [result(lemma, frequencies[lemma])]
+    })
+    const patches: Record<string, ResolvedEntry>[] = []
+    const candidates = [
+      { ...candidate('dictionary'), fallbackFrequency: 21 },
+      { ...candidate('fallback'), fallbackFrequency: 22 },
+      { ...candidate('invalid'), fallbackFrequency: 23 },
+      { ...candidate('infinite'), fallbackFrequency: 24 },
+      { ...candidate('none'), fallbackFrequency: null },
+      { ...candidate('missing'), fallbackFrequency: 25 }
+    ]
+
+    await resolveCandidateEntries(
+      dict,
+      candidates,
+      {},
+      { frequencyDictId: null },
+      { current: 0 },
+      (patch) => patches.push(patch)
+    )
+
+    expect(patches).toEqual([
+      {
+        dictionary: { entry: result('dictionary', 11), frequency: 11 },
+        fallback: { entry: result('fallback', null), frequency: 22 },
+        invalid: { entry: result('invalid', Number.NaN), frequency: 23 },
+        infinite: { entry: result('infinite', Number.POSITIVE_INFINITY), frequency: 24 },
+        none: { entry: result('none', null), frequency: null },
+        missing: { entry: null, frequency: null }
+      }
+    ])
+  })
+
   it('skips resolved lemmas, turns empty or rejected lookups into null entries, and continues', async () => {
     const calls: string[] = []
     const dict = fakeDict(async (lemma) => {
