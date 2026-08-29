@@ -75,6 +75,38 @@ describe('ModalOverlay', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(document.querySelector('.modal-overlay')?.getAttribute('aria-hidden')).toBe('true')
   })
+
+  it('traps Tab focus and restores the previously focused element when closed', () => {
+    const outside = document.createElement('button')
+    document.body.append(outside)
+    outside.focus()
+
+    const { rerender } = render(
+      <ModalOverlay open label="Test dialog" onClose={vi.fn()}>
+        <button type="button">First</button>
+        <button type="button">Last</button>
+      </ModalOverlay>
+    )
+
+    const close = screen.getByRole('button', { name: 'Close test dialog' })
+    const last = screen.getByRole('button', { name: 'Last' })
+    expect(document.activeElement).toBe(close)
+
+    last.focus()
+    fireEvent.keyDown(last, { key: 'Tab' })
+    expect(document.activeElement).toBe(close)
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(last)
+
+    rerender(
+      <ModalOverlay open={false} label="Test dialog" onClose={vi.fn()}>
+        <button type="button">First</button>
+        <button type="button">Last</button>
+      </ModalOverlay>
+    )
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+  })
 })
 
 describe('BulkMiningModal', () => {
