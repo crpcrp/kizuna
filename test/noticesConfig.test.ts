@@ -21,6 +21,17 @@ import {
 
 type NoticesFile = import('@scripts/notices.mjs').NoticesFile
 type NoticeComponent = import('@scripts/notices.mjs').NoticeComponent
+type VocabularySnapshot = {
+  schemaVersion: number
+  source: {
+    name: string
+    version: string
+    commit: string
+    license: string
+  }
+  inputRecordCount: number
+  entries: unknown[]
+}
 
 const require = createRequire(import.meta.url)
 const read = (rel: string): string => readFileSync(join(REPO_ROOT, rel), 'utf-8')
@@ -33,6 +44,9 @@ const lock = readJson(
 const packageLock = readJson('package-lock.json')
 const packageJson = readJson('package.json')
 const components = notices.components as NoticeComponent[]
+const vocabulary = readJson(
+  'src/main/services/jlpt/data/vocabulary.json'
+) as unknown as VocabularySnapshot
 
 describe('third-party.json', () => {
   it('is structurally valid', () => {
@@ -69,14 +83,16 @@ describe('third-party.json', () => {
       expect(component.source?.code, `${component.name} has no exact-source URL`).toMatch(
         /^https:\/\//
       )
-      expect(component.source?.buildRecipe, `${component.name} has no build recipe`).toMatch(
-        /^https:\/\//
-      )
+      if (component.bundled === 'resources') {
+        expect(component.source?.buildRecipe, `${component.name} has no build recipe`).toMatch(
+          /^https:\/\//
+        )
+      }
     }
   })
 
   it('identifies each copyleft binary by the build it actually distributes', () => {
-    for (const component of components.filter((c) => c.copyleft)) {
+    for (const component of components.filter((c) => c.copyleft && c.bundled === 'resources')) {
       expect(component.version, `${component.name} names no build`).toBeTruthy()
       expect(
         component.source?.binaryArchiveSha256,
@@ -95,6 +111,27 @@ describe('licence texts on disk', () => {
       for (const path of component.licenseFiles ?? []) {
         expect(existsSync(join(REPO_ROOT, path)), `${path} is missing`).toBe(true)
       }
+    }
+  })
+
+  it('covers the committed OpenJLPT data and both upstream licence files', () => {
+    const component = components.find((item) => item.id === 'openjlpt-vocabulary')
+    expect(component).toMatchObject({
+      bundled: 'source',
+      version: '0.2.0',
+      sourceRoot: 'src/main/services/jlpt/data',
+      licenseFiles: [
+        'licenses/openjlpt/LICENSE.CC-BY-SA-4.0.txt',
+        'licenses/openjlpt/NOTICE.OpenJLPT.md'
+      ],
+      copyleft: true,
+      source: {
+        code: 'https://github.com/evanclan/OpenJLPT/tree/c42fd9fa3777bfc1775446f7c418d549dfd6e4cf'
+      }
+    })
+    expect(existsSync(join(REPO_ROOT, component?.sourceRoot ?? ''))).toBe(true)
+    for (const path of component?.licenseFiles ?? []) {
+      expect(existsSync(join(REPO_ROOT, path)), `${path} is missing`).toBe(true)
     }
   })
 
@@ -134,6 +171,32 @@ describe('licence texts on disk', () => {
     }
     const collisions = [...byDestination].filter(([, sources]) => sources.size > 1)
     expect(collisions.map(([to]) => to)).toEqual([])
+  })
+})
+
+describe('OpenJLPT vocabulary snapshot', () => {
+  it('has the pinned source metadata and expected input total', () => {
+    expect(vocabulary.schemaVersion).toBe(1)
+    expect(vocabulary.source).toEqual({
+      name: 'OpenJLPT',
+      version: '0.2.0',
+      commit: 'c42fd9fa3777bfc1775446f7c418d549dfd6e4cf',
+      license: 'CC-BY-SA-4.0'
+    })
+    expect(vocabulary.inputRecordCount).toBe(8334)
+    expect(vocabulary.entries).toHaveLength(8334)
+  })
+
+  it('contains only three-field tuples with valid levels', () => {
+    const levels = new Set(['N5', 'N4', 'N3', 'N2', 'N1'])
+    for (const entry of vocabulary.entries) {
+      expect(Array.isArray(entry)).toBe(true)
+      expect(entry).toHaveLength(3)
+      const [expression, reading, level] = entry as [unknown, unknown, unknown]
+      expect(typeof expression).toBe('string')
+      expect(typeof reading).toBe('string')
+      expect(levels.has(String(level))).toBe(true)
+    }
   })
 })
 
