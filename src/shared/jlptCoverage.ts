@@ -24,6 +24,7 @@ export interface JlptCoverageDataset {
   snapshotId: string
   license: string
   licenseUrl: string
+  attribution: string
   rawRecordCount: number
   deduplicatedExpressionCount: number
   duplicateCount: number

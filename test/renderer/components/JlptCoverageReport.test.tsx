@@ -43,6 +43,8 @@ const DATA: JlptCoverageReportData = {
     snapshotId: 'abc123',
     license: 'CC-BY-SA-4.0',
     licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+    attribution:
+      "OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources.",
     rawRecordCount: 13,
     deduplicatedExpressionCount: 10,
     duplicateCount: 3,
@@ -146,6 +148,7 @@ describe('JlptCoverageReport ready state', () => {
     expect(screen.getByText('abc123')).toBeTruthy()
     expect(screen.getByText(DATA.generatedAt)).toBeTruthy()
     expect(screen.getByText('CC-BY-SA-4.0')).toBeTruthy()
+    expect(screen.getByText(/Jonathan Waller's JLPT Resources/)).toBeTruthy()
     expect(screen.getByText('not configured')).toBeTruthy()
     expect(screen.getByText('30m ago')).toBeTruthy()
     expect(
@@ -158,6 +161,18 @@ describe('JlptCoverageReport ready state', () => {
     expect(screen.getByText('30m ago').getAttribute('title')).toBe(
       DATA.sourceStatus?.anki.lastSuccessfulSyncAt
     )
+  })
+
+  it('uses each fresh report timestamp for relative sync age', () => {
+    const { rerender, props } = renderReport()
+    const refreshed = {
+      ...DATA,
+      generatedAt: '2026-08-29T13:30:00.000Z'
+    }
+
+    rerender(<JlptCoverageReport {...props} data={refreshed} />)
+
+    expect(screen.getByText('2h ago')).toBeTruthy()
   })
 
   it('routes target changes and close through callbacks', () => {

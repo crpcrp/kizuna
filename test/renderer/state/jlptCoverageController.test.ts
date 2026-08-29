@@ -35,6 +35,8 @@ function readyReport(): JlptCoverageReportReady {
       snapshotId: 'test',
       license: 'CC-BY-SA-4.0',
       licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      attribution:
+        "OpenJLPT contributors; level classifications derived from Jonathan Waller's JLPT Resources.",
       rawRecordCount: 0,
       deduplicatedExpressionCount: 0,
       duplicateCount: 0,

@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
 import {
   masteredCount,
@@ -377,6 +376,7 @@ function DatasetSection({
         <div>
           <dt>License / attribution</dt>
           <dd>
+            {data.dataset.attribution}{' '}
             <a href={data.dataset.licenseUrl} target="_blank" rel="noreferrer">
               {data.dataset.license}
             </a>
@@ -464,7 +464,6 @@ export default function JlptCoverageReport({
   onRetry,
   errorText
 }: JlptCoverageReportProps): React.JSX.Element {
-  const [nowMs] = useState(() => Date.now())
   const loading = phase === 'loading' || (phase === 'ready' && data === null)
   const body =
     phase === 'idle' ? null : loading ? (
@@ -476,7 +475,7 @@ export default function JlptCoverageReport({
         data={data!}
         selectedLevel={selectedLevel}
         onTargetLevelChange={onTargetLevelChange}
-        nowMs={nowMs}
+        nowMs={Date.parse(data!.generatedAt)}
       />
     )
 
