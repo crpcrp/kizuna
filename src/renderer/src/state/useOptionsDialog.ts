@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useState, useSyncExternalStore, type RefObject } from 'react'
-import type { AnkiJlptSetupResult, AnkiPing, AnkiSettings } from '../../../shared/anki'
+import type {
+  AnkiJlptBackfillApplyRequest,
+  AnkiJlptBackfillPreview,
+  AnkiJlptBackfillProgress,
+  AnkiJlptBackfillResult,
+  AnkiJlptSetupResult,
+  AnkiPing,
+  AnkiSettings
+} from '../../../shared/anki'
 import type { ImportProgress } from '../../../shared/dictionary'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
 import type { PlayerSettings } from '../../../shared/playerSettings'
@@ -78,6 +86,9 @@ export interface OptionsDialogActions {
   onRemoveYomitanDict(id: number): Promise<void>
   ankiPing(): Promise<AnkiPing>
   onSetupAnkiJlptField(): Promise<AnkiJlptSetupResult>
+  onPreviewJlptBackfill(): Promise<AnkiJlptBackfillPreview>
+  onApplyJlptBackfill(request: AnkiJlptBackfillApplyRequest): Promise<AnkiJlptBackfillResult>
+  onJlptBackfillProgress(cb: (value: AnkiJlptBackfillProgress) => void): () => void
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
   onSaveAzureTranslationKey(key: string): Promise<boolean>
   onSaveAzureTranslationRegion(region: string): Promise<boolean>
@@ -197,6 +208,9 @@ export function useOptionsDialog({
         await controller.load('anki', { force: true })
         return result
       },
+      onPreviewJlptBackfill: () => bridge.anki.previewJlptBackfill(),
+      onApplyJlptBackfill: (request) => bridge.anki.applyJlptBackfill(request),
+      onJlptBackfillProgress: (cb) => bridge.anki.onJlptBackfillProgress(cb),
       onChangeAnkiSettings: (patch) => changeAnkiSettings(bridge.anki, controller, patch),
       onSaveAzureTranslationKey: async (key) => {
         try {

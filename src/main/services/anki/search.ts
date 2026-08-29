@@ -5,8 +5,13 @@
 import type { DuplicatePolicy } from '../../../shared/anki'
 
 /** Escapes a value for embedding in a double-quoted Anki search clause. */
-function escapeAnkiSearchValue(value: string): string {
+export function escapeAnkiSearchValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/** Finds notes in exactly the configured deck and note type. */
+export function findBackfillQuery(deckName: string, modelName: string): string {
+  return `deck:"${escapeAnkiSearchValue(deckName)}" note:"${escapeAnkiSearchValue(modelName)}"`
 }
 
 /**

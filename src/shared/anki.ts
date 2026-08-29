@@ -3,6 +3,7 @@
 
 import type { Token } from './token'
 import type { LookupResult } from './dictionary'
+import type { JlptLevel } from './jlpt'
 
 export type AnkiField =
   | 'word'
@@ -165,6 +166,64 @@ export type AnkiJlptSetupResult =
 export const ANKI_MEMBERSHIP_BATCH_LIMIT = 100
 
 export type AnkiMembershipMatches = Record<string, AnkiExistingMatch | null>
+
+/** Maximum note IDs sent to one AnkiConnect notesInfo request. */
+export const ANKI_BACKFILL_BATCH_LIMIT = 100
+
+export interface AnkiJlptBackfillCounts {
+  total: number
+  wouldWrite: Record<JlptLevel, number>
+  unclassified: number
+  alreadyPopulated: number
+  invalidSource: number
+  destinationMissing: number
+}
+
+/** The only renderer-supplied write candidate data accepted by the main process. */
+export interface AnkiJlptBackfillCandidate {
+  noteId: number
+  expectedTargetValue: ''
+}
+
+export interface AnkiJlptBackfillPreviewReady {
+  status: 'ready'
+  operationToken: string
+  deckName: string
+  modelName: string
+  wordField: string
+  readingField: string
+  targetField: string
+  counts: AnkiJlptBackfillCounts
+  candidates: AnkiJlptBackfillCandidate[]
+}
+
+export interface AnkiJlptBackfillPreviewFailure {
+  status: 'preflight-failure' | 'api-failure'
+  modelName: string
+  message: string
+  /** True when the existing "Set up JLPT field" action can resolve the error. */
+  setupRequired?: boolean
+}
+
+export type AnkiJlptBackfillPreview = AnkiJlptBackfillPreviewReady | AnkiJlptBackfillPreviewFailure
+
+export interface AnkiJlptBackfillApplyRequest {
+  operationToken: string
+  candidates: AnkiJlptBackfillCandidate[]
+}
+
+export interface AnkiJlptBackfillProgress {
+  operationToken: string
+  completed: number
+  total: number
+}
+
+export interface AnkiJlptBackfillResult {
+  updated: number
+  skipped: number
+  failed: number
+  firstError?: string
+}
 
 /** A captured video frame, already encoded as raw base64 JPEG (no data: URL
  * prefix) by the renderer's crop dialog. */

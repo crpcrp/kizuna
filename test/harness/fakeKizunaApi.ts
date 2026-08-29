@@ -157,6 +157,13 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
         status: 'already-configured' as const,
         modelName: ''
       })),
+      previewJlptBackfill: vi.fn(async () => ({
+        status: 'preflight-failure' as const,
+        modelName: '',
+        message: 'Not configured'
+      })),
+      applyJlptBackfill: vi.fn(async () => ({ updated: 0, skipped: 0, failed: 0 })),
+      onJlptBackfillProgress: vi.fn(() => listenerCleanup),
       addNote: vi.fn(async () => ({
         noteId: 1,
         operation: 'added' as const,
