@@ -23,6 +23,7 @@ function candidate(
     count: 1,
     kind: 'vocabulary',
     level: 'N3',
+    fixedJlptLevel: 'N3',
     ...overrides
   }
 }
@@ -67,7 +68,7 @@ function modalProps(
 ): JlptBulkExportModalProps {
   return {
     open: true,
-    presentation: 'open',
+    presentation: 'modal',
     throughLevel: 'N3',
     mode: 'vocabulary',
     phase,
@@ -82,6 +83,8 @@ function modalProps(
     onStart: vi.fn(),
     onCancel: vi.fn(),
     onBackToList: vi.fn(),
+    onHideToSidebar: vi.fn(),
+    onReopen: vi.fn(),
     ...overrides
   }
 }
@@ -254,9 +257,11 @@ describe('JlptBulkExportModal phases and close policy', () => {
     expect(screen.getByRole('status').textContent).toContain('Exported 0 of 1')
     fireEvent.click(screen.getByRole('dialog', { name: 'JLPT unknown-item export' }))
     fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.click(screen.getByRole('button', { name: 'Hide to sidebar' }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(props.onClose).not.toHaveBeenCalled()
+    expect(props.onHideToSidebar).toHaveBeenCalledOnce()
     expect(props.onCancel).toHaveBeenCalledOnce()
     expect(screen.queryByRole('button', { name: 'Close JLPT unknown-item export' })).toBeNull()
   })

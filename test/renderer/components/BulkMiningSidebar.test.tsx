@@ -98,6 +98,17 @@ describe('BulkMiningSidebar', () => {
     expect(html).not.toContain('>Cancel</button>')
   })
 
+  it('uses export copy and identity for a hidden JLPT export', () => {
+    const html = render({
+      variant: 'export',
+      phase: { kind: 'running', candidates, statuses: {}, cancelling: false }
+    })
+
+    expect(html).toContain('id="jlpt-export-sidebar"')
+    expect(html).toContain('aria-label="JLPT export progress"')
+    expect(html).toContain('Exported 0 of 2')
+  })
+
   it('forwards Reopen and Cancel callbacks only for an active run', () => {
     let reopened = 0
     let cancelled = 0

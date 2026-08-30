@@ -112,6 +112,38 @@ describe('resolveCandidateEntries', () => {
     ])
   })
 
+  it('prefers a JLPT-classified sense and carries the export inventory level', async () => {
+    const unrelated = makeLookupResult({
+      expression: 'だんだん',
+      reading: 'だんだん',
+      glossary: 'thank you',
+      jlptLevel: null
+    })
+    const standard = makeLookupResult({
+      expression: '段々',
+      reading: 'だんだん',
+      glossary: 'gradually',
+      jlptLevel: 'N1'
+    })
+    const dict = fakeDict(async () => [unrelated, standard])
+    const patches: Record<string, ResolvedEntry>[] = []
+
+    await resolveCandidateEntries(
+      dict,
+      [{ ...candidate('だんだん', { reading: '' }), fixedJlptLevel: 'N5' }],
+      {},
+      { frequencyDictId: null },
+      { current: 0 },
+      (patch) => patches.push(patch)
+    )
+
+    expect(patches[0]['だんだん'].entry).toEqual({
+      ...standard,
+      expression: 'だんだん',
+      jlptLevel: 'N5'
+    })
+  })
+
   it('keeps an authoritative pinned frequency even when dictionary resolution differs or fails', async () => {
     const dict = fakeDict(async (lemma) => {
       if (lemma === 'missing') return []

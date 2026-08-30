@@ -6,6 +6,8 @@ import type { MiningCandidate } from './bulkMining'
 export interface JlptMiningCandidate extends MiningCandidate {
   kind: JlptExportItem['kind']
   level: JlptLevel
+  /** Inventory level that the resolved dictionary row must carry into Anki. */
+  fixedJlptLevel: JlptLevel
   /** Authoritative pinned rank for kanji; absent for vocabulary. */
   fixedFrequency?: number | null
 }
@@ -42,6 +44,7 @@ export function buildJlptMiningCandidates(items: readonly JlptExportItem[]): Jlp
         count: 1,
         kind: item.kind,
         level: item.level,
+        fixedJlptLevel: item.level,
         ...(item.kind === 'kanji' ? { fixedFrequency: item.frequency } : {})
       }
     })

@@ -1,4 +1,4 @@
-#bulk-mining-sidebar {
+.bulk-mining-sidebar {
   box-sizing: border-box;
   display: flex;
   width: min(260px, 100%);

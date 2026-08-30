@@ -1,4 +1,5 @@
 import type { FrequencyMode, LookupResult } from '../../../shared/dictionary'
+import type { JlptLevel } from '../../../shared/jlpt'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import { errorMessage } from '../util/errorMessage'
 import {
@@ -22,6 +23,22 @@ export interface EntryResolutionOpts {
 type CandidateWithFrequencyFallback = MiningCandidate & {
   fallbackFrequency?: number | null
   fixedFrequency?: number | null
+  fixedJlptLevel?: JlptLevel
+}
+
+function resolvedEntry(
+  candidate: CandidateWithFrequencyFallback,
+  results: LookupResult[]
+): LookupResult | null {
+  const entry =
+    (candidate.fixedJlptLevel ? results.find((result) => result.jlptLevel !== null) : undefined) ??
+    results.find((result) => result.expression === candidate.lemma) ??
+    results[0] ??
+    null
+
+  return entry && candidate.fixedJlptLevel
+    ? { ...entry, expression: candidate.lemma, jlptLevel: candidate.fixedJlptLevel }
+    : entry
 }
 
 function resolvedFrequency(
@@ -197,8 +214,7 @@ export async function resolveCandidateEntries(
           candidate.token.surface
         )
         if (cancelToken.current !== request) return
-        const entry =
-          results.find((result) => result.expression === candidate.lemma) ?? results[0] ?? null
+        const entry = resolvedEntry(candidate, results)
         patch[candidate.lemma] = {
           entry,
           frequency: resolvedFrequency(candidate, entry)

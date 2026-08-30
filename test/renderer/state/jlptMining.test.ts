@@ -38,6 +38,7 @@ describe('buildJlptMiningCandidates', () => {
         count: 1,
         kind: 'kanji',
         level: 'N5',
+        fixedJlptLevel: 'N5',
         fixedFrequency: 12
       },
       {
@@ -46,7 +47,8 @@ describe('buildJlptMiningCandidates', () => {
         sentence: '',
         count: 1,
         kind: 'vocabulary',
-        level: 'N4'
+        level: 'N4',
+        fixedJlptLevel: 'N4'
       }
     ])
   })

@@ -92,7 +92,7 @@ describe('useJlptBulkExport', () => {
     act(() => result.result.current.openExport({ throughLevel: 'N4' }))
     expect(result.result.current).toMatchObject({
       open: true,
-      presentation: 'open',
+      presentation: 'modal',
       throughLevel: 'N4',
       mode: 'vocabulary',
       phase: { kind: 'preparing' }
@@ -141,5 +141,31 @@ describe('useJlptBulkExport', () => {
     })
     await Promise.resolve()
     expect(current.dict.lookup).not.toHaveBeenCalled()
+  })
+
+  it('hides a running export without closing it and reopens the same run', async () => {
+    const current = bridge()
+    vi.mocked(current.anki.addNote).mockReturnValue(new Promise(() => undefined))
+    const result = renderHook(() =>
+      useJlptBulkExport({
+        bridge: current,
+        frequencyDictId: null,
+        sortOrder: 'auto',
+        syncNow: vi.fn().mockResolvedValue({})
+      })
+    )
+
+    act(() => result.result.current.openExport())
+    await vi.waitFor(() => expect(result.result.current.phase.kind).toBe('ready'))
+    act(() => result.result.current.onStart())
+    await vi.waitFor(() => expect(result.result.current.phase.kind).toBe('running'))
+
+    act(() => result.result.current.onHideToSidebar())
+    expect(result.result.current).toMatchObject({ open: false, presentation: 'sidebar' })
+    expect(result.result.current.phase.kind).toBe('running')
+
+    act(() => result.result.current.onReopen())
+    expect(result.result.current).toMatchObject({ open: true, presentation: 'modal' })
+    expect(result.result.current.phase.kind).toBe('running')
   })
 })

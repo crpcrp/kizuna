@@ -6,6 +6,11 @@ import type { JlptLevel } from '../../../shared/jlpt'
 import { type JlptExportMode } from '../../../shared/jlptExport'
 import type { BulkMiningPhase } from './bulkMiningController'
 import {
+  hideBulkMiningToSidebar,
+  reopenBulkMiningModal,
+  type BulkMiningPresentation
+} from './bulkMiningPresentation'
+import {
   createJlptBulkExportController,
   type JlptBulkExportController,
   type JlptBulkExportState
@@ -22,7 +27,7 @@ export interface UseJlptBulkExportInput {
 
 export interface JlptBulkExportViewModel {
   open: boolean
-  presentation: 'closed' | 'open'
+  presentation: BulkMiningPresentation
   throughLevel: JlptLevel
   mode: JlptExportMode
   phase: BulkMiningPhase
@@ -37,6 +42,8 @@ export interface JlptBulkExportViewModel {
   onStart(): void
   onCancel(): void
   onBackToList(): void
+  onHideToSidebar(): void
+  onReopen(): void
 }
 
 export interface UseJlptBulkExportResult extends JlptBulkExportViewModel {
@@ -63,6 +70,7 @@ export function useJlptBulkExport({
       refreshKnowledge
     })
   )
+  const [presentation, setPresentation] = useState<BulkMiningPresentation>('closed')
   const state = useSyncExternalStore(
     controller.subscribe,
     () => controller.getState(),
@@ -72,9 +80,18 @@ export function useJlptBulkExport({
   useEffect(() => () => controller.close(), [controller])
 
   const openExport = useLatestCallback((options?: { throughLevel?: JlptLevel }): void => {
+    if (presentation === 'sidebar') {
+      setPresentation(reopenBulkMiningModal(presentation))
+      return
+    }
+    if (presentation === 'modal') return
+    setPresentation('modal')
     controller.open(options)
   })
-  const close = useLatestCallback(() => controller.close())
+  const close = useLatestCallback(() => {
+    controller.close()
+    setPresentation('closed')
+  })
   const retry = useLatestCallback(() => controller.retry())
   const setThroughLevel = useLatestCallback((level: JlptLevel) => controller.setThroughLevel(level))
   const setMode = useLatestCallback((mode: JlptExportMode) => controller.setMode(mode))
@@ -84,9 +101,13 @@ export function useJlptBulkExport({
   const start = useLatestCallback(() => controller.start())
   const cancel = useLatestCallback(() => controller.cancel())
   const backToList = useLatestCallback(() => controller.backToList())
+  const hideToSidebar = useLatestCallback(() =>
+    setPresentation(hideBulkMiningToSidebar(presentation, state.phase))
+  )
+  const reopen = useLatestCallback(() => setPresentation(reopenBulkMiningModal(presentation)))
 
   return {
-    ...viewModel(state, frequencyDictId),
+    ...viewModel(state, presentation, frequencyDictId),
     onClose: close,
     onRetry: retry,
     onThroughLevelChange: setThroughLevel,
@@ -97,20 +118,23 @@ export function useJlptBulkExport({
     onStart: start,
     onCancel: cancel,
     onBackToList: backToList,
+    onHideToSidebar: hideToSidebar,
+    onReopen: reopen,
     openExport
   }
 }
 
 function viewModel(
   state: JlptBulkExportState,
+  presentation: BulkMiningPresentation,
   frequencyDictId: number | null
 ): Pick<
   JlptBulkExportViewModel,
   'open' | 'presentation' | 'throughLevel' | 'mode' | 'phase' | 'frequencyDictConfigured'
 > {
   return {
-    open: state.open,
-    presentation: state.open ? 'open' : 'closed',
+    open: state.open && presentation === 'modal',
+    presentation,
     throughLevel: state.throughLevel,
     mode: state.mode,
     phase: state.phase,

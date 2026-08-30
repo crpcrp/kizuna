@@ -253,14 +253,6 @@
   background: var(--danger-bg);
 }
 
-.jlpt-bulk-export-running-label {
-  color: var(--text-muted);
-  font-size: var(--label-size);
-  font-weight: 700;
-  letter-spacing: var(--label-tracking);
-  text-transform: uppercase;
-}
-
 @media (max-width: 620px) {
   #jlpt-bulk-export .modal-panel {
     width: calc(100vw - 32px);

@@ -137,7 +137,7 @@ body {
   flex: 1;
   border-left: none;
 }
-#right-sidebar-stack #bulk-mining-sidebar {
+#right-sidebar-stack .bulk-mining-sidebar {
   width: 100%;
 }
 

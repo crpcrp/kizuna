@@ -441,9 +441,9 @@ export default function JlptBulkExportModal(props: JlptBulkExportModalProps): Re
       onClose={onOverlayClose}
       headerActions={
         running ? (
-          <span className="jlpt-bulk-export-running-label" aria-hidden="true">
-            Exporting…
-          </span>
+          <button type="button" onClick={props.onHideToSidebar}>
+            Hide to sidebar
+          </button>
         ) : (
           <button
             type="button"
