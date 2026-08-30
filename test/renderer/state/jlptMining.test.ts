@@ -21,6 +21,7 @@ describe('buildJlptMiningCandidates', () => {
     expect(
       buildJlptMiningCandidates([
         item({ expression: ' 猫 ', reading: 'ねこ', level: 'N4' }),
+        item({ id: 'vocabulary:だんだん', expression: 'だんだん', reading: '', level: 'N5' }),
         item({
           id: 'kanji:日',
           kind: 'kanji',
@@ -32,12 +33,28 @@ describe('buildJlptMiningCandidates', () => {
       ])
     ).toEqual([
       {
+        lemma: 'だんだん',
+        token: {
+          surface: 'だんだん',
+          reading: 'だんだん',
+          lemma: 'だんだん',
+          pos: '',
+          startOffset: 0
+        },
+        sentence: '',
+        count: 1,
+        kind: 'vocabulary',
+        level: 'N5',
+        fixedJlptLevel: 'N5'
+      },
+      {
         lemma: '日',
         token: { surface: '日', reading: '', lemma: '日', pos: '', startOffset: 0 },
         sentence: '',
         count: 1,
         kind: 'kanji',
         level: 'N5',
+        fixedJlptLevel: 'N5',
         fixedFrequency: 12
       },
       {
@@ -46,7 +63,8 @@ describe('buildJlptMiningCandidates', () => {
         sentence: '',
         count: 1,
         kind: 'vocabulary',
-        level: 'N4'
+        level: 'N4',
+        fixedJlptLevel: 'N4'
       }
     ])
   })

@@ -6,6 +6,7 @@ export interface BulkMiningSidebarProps {
   phase: BulkMiningPhase
   onReopen: () => void
   onCancel: () => void
+  variant?: 'mining' | 'export'
 }
 
 function isTerminal(status: MiningWordStatus | undefined): boolean {
@@ -61,7 +62,8 @@ function currentCandidate(phase: Extract<BulkMiningPhase, { kind: 'running' | 'd
 export default function BulkMiningSidebar({
   phase,
   onReopen,
-  onCancel
+  onCancel,
+  variant = 'mining'
 }: BulkMiningSidebarProps): React.JSX.Element | null {
   if (phase.kind !== 'running' && phase.kind !== 'done') return null
 
@@ -73,9 +75,14 @@ export default function BulkMiningSidebar({
     phase.kind === 'running' && phase.cancelling ? 'Cancelling…' : statusLabel(current.status)
 
   return (
-    <aside id="bulk-mining-sidebar" aria-label="Bulk mining progress" data-phase={phase.kind}>
+    <aside
+      id={variant === 'export' ? 'jlpt-export-sidebar' : 'bulk-mining-sidebar'}
+      className="bulk-mining-sidebar"
+      aria-label={variant === 'export' ? 'JLPT export progress' : 'Bulk mining progress'}
+      data-phase={phase.kind}
+    >
       <p className="bulk-mining-sidebar-progress">
-        Mined {completed} of {phase.candidates.length}
+        {variant === 'export' ? 'Exported' : 'Mined'} {completed} of {phase.candidates.length}
       </p>
       <p className="bulk-mining-sidebar-current">
         <span>

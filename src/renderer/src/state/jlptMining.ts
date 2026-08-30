@@ -6,11 +6,14 @@ import type { MiningCandidate } from './bulkMining'
 export interface JlptMiningCandidate extends MiningCandidate {
   kind: JlptExportItem['kind']
   level: JlptLevel
+  /** Inventory level that the resolved dictionary row must carry into Anki. */
+  fixedJlptLevel: JlptLevel
   /** Authoritative pinned rank for kanji; absent for vocabulary. */
   fixedFrequency?: number | null
 }
 
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
+const KANA_EXPRESSION = /^[ぁ-ゖゝゞァ-ヺー]+$/u
 
 function compareText(left: string, right: string): number {
   return left === right ? 0 : left < right ? -1 : 1
@@ -33,7 +36,10 @@ export function buildJlptMiningCandidates(items: readonly JlptExportItem[]): Jlp
         lemma: expression,
         token: {
           surface: expression,
-          reading: item.kind === 'vocabulary' ? item.reading : '',
+          reading:
+            item.kind === 'vocabulary'
+              ? item.reading || (KANA_EXPRESSION.test(expression) ? expression : '')
+              : '',
           lemma: expression,
           pos: '',
           startOffset: 0
@@ -42,6 +48,7 @@ export function buildJlptMiningCandidates(items: readonly JlptExportItem[]): Jlp
         count: 1,
         kind: item.kind,
         level: item.level,
+        fixedJlptLevel: item.level,
         ...(item.kind === 'kanji' ? { fixedFrequency: item.frequency } : {})
       }
     })

@@ -231,6 +231,10 @@ export default function App({
   // Bulk mining's compact surface reserves right-stack width like a panel, so
   // the window-sizing feature below has to know which surface is showing.
   const miningPresentation = vocabulary.mining.presentation
+  const rightSidebarPresentation =
+    miningPresentation === 'sidebar' || jlptBulkExport.presentation === 'sidebar'
+      ? 'sidebar'
+      : miningPresentation
 
   // Playback and window lifecycle: audio/subtitle menu commands, per-file
   // values, panel sizing, video scale, fullscreen, mini player, and picture
@@ -244,7 +248,7 @@ export default function App({
     settingsPersistenceRef,
     settingsReady,
     panels: { sidebarOpen, playlistOpen, setSidebarOpen, setPlaylistOpen },
-    miningPresentation,
+    miningPresentation: rightSidebarPresentation,
     initialAudioDevices,
     reportError: mediaSession.banner.reportError
   })
@@ -515,7 +519,7 @@ export default function App({
 
         {!state.fullscreen &&
           !miniPlayerActive &&
-          (sidebarOpen || miningPresentation === 'sidebar') && (
+          (sidebarOpen || rightSidebarPresentation === 'sidebar') && (
             <aside id="right-sidebar-stack" ref={rightSidebarStackRef} aria-label="Sidebars">
               {sidebarOpen && (
                 <SubtitleSidebar
@@ -529,6 +533,14 @@ export default function App({
               )}
               {miningPresentation === 'sidebar' && (
                 <BulkMiningSidebar {...vocabulary.mining.sidebar} />
+              )}
+              {jlptBulkExport.presentation === 'sidebar' && (
+                <BulkMiningSidebar
+                  variant="export"
+                  phase={jlptBulkExport.phase}
+                  onReopen={jlptBulkExport.onReopen}
+                  onCancel={jlptBulkExport.onCancel}
+                />
               )}
             </aside>
           )}
