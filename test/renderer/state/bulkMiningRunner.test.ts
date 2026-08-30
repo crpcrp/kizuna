@@ -112,37 +112,46 @@ describe('resolveCandidateEntries', () => {
     ])
   })
 
-  it('prefers a JLPT-classified sense and carries the export inventory level', async () => {
-    const unrelated = makeLookupResult({
-      expression: 'だんだん',
-      reading: 'だんだん',
-      glossary: 'thank you',
-      jlptLevel: null
-    })
-    const standard = makeLookupResult({
-      expression: '段々',
-      reading: 'だんだん',
-      glossary: 'gradually',
-      jlptLevel: 'N1'
-    })
-    const dict = fakeDict(async () => [unrelated, standard])
-    const patches: Record<string, ResolvedEntry>[] = []
+  it.each([
+    ['だんだん', 'thank you', '段々', 'gradually'],
+    ['かぎ', 'Kagi', '鍵', 'key']
+  ])(
+    'prefers the common dictionary sense for %s and carries the export inventory level',
+    async (lemma, unrelatedGlossary, standardExpression, standardGlossary) => {
+      const unrelated = makeLookupResult({
+        expression: lemma,
+        reading: lemma,
+        glossary: unrelatedGlossary,
+        jlptLevel: null,
+        fallbackOnly: lemma === 'かぎ'
+      })
+      const standard = makeLookupResult({
+        expression: standardExpression,
+        reading: lemma,
+        glossary: standardGlossary,
+        jlptLevel: null,
+        defTags: '★ priority form',
+        score: 200
+      })
+      const dict = fakeDict(async () => [unrelated, standard])
+      const patches: Record<string, ResolvedEntry>[] = []
 
-    await resolveCandidateEntries(
-      dict,
-      [{ ...candidate('だんだん', { reading: '' }), fixedJlptLevel: 'N5' }],
-      {},
-      { frequencyDictId: null },
-      { current: 0 },
-      (patch) => patches.push(patch)
-    )
+      await resolveCandidateEntries(
+        dict,
+        [{ ...candidate(lemma, { reading: '' }), fixedJlptLevel: 'N5' }],
+        {},
+        { frequencyDictId: null },
+        { current: 0 },
+        (patch) => patches.push(patch)
+      )
 
-    expect(patches[0]['だんだん'].entry).toEqual({
-      ...standard,
-      expression: 'だんだん',
-      jlptLevel: 'N5'
-    })
-  })
+      expect(patches[0][lemma].entry).toEqual({
+        ...standard,
+        expression: lemma,
+        jlptLevel: 'N5'
+      })
+    }
+  )
 
   it('keeps an authoritative pinned frequency even when dictionary resolution differs or fails', async () => {
     const dict = fakeDict(async (lemma) => {

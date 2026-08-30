@@ -1,4 +1,4 @@
-import type { FrequencyMode, LookupResult } from '../../../shared/dictionary'
+import { priorityWeight, type FrequencyMode, type LookupResult } from '../../../shared/dictionary'
 import type { JlptLevel } from '../../../shared/jlpt'
 import type { AnkiPing, AnkiSettings } from '../../../shared/anki'
 import { errorMessage } from '../util/errorMessage'
@@ -31,6 +31,11 @@ function resolvedEntry(
   results: LookupResult[]
 ): LookupResult | null {
   const entry =
+    (candidate.fixedJlptLevel
+      ? results.find(
+          (result) => !result.fallbackOnly && priorityWeight(result.termTags, result.defTags) > 0
+        )
+      : undefined) ??
     (candidate.fixedJlptLevel ? results.find((result) => result.jlptLevel !== null) : undefined) ??
     results.find((result) => result.expression === candidate.lemma) ??
     results[0] ??
