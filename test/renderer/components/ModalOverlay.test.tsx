@@ -31,6 +31,16 @@ function miningProps(phase: BulkMiningPhase) {
 }
 
 describe('ModalOverlay', () => {
+  it('opts out of the native drag region for mouse interaction', () => {
+    const html = renderToStaticMarkup(
+      <ModalOverlay open label="Test dialog" onClose={vi.fn()}>
+        <button type="button">Action</button>
+      </ModalOverlay>
+    )
+
+    expect(html).toMatch(/class="modal-overlay open"[^>]*-webkit-app-region:\s*no-drag/)
+  })
+
   it('reports which gesture asked it to close', () => {
     const onClose = vi.fn()
     render(
