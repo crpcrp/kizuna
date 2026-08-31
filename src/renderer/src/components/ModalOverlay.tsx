@@ -18,6 +18,11 @@ export type ModalCloseSource = 'escape' | 'backdrop' | 'button'
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// Modal dialogs can be rendered above a surface that owns the window's drag
+// region (the splash screen does this for the startup update prompt). Opt the
+// whole overlay out so mouse input reaches the backdrop and its controls.
+const noDragStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
+
 export interface ModalOverlayProps {
   open: boolean
   /** Accessible name for the dialog, e.g. 'Word report'. */
@@ -105,6 +110,7 @@ export default function ModalOverlay({
       ref={overlayRef}
       id={id}
       className={open ? 'modal-overlay open' : 'modal-overlay'}
+      style={noDragStyle}
       role="dialog"
       aria-label={label}
       aria-modal="true"
