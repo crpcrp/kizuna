@@ -403,10 +403,13 @@ describe('applyOverwrite picture attachment', () => {
     expect(update.fields.Picture).toBe('')
   })
 
-  it('replaces an already-filled Picture field with the newly captured frame', async () => {
+  it('replaces an already-filled Picture field without deleting existing media', async () => {
     const note = buildNote(mineRequest, withPicture, { picture })
     const target = overwriteNote(8, token.lemma, {
-      Picture: { value: '<img src="mine.jpg">', order: 5 }
+      Picture: {
+        value: '<img src="kizuna_猫_1699000000000.jpg"><img src="chosen-cat.jpg">',
+        order: 5
+      }
     })
     const { anki, ankiClient } = client({
       notesInfo: { result: [target] },
@@ -431,64 +434,10 @@ describe('applyOverwrite picture attachment', () => {
     ).note
     expect(update.picture).toEqual([picture])
     expect(update.fields.Picture).toBe('')
-  })
-
-  it('deletes the mined image it replaced, after the update is verified', async () => {
-    const note = buildNote(mineRequest, withPicture, { picture })
-    const target = overwriteNote(8, token.lemma, {
-      Picture: { value: '<img src="kizuna_猫_1699000000000.jpg">', order: 5 }
-    })
-    const { anki, ankiClient } = client({
-      notesInfo: { result: [target] },
-      updateNoteFields: { result: null },
-      addTags: { result: null },
-      deleteMediaFile: { result: null }
-    })
-
-    await applyOverwrite(ankiClient, withPicture, target, note, undefined)
-
-    const actions = anki.calls.map((call) => call.action)
-    expect(anki.calls.filter((call) => call.action === 'deleteMediaFile')).toEqual([
-      { action: 'deleteMediaFile', params: { filename: 'kizuna_猫_1699000000000.jpg' } }
-    ])
-    expect(actions.lastIndexOf('notesInfo')).toBeLessThan(actions.indexOf('deleteMediaFile'))
-  })
-
-  it('keeps an image the user chose themselves in the media folder', async () => {
-    const note = buildNote(mineRequest, withPicture, { picture })
-    const target = overwriteNote(8, token.lemma, {
-      Picture: { value: '<img src="mine.jpg">', order: 5 }
-    })
-    const { anki, ankiClient } = client({
-      notesInfo: { result: [target] },
-      updateNoteFields: { result: null },
-      addTags: { result: null }
-    })
-
-    await applyOverwrite(ankiClient, withPicture, target, note, undefined)
-
     expect(anki.calls.map((call) => call.action)).not.toContain('deleteMediaFile')
   })
 
-  it('still reports the mine as updated when deleting the replaced image fails', async () => {
-    const note = buildNote(mineRequest, withPicture, { picture })
-    const target = overwriteNote(8, token.lemma, {
-      Picture: { value: '<img src="kizuna_猫_1699000000000.jpg">', order: 5 }
-    })
-    const { anki, ankiClient } = client({
-      notesInfo: { result: [target] },
-      updateNoteFields: { result: null },
-      addTags: { result: null },
-      deleteMediaFile: { error: 'file not found' }
-    })
-
-    await expect(applyOverwrite(ankiClient, withPicture, target, note, undefined)).resolves.toEqual(
-      expect.objectContaining({ noteId: 8, operation: 'updated' })
-    )
-    expect(anki.calls.map((call) => call.action)).toContain('deleteMediaFile')
-  })
-
-  it('clears an existing picture and deletes its media when the mine carries no screenshot', async () => {
+  it('clears an existing picture without deleting its media when the mine carries no screenshot', async () => {
     const note = buildNote(mineRequest, withPicture)
     const target = overwriteNote(8, token.lemma, {
       Picture: {
@@ -499,8 +448,7 @@ describe('applyOverwrite picture attachment', () => {
     const { anki, ankiClient } = client({
       notesInfo: { result: [target] },
       updateNoteFields: { result: null },
-      addTags: { result: null },
-      deleteMediaFile: { result: null }
+      addTags: { result: null }
     })
 
     await expect(applyOverwrite(ankiClient, withPicture, target, note, undefined)).resolves.toEqual(
@@ -511,12 +459,7 @@ describe('applyOverwrite picture attachment', () => {
     ).note
     expect(update.picture).toBeUndefined()
     expect(update.fields.Picture).toBe('')
-    expect(anki.calls.filter((call) => call.action === 'deleteMediaFile')).toEqual([
-      { action: 'deleteMediaFile', params: { filename: 'kizuna_猫_1699000000000.jpg' } },
-      { action: 'deleteMediaFile', params: { filename: 'chosen-cat.jpg' } }
-    ])
-    const actions = anki.calls.map((call) => call.action)
-    expect(actions.lastIndexOf('notesInfo')).toBeLessThan(actions.indexOf('deleteMediaFile'))
+    expect(anki.calls.map((call) => call.action)).not.toContain('deleteMediaFile')
   })
 
   it('requires the mapped Picture field on the target model when replacing or clearing it', async () => {

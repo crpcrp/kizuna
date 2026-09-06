@@ -124,7 +124,6 @@ export interface AnkiClient {
     }
   ): Promise<void>
   addTags(noteIds: number[], tags: string[]): Promise<void>
-  deleteMediaFile(filename: string): Promise<void>
   guiBrowse(query: string): Promise<number[]>
 }
 
@@ -220,9 +219,6 @@ export function createAnkiClient(deps: {
       if (!normalizedTags) return
       await invoke<void>('addTags', { notes: noteIds, tags: normalizedTags })
     },
-    // Anki trashes the file rather than unlinking it, and reports an error for a
-    // name it does not hold; callers treat both as advisory.
-    deleteMediaFile: (filename: string) => invoke<void>('deleteMediaFile', { filename }),
     guiBrowse: (query: string) => invoke<number[]>('guiBrowse', { query })
   }
 }
