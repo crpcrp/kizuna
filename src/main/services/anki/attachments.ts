@@ -1,6 +1,5 @@
-// Attachment naming and field handling: picture/audio filenames, the mapped
-// fields AnkiConnect fills from a media array, and cleanup of images a
-// picture overwrite replaces.
+// Attachment naming and field handling: picture/audio filenames and the mapped
+// fields AnkiConnect fills from a media array.
 
 import type { AnkiSettings } from '../../../shared/anki'
 import { formatScreenshotTimestamp } from '../screenshots'
@@ -57,49 +56,4 @@ export function clearedPictureFields(pictures: AnkiMediaAttachment[]): Record<st
   return Object.fromEntries(
     pictures.flatMap((picture) => picture.fields.map((field) => [field, '']))
   )
-}
-
-/** `src` filenames of every `<img>` in one field's HTML, in document order. */
-export function imageFilenames(html: string): string[] {
-  const found: string[] = []
-  const img = /<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi
-  for (const match of html.matchAll(img)) {
-    // Anki writes the bare filename, but a field edited by hand can carry the
-    // HTML-escaped form of one.
-    const src = (match[1] ?? match[2] ?? match[3] ?? '')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&amp;/g, '&')
-      .trim()
-    if (src !== '') found.push(src)
-  }
-  return found
-}
-
-/**
- * Kizuna's own mined-picture names (`pictureFilename`): `kizuna_<word>_<ms>.jpg`.
- */
-const MINED_PICTURE_NAME = /^kizuna_.+_\d+\.jpg$/
-
-/**
- * The media files a picture overwrite strands: images currently in the fields
- * `pictures` is about to replace on `target`. Only Kizuna's own mined
- * filenames qualify — a picture the user chose themselves is their asset, and
- * deleting it from Anki's media folder is not this feature's business. Names
- * being written by this very mine are excluded so a re-used filename is never
- * deleted after being uploaded. Call it *before* the update, while `target`
- * still describes the note's old contents.
- */
-export function replacedPictureFilenames(
-  // Only the old field values are read, so the parameter asks for no more than
-  // that — an `AnkiNoteInfo` satisfies it.
-  target: { fields: Record<string, { value: string } | undefined> },
-  pictures: AnkiMediaAttachment[]
-): string[] {
-  const incoming = new Set(pictures.map((picture) => picture.filename))
-  const stranded = pictures
-    .flatMap((picture) => picture.fields)
-    .flatMap((field) => imageFilenames(target.fields[field]?.value ?? ''))
-    .filter((filename) => MINED_PICTURE_NAME.test(filename) && !incoming.has(filename))
-  return [...new Set(stranded)]
 }

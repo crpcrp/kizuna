@@ -4,12 +4,7 @@
 
 import type { AnkiMineResult, AnkiSettings } from '../../../shared/anki'
 import type { AnkiClient, AnkiNoteInfo } from './ankiConnect'
-import {
-  attachmentFieldNames,
-  clearedPictureFields,
-  imageFilenames,
-  replacedPictureFilenames
-} from './attachments'
+import { attachmentFieldNames, clearedPictureFields } from './attachments'
 import type { AnkiMediaAttachment, AnkiNote } from './noteBuilder'
 import { findExistingQuery } from './search'
 
@@ -148,12 +143,7 @@ export async function applyOverwrite(
     picture: pictureUpdate.length > 0 || pictureField !== '',
     sentenceAudio: sentenceAudio !== undefined && keptAudio.includes(sentenceAudio)
   })
-  // Read while `target` still holds the note's old contents: after the update
-  // these fields describe the new image instead of the stranded one.
   const clearingPicture = pictureUpdate.length === 0 && pictureField !== ''
-  const strandedPictures = clearingPicture
-    ? imageFilenames(target.fields[pictureField]?.value ?? '')
-    : replacedPictureFilenames(target, pictureUpdate)
   const attachmentFields = attachmentFieldNames(settings).filter(
     (field) => !clearingPicture || field !== pictureField
   )
@@ -183,18 +173,6 @@ export async function applyOverwrite(
   // `<img>` markup. Both are optional, so confirm the updated fields and tags
   // without comparing the attachment fields verbatim.
   await verifyOverwrite(anki, target.noteId, note.fields, note.tags, attachmentFields)
-  // Only now that the note demonstrably carries the requested picture state:
-  // drop each image the overwrite replaced or removed, so re-mining does not
-  // leave media orphans for `Tools → Check Media` to find. Best-effort by
-  // design — the mine has already succeeded, and a failed cleanup (file
-  // already gone, older AnkiConnect) must not report it as a failure.
-  for (const filename of strandedPictures) {
-    try {
-      await anki.deleteMediaFile(filename)
-    } catch {
-      // Leaves the orphan behind; Check Media still finds it later.
-    }
-  }
   return {
     noteId: target.noteId,
     operation: 'updated',

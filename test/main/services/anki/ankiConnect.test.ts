@@ -344,22 +344,6 @@ describe('createAnkiClient', () => {
     ])
   })
 
-  it('deleteMediaFile() posts the filename and surfaces an AnkiConnect error', async () => {
-    const anki = fakeAnkiConnect({ deleteMediaFile: { result: null } })
-    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
-
-    await client.deleteMediaFile('kizuna_猫_1.jpg')
-
-    expect(anki.calls).toEqual([
-      { action: 'deleteMediaFile', params: { filename: 'kizuna_猫_1.jpg' } }
-    ])
-
-    const missing = fakeAnkiConnect({ deleteMediaFile: { error: 'file not found' } })
-    await expect(
-      createAnkiClient({ url: missing.url, fetch: missing.fetch }).deleteMediaFile('gone.jpg')
-    ).rejects.toThrow('file not found')
-  })
-
   it('skips addTags when every configured tag is blank', async () => {
     const anki = fakeAnkiConnect({})
     const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })

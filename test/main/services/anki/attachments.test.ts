@@ -2,19 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   attachmentFieldNames,
   clearedPictureFields,
-  imageFilenames,
   pictureFilename,
-  replacedPictureFilenames,
   sentenceAudioFilename
 } from '@src/main/services/anki/attachments'
 import { defaultAnkiSettings } from '@src/shared/anki'
-
-function overwriteNote(
-  noteId: number,
-  fields: Record<string, { value: string; order: number } | undefined> = {}
-) {
-  return { noteId, modelName: 'Kizuna', tags: [] as string[], fields }
-}
 
 describe('pictureFilename', () => {
   it('names a mined frame after the word and the capture time', () => {
@@ -86,77 +77,5 @@ describe('clearedPictureFields', () => {
 
   it('writes nothing when no picture is being sent', () => {
     expect(clearedPictureFields([])).toEqual({})
-  })
-})
-
-describe('imageFilenames', () => {
-  it('reads the src of every img, single- double- and unquoted', () => {
-    expect(
-      imageFilenames(
-        `text <img src="a.jpg"> <IMG class="x" SRC='b.png'> <img src=c.gif width=10> tail`
-      )
-    ).toEqual(['a.jpg', 'b.png', 'c.gif'])
-  })
-
-  it('unescapes an HTML-escaped filename', () => {
-    expect(imageFilenames('<img src="a&amp;b.jpg">')).toEqual(['a&b.jpg'])
-  })
-
-  it('finds nothing in field text without an image', () => {
-    expect(imageFilenames('')).toEqual([])
-    expect(imageFilenames('<div>plain <b>text</b></div>')).toEqual([])
-    expect(imageFilenames('<img alt="no src">')).toEqual([])
-  })
-})
-
-describe('replacedPictureFilenames', () => {
-  const mined = (filename: string): { data: string; filename: string; fields: string[] } => ({
-    data: 'JPEG',
-    filename,
-    fields: ['Picture']
-  })
-
-  it('returns the mined image the update is about to replace', () => {
-    const target = overwriteNote(8, {
-      Picture: { value: '<img src="kizuna_猫_1699000000000.jpg">', order: 5 }
-    })
-
-    expect(replacedPictureFilenames(target, [mined('kizuna_猫_1700000000000.jpg')])).toEqual([
-      'kizuna_猫_1699000000000.jpg'
-    ])
-  })
-
-  it('leaves a picture the user chose themselves alone', () => {
-    const target = overwriteNote(8, { Picture: { value: '<img src="my-own-cat.jpg">', order: 5 } })
-
-    expect(replacedPictureFilenames(target, [mined('kizuna_猫_1700000000000.jpg')])).toEqual([])
-  })
-
-  it('never deletes a filename this very mine is uploading', () => {
-    const target = overwriteNote(8, {
-      Picture: { value: '<img src="kizuna_猫_1700000000000.jpg">', order: 5 }
-    })
-
-    expect(replacedPictureFilenames(target, [mined('kizuna_猫_1700000000000.jpg')])).toEqual([])
-  })
-
-  it('deduplicates, and ignores fields no picture is being written to', () => {
-    const target = overwriteNote(8, {
-      Picture: {
-        value: '<img src="kizuna_猫_1.jpg"><img src="kizuna_猫_1.jpg">',
-        order: 5
-      },
-      Extra: { value: '<img src="kizuna_猫_2.jpg">', order: 6 }
-    })
-
-    expect(replacedPictureFilenames(target, [mined('kizuna_猫_3.jpg')])).toEqual([
-      'kizuna_猫_1.jpg'
-    ])
-  })
-
-  it('returns nothing when no picture is being sent', () => {
-    const target = overwriteNote(8, { Picture: { value: '<img src="kizuna_猫_1.jpg">', order: 5 } })
-
-    expect(replacedPictureFilenames(target, [])).toEqual([])
   })
 })
