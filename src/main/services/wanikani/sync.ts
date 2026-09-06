@@ -44,8 +44,9 @@ export async function syncWaniKani(deps: {
   client: WaniKaniClient
   db: KnowledgeDb
   now: () => number
-}): Promise<{ count: number; syncedAt: string }> {
-  const { client, db, now } = deps
+  isCurrent?: () => boolean
+}): Promise<{ count: number; syncedAt: string } | null> {
+  const { client, db, now, isCurrent } = deps
 
   const assignments: WkAssignment[] = []
   for await (const page of client.collection('assignments', {
@@ -69,6 +70,7 @@ export async function syncWaniKani(deps: {
 
   const rows = toKnownRows(assignments, subjects)
   const syncedAt = new Date(now()).toISOString()
+  if (isCurrent && !isCurrent()) return null
   const count = replaceSource(db, 'wanikani', rows, syncedAt)
   setSyncState(db, 'wanikani', syncedAt)
   return { count, syncedAt }

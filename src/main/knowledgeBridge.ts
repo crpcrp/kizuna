@@ -132,7 +132,13 @@ function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSe
  */
 export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): KnowledgeServiceLike {
   const { db, settings, secrets, fetch, now = Date.now } = deps
-  const inFlight: Partial<Record<KnowledgeSource, Promise<SourceStatus>>> = {}
+  const inFlight: Partial<Record<KnowledgeSource, InFlightSync>> = {}
+  let wanikaniGeneration = 0
+
+  interface InFlightSync {
+    task: Promise<SourceStatus>
+    generation: number
+  }
 
   function currentStatus(source: KnowledgeSource, k: KnowledgeSettings): SourceStatus {
     const configured =
@@ -150,7 +156,11 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     return { ...status, outcome, ...(retryAt === undefined ? {} : { retryAt }) }
   }
 
-  async function runWaniKaniSync(k: KnowledgeSettings, force = false): Promise<SourceStatus> {
+  async function runWaniKaniSync(
+    k: KnowledgeSettings,
+    force = false,
+    generation = wanikaniGeneration
+  ): Promise<SourceStatus> {
     const token = readSecret(secrets, k.wanikaniTokenEnc)
     if (token === '') return withOutcome(currentStatus('wanikani', k), 'unconfigured')
     const lastSyncAt = getSyncState(db, 'wanikani').lastSyncAt
@@ -163,7 +173,14 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     }
     try {
       const client = createWaniKaniClient({ token, fetch, now })
-      const { syncedAt, count } = await syncWaniKani({ client, db, now })
+      const result = await syncWaniKani({
+        client,
+        db,
+        now,
+        isCurrent: () => generation === wanikaniGeneration
+      })
+      if (result === null) return currentStatus('wanikani', settings.get().knowledge)
+      const { syncedAt, count } = result
       return { lastSyncAt: syncedAt, count, configured: true, outcome: 'synced' }
     } catch (err) {
       const message =
@@ -227,15 +244,19 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
     k: KnowledgeSettings,
     opts: { force?: boolean } = {}
   ): Promise<SourceStatus> {
+    const generation = source === 'wanikani' ? wanikaniGeneration : 0
     const existing = inFlight[source]
     if (existing) {
-      if (!opts.force) return existing
-      return existing.then(() => syncSource(source, settings.get().knowledge, opts))
+      if (!opts.force && existing.generation === generation) return existing.task
+      return existing.task.then(() => syncSource(source, settings.get().knowledge, opts))
     }
-    const task = source === 'wanikani' ? runWaniKaniSync(k, opts.force) : runAnkiSync(k, opts.force)
-    inFlight[source] = task
+    const task =
+      source === 'wanikani'
+        ? runWaniKaniSync(k, opts.force, generation)
+        : runAnkiSync(k, opts.force)
+    inFlight[source] = { task, generation }
     void task.finally(() => {
-      if (inFlight[source] === task) delete inFlight[source]
+      if (inFlight[source]?.task === task) delete inFlight[source]
     })
     return task
   }
@@ -328,6 +349,7 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps): Knowle
           : secrets.encrypt(wanikaniToken)
     settings.set({ knowledge: { ...current, ...rest, wanikaniTokenEnc } })
     if (tokenChanged) {
+      wanikaniGeneration++
       // A replaced (or cleared) token must not keep the previous token's
       // words known — purge the WaniKani rows now, and drop the sync-state
       // row so an immediate resync with the new token isn't blocked by the

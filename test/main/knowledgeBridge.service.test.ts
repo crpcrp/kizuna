@@ -75,6 +75,16 @@ function subjectsPage(
   }
 }
 
+function jsonResponse(json: unknown) {
+  return {
+    status: 200,
+    ok: true,
+    headers: { get: () => null },
+    json: async () => json,
+    text: async () => JSON.stringify(json)
+  }
+}
+
 const ASSIGNMENTS_URL = `${WANIKANI_BASE}assignments?started=true&subject_types=vocabulary%2Ckana_vocabulary&per_page=500`
 const SUBJECTS_URL = `${WANIKANI_BASE}subjects?ids=1&per_page=1000`
 
@@ -608,6 +618,133 @@ describe('createKnowledgeService', () => {
 
     expect(first).toEqual(second)
     expect(wk.calls.filter((c) => c.url === ASSIGNMENTS_URL)).toHaveLength(1)
+  })
+
+  it('does not let a cleared token commit an in-flight WaniKani sync', async () => {
+    const release = deferred()
+    let oldRequestStarted = false
+    const fetch: HttpFetch = async (url) => {
+      if (url === ASSIGNMENTS_URL) {
+        oldRequestStarted = true
+        await release.promise
+        return jsonResponse(
+          assignmentsPage([{ subjectId: 1, subjectType: 'vocabulary', srsStage: 6 }]).json
+        )
+      }
+      if (url === SUBJECTS_URL)
+        return jsonResponse(
+          subjectsPage([{ id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' }]).json
+        )
+      throw new Error(`unexpected URL: ${url}`)
+    }
+    const anki = fakeAnkiConnect({})
+    const service = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch: async (url, init) =>
+        url === FAKE_ANKI_CONNECT_URL ? anki.fetch(url, init) : fetch(url, init),
+      now: () => Date.parse('2026-07-09T00:00:00Z')
+    })
+    await service.setSettings({ wanikaniToken: 'old-token' })
+    replaceSource(
+      asKnowledgeDb(db),
+      'anki',
+      [{ source: 'anki', lemma: '犬', reading: '', level: 'known' }],
+      't0'
+    )
+
+    const sync = service.sync('wanikani')
+    await Promise.resolve()
+    expect(oldRequestStarted).toBe(true)
+
+    await service.setSettings({ wanikaniToken: '' })
+    release.resolve()
+    await sync
+
+    expect(countBySource(asKnowledgeDb(db))).toEqual({ anki: 1 })
+    expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({ lastSyncAt: null })
+  })
+
+  it('queues a new-token sync and rejects the old token data', async () => {
+    const releaseOld = deferred()
+    const subjectsUrl2 = `${WANIKANI_BASE}subjects?ids=2&per_page=1000`
+    const fetch: HttpFetch = async (url, init) => {
+      const token = init?.headers?.Authorization
+      if (url === ASSIGNMENTS_URL) {
+        if (token === 'Bearer token-a') {
+          await releaseOld.promise
+          return jsonResponse(
+            assignmentsPage([{ subjectId: 1, subjectType: 'vocabulary', srsStage: 6 }]).json
+          )
+        }
+        return jsonResponse(
+          assignmentsPage([{ subjectId: 2, subjectType: 'vocabulary', srsStage: 6 }]).json
+        )
+      }
+      if (url === SUBJECTS_URL)
+        return jsonResponse(
+          subjectsPage([{ id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' }]).json
+        )
+      if (url === subjectsUrl2)
+        return jsonResponse(
+          subjectsPage([{ id: 2, type: 'vocabulary', characters: '犬', reading: 'いぬ' }]).json
+        )
+      throw new Error(`unexpected URL: ${url}`)
+    }
+    const service = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch,
+      now: () => Date.parse('2026-07-09T00:00:00Z')
+    })
+    await service.setSettings({ wanikaniToken: 'token-a' })
+    const oldSync = service.sync('wanikani')
+    await Promise.resolve()
+
+    await service.setSettings({ wanikaniToken: 'token-b' })
+    const newSync = service.sync('wanikani')
+    releaseOld.resolve()
+    await Promise.all([oldSync, newSync])
+
+    expect(await service.levelsFor(['猫', '犬'])).toEqual({ 犬: 'known' })
+    expect(getSyncState(asKnowledgeDb(db), 'wanikani').lastSyncAt).toBe('2026-07-09T00:00:00.000Z')
+  })
+
+  it('keeps valid in-flight work when the identical token is saved', async () => {
+    const release = deferred()
+    const fetch: HttpFetch = async (url) => {
+      if (url === ASSIGNMENTS_URL) {
+        await release.promise
+        return jsonResponse(
+          assignmentsPage([{ subjectId: 1, subjectType: 'vocabulary', srsStage: 6 }]).json
+        )
+      }
+      if (url === SUBJECTS_URL)
+        return jsonResponse(
+          subjectsPage([{ id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' }]).json
+        )
+      throw new Error(`unexpected URL: ${url}`)
+    }
+    const service = createKnowledgeService({
+      db: asKnowledgeDb(db),
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      fetch,
+      now: () => Date.parse('2026-07-09T00:00:00Z')
+    })
+    await service.setSettings({ wanikaniToken: 'token' })
+    const sync = service.sync('wanikani')
+    await Promise.resolve()
+    await service.setSettings({ wanikaniToken: 'token' })
+    release.resolve()
+    await sync
+
+    expect(countBySource(asKnowledgeDb(db))).toEqual({ wanikani: 1 })
+    expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({
+      lastSyncAt: '2026-07-09T00:00:00.000Z'
+    })
   })
 
   it('allows different sources to sync independently', async () => {
