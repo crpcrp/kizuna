@@ -36,6 +36,20 @@ const A = '/media/a.mkv'
 const B = '/media/b.mkv'
 const C = '/media/c.mkv'
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 describe('playlist controller — state', () => {
   it('starts empty', () => {
     const controller = createPlaylistController()
@@ -238,6 +252,99 @@ describe('playlist controller — explicit navigation', () => {
     await controller.next(deps)
 
     expect(controller.getState().playlist.currentIndex).toBe(1)
+  })
+
+  it('does not select a refused navigation while an accepted open is pending', async () => {
+    const controller = createPlaylistController()
+    controller.addPaths([A, B, C])
+    const openingB = deferred<OpenMediaResult>()
+    const load = vi
+      .fn<(filePath: string) => Promise<OpenMediaResult>>()
+      .mockResolvedValueOnce({ status: 'opened', filePath: A, warnings: [] })
+      .mockReturnValueOnce(openingB.promise)
+    const deps = { load, play: vi.fn(async () => undefined) }
+
+    await controller.playAt(0, deps)
+    const openB = controller.playAt(1, deps)
+    await Promise.resolve()
+    await controller.playAt(2, deps)
+
+    expect(load).toHaveBeenCalledTimes(2)
+    expect(load).toHaveBeenLastCalledWith(B)
+    expect(controller.getState().playlist.currentIndex).toBe(0)
+    expect(controller.isPlaybackCurrent(A)).toBe(true)
+
+    openingB.resolve({ status: 'opened', filePath: B, warnings: [] })
+    await openB
+
+    expect(controller.getState().playlist.currentIndex).toBe(1)
+    expect(controller.isPlaybackCurrent(B)).toBe(true)
+  })
+
+  it.each([
+    ['busy', { status: 'busy' }],
+    ['cancelled', { status: 'cancelled' }],
+    ['stale', { status: 'stale' }]
+  ] as const)('retains the accepted row after a %s navigation', async (_name, result) => {
+    const controller = createPlaylistController()
+    controller.addPaths([A, B])
+    const accepted = okLoad()
+    await controller.playAt(0, accepted.deps)
+    const load = vi.fn(async (): Promise<OpenMediaResult> => result)
+
+    await controller.playAt(1, { load, play: vi.fn(async () => undefined) })
+
+    expect(controller.getState().playlist.currentIndex).toBe(0)
+    expect(controller.isPlaybackCurrent(A)).toBe(true)
+  })
+
+  it('releases its navigation guard when a load rejects', async () => {
+    const controller = createPlaylistController()
+    controller.addPaths([A, B, C])
+    const openingB = deferred<OpenMediaResult>()
+    const first = controller.playAt(1, {
+      load: () => openingB.promise,
+      play: vi.fn(async () => undefined)
+    })
+
+    openingB.reject(new Error('open failed'))
+    await expect(first).rejects.toThrow('open failed')
+
+    const next = okLoad()
+    await controller.playAt(2, next.deps)
+
+    expect(next.load).toHaveBeenCalledWith(C)
+    expect(controller.getState().playlist.currentIndex).toBe(2)
+  })
+
+  it('uses the attempted entry as the skip cursor without staging it as current', async () => {
+    const controller = createPlaylistController()
+    controller.addPaths([A, B, C])
+    const accepted = okLoad()
+    await controller.playAt(0, accepted.deps)
+    const missing = failingLoad([B])
+
+    await controller.next(missing.deps)
+
+    expect(missing.load.mock.calls.map((call) => call[0])).toEqual([B, C])
+    expect(controller.getState().playlist.currentIndex).toBe(2)
+  })
+
+  it('commits a successful entry at its current position after a playlist edit', async () => {
+    const controller = createPlaylistController()
+    controller.addPaths([A, B, C])
+    const openingB = deferred<OpenMediaResult>()
+    const openB = controller.playAt(1, {
+      load: () => openingB.promise,
+      play: vi.fn(async () => undefined)
+    })
+
+    controller.moveEntry(1, 2)
+    openingB.resolve({ status: 'opened', filePath: B, warnings: [] })
+    await openB
+
+    expect(controller.getState().playlist.entries).toEqual([A, C, B])
+    expect(controller.getState().playlist.currentIndex).toBe(2)
   })
 })
 
