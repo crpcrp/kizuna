@@ -176,6 +176,54 @@ describe('SeekPreviewController', () => {
     expect(calls).toHaveLength(1)
   })
 
+  it('invalidates an in-flight different bucket when returning to the cached frame', async () => {
+    const timer = fakeTimer()
+    const { fetch, calls, resolve } = deferredFetch()
+    const states: SeekPreviewState[] = []
+    const controller = new SeekPreviewController((s) => states.push(s), fetch, timer)
+    controller.setSource('/video/ep.mkv', 100, true)
+
+    controller.hover(0.1)
+    timer.run(timer.pending()[0])
+    resolve(0, { dataUrl: 'A' })
+    await Promise.resolve()
+
+    controller.hover(0.8)
+    timer.run(timer.pending()[0])
+    controller.hover(0.1)
+
+    resolve(1, { dataUrl: 'STALE-B' })
+    await Promise.resolve()
+
+    expect(calls).toHaveLength(2)
+    expect(states.at(-1)).toEqual({
+      visible: true,
+      dataUrl: 'A',
+      timeSec: 10,
+      positionRatio: 0.1
+    })
+  })
+
+  it('cancels a pending different bucket when returning to the cached frame', async () => {
+    const timer = fakeTimer()
+    const { fetch, calls, resolve } = deferredFetch()
+    const controller = new SeekPreviewController(() => {}, fetch, timer)
+    controller.setSource('/video/ep.mkv', 100, true)
+
+    controller.hover(0.1)
+    timer.run(timer.pending()[0])
+    resolve(0, { dataUrl: 'A' })
+    await Promise.resolve()
+
+    controller.hover(0.8)
+    const pendingBucketB = timer.pending()[0]
+    controller.hover(0.1)
+    timer.run(pendingBucketB)
+
+    expect(timer.pending()).toEqual([])
+    expect(calls).toHaveLength(1)
+  })
+
   it('re-shows a bucket’s cached frame immediately after leaving and re-entering it', async () => {
     const timer = fakeTimer()
     const { fetch, calls, resolve } = deferredFetch()
