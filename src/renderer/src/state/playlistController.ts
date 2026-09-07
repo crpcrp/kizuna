@@ -94,6 +94,9 @@ export function createPlaylistController(rng: Rng = Math.random): PlaylistContro
   let state: PlaylistControllerState = { playlist: EMPTY_PLAYLIST, missing: [] }
   const listeners = new Set<() => void>()
   const missing = new Set<number>()
+  // Only one playlist navigation may await an open. `currentIndex` is committed
+  // after success, so a refused concurrent call cannot stage a competing row.
+  let loadInFlight = false
 
   function notify(): void {
     listeners.forEach((listener) => listener())
@@ -137,24 +140,32 @@ export function createPlaylistController(rng: Rng = Math.random): PlaylistContro
     deps: PlaylistLoadDeps,
     autoplay = false
   ): Promise<void> {
+    if (loadInFlight) return
+    loadInFlight = true
     const attemptLimit = state.playlist.entries.length
     let index = startIndex
-    for (let attempts = 0; attempts < attemptLimit; attempts++) {
-      if (index < 0 || index >= state.playlist.entries.length) return
-      setPlaylist({ ...state.playlist, currentIndex: index })
-      const path = state.playlist.entries[index]
-      const result = await deps.load(path)
-      if (result.status === 'opened') {
-        clearMissing(index)
-        if (autoplay) await deps.play()
-        return
+    try {
+      for (let attempts = 0; attempts < attemptLimit; attempts++) {
+        if (index < 0 || index >= state.playlist.entries.length) return
+        const path = state.playlist.entries[index]
+        const result = await deps.load(path)
+        if (result.status === 'opened') {
+          const currentIndex = state.playlist.entries.indexOf(path)
+          if (currentIndex === -1) return
+          clearMissing(currentIndex)
+          setPlaylist({ ...state.playlist, currentIndex })
+          if (autoplay) await deps.play()
+          return
+        }
+        if (result.status !== 'missing' && result.status !== 'failed') return
+        if (index >= state.playlist.entries.length || state.playlist.entries[index] !== path) return
+        markMissing(index)
+        const next = nextIndex({ ...state.playlist, currentIndex: index })
+        if (next === null || next === startIndex) return
+        index = next
       }
-      if (result.status !== 'missing' && result.status !== 'failed') return
-      if (index >= state.playlist.entries.length || state.playlist.entries[index] !== path) return
-      markMissing(index)
-      const next = nextIndex(state.playlist)
-      if (next === null || next === startIndex) return
-      index = next
+    } finally {
+      loadInFlight = false
     }
   }
 
