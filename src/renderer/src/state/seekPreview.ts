@@ -156,9 +156,15 @@ export class SeekPreviewController {
     const geometry = containerWidth === undefined ? {} : { containerWidth }
     this.emit({ visible: true, dataUrl, timeSec, positionRatio: ratio, ...geometry })
 
-    // Position-only moves in the shown or already-requested bucket must not
-    // reset its debounce, duplicate its fetch, or replace the image element.
-    if (bucket === this.shownBucket || bucket === this.requestBucket) return
+    // Returning to a cached bucket must retire work for another bucket, or its
+    // late response could replace the cached frame after the cursor moved back.
+    if (bucket === this.shownBucket) {
+      if (this.requestBucket !== null) this.cancel()
+      return
+    }
+    // Position-only moves in the requested bucket must not reset its debounce,
+    // duplicate its fetch, or replace the image element.
+    if (bucket === this.requestBucket) return
     this.schedule(bucket, timeSec)
   }
 
