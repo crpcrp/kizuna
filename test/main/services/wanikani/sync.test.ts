@@ -79,11 +79,11 @@ describe('syncWaniKani', () => {
     })
     const client = createWaniKaniClient({ token: 'tok', fetch: http.fetch })
 
-    const first = await syncWaniKani({
+    const first = (await syncWaniKani({
       client,
       db: asKnowledgeDb(db),
       now: () => Date.parse('2026-07-09T00:00:00Z')
-    })
+    }))!
 
     expect(first.count).toBe(2)
     expect(detailsFor(asKnowledgeDb(db), ['猫'])).toEqual({
@@ -97,11 +97,11 @@ describe('syncWaniKani', () => {
     expect(levelsFor(asKnowledgeDb(db), ['猫', '犬'])).toEqual({ 猫: 'known', 犬: 'wellKnown' })
     expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({ lastSyncAt: first.syncedAt })
 
-    const second = await syncWaniKani({
+    const second = (await syncWaniKani({
       client,
       db: asKnowledgeDb(db),
       now: () => Date.parse('2026-07-10T00:00:00Z')
-    })
+    }))!
 
     expect(second.count).toBe(1)
     expect(countBySource(asKnowledgeDb(db))).toEqual({ wanikani: 1 })
