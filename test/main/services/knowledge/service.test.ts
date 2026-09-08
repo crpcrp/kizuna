@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
-import { createKnowledgeService } from '@src/main/knowledgeBridge'
+import { createKnowledgeService } from '@src/main/services/knowledge/service'
 import { createSettingsStore } from '@src/main/services/settings'
 import { initSchema } from '@src/main/services/knowledge/schema'
 import {
