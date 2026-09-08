@@ -166,12 +166,7 @@ export function useBulkMining({
           mineMediaSource()
         ),
       onCancel: () => bulkMiningController.cancel(),
-      onBackToList: () =>
-        void bulkMiningController.backToList({
-          dict: bridge.dict,
-          anki: bridge.anki,
-          knowledge: bridge.knowledge
-        }),
+      onBackToList: () => void bulkMiningController.backToList({ anki: bridge.anki }),
       onRetry: () => {
         void bulkMiningController.open({
           bridges: {

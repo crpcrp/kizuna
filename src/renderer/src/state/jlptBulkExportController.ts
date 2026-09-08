@@ -216,10 +216,7 @@ export function createJlptBulkExportController(
     },
     backToList(): void {
       if (!activeSource || !state.open) return
-      void bulkMining.backToList({
-        dict: activeSource.bridge.dict,
-        anki: activeSource.bridge.anki
-      })
+      void bulkMining.backToList({ anki: activeSource.bridge.anki })
     }
   }
 }

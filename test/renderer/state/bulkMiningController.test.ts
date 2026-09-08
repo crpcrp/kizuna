@@ -625,7 +625,7 @@ describe('createBulkMiningController', () => {
     await controller.start(bridges)
     expect(controller.getState()).toMatchObject({ kind: 'done', summary: { added: 2 } })
 
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     await vi.waitFor(() => expect(bridges.anki.findTargetDeckMembership).toHaveBeenCalledTimes(2))
     expect(vi.mocked(bridges.anki.findTargetDeckMembership).mock.calls[1][0]).toEqual([
       'one',
@@ -659,7 +659,7 @@ describe('createBulkMiningController', () => {
       statuses: { one: { kind: 'duplicate' }, two: { kind: 'added' } }
     })
 
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     await vi.waitFor(() => expect(bridges.anki.findTargetDeckMembership).toHaveBeenCalledTimes(2))
     expect(vi.mocked(bridges.anki.findTargetDeckMembership).mock.calls[1][0]).toEqual([
       'one',
@@ -681,7 +681,7 @@ describe('createBulkMiningController', () => {
     await controller.open(opened)
     await vi.waitFor(() => expect(bridges.anki.findTargetDeckMembership).toHaveBeenCalledTimes(1))
     await controller.start(bridges)
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     await vi.waitFor(() =>
       expect(controller.getState()).toMatchObject({
         kind: 'ready',
@@ -695,12 +695,12 @@ describe('createBulkMiningController', () => {
     const bridges = anki()
     const controller = createBulkMiningController()
     const opened = input(bridges)
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     expect(controller.getState()).toEqual({ kind: 'idle' })
 
     await controller.open(opened)
     await new Promise((resolve) => setTimeout(resolve, 0))
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     expect(controller.getState()).toMatchObject({
       kind: 'ready',
       candidates: [{ lemma: 'one' }, { lemma: 'two' }]
@@ -710,7 +710,7 @@ describe('createBulkMiningController', () => {
     vi.mocked(bridges.anki.addNote).mockReturnValue(gate.promise)
     const run = controller.start(bridges)
     await vi.waitFor(() => expect(controller.getState().kind).toBe('running'))
-    await controller.backToList(opened.bridges)
+    await controller.backToList({ anki: bridges.anki })
     expect(controller.getState()).toMatchObject({ kind: 'running' })
     gate.resolve({ noteId: 1, operation: 'added', changedFields: ['Word'] })
     await run
