@@ -630,6 +630,7 @@ describe('restoreReadyAfterRun', () => {
     expect(restored.threshold).toBe(5000)
     expect(restored.minimumCount).toBe(2)
     expect(restored.sort).toBe('frequency')
+    expect(restored.resolving).toBe(false)
     expect(restored.hideTargetDeckMatches).toBe(true)
     expect(restored.candidates).toHaveLength(4)
   })
@@ -641,12 +642,6 @@ describe('restoreReadyAfterRun', () => {
       c: { kind: 'added' }
     })
     expect(restored.selected).toEqual({ a: true, b: true, c: false, d: true })
-  })
-
-  it('recomputes resolving as true only when a candidate is still unresolved', () => {
-    expect(restoreReadyAfterRun(ready(), {}).resolving).toBe(false)
-    const withHole = ready({ resolved: { a: resolvedEntry, b: resolvedEntry, c: resolvedEntry } })
-    expect(restoreReadyAfterRun(withHole, {}).resolving).toBe(true)
   })
 
   it('clears any advisory warning from the prior list state', () => {

@@ -22,12 +22,7 @@ import {
   type MiningSummary,
   type MiningWordStatus
 } from './bulkMining'
-import {
-  resolveCandidateEntries,
-  runBulkMining,
-  type BulkMineBridges,
-  type EntryResolutionOpts
-} from './bulkMiningRunner'
+import { resolveCandidateEntries, runBulkMining, type BulkMineBridges } from './bulkMiningRunner'
 import { reportLemmas } from './subtitleReport'
 import { type MineMediaSource } from './ankiMining'
 import { type SubtitleRequestToken } from './mediaSession'
@@ -100,11 +95,7 @@ export interface BulkMiningController {
   /** Mines the selected rows. `media` is the loaded file each candidate's
    * sentence audio can be clipped from; omit it to mine without clips. */
   start(bridges: BulkMineBridges, media?: MineMediaSource): Promise<void>
-  backToList(
-    bridges: Pick<BulkMiningOpenInput['bridges'], 'dict' | 'anki'> & {
-      knowledge?: KnowledgeDetailsBridge
-    }
-  ): Promise<void>
+  backToList(bridges: Pick<BulkMiningOpenInput['bridges'], 'anki'>): Promise<void>
   cancel(): void
   close(): void
   getSummaryIfMined(): MiningSummary | null
@@ -120,7 +111,6 @@ export function createBulkMiningController(): BulkMiningController {
   const runCancellationToken: SubtitleRequestToken = { current: 0 }
   let frequencyDictConfigured = false
   let lastReady: BulkMiningReadyPhase | null = null
-  let lastResolveOpts: EntryResolutionOpts = { frequencyDictId: null }
   const set = (next: BulkMiningPhase): void => {
     state = next
     listeners.forEach((listener) => listener())
@@ -144,7 +134,6 @@ export function createBulkMiningController(): BulkMiningController {
     checkTargetDeckMembership?: boolean
   }): void => {
     frequencyDictConfigured = frequencyDictId !== null
-    lastResolveOpts = { frequencyDictId, sortOrder }
     lastReady = null
     set({
       kind: 'ready',
@@ -163,7 +152,7 @@ export function createBulkMiningController(): BulkMiningController {
       bridges.dict,
       candidates,
       {},
-      lastResolveOpts,
+      { frequencyDictId, sortOrder },
       requestToken,
       (patch) => {
         if (requestToken.current !== request || state.kind !== 'ready') return
@@ -392,26 +381,8 @@ export function createBulkMiningController(): BulkMiningController {
       ]
       const request = ++requestToken.current
       set({ ...restored, checkingTargetDeck: minedIdentities.length > 0 })
-      if (minedIdentities.length === 0 && !restored.resolving) return
-      void resolveCandidateEntries(
-        bridges.dict,
-        restored.candidates,
-        restored.resolved,
-        lastResolveOpts,
-        requestToken,
-        (patch) => {
-          if (requestToken.current !== request || state.kind !== 'ready') return
-          const resolved = { ...state.resolved, ...patch }
-          const selected = { ...state.selected }
-          for (const [lemma, entry] of Object.entries(patch))
-            if (entry.entry === null) selected[lemma] = false
-          set({ ...state, resolved, selected })
-        }
-      ).then(async () => {
-        if (requestToken.current !== request || state.kind !== 'ready') return
-        set({ ...state, resolving: false })
-        await refreshTargetDeckMembership(request, minedIdentities, bridges.anki)
-      })
+      if (minedIdentities.length === 0) return
+      await refreshTargetDeckMembership(request, minedIdentities, bridges.anki)
     },
     cancel(): void {
       if (state.kind !== 'running' || state.cancelling) return

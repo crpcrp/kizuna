@@ -92,8 +92,8 @@ export interface BulkMiningReadyPhase {
  * Rebuilds the ready phase from a run's retained snapshot. Rows that are now
  * unmineable — `added`, `updated`, or `duplicate` — are deselected so Mine
  * never retries them; `error`/`cancelled` selections are kept for a retry.
- * `resolving` is recomputed as true iff any candidate still lacks a resolved
- * entry, so a run that started mid-resolution re-triggers resolution.
+ * `start()` only retains a ready phase after resolution completes, so the
+ * restored phase is always fully resolved.
  */
 export function restoreReadyAfterRun(
   lastReady: BulkMiningReadyPhase,
@@ -105,10 +105,7 @@ export function restoreReadyAfterRun(
       selected[lemma] = false
     }
   }
-  const resolving = lastReady.candidates.some(
-    (candidate) => lastReady.resolved[candidate.lemma] === undefined
-  )
-  return { ...lastReady, selected, resolving, advisoryWarning: undefined }
+  return { ...lastReady, resolving: false, selected, advisoryWarning: undefined }
 }
 
 export interface MiningCueTokens extends Omit<VocabularyUnitCue, 'cueKey'> {
