@@ -1,11 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type RefObject,
-  type SetStateAction
-} from 'react'
+import { useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import { effectiveAudioDevice, type AudioDevice } from '../../../shared/audioDevice'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
@@ -25,17 +18,12 @@ import type { PlayerAction, PlayerState } from './playerState'
 import type { SettingsPersistence } from './settingsPersistence'
 import { selectAudio } from './trackSelection'
 import type { KeyboardShortcutContext } from './useKeyboardShortcuts'
-import { useLatestCallback, useLatestRef } from './useLatestRef'
+import { useLatestRef } from './useLatestRef'
 import { useMiniPlayer } from './useMiniPlayer'
 import { usePerFileRestore } from './usePerFileRestore'
 import type { UsePlayerEventsInput } from './usePlayerEvents'
 import { useVideoMargins } from './useVideoMargins'
-import {
-  sidebarPreservingWindowSize,
-  videoContentBaseline,
-  videoScaleWindowSize,
-  type VideoContentBaseline
-} from './windowSizing'
+import { useVideoWindowSizing } from './useVideoWindowSizing'
 
 type PlaybackWindowState = Pick<
   PlayerState,
@@ -211,17 +199,6 @@ export function usePlaybackWindow({
   // Video menu's size presets; undefined until fetched (or if there's no
   // video stream).
   const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | undefined>(undefined)
-  // The last size preset the user explicitly picked from Video ▸ Size, kept so
-  // opening/closing a side panel can re-apply it (see applyVideoScale).
-  // Undefined until a preset is picked; the default size is preserved through
-  // videoContentBaselineRef instead.
-  const [requestedVideoScale, setRequestedVideoScale] = useState<number | undefined>(undefined)
-  // The video rectangle a side-panel toggle has to preserve while no preset is
-  // in play — the window content box minus the panels open when it was
-  // measured. Re-measured whenever the window itself resizes (see below), never
-  // during a panel transition, so it always describes the picture the user is
-  // currently looking at rather than a fabricated scale.
-  const videoContentBaselineRef = useRef<VideoContentBaseline | undefined>(undefined)
   const [alwaysOnTop, setAlwaysOnTop] = useState(false)
   // Compact mini-player (picture-in-picture) mode. `miniPlayer.active` gates the
   // reduced chrome; the ref mirror lets the toggle-fullscreen wrapper read the
@@ -281,6 +258,20 @@ export function usePlaybackWindow({
     videoAdjustmentsRef,
     reapplyAudioDevice: audioDeviceController.reapplyAfterLoad,
     setVideoDimensions
+  })
+
+  const { onSetVideoScale } = useVideoWindowSizing({
+    topBarRef,
+    bottomBarRef,
+    leftSidebarStackRef,
+    rightSidebarStackRef,
+    videoDimensions,
+    fullscreen: state.fullscreen,
+    miniPlayerActive,
+    settingsReady,
+    sidebarOpen,
+    playlistOpen,
+    setWindowSize: (width, height) => bridge.windowControls.setSize(width, height)
   })
 
   // Updates the current subtitle offset immediately and persists it keyed by
@@ -346,118 +337,6 @@ export function usePlaybackWindow({
     applyVideoAdjustments(bridge.player, next)
   }
 
-  // Resizes the app window so the embedded mpv video renders at `scale` ×
-  // its native resolution (clamped to the display's available area). No-op
-  // if the current file's video dimensions aren't known yet (e.g. audio-only
-  // file, or still loading). The open side panels are measured from the same
-  // refs useVideoMargins observes: mpv takes their width out of the video
-  // area, so the window has to be that much wider for the picture to keep the
-  // requested scale. Stable identity so the re-apply effect below can depend
-  // on it without re-firing every render.
-  const applyVideoScale = useLatestCallback((scale: number): void => {
-    const size = videoScaleWindowSize(
-      videoDimensions,
-      scale,
-      topBarRef.current?.offsetHeight ?? 0,
-      bottomBarRef.current?.offsetHeight ?? 0,
-      { width: window.screen.availWidth, height: window.screen.availHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-    if (size) bridge.windowControls.setSize(size.width, size.height)
-  })
-
-  const handleSetVideoScale = (scale: number): void => {
-    setRequestedVideoScale(scale)
-    // Applied here as well as from the effect below: re-picking the preset
-    // that is already remembered leaves the state untouched, and the user
-    // (who may have hand-resized the window since) still expects a resize.
-    applyVideoScale(scale)
-  }
-
-  // Re-measures the preservation baseline from the window as it stands now.
-  // Only ever called outside a panel transition: mid-transition the panels are
-  // already laid out while the window still has its old size, which would fold
-  // the panel's width into the baseline and defeat the whole compensation.
-  const captureVideoContentBaseline = useLatestCallback((): void => {
-    videoContentBaselineRef.current = videoContentBaseline(
-      { width: window.innerWidth, height: window.innerHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-  })
-
-  // Resizes the window so the video keeps the dimensions it had before the
-  // panel transition, for the default/unmodified size (no preset picked). The
-  // baseline is the rectangle measured before this transition, so the window
-  // simply carries whichever panels are open now on top of it.
-  const applySidebarSizeCompensation = useLatestCallback((): void => {
-    if (state.fullscreen || miniPlayerActive) return
-    // Same guard the preset path uses: with no video stream there is no picture
-    // to preserve, so the window is left exactly where the user put it.
-    if (!videoDimensions) return
-    const size = sidebarPreservingWindowSize(
-      videoContentBaselineRef.current,
-      { width: window.screen.availWidth, height: window.screen.availHeight },
-      leftSidebarStackRef.current?.offsetWidth ?? 0,
-      rightSidebarStackRef.current?.offsetWidth ?? 0
-    )
-    if (size) bridge.windowControls.setSize(size.width, size.height)
-  })
-
-  // Keeps the baseline current between panel transitions. The window resizing —
-  // by the user's drag, a size preset, or our own compensation — is the only
-  // thing that legitimately changes the video rectangle, so re-measuring on
-  // `resize` is both the staleness fix and the way a clamped compensation
-  // settles into the new (smaller) rectangle. Panel toggles deliberately do not
-  // re-run this: their deps are absent. `settingsReady` lets restored panels
-  // establish the startup baseline; `videoDimensions` rebases layouts changed
-  // while no video dimensions were available before later transitions.
-  useEffect(() => {
-    if (state.fullscreen || miniPlayerActive) return
-    captureVideoContentBaseline()
-    const onResize = (): void => captureVideoContentBaseline()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [
-    state.fullscreen,
-    miniPlayerActive,
-    settingsReady,
-    videoDimensions,
-    captureVideoContentBaseline
-  ])
-
-  // True once the restored panel layout has been observed, so the panels
-  // reopened at startup establish the baseline instead of counting as a
-  // transition to compensate for.
-  const panelLayoutObservedRef = useRef(false)
-
-  // Keeps the visible video the same size across panel toggles: opening or
-  // closing a side panel changes how much window width mpv's margins reserve,
-  // so the window has to grow or shrink by that width instead of the picture
-  // doing it. With an explicit Video ▸ Size preset the preset is re-applied;
-  // otherwise the default size is preserved against the measured baseline.
-  // Runs post-commit, so the sidebar refs measure the panel's real width.
-  useEffect(() => {
-    if (requestedVideoScale !== undefined) {
-      applyVideoScale(requestedVideoScale)
-      return
-    }
-    if (!settingsReady) return
-    if (!panelLayoutObservedRef.current) {
-      panelLayoutObservedRef.current = true
-      return
-    }
-    applySidebarSizeCompensation()
-  }, [
-    settingsReady,
-    sidebarOpen,
-    playlistOpen,
-    requestedVideoScale,
-    applyVideoScale,
-    applySidebarSizeCompensation
-  ])
-
   const handleToggleAlwaysOnTop = (): void => {
     const next = !alwaysOnTop
     setAlwaysOnTop(next)
@@ -492,7 +371,7 @@ export function usePlaybackWindow({
     videoMenu: {
       alwaysOnTop,
       miniPlayer: miniPlayerActive,
-      onSetVideoScale: handleSetVideoScale,
+      onSetVideoScale,
       onOpenVideoAdjustments: () => setVideoAdjustmentsOpen(true),
       onToggleAlwaysOnTop: handleToggleAlwaysOnTop,
       onToggleMiniPlayer: () => void handleToggleMiniPlayer()
