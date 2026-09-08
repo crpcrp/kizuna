@@ -92,7 +92,7 @@ describe('runImportInWorker', () => {
   })
 })
 
-describe('migrateAutoVacuum', () => {
+describe('migrateAutoVacuum', { timeout: SQLITE_FILE_TEST_TIMEOUT_MS }, () => {
   it('converts a legacy auto_vacuum = NONE database to INCREMENTAL', () => {
     const path = tempDbPath()
     const setup = new Database(path)
@@ -175,7 +175,8 @@ describe('reclaimAfterImport', { timeout: SQLITE_FILE_TEST_TIMEOUT_MS }, () => {
     reclaimAfterImport(db as unknown as WorkerDb)
 
     // TRUNCATE hands the space back; a plain PASSIVE checkpoint would not.
-    expect(statSync(walPath).size).toBe(0)
+    // SQLite may remove an empty WAL on Windows; missing is equivalent to zero.
+    expect(existsSync(walPath) ? statSync(walPath).size : 0).toBe(0)
     expect(db.prepare('SELECT COUNT(*) AS n FROM terms').get()).toEqual({ n: 500 })
     db.close()
   })

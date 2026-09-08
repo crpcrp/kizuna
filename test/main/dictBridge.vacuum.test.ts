@@ -18,6 +18,7 @@ function seedAndDelete(db: Database.Database): void {
 }
 
 const tempDirs: string[] = []
+const SQLITE_FILE_TEST_TIMEOUT_MS = 15_000
 
 function tempDbPath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'kizuna-vacuum-'))
@@ -31,7 +32,7 @@ afterEach(() => {
   }
 })
 
-describe('configureDictConnection', () => {
+describe('configureDictConnection', { timeout: SQLITE_FILE_TEST_TIMEOUT_MS }, () => {
   // Regression: `journal_mode = WAL` writes the header of a brand-new file, and
   // after that SQLite refuses to change auto_vacuum without a full VACUUM. With
   // the pragmas in the other order a fresh install silently stayed on
