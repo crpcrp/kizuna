@@ -11,6 +11,8 @@ export interface FakeHttpRoute {
   headers?: Record<string, string>
   json?: unknown
   text?: string
+  /** Binary response body. An array supplies chunks in order. */
+  bytes?: Uint8Array | Uint8Array[]
   /** Keep this response pending until the caller aborts its request. */
   deferred?: boolean
 }
@@ -80,7 +82,16 @@ function toResponse(route: FakeHttpRoute): HttpResponse {
     status,
     ok: status >= 200 && status < 300,
     headers: { get: (name: string) => headers[name] ?? null },
+    body: route.bytes === undefined ? undefined : byteChunks(route.bytes),
     json: async () => route.json,
     text: async () => route.text ?? (route.json === undefined ? '' : JSON.stringify(route.json))
   }
+}
+
+async function* byteChunks(bytes: Uint8Array | Uint8Array[]): AsyncIterable<Uint8Array> {
+  if (Array.isArray(bytes)) {
+    for (const chunk of bytes) yield chunk
+    return
+  }
+  yield bytes
 }
