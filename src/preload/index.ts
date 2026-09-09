@@ -9,6 +9,7 @@ import {
   DICT_CHANNELS,
   GAME_OCR_CHANNELS,
   INTEGRATION_CHANNELS,
+  JIMAKU_CHANNELS,
   KNOWLEDGE_CHANNELS,
   LAUNCH_CHANNELS,
   MECAB_CHANNELS,
@@ -75,6 +76,7 @@ import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { OcrResult } from '../shared/ocr'
 import type { AppSurface } from '../shared/appShell'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from '../shared/translation'
+import type { JimakuSettingsStatus } from '../shared/jimaku'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -406,6 +408,15 @@ const api = {
       ipcRenderer.invoke(TRANSLATE_CHANNELS.getSettings),
     setSettings: (patch: TranslationSettingsPatch): Promise<PublicTranslationSettings> =>
       ipcRenderer.invoke(TRANSLATE_CHANNELS.setSettings, patch)
+  },
+  jimaku: {
+    getStatus: (): Promise<JimakuSettingsStatus> => ipcRenderer.invoke(JIMAKU_CHANNELS.getStatus),
+    setApiKey: (value: string): Promise<JimakuSettingsStatus> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.setApiKey, value),
+    clearApiKey: (): Promise<JimakuSettingsStatus> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.clearApiKey),
+    testConnection: (): Promise<JimakuSettingsStatus> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the

@@ -50,3 +50,13 @@ export interface JimakuError {
 }
 
 export type JimakuResult<T> = { ok: true; value: T } | { ok: false; error: JimakuError }
+
+export type JimakuTestOutcome =
+  { status: 'notTested' } | { status: 'connected' } | { status: 'error'; error: JimakuError }
+
+/** Credential state exposed to the renderer; no key or encrypted value crosses this boundary. */
+export interface JimakuSettingsStatus {
+  configured: boolean
+  secretStorageAvailable: boolean
+  testOutcome: JimakuTestOutcome
+}

@@ -42,6 +42,10 @@ export interface TranslationSettings {
   azureRegion: string
 }
 
+export interface JimakuSettings {
+  apiKeyEnc: string
+}
+
 export interface Settings {
   mecabDictId: 'ipadic' | 'unidic'
   dictOrder: number[]
@@ -51,6 +55,7 @@ export interface Settings {
   player: PlayerSettings
   gameOcr: GameOcrSettings
   translation: TranslationSettings
+  jimaku: JimakuSettings
   mediaHistory: MediaHistory
 }
 
@@ -68,6 +73,10 @@ export const defaultTranslationSettings: TranslationSettings = {
   azureRegion: ''
 }
 
+export const defaultJimakuSettings: JimakuSettings = {
+  apiKeyEnc: ''
+}
+
 export const defaultSettings: Settings = {
   mecabDictId: 'ipadic',
   dictOrder: [],
@@ -77,6 +86,7 @@ export const defaultSettings: Settings = {
   player: DEFAULT_PLAYER_SETTINGS,
   gameOcr: DEFAULT_GAME_OCR_SETTINGS,
   translation: defaultTranslationSettings,
+  jimaku: defaultJimakuSettings,
   mediaHistory: normalizeMediaHistory(undefined)
 }
 
@@ -111,7 +121,15 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     player: mergePlayerSettings(obj.player),
     gameOcr: mergeGameOcrSettings(obj.gameOcr),
     translation: mergeTranslationSettings(obj.translation),
+    jimaku: mergeJimakuSettings(obj.jimaku),
     mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
+  }
+}
+
+function mergeJimakuSettings(raw: unknown): JimakuSettings {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  return {
+    apiKeyEnc: typeof obj.apiKeyEnc === 'string' ? obj.apiKeyEnc : defaultJimakuSettings.apiKeyEnc
   }
 }
 

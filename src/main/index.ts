@@ -87,6 +87,9 @@ import { createTranslationSettingsService } from './services/translate/translati
 import { createSafeStorageCodec } from './services/secrets'
 import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
+import { createJimakuClient } from './services/jimaku/client'
+import { createJimakuSettingsService, type JimakuSettingsService } from './services/jimaku/settings'
+import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
 import { createMediaHistoryService, type MediaHistoryService } from './services/mediaHistory'
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
@@ -613,6 +616,22 @@ function startTranslation(
   )
 }
 
+function startJimaku(
+  settings: SettingsStore,
+  secrets: ReturnType<typeof createSafeStorageCodec>
+): void {
+  const client = createJimakuClient({
+    getApiKey: () => jimakuSettings.getApiKey(),
+    fetch: httpFetch
+  })
+  const jimakuSettings: JimakuSettingsService = createJimakuSettingsService({
+    settings,
+    secrets,
+    client
+  })
+  registerJimakuSettingsBridge(ipcMain, jimakuSettings)
+}
+
 /**
  * Registers the player-settings IPC bridge (getSettings/setSettings for the
  * Options menu's contents: keybindings, skip amount, popup/subtitle display),
@@ -892,6 +911,7 @@ if (!gotSingleInstanceLock) {
     startAnki(settings, binaryPaths.ffmpegPath)
     startKnowledge(settings, secrets)
     startTranslation(settings, secrets)
+    startJimaku(settings, secrets)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
     startAppInfo()

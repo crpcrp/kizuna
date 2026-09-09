@@ -8,6 +8,7 @@ import type { JlptExportResult } from '@src/shared/jlptExport'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
+import type { JimakuSettingsStatus } from '@src/shared/jimaku'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -28,6 +29,12 @@ const DEFAULT_GAME_OCR_STATUS: GameOcrRuntimeStatus = {
   shortcut: DEFAULT_GAME_OCR_SETTINGS.captureShortcut,
   ocr: { state: 'not-started' },
   game: { state: 'stopped' }
+}
+
+const DEFAULT_JIMAKU_STATUS: JimakuSettingsStatus = {
+  configured: false,
+  secretStorageAvailable: false,
+  testOutcome: { status: 'notTested' }
 }
 
 function listenerCleanup(): void {}
@@ -246,6 +253,12 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
         encryptionAvailable: false
       }))
     },
+    jimaku: {
+      getStatus: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
+      setApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
+      clearApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
+      testConnection: vi.fn(async () => DEFAULT_JIMAKU_STATUS)
+    },
     files: {
       pathForFile: vi.fn(() => '')
     }
@@ -268,6 +281,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
   Object.assign(api.updates, overrides.updates)
   Object.assign(api.clipboard, overrides.clipboard)
   Object.assign(api.translate, overrides.translate)
+  Object.assign(api.jimaku, overrides.jimaku)
   Object.assign(api.files, overrides.files)
 
   return api

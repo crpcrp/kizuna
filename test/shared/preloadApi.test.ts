@@ -15,6 +15,7 @@ import type {
 } from '@src/shared/mediaHistory'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from '@src/shared/translation'
+import type { JimakuSettingsStatus } from '@src/shared/jimaku'
 
 // Compile-time contract checks: these guard against `window.kizuna` and the
 // preload `satisfies KizunaApi` implementation silently diverging in
@@ -115,6 +116,20 @@ describe('KizunaApi', () => {
     >()
     expectTypeOf<KizunaApi['translate']['setSettings']>().returns.toEqualTypeOf<
       Promise<PublicTranslationSettings>
+    >()
+  })
+
+  it('jimaku exposes only typed credential status operations', () => {
+    expectTypeOf<KizunaApi['jimaku']['getStatus']>().returns.toEqualTypeOf<
+      Promise<JimakuSettingsStatus>
+    >()
+    expectTypeOf<KizunaApi['jimaku']['setApiKey']>().parameters.toEqualTypeOf<[string]>()
+    expectTypeOf<KizunaApi['jimaku']['setApiKey']>().returns.toEqualTypeOf<
+      Promise<JimakuSettingsStatus>
+    >()
+    expectTypeOf<KizunaApi['jimaku']['clearApiKey']>().parameters.toEqualTypeOf<[]>()
+    expectTypeOf<KizunaApi['jimaku']['testConnection']>().returns.toEqualTypeOf<
+      Promise<JimakuSettingsStatus>
     >()
   })
 

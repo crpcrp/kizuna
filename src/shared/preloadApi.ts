@@ -63,6 +63,7 @@ import type { GameOcrSettings } from './gameOcrSettings'
 import type { OcrResult } from './ocr'
 import type { AppSurface } from './appShell'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from './translation'
+import type { JimakuSettingsStatus } from './jimaku'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -295,6 +296,12 @@ export interface KizunaApi {
     cancel(requestId: string): void
     getSettings(): Promise<PublicTranslationSettings>
     setSettings(patch: TranslationSettingsPatch): Promise<PublicTranslationSettings>
+  }
+  jimaku: {
+    getStatus(): Promise<JimakuSettingsStatus>
+    setApiKey(value: string): Promise<JimakuSettingsStatus>
+    clearApiKey(): Promise<JimakuSettingsStatus>
+    testConnection(): Promise<JimakuSettingsStatus>
   }
   files: {
     /** Real filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`). */
