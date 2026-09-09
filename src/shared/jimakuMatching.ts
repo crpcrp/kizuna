@@ -1,4 +1,5 @@
-import type { JimakuEntry } from './jimaku'
+import type { JimakuCandidateStatus, JimakuEntry, JimakuFileFormat } from './jimaku'
+export type { JimakuCandidateStatus, JimakuFileFormat } from './jimaku'
 
 export interface JimakuVideoIdentityInput {
   /** A basename, or a local path accepted for convenient platform-neutral tests. */
@@ -32,9 +33,6 @@ export interface JimakuVideoIdentity {
   source?: string
   unknowns: JimakuIdentityUnknown[]
 }
-
-export type JimakuFileFormat = 'srt' | 'ass' | 'ssa' | 'zip' | 'unsupported'
-export type JimakuCandidateStatus = 'eligible' | 'browseOnly' | 'excluded'
 
 export interface JimakuRankedFile {
   name: string

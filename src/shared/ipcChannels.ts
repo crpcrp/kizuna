@@ -334,10 +334,19 @@ export const TRANSLATE_CHANNELS = {
   setSettings: 'translate:setSettings'
 } as const
 
-/** Jimaku credential setup and explicit connection-test bridge. */
+/** Jimaku credential setup and sender-scoped search/download bridge. */
 export const JIMAKU_CHANNELS = {
   getStatus: 'jimaku:getStatus',
   setApiKey: 'jimaku:setApiKey',
   clearApiKey: 'jimaku:clearApiKey',
-  testConnection: 'jimaku:testConnection'
+  testConnection: 'jimaku:testConnection',
+  beginSession: 'jimaku:beginSession',
+  searchTitles: 'jimaku:searchTitles',
+  listFiles: 'jimaku:listFiles',
+  prepareFile: 'jimaku:prepareFile',
+  prepareArchiveMember: 'jimaku:prepareArchiveMember',
+  cancelPending: 'jimaku:cancelPending',
+  endSession: 'jimaku:endSession',
+  openSourcePage: 'jimaku:openSourcePage',
+  commitPreparedSubtitle: 'jimaku:commitPreparedSubtitle'
 } as const

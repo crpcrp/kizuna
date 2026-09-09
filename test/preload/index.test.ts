@@ -4,6 +4,7 @@ import {
   APP_SHELL_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
+  JIMAKU_CHANNELS,
   KNOWLEDGE_CHANNELS,
   LAUNCH_CHANNELS,
   MEDIA_CHANNELS,
@@ -358,6 +359,54 @@ describe('preload translation contract', () => {
     expect(electron.invoke).toHaveBeenCalledWith(TRANSLATE_CHANNELS.setSettings, {
       azureSubscriptionKey: 'test-azure-key'
     })
+  })
+})
+
+describe('preload Jimaku session contract', () => {
+  beforeEach(() => {
+    electron.invoke.mockReset()
+  })
+
+  it('forwards the sender-scoped search and preparation operations', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      jimaku: {
+        beginSession(path: string, generation: number): Promise<unknown>
+        searchTitles(sessionId: string, request: unknown): Promise<unknown>
+        listFiles(sessionId: string, entryId: number, refresh?: boolean): Promise<unknown>
+        prepareFile(sessionId: string, candidateId: string): Promise<unknown>
+        prepareArchiveMember(
+          sessionId: string,
+          packageId: string,
+          memberId: string
+        ): Promise<unknown>
+        cancelPending(sessionId: string): Promise<unknown>
+        endSession(sessionId: string): Promise<unknown>
+        openSourcePage(sessionId: string, entryId: number): Promise<unknown>
+        commitPreparedSubtitle(sessionId: string, handle: string): Promise<unknown>
+      }
+    }
+
+    api.jimaku.beginSession('/media/episode.mkv', 4)
+    api.jimaku.searchTitles('session-1', { query: 'Anime', category: 'all' })
+    api.jimaku.listFiles('session-1', 42, true)
+    api.jimaku.prepareFile('session-1', 'candidate-1')
+    api.jimaku.prepareArchiveMember('session-1', 'package-1', 'member-1')
+    api.jimaku.cancelPending('session-1')
+    api.jimaku.endSession('session-1')
+    api.jimaku.openSourcePage('session-1', 42)
+    api.jimaku.commitPreparedSubtitle('session-1', 'prepared-1')
+
+    expect(electron.invoke.mock.calls).toEqual([
+      [JIMAKU_CHANNELS.beginSession, '/media/episode.mkv', 4],
+      [JIMAKU_CHANNELS.searchTitles, 'session-1', { query: 'Anime', category: 'all' }],
+      [JIMAKU_CHANNELS.listFiles, 'session-1', 42, true],
+      [JIMAKU_CHANNELS.prepareFile, 'session-1', 'candidate-1'],
+      [JIMAKU_CHANNELS.prepareArchiveMember, 'session-1', 'package-1', 'member-1'],
+      [JIMAKU_CHANNELS.cancelPending, 'session-1'],
+      [JIMAKU_CHANNELS.endSession, 'session-1'],
+      [JIMAKU_CHANNELS.openSourcePage, 'session-1', 42],
+      [JIMAKU_CHANNELS.commitPreparedSubtitle, 'session-1', 'prepared-1']
+    ])
   })
 })
 

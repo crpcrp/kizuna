@@ -89,7 +89,11 @@ import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
 import { createJimakuClient } from './services/jimaku/client'
 import { createJimakuSettingsService, type JimakuSettingsService } from './services/jimaku/settings'
+import { createJimakuDownloadStore } from './services/jimaku/downloadStore'
+import { createJimakuArchiveService } from './services/jimaku/archive'
+import { createJimakuService, type JimakuService } from './services/jimaku/service'
 import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
+import { registerJimakuBridge } from './jimakuBridge'
 import { createMediaHistoryService, type MediaHistoryService } from './services/mediaHistory'
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
@@ -166,6 +170,7 @@ let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
 let gameOcr: GameOcrRuntimeService | undefined
 let gameOcrLifecycle: GameOcrBackgroundLifecycle | undefined
+let jimakuService: JimakuService | undefined
 let appShell: AppShellCoordinator | undefined
 // The renderer-owning window. On Linux this is the transparent child overlay;
 // the opaque video host is kept separate and is passed only to mpv.
@@ -618,7 +623,8 @@ function startTranslation(
 
 function startJimaku(
   settings: SettingsStore,
-  secrets: ReturnType<typeof createSafeStorageCodec>
+  secrets: ReturnType<typeof createSafeStorageCodec>,
+  history: MediaHistoryService
 ): void {
   const client = createJimakuClient({
     getApiKey: () => jimakuSettings.getApiKey(),
@@ -629,7 +635,23 @@ function startJimaku(
     secrets,
     client
   })
+  const downloads = createJimakuDownloadStore({
+    fetch: httpFetch,
+    cacheRoot: join(app.getPath('userData'), 'jimaku')
+  })
+  const archive = createJimakuArchiveService({ downloads })
+  const service = createJimakuService({
+    client,
+    settings: jimakuSettings,
+    downloads,
+    archive,
+    mediaHistory: history,
+    openExternal: (url) => shell.openExternal(url)
+  })
+  jimakuService = service
   registerJimakuSettingsBridge(ipcMain, jimakuSettings)
+  registerJimakuBridge(ipcMain, service)
+  void downloads.cleanup(history.getProtectedJimakuPaths())
 }
 
 /**
@@ -911,7 +933,7 @@ if (!gotSingleInstanceLock) {
     startAnki(settings, binaryPaths.ffmpegPath)
     startKnowledge(settings, secrets)
     startTranslation(settings, secrets)
-    startJimaku(settings, secrets)
+    startJimaku(settings, secrets, mediaHistory)
     startPlayerSettings(settings, mpvConfig)
     startIntegrationStatus(binaryPaths)
     startAppInfo()
@@ -937,6 +959,7 @@ if (!gotSingleInstanceLock) {
   app.on('will-quit', () => {
     gameOcrLifecycle?.dispose()
     updates?.dispose()
+    jimakuService?.dispose()
   })
 
   app.on('window-all-closed', () => {

@@ -8,7 +8,15 @@ import type { JlptExportResult } from '@src/shared/jlptExport'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
-import type { JimakuSettingsStatus } from '@src/shared/jimaku'
+import type {
+  JimakuFileListResult,
+  JimakuPrepareResult,
+  JimakuPreparedSubtitleResult,
+  JimakuSession,
+  JimakuServiceResult,
+  JimakuSettingsStatus,
+  JimakuTitleSearchResult
+} from '@src/shared/jimaku'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -258,7 +266,45 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       getStatus: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       setApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       clearApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
-      testConnection: vi.fn(async () => DEFAULT_JIMAKU_STATUS)
+      testConnection: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
+      beginSession: vi.fn(async (): Promise<JimakuServiceResult<JimakuSession>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      searchTitles: vi.fn(async (): Promise<JimakuServiceResult<JimakuTitleSearchResult>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      listFiles: vi.fn(async (): Promise<JimakuServiceResult<JimakuFileListResult>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      prepareFile: vi.fn(async (): Promise<JimakuServiceResult<JimakuPrepareResult>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      prepareArchiveMember: vi.fn(
+        async (): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>> => ({
+          ok: false,
+          error: { code: 'invalidSession' }
+        })
+      ),
+      cancelPending: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      endSession: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      openSourcePage: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
+        ok: false,
+        error: { code: 'invalidSession' }
+      })),
+      commitPreparedSubtitle: vi.fn(async () => ({
+        ok: false as const,
+        error: { code: 'invalidSession' as const }
+      }))
     },
     files: {
       pathForFile: vi.fn(() => '')
