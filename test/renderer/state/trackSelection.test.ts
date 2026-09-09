@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { openAndLoad } from '@src/renderer/src/state/mediaOpen'
 import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
 import {
+  captureSubtitleSelectionSnapshot,
   detectJapaneseCues,
   externalSubtitleTrack,
   loadExternalSubtitle,
@@ -63,6 +64,56 @@ describe('selectAudio', () => {
 
     expect(dispatch).toHaveBeenCalledWith({ type: 'selectAudio', id: audioTrack.id })
     expect(warning).toBe('disk full')
+  })
+})
+
+describe('captureSubtitleSelectionSnapshot', () => {
+  it('captures Off, embedded, and external selections with their effective offset', () => {
+    expect(
+      captureSubtitleSelectionSnapshot({
+        selectedSubtitleId: null,
+        tracks: [subTrack],
+        externalSubtitleEncoding: 'auto',
+        subtitleOffsetMs: 250
+      })
+    ).toEqual({ selection: { mode: 'off' }, offsetMs: 250 })
+
+    expect(
+      captureSubtitleSelectionSnapshot({
+        selectedSubtitleId: subTrack.id,
+        tracks: [subTrack],
+        externalSubtitleEncoding: 'auto',
+        subtitleOffsetMs: -100
+      })
+    ).toEqual({
+      selection: { mode: 'track', track: { id: subTrack.id, codec: 'ass' } },
+      offsetMs: -100
+    })
+
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion: 'a'.repeat(64)
+    }
+    expect(
+      captureSubtitleSelectionSnapshot({
+        selectedSubtitleId: EXTERNAL_SUBTITLE_TRACK_ID,
+        tracks: [externalTrack],
+        externalSubtitlePath: '/cache/episode.srt',
+        externalSubtitleEncoding: 'auto',
+        externalSubtitleProvenance: provenance,
+        subtitleOffsetMs: 1_500
+      })
+    ).toEqual({
+      selection: {
+        mode: 'external',
+        path: '/cache/episode.srt',
+        encoding: 'auto',
+        provenance
+      },
+      offsetMs: 1_500
+    })
   })
 })
 
@@ -215,6 +266,43 @@ describe('selectSubtitle', () => {
     expect(warning).toBeUndefined()
   })
 
+  it('persists Jimaku provenance and applies the version-specific offset', async () => {
+    const bridge = makeBridge()
+    const dispatch = vi.fn()
+    const cache = new Map<number, Cue[]>([[EXTERNAL_SUBTITLE_TRACK_ID, cues]])
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion: 'a'.repeat(64)
+    }
+    const previousSnapshot = { selection: { mode: 'off' } as const, offsetMs: 250 }
+    const onApplied = vi.fn()
+
+    await selectSubtitle(
+      bridge,
+      dispatch,
+      '/video.mkv',
+      externalTrack,
+      undefined,
+      cache,
+      '/cache/episode.srt',
+      'auto',
+      { provenance, offsetMs: 1_500, previousSnapshot, onApplied }
+    )
+
+    expect(dispatch.mock.calls).toContainEqual([
+      { type: 'setSubtitleVersionOffset', contentVersion: provenance.contentVersion, value: 1_500 }
+    ])
+    expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith('/video.mkv', {
+      mode: 'external',
+      path: '/cache/episode.srt',
+      encoding: 'auto',
+      provenance
+    })
+    expect(onApplied).toHaveBeenCalledWith(previousSnapshot)
+  })
+
   it('persists nothing for the external track when its path is unknown (it would be stored as "off")', async () => {
     const bridge = makeBridge()
     const dispatch = vi.fn()
@@ -361,6 +449,41 @@ describe('loadExternalSubtitle', () => {
       mode: 'external',
       path: '/subs/episode.srt',
       encoding: 'shift_jis'
+    })
+  })
+
+  it('restores a downloaded version offset and persists its provenance', async () => {
+    const bridge = makeBridge({
+      media: { loadExternalSubtitle: vi.fn().mockResolvedValue(japanese) }
+    })
+    const dispatch = vi.fn()
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion: 'b'.repeat(64)
+    }
+    const session = makeSession({
+      bridge,
+      dispatch,
+      getSubtitleVersionOffset: () => 0
+    })
+
+    await loadExternalSubtitle(session, '/video.mkv', '/cache/episode.srt', { provenance })
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'externalSubtitleLoaded', provenance })
+    )
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'setSubtitleVersionOffset',
+      contentVersion: provenance.contentVersion,
+      value: 0
+    })
+    expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith('/video.mkv', {
+      mode: 'external',
+      path: '/cache/episode.srt',
+      encoding: 'auto',
+      provenance
     })
   })
 

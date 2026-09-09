@@ -238,6 +238,73 @@ describe('createMediaHistoryService', () => {
     })
   })
 
+  it('persists trusted Jimaku provenance and isolated, bounded version offsets', () => {
+    const settings = fakeSettings()
+    const contentA = 'a'.repeat(64)
+    const contentB = 'b'.repeat(64)
+    const knownPaths = new Set(['/cache/a.srt', '/cache/a-renamed.srt', '/cache/b.srt'])
+    const history = createMediaHistoryService({
+      settings: settings.store,
+      pathOptions: paths,
+      isKnownManagedSubtitle: (path) => knownPaths.has(path)
+    })
+    const prepared = (managedPath: string, contentVersion: string, originalName: string) => ({
+      handle: `handle-${managedPath}`,
+      contentVersion,
+      originalName,
+      format: 'srt' as const,
+      managedPath,
+      size: 10,
+      provenance: {
+        entryId: 7,
+        remoteFilename: originalName,
+        remoteRevision: 'revision'
+      }
+    })
+
+    history.applyPreparedSubtitle('/media/a.mkv', prepared('/cache/a.srt', contentA, 'a.srt'))
+    history.setSubtitleVersionOffset('/media/a.mkv', contentA, 1_500)
+    history.applyPreparedSubtitle('/media/a.mkv', prepared('/cache/b.srt', contentB, 'b.srt'))
+    history.setSubtitleVersionOffset('/media/a.mkv', contentB, -300)
+    history.applyPreparedSubtitle(
+      '/media/a.mkv',
+      prepared('/cache/a-renamed.srt', contentA, 'renamed-a.srt')
+    )
+
+    expect(history.getPlaybackHistory('/media/a.mkv')).toMatchObject({
+      subtitle: {
+        mode: 'external',
+        path: '/cache/a-renamed.srt',
+        provenance: { provider: 'jimaku', fileName: 'renamed-a.srt', contentVersion: contentA }
+      },
+      subtitleOffsetsByVersion: { [contentA]: 1_500, [contentB]: -300 }
+    })
+    expect(history.getProtectedJimakuPaths()).toEqual(['/cache/a-renamed.srt'])
+
+    history.applyPreparedSubtitle('/media/b.mkv', prepared('/cache/a.srt', contentA, 'a.srt'))
+    expect(history.getPlaybackHistory('/media/b.mkv')?.subtitleOffsetsByVersion).toEqual({
+      [contentA]: 0
+    })
+
+    history.setSubtitleTrack('/media/untrusted.mkv', {
+      mode: 'external',
+      path: '/cache/foreign.srt',
+      encoding: 'auto',
+      provenance: {
+        provider: 'jimaku',
+        entryId: 7,
+        fileName: 'foreign.srt',
+        contentVersion: contentB
+      }
+    })
+    expect(history.getPlaybackHistory('/media/untrusted.mkv')).toMatchObject({
+      subtitle: { mode: 'external', path: '/cache/foreign.srt' }
+    })
+    expect(
+      history.getPlaybackHistory('/media/untrusted.mkv')?.subtitleOffsetsByVersion
+    ).toBeUndefined()
+  })
+
   it('buffers valid observations, preserves a known duration when mpv emits zero, and accepts backward seeks', () => {
     const { history, timer } = service()
     history.observePosition(5)

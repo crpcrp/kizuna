@@ -95,6 +95,7 @@ function makeBridge(
       getPlaybackHistory: vi.fn().mockResolvedValue(undefined),
       setAudioTrack: vi.fn().mockResolvedValue(undefined),
       setSubtitleTrack: vi.fn().mockResolvedValue(undefined),
+      setSubtitleVersionOffset: vi.fn().mockResolvedValue(undefined),
       getRecentFiles: vi.fn(overrides.getRecentFiles ?? (() => Promise.resolve([]))),
       clearRecentFiles: vi.fn(overrides.clearRecentFiles ?? (() => Promise.resolve(undefined))),
       checkFileAvailability: vi.fn(

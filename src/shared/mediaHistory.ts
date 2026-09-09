@@ -3,6 +3,8 @@
 export const MAX_RECENT_FILES = 5
 /** Maximum persisted resume/track state entries, to bound settings size and flush work. */
 export const MAX_PLAYBACK_ENTRIES = 500
+/** Maximum recently-used downloaded subtitle versions kept per video. */
+export const MAX_SUBTITLE_VERSION_OFFSETS = 20
 export const MIN_RESUME_SECONDS = 10
 export const END_RESTART_WINDOW_SECONDS = 30
 export const HISTORY_FLUSH_DELAY_MS = 2_000
@@ -16,6 +18,15 @@ export interface StoredTrackSelection {
   codec?: string
 }
 
+/** Optional provenance for a subtitle owned by the Jimaku download cache. */
+export interface JimakuSubtitleProvenance {
+  provider: 'jimaku'
+  entryId: number
+  fileName: string
+  contentVersion: string
+  archiveMemberName?: string
+}
+
 import { isSubtitleEncoding, type SubtitleEncoding } from './subtitleEncoding'
 import { isRemoteUrl } from './mediaFileTypes'
 
@@ -25,13 +36,20 @@ export type StoredSubtitleSelection =
   /** A standalone subtitle file the user dropped in or picked; `path`
    *  is the sidecar file, not the video. Its synthetic track has no stream
    *  index, so it cannot be stored as a `track` selection. */
-  | { mode: 'external'; path: string; encoding: SubtitleEncoding }
+  | {
+      mode: 'external'
+      path: string
+      encoding: SubtitleEncoding
+      provenance?: JimakuSubtitleProvenance
+    }
 
 export interface MediaPlaybackHistory {
   positionSeconds: number
   durationSeconds?: number
   audioTrack?: StoredTrackSelection
   subtitle?: StoredSubtitleSelection
+  /** Downloaded subtitle offsets keyed by the original-byte SHA-256. */
+  subtitleOffsetsByVersion?: Record<string, number>
   updatedAt: number
 }
 
@@ -131,6 +149,47 @@ export function normalizeMediaHistory(
   }
 }
 
+/** Normalizes a persisted or renderer-supplied Jimaku provenance descriptor. */
+export function normalizeJimakuSubtitleProvenance(
+  value: unknown
+): JimakuSubtitleProvenance | undefined {
+  if (!isRecord(value) || value.provider !== 'jimaku') return undefined
+  if (!isPositiveSafeInteger(value.entryId)) return undefined
+  const fileName = boundedNonEmptyString(value.fileName, 512)
+  if (!fileName || !isContentVersion(value.contentVersion)) return undefined
+
+  const provenance: JimakuSubtitleProvenance = {
+    provider: 'jimaku',
+    entryId: value.entryId,
+    fileName,
+    contentVersion: value.contentVersion
+  }
+  const archiveMemberName = boundedNonEmptyString(value.archiveMemberName, 512)
+  if (archiveMemberName) provenance.archiveMemberName = archiveMemberName
+  return provenance
+}
+
+/** Keeps a bounded, insertion-ordered content-version offset map. */
+export function normalizeSubtitleOffsetsByVersion(
+  raw: unknown,
+  currentVersion?: string
+): Record<string, number> {
+  if (!isRecord(raw)) return {}
+
+  const valid = Object.entries(raw).filter(
+    ([version, offset]) => isContentVersion(version) && isFiniteNumber(offset)
+  ) as Array<[string, number]>
+  if (valid.length <= MAX_SUBTITLE_VERSION_OFFSETS) return Object.fromEntries(valid)
+
+  const current = currentVersion ? valid.find(([version]) => version === currentVersion) : undefined
+  const withoutCurrent = valid.filter(([version]) => version !== currentVersion)
+  const retained = withoutCurrent.slice(
+    -(MAX_SUBTITLE_VERSION_OFFSETS - (current === undefined ? 0 : 1))
+  )
+  if (current) retained.push(current)
+  return Object.fromEntries(retained)
+}
+
 /**
  * Returns a bounded copy of playback history. Protected keys always survive;
  * remaining entries are selected by newest update, then lexical key order so
@@ -213,6 +272,15 @@ function normalizePlaybackHistory(
   if (audioTrack) history.audioTrack = audioTrack
   const subtitle = normalizeSubtitleSelection(value.subtitle, options)
   if (subtitle) history.subtitle = subtitle
+  const currentVersion =
+    subtitle?.mode === 'external' ? subtitle.provenance?.contentVersion : undefined
+  const subtitleOffsetsByVersion = normalizeSubtitleOffsetsByVersion(
+    value.subtitleOffsetsByVersion,
+    currentVersion
+  )
+  if (Object.keys(subtitleOffsetsByVersion).length > 0) {
+    history.subtitleOffsetsByVersion = subtitleOffsetsByVersion
+  }
   return history
 }
 
@@ -239,11 +307,13 @@ export function normalizeSubtitleSelection(
   if (value.mode === 'off') return { mode: 'off' }
   if (value.mode === 'external') {
     const path = normalizeMediaPath(value.path, options)
+    const provenance = normalizeJimakuSubtitleProvenance(value.provenance)
     return path
       ? {
           mode: 'external',
           path,
-          encoding: isSubtitleEncoding(value.encoding) ? value.encoding : 'auto'
+          encoding: isSubtitleEncoding(value.encoding) ? value.encoding : 'auto',
+          ...(provenance ? { provenance } : {})
         }
       : undefined
   }
@@ -308,6 +378,20 @@ function addMetadata(
   if (typeof value === 'string' && value.trim() !== '') selection[key] = value
 }
 
+function boundedNonEmptyString(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed !== '' && trimmed.length <= maxLength ? trimmed : undefined
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+}
+
+export function isContentVersion(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -322,4 +406,8 @@ function isTimestamp(value: unknown): value is number {
 
 function isNonNegativeFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }

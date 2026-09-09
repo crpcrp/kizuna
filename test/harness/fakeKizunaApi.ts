@@ -137,7 +137,8 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       clearRecentFiles: vi.fn(async () => undefined),
       checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
       setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined)
+      setSubtitleTrack: vi.fn(async () => undefined),
+      setSubtitleVersionOffset: vi.fn(async () => undefined)
     },
     mecab: {
       tokenize: vi.fn(async () => []),

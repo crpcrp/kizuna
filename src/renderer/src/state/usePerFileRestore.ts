@@ -1,9 +1,10 @@
 import { useEffect, type Dispatch, type RefObject } from 'react'
 import type { Chapter } from '../../../shared/chapter'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
+import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
 import type { VideoDimensions } from '../../../shared/track'
 import type { VideoAdjustments } from '../../../shared/playerSettings'
-import { audioDelayForFile, subtitleOffsetForFile } from './perFileOffsets'
+import { audioDelayForFile, subtitleOffsetForSelection } from './perFileOffsets'
 import { type VideoAdjustmentsBridge, applyVideoAdjustments } from './playbackCommands'
 import type { PlayerAction } from './playerState'
 
@@ -43,6 +44,8 @@ export interface UsePerFileRestoreInput {
   playbackSettingsRef: RefObject<{ loudnessNormalization: boolean; audioDevice: string }>
   subtitleOffsetsRef: RefObject<Record<string, number>>
   folderSubtitleOffsetsRef: RefObject<Record<string, number>>
+  subtitleOffsetsByVersion?: Record<string, number>
+  externalSubtitleProvenance?: JimakuSubtitleProvenance
   audioDelaysRef: RefObject<Record<string, number>>
   videoAdjustmentsRef: RefObject<VideoAdjustments>
   /** Re-reads mpv's output list and re-sends the stored preference, which a
@@ -61,27 +64,44 @@ export function usePerFileRestore({
   playbackSettingsRef,
   subtitleOffsetsRef,
   folderSubtitleOffsetsRef,
+  subtitleOffsetsByVersion = {},
+  externalSubtitleProvenance,
   audioDelaysRef,
   videoAdjustmentsRef,
   reapplyAudioDevice,
   setVideoDimensions
 }: UsePerFileRestoreInput): void {
-  // Applies the current file's persisted subtitle offset (its own entry, else
-  // its folder's — see subtitleOffsetForFile) and fetches its video stream's
-  // native resolution (for the Video menu's size presets) whenever a new file
-  // loads. Both offset refs are populated by the settings-load effect above (or
-  // already hold this file's entry if it was set earlier this session).
+  // Applies the current file's persisted subtitle offset, or the active
+  // downloaded content-version offset. Keep this separate from the mpv reset
+  // effect below so changing subtitle versions does not reset unrelated state.
+  useEffect(() => {
+    if (!filePath || !settingsReady || isRemoteUrl(filePath)) return
+    dispatch({
+      type: 'setSubtitleOffset',
+      value: subtitleOffsetForSelection(
+        subtitleOffsetsRef.current,
+        folderSubtitleOffsetsRef.current,
+        subtitleOffsetsByVersion,
+        filePath,
+        externalSubtitleProvenance
+      )
+    })
+  }, [
+    loadGeneration,
+    settingsReady,
+    filePath,
+    dispatch,
+    subtitleOffsetsRef,
+    folderSubtitleOffsetsRef,
+    subtitleOffsetsByVersion,
+    externalSubtitleProvenance
+  ])
+
+  // Resets per-file mpv state and fetches its video stream's native resolution
+  // (for the Video menu's size presets) whenever a new file loads.
   useEffect(() => {
     if (!filePath || !settingsReady || isRemoteUrl(filePath)) return
     void bridge.player.setSpeed(1)
-    dispatch({
-      type: 'setSubtitleOffset',
-      value: subtitleOffsetForFile(
-        subtitleOffsetsRef.current,
-        folderSubtitleOffsetsRef.current,
-        filePath
-      )
-    })
     // mpv retains `audio-delay` across `loadfile`, so the restored value must
     // always be re-applied — even 0, to clear a delay left by the previous file.
     const delay = audioDelayForFile(audioDelaysRef.current, filePath)
@@ -100,7 +120,7 @@ export function usePerFileRestore({
     reapplyAudioDevice()
     // Keyed on loadGeneration, not filePath: reopening the current file (F8
     // second instance, or picking it from Recent) must re-reset speed and
-    // re-apply the stored offset/delay even though the path is unchanged.
+    // re-apply the stored delay even though the path is unchanged.
     // Everything else listed here is render-stable (refs, the reducer's
     // dispatch, the preload bridge, module-level helpers and state setters), so
     // it never re-fires the effect on its own.

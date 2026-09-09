@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   END_RESTART_WINDOW_SECONDS,
+  MAX_SUBTITLE_VERSION_OFFSETS,
   MAX_RECENT_FILES,
   MAX_PLAYBACK_ENTRIES,
   MIN_RESUME_SECONDS,
@@ -11,7 +12,8 @@ import {
   normalizeMediaHistory,
   normalizeMediaPath,
   normalizeRecentFiles,
-  normalizeSubtitleSelection
+  normalizeSubtitleSelection,
+  normalizeSubtitleOffsetsByVersion
 } from '@src/shared/mediaHistory'
 
 const windows = { platform: 'win32' as const, cwd: 'C:\\Users\\kizuna' }
@@ -84,6 +86,74 @@ describe('normalizeSubtitleSelection', () => {
       normalizeSubtitleSelection({ mode: 'sidecar', path: 'C:\\Subs\\ep.srt' }, windows)
     ).toBeUndefined()
     expect(normalizeSubtitleSelection(undefined, windows)).toBeUndefined()
+  })
+
+  it('keeps valid Jimaku provenance but drops malformed optional metadata', () => {
+    const contentVersion = 'a'.repeat(64)
+    expect(
+      normalizeSubtitleSelection(
+        {
+          mode: 'external',
+          path: 'C:/Subs/episode.srt',
+          encoding: 'utf-8',
+          provenance: {
+            provider: 'jimaku',
+            entryId: 42,
+            fileName: 'episode.srt',
+            contentVersion,
+            archiveMemberName: 'episode.srt'
+          }
+        },
+        windows
+      )
+    ).toEqual({
+      mode: 'external',
+      path: 'C:\\Subs\\episode.srt',
+      encoding: 'utf-8',
+      provenance: {
+        provider: 'jimaku',
+        entryId: 42,
+        fileName: 'episode.srt',
+        contentVersion,
+        archiveMemberName: 'episode.srt'
+      }
+    })
+    expect(
+      normalizeSubtitleSelection(
+        {
+          mode: 'external',
+          path: 'C:/Subs/episode.srt',
+          encoding: 'utf-8',
+          provenance: {
+            provider: 'jimaku',
+            entryId: 42,
+            fileName: 'episode.srt',
+            contentVersion: 'bad'
+          }
+        },
+        windows
+      )
+    ).toEqual({ mode: 'external', path: 'C:\\Subs\\episode.srt', encoding: 'utf-8' })
+  })
+})
+
+describe('normalizeSubtitleOffsetsByVersion', () => {
+  it('keeps valid offsets, drops malformed entries, and bounds the map while retaining current', () => {
+    const versions = Array.from({ length: MAX_SUBTITLE_VERSION_OFFSETS + 2 }, (_, index) =>
+      String(index).padStart(64, '0')
+    )
+    const offsets = Object.fromEntries([
+      ['not-a-version', 1],
+      ['b'.repeat(64), Number.NaN],
+      ...versions.map((version, index) => [version, index])
+    ])
+
+    const normalized = normalizeSubtitleOffsetsByVersion(offsets, versions[0])
+
+    expect(Object.keys(normalized)).toHaveLength(MAX_SUBTITLE_VERSION_OFFSETS)
+    expect(normalized[versions[0]]).toBe(0)
+    expect(normalized['not-a-version']).toBeUndefined()
+    expect(normalized['b'.repeat(64)]).toBeUndefined()
   })
 })
 

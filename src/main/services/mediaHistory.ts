@@ -2,10 +2,13 @@ import {
   HISTORY_FLUSH_DELAY_MS,
   MAX_RECENT_FILES,
   mediaPathKey,
+  normalizeJimakuSubtitleProvenance,
   normalizeMediaPath,
+  normalizeSubtitleOffsetsByVersion,
   normalizeStoredTrackSelection,
   normalizeSubtitleSelection,
   prunePlaybackHistory,
+  type JimakuSubtitleProvenance,
   type MediaHistory,
   type MediaPlaybackHistory,
   type PathNormalizationOptions,
@@ -14,8 +17,10 @@ import {
   type StoredTrackSelection
 } from '../../shared/mediaHistory'
 import type { FileAvailability } from '../../shared/preloadApi'
+import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 import { stat as statFile } from 'node:fs/promises'
 import type { SettingsStore } from './settings'
+import type { JimakuPreparedSubtitle } from './jimaku/downloadStore'
 
 export interface MediaHistoryTimers {
   setTimer(callback: () => void, delayMs: number): unknown
@@ -32,6 +37,8 @@ export interface MediaHistoryServiceDependencies {
   timers?: MediaHistoryTimers
   pathOptions?: PathNormalizationOptions
   stat?: (path: string) => Promise<MediaHistoryFileInfo>
+  /** Main-owned cache validation used before accepting renderer provenance. */
+  isKnownManagedSubtitle?: (path: string, provenance: JimakuSubtitleProvenance) => boolean
 }
 
 export interface MediaHistoryService {
@@ -48,6 +55,15 @@ export interface MediaHistoryService {
   observeDuration(value: unknown): void
   setAudioTrack(path: string, track: StoredTrackSelection): void
   setSubtitleTrack(path: string, selection: StoredSubtitleSelection): void
+  /** Applies a main-validated downloaded subtitle without trusting renderer data. */
+  applyPreparedSubtitle(
+    path: string,
+    prepared: JimakuPreparedSubtitle,
+    encoding?: SubtitleEncoding
+  ): StoredSubtitleSelection | undefined
+  setSubtitleVersionOffset(path: string, contentVersion: string, offsetMs: number): void
+  /** Returns cache paths referenced by validated persisted Jimaku selections. */
+  getProtectedJimakuPaths(): string[]
   removeRecentFile(path: string): RecentMediaFile[]
   clearRecentFiles(): void
   flush(): void
@@ -71,7 +87,8 @@ export function createMediaHistoryService(
     now = Date.now,
     timers = systemTimers,
     pathOptions,
-    stat = statFile
+    stat = statFile,
+    isKnownManagedSubtitle
   } = dependencies
   let activeKey: string | undefined
   let pendingPosition: number | undefined
@@ -119,6 +136,63 @@ export function createMediaHistoryService(
     next.playbackByPath[key] = entry
     pruneHistory(next, key)
     persist(next)
+  }
+
+  function isKnownSelection(selection: StoredSubtitleSelection): boolean {
+    if (selection.mode !== 'external' || selection.provenance === undefined) return true
+    if (!isKnownManagedSubtitle) return false
+    try {
+      return isKnownManagedSubtitle(selection.path, selection.provenance)
+    } catch {
+      return false
+    }
+  }
+
+  function withTrustedProvenance(
+    selection: StoredSubtitleSelection
+  ): StoredSubtitleSelection | undefined {
+    if (selection.mode !== 'external' || selection.provenance === undefined) return selection
+    return isKnownSelection(selection)
+      ? selection
+      : { mode: 'external', path: selection.path, encoding: selection.encoding }
+  }
+
+  function updateVersionOffset(
+    entry: MediaPlaybackHistory,
+    contentVersion: string,
+    offsetMs: number
+  ): void {
+    const offsets = normalizeSubtitleOffsetsByVersion(entry.subtitleOffsetsByVersion)
+    delete offsets[contentVersion]
+    offsets[contentVersion] = offsetMs
+    entry.subtitleOffsetsByVersion = normalizeSubtitleOffsetsByVersion(offsets, contentVersion)
+  }
+
+  function preparedSelection(
+    prepared: JimakuPreparedSubtitle,
+    encoding: SubtitleEncoding
+  ): StoredSubtitleSelection | undefined {
+    if (prepared.format !== 'srt' && prepared.format !== 'ass' && prepared.format !== 'ssa') {
+      return undefined
+    }
+    const provenance = normalizeJimakuSubtitleProvenance({
+      provider: 'jimaku',
+      entryId: prepared.provenance.entryId,
+      fileName: prepared.originalName,
+      contentVersion: prepared.contentVersion,
+      ...(prepared.provenance.archiveMemberName === undefined
+        ? {}
+        : { archiveMemberName: prepared.provenance.archiveMemberName })
+    })
+    const managedPath = normalizeMediaPath(prepared.managedPath, pathOptions)
+    if (!managedPath || !provenance) return undefined
+    const selection = normalizeSubtitleSelection(
+      { mode: 'external', path: managedPath, encoding, provenance },
+      pathOptions
+    )
+    if (!selection || selection.mode !== 'external' || !selection.provenance) return undefined
+    if (isKnownManagedSubtitle && !isKnownSelection(selection)) return undefined
+    return selection
   }
 
   function cancelTimer(): void {
@@ -267,9 +341,61 @@ export function createMediaHistoryService(
     setSubtitleTrack(path: string, selection: StoredSubtitleSelection): void {
       const normalized = normalizeSubtitleSelection(selection, pathOptions)
       if (!normalized) return
+      const trusted = withTrustedProvenance(normalized)
+      if (!trusted) return
       updatePlayback(path, (entry) => {
-        entry.subtitle = normalized
+        entry.subtitle = trusted
+        if (trusted.mode === 'external' && trusted.provenance) {
+          const current = entry.subtitleOffsetsByVersion?.[trusted.provenance.contentVersion]
+          updateVersionOffset(entry, trusted.provenance.contentVersion, current ?? 0)
+        }
       })
+    },
+
+    applyPreparedSubtitle(
+      path: string,
+      prepared: JimakuPreparedSubtitle,
+      encoding: SubtitleEncoding = 'auto'
+    ): StoredSubtitleSelection | undefined {
+      const selection = preparedSelection(prepared, encoding)
+      if (!selection || selection.mode !== 'external' || !selection.provenance) return undefined
+      updatePlayback(path, (entry) => {
+        entry.subtitle = selection
+        const contentVersion = selection.provenance!.contentVersion
+        updateVersionOffset(
+          entry,
+          contentVersion,
+          entry.subtitleOffsetsByVersion?.[contentVersion] ?? 0
+        )
+      })
+      return selection
+    },
+
+    setSubtitleVersionOffset(path: string, contentVersion: string, offsetMs: number): void {
+      if (!isContentVersion(contentVersion) || !isFiniteNumber(offsetMs)) return
+      const key = mediaPathKey(path, pathOptions)
+      if (!key) return
+      const current = history().playbackByPath[key]
+      if (
+        current?.subtitle?.mode !== 'external' ||
+        current.subtitle.provenance?.contentVersion !== contentVersion
+      ) {
+        return
+      }
+      updatePlayback(path, (entry) => {
+        updateVersionOffset(entry, contentVersion, offsetMs)
+      })
+    },
+
+    getProtectedJimakuPaths(): string[] {
+      if (!isKnownManagedSubtitle) return []
+      const paths: string[] = []
+      for (const entry of Object.values(history().playbackByPath)) {
+        const subtitle = entry.subtitle
+        if (subtitle?.mode !== 'external' || !subtitle.provenance) continue
+        if (isKnownSelection(subtitle)) paths.push(subtitle.path)
+      }
+      return paths
     },
 
     removeRecentFile(path: string): RecentMediaFile[] {
@@ -317,12 +443,30 @@ function clonePlayback(value: MediaPlaybackHistory | undefined): MediaPlaybackHi
   return {
     ...value,
     ...(value.audioTrack ? { audioTrack: { ...value.audioTrack } } : {}),
-    ...(value.subtitle ? { subtitle: cloneSubtitleSelection(value.subtitle) } : {})
+    ...(value.subtitle ? { subtitle: cloneSubtitleSelection(value.subtitle) } : {}),
+    ...(value.subtitleOffsetsByVersion
+      ? { subtitleOffsetsByVersion: { ...value.subtitleOffsetsByVersion } }
+      : {})
   }
 }
 
 function cloneSubtitleSelection(value: StoredSubtitleSelection): StoredSubtitleSelection {
-  return value.mode === 'track' ? { mode: 'track', track: { ...value.track } } : { ...value }
+  if (value.mode === 'track') return { mode: 'track', track: { ...value.track } }
+  if (value.mode === 'external') {
+    return {
+      ...value,
+      ...(value.provenance ? { provenance: { ...value.provenance } } : {})
+    }
+  }
+  return { ...value }
+}
+
+function isContentVersion(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isNonNegativeFinite(value: unknown): value is number {

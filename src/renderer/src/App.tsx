@@ -42,6 +42,7 @@ import { useVocabularyMining } from './state/useVocabularyMining'
 import { useJlptCoverageReport } from './state/useJlptCoverageReport'
 import { useJlptBulkExport } from './state/useJlptBulkExport'
 import { useOptionsController } from './state/useOptionsController'
+import { subtitleOffsetForFile } from './state/perFileOffsets'
 import { adjustSubtitleFontScale, subtitleFontWheelStep } from './state/subtitleFontWheel'
 import { errorMessage } from './util/errorMessage'
 import type { KizunaApi } from '../../shared/preloadApi'
@@ -140,7 +141,17 @@ export default function App({
     dispatch,
     player: playerAdapter,
     state,
-    stateRef
+    stateRef,
+    getLegacySubtitleOffset: () =>
+      stateRef.current.filePath
+        ? subtitleOffsetForFile(
+            perFileValues.subtitleOffsetsRef.current,
+            perFileValues.folderSubtitleOffsetsRef.current,
+            stateRef.current.filePath
+          )
+        : 0,
+    getSubtitleVersionOffset: (contentVersion) =>
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? 0
   })
   useEffect(() => {
     reportErrorRef.current = mediaSession.banner.reportError

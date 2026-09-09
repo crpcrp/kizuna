@@ -167,6 +167,9 @@ describe('KizunaApi', () => {
     expectTypeOf<KizunaApi['mediaHistory']['setSubtitleTrack']>().parameters.toEqualTypeOf<
       [string, StoredSubtitleSelection]
     >()
+    expectTypeOf<KizunaApi['mediaHistory']['setSubtitleVersionOffset']>().parameters.toEqualTypeOf<
+      [string, string, number]
+    >()
   })
 
   it('clipboard exposes only an asynchronous text writer', () => {

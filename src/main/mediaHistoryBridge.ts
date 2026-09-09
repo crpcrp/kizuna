@@ -17,6 +17,7 @@ export interface MediaHistoryBridgeService {
   checkFileAvailability(path: string): Promise<FileAvailability>
   setAudioTrack(path: string, track: StoredTrackSelection): void
   setSubtitleTrack(path: string, selection: StoredSubtitleSelection): void
+  setSubtitleVersionOffset(path: string, contentVersion: string, offsetMs: number): void
 }
 
 /** Registers the typed, serializable media-history IPC surface. */
@@ -43,5 +44,10 @@ export function registerMediaHistoryBridge<E>(
     MEDIA_HISTORY_CHANNELS.setSubtitleTrack,
     (_event, path: string, selection: StoredSubtitleSelection) =>
       service.setSubtitleTrack(path, selection)
+  )
+  ipc.handle(
+    MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset,
+    (_event, path: string, contentVersion: string, offsetMs: number) =>
+      service.setSubtitleVersionOffset(path, contentVersion, offsetMs)
   )
 }

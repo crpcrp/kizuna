@@ -669,6 +669,43 @@ describe('loadPath', () => {
     expect(cache.get(EXTERNAL_SUBTITLE_TRACK_ID)).toBe(japanese)
   })
 
+  it('restores a saved downloaded subtitle with its content-version offset', async () => {
+    const japanese: Cue[] = [{ start: 0, end: 1, text: 'こんにちは' }]
+    const contentVersion = 'a'.repeat(64)
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion
+    }
+    const bridge = makeBridge({
+      media: { loadExternalSubtitle: vi.fn().mockResolvedValue(japanese) },
+      mediaHistory: {
+        getPlaybackHistory: vi.fn().mockResolvedValue({
+          positionSeconds: 0,
+          updatedAt: 1,
+          subtitle: { mode: 'external', path: '/cache/episode.srt', encoding: 'auto', provenance },
+          subtitleOffsetsByVersion: { [contentVersion]: 1_500 }
+        })
+      }
+    })
+    const dispatch = vi.fn()
+    const session = makeSession({ bridge, dispatch })
+
+    await loadPath(session, '/recent.mkv')
+
+    await vi.waitFor(() =>
+      expect(dispatch).toHaveBeenCalledWith({
+        type: 'setSubtitleVersionOffset',
+        contentVersion,
+        value: 1_500
+      })
+    )
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'fileLoaded', history: expect.any(Object) })
+    )
+  })
+
   it('falls back to the default embedded track when the saved external file can no longer be read', async () => {
     const bridge = makeBridge({
       media: {

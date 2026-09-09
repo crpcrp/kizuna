@@ -49,6 +49,7 @@ export function makeBridge(overrides: BridgeOverrides = {}): PlayerBridge {
       getPlaybackHistory: vi.fn().mockResolvedValue(undefined),
       setAudioTrack: vi.fn().mockResolvedValue(undefined),
       setSubtitleTrack: vi.fn().mockResolvedValue(undefined),
+      setSubtitleVersionOffset: vi.fn().mockResolvedValue(undefined),
       ...(overrides.mediaHistory ?? {})
     }
   }

@@ -17,7 +17,8 @@ function fakeService(availability: FileAvailability = { status: 'available' }) {
     clearRecentFiles: vi.fn(),
     checkFileAvailability: vi.fn(async () => availability),
     setAudioTrack: vi.fn(),
-    setSubtitleTrack: vi.fn()
+    setSubtitleTrack: vi.fn(),
+    setSubtitleVersionOffset: vi.fn()
   }
   return { service, recents }
 }
@@ -67,8 +68,17 @@ describe('registerMediaHistoryBridge', () => {
     expect(
       await handlers.get(MEDIA_HISTORY_CHANNELS.setSubtitleTrack)!(event, path, subtitle)
     ).toBeUndefined()
+    expect(
+      await handlers.get(MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset)!(
+        event,
+        path,
+        'a'.repeat(64),
+        250
+      )
+    ).toBeUndefined()
     expect(service.checkFileAvailability).toHaveBeenCalledWith(path)
     expect(service.setAudioTrack).toHaveBeenCalledWith(path, audio)
     expect(service.setSubtitleTrack).toHaveBeenCalledWith(path, subtitle)
+    expect(service.setSubtitleVersionOffset).toHaveBeenCalledWith(path, 'a'.repeat(64), 250)
   })
 })

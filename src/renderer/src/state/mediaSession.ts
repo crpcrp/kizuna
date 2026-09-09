@@ -16,6 +16,7 @@ import { type FileAvailability } from '../../../shared/preloadApi'
 import { type SubtitleEncoding } from '../../../shared/subtitleEncoding'
 import { type Track } from '../../../shared/track'
 import { type PlayerAction } from './playerState'
+import type { SubtitleSelectionSnapshot } from './trackSelection'
 
 /** Subset of the preload `kizuna` bridge that orchestration needs. */
 export interface PlayerBridge {
@@ -35,6 +36,7 @@ export interface PlayerBridge {
     getPlaybackHistory(path: string): Promise<MediaPlaybackHistory | undefined>
     setAudioTrack(path: string, track: StoredTrackSelection): Promise<void>
     setSubtitleTrack(path: string, selection: StoredSubtitleSelection): Promise<void>
+    setSubtitleVersionOffset(path: string, contentVersion: string, offsetMs: number): Promise<void>
   }
 }
 
@@ -145,6 +147,14 @@ export interface OpenSession {
   fileToken: SubtitleRequestToken
   /** Encoding to use for a restored external subtitle that saved none. */
   externalSubtitleEncoding?: SubtitleEncoding
+  /** Current video's legacy local/embedded offset. */
+  getLegacySubtitleOffset?: () => number
+  /** Existing per-video downloaded-version offset, or zero for a new version. */
+  getSubtitleVersionOffset?: (contentVersion: string) => number
+  /** Captures the active selection immediately before a successful replacement. */
+  captureSubtitleSelection?: () => SubtitleSelectionSnapshot
+  /** Receives the one-step revert snapshot after a replacement commits. */
+  onSubtitleSelectionApplied?: (previous: SubtitleSelectionSnapshot) => void
   onWarning?: OpenWarningSink
   /** Fires when "Open file…" (via openAndLoad) picks a path, with the entries
    * that pick replaces the queue with — a playlist's expanded entries, or the
