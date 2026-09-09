@@ -49,6 +49,10 @@ export default function OptionsSurface({
     })()
   }, [bridge.appShell.dismissOptions, controller.options, onClose])
 
+  if (!controller.settingsReady) {
+    return <div id="app" className="standalone-options-app" aria-busy="true" />
+  }
+
   const optionsMenu = buildOptionsMenuProps({
     open: true,
     settings: controller.state,
