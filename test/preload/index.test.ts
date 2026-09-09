@@ -436,6 +436,11 @@ describe('preload media-history contract', () => {
         checkFileAvailability(path: string): Promise<unknown>
         setAudioTrack(path: string, track: { id: number }): Promise<void>
         setSubtitleTrack(path: string, selection: { mode: 'off' }): Promise<void>
+        setSubtitleVersionOffset(
+          path: string,
+          contentVersion: string,
+          offsetMs: number
+        ): Promise<void>
       }
     }
     const path = 'C:\\Media\\episode.mkv'
@@ -447,6 +452,7 @@ describe('preload media-history contract', () => {
     api.mediaHistory.checkFileAvailability(path)
     api.mediaHistory.setAudioTrack(path, { id: 2 })
     api.mediaHistory.setSubtitleTrack(path, { mode: 'off' })
+    api.mediaHistory.setSubtitleVersionOffset(path, 'a'.repeat(64), 1_500)
 
     expect(electron.invoke.mock.calls).toEqual([
       [MEDIA_HISTORY_CHANNELS.getRecentFiles],
@@ -455,7 +461,8 @@ describe('preload media-history contract', () => {
       [MEDIA_HISTORY_CHANNELS.clearRecentFiles],
       [MEDIA_HISTORY_CHANNELS.checkFileAvailability, path],
       [MEDIA_HISTORY_CHANNELS.setAudioTrack, path, { id: 2 }],
-      [MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, { mode: 'off' }]
+      [MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, { mode: 'off' }],
+      [MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset, path, 'a'.repeat(64), 1_500]
     ])
   })
 })

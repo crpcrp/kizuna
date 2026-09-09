@@ -4,6 +4,7 @@
 
 import { type Cue } from '../../../shared/cue'
 import {
+  type JimakuSubtitleProvenance,
   type StoredSubtitleSelection,
   createStoredTrackSelection,
   mediaFileBasename
@@ -24,6 +25,55 @@ interface SubtitlePickerSessionDeps {
   pickPath: () => Promise<string | undefined>
   session: OpenSession
   reportError: (message: string) => void
+}
+
+export interface SubtitleSelectionOptions {
+  /** Effective offset to restore after this selection succeeds. */
+  offsetMs?: number
+  /** Main-validated provenance for a downloaded external subtitle. */
+  provenance?: JimakuSubtitleProvenance
+  /** Snapshot captured before this selection began, for one-step revert. */
+  previousSnapshot?: SubtitleSelectionSnapshot
+  /** Receives `previousSnapshot` once the new selection has parsed and committed. */
+  onApplied?: (previous: SubtitleSelectionSnapshot) => void
+  /** Re-parsing the already-active subtitle (for example after encoding change) does not create a revert. */
+  capturePrevious?: boolean
+}
+
+export interface SubtitleSelectionSnapshot {
+  selection: StoredSubtitleSelection
+  offsetMs: number
+}
+
+export interface SubtitleSelectionSnapshotState {
+  selectedSubtitleId: number | null
+  tracks: Track[]
+  externalSubtitlePath?: string
+  externalSubtitleEncoding: SubtitleEncoding
+  externalSubtitleProvenance?: JimakuSubtitleProvenance
+  subtitleOffsetMs: number
+}
+
+/** Captures all renderer-owned information needed for one-step subtitle revert. */
+export function captureSubtitleSelectionSnapshot(
+  state: SubtitleSelectionSnapshotState
+): SubtitleSelectionSnapshot {
+  let selection: StoredSubtitleSelection = { mode: 'off' }
+  if (state.selectedSubtitleId === EXTERNAL_SUBTITLE_TRACK_ID && state.externalSubtitlePath) {
+    selection = {
+      mode: 'external',
+      path: state.externalSubtitlePath,
+      encoding: state.externalSubtitleEncoding,
+      ...(state.externalSubtitleProvenance ? { provenance: state.externalSubtitleProvenance } : {})
+    }
+  } else if (state.selectedSubtitleId !== null) {
+    const track = state.tracks.find(
+      (candidate) => candidate.kind === 'subtitle' && candidate.id === state.selectedSubtitleId
+    )
+    const descriptor = track ? createStoredTrackSelection(track) : undefined
+    if (descriptor) selection = { mode: 'track', track: descriptor }
+  }
+  return { selection, offsetMs: state.subtitleOffsetMs }
 }
 
 /**
@@ -91,13 +141,16 @@ export async function selectSubtitle(
   subtitleToken: SubtitleRequestToken = { current: 0 },
   cueCache: Map<number, Cue[]> = new Map(),
   externalSubtitlePath?: string,
-  externalSubtitleEncoding: SubtitleEncoding = 'auto'
+  externalSubtitleEncoding: SubtitleEncoding = 'auto',
+  options: SubtitleSelectionOptions = {}
 ): Promise<string | undefined> {
   const requestId = ++subtitleToken.current
 
   if (track === null) {
     dispatch({ type: 'cuesLoaded', cues: [] })
     dispatch({ type: 'selectSubtitle', id: null })
+    applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
+    notifyApplied(options)
     return persistSubtitleSelection(bridge, filePath, { mode: 'off' })
   }
 
@@ -105,12 +158,15 @@ export async function selectSubtitle(
   if (cached) {
     dispatch({ type: 'cuesLoaded', cues: cached })
     dispatch({ type: 'selectSubtitle', id: track.id })
+    applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
+    notifyApplied(options)
     return persistSubtitleTrack(
       bridge,
       filePath,
       track,
       externalSubtitlePath,
-      externalSubtitleEncoding
+      externalSubtitleEncoding,
+      options.provenance
     )
   }
 
@@ -119,12 +175,15 @@ export async function selectSubtitle(
   cueCache.set(track.id, cues)
   dispatch({ type: 'cuesLoaded', cues })
   dispatch({ type: 'selectSubtitle', id: track.id })
+  applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
+  notifyApplied(options)
   return persistSubtitleTrack(
     bridge,
     filePath,
     track,
     externalSubtitlePath,
-    externalSubtitleEncoding
+    externalSubtitleEncoding,
+    options.provenance
   )
 }
 
@@ -140,14 +199,16 @@ async function persistSubtitleTrack(
   filePath: string,
   track: Track,
   externalSubtitlePath?: string,
-  externalSubtitleEncoding: SubtitleEncoding = 'auto'
+  externalSubtitleEncoding: SubtitleEncoding = 'auto',
+  provenance?: JimakuSubtitleProvenance
 ): Promise<string | undefined> {
   if (track.id === EXTERNAL_SUBTITLE_TRACK_ID) {
     if (!externalSubtitlePath) return undefined
     return persistSubtitleSelection(bridge, filePath, {
       mode: 'external',
       path: externalSubtitlePath,
-      encoding: externalSubtitleEncoding
+      encoding: externalSubtitleEncoding,
+      ...(provenance ? { provenance } : {})
     })
   }
   return persistSubtitleSelection(bridge, filePath, subtitleSelection(track))
@@ -211,9 +272,10 @@ export function externalSubtitleTrack(subtitlePath: string, cues: Cue[]): Track 
 export async function loadExternalSubtitle(
   session: OpenSession,
   filePath: string,
-  subtitlePath: string
+  subtitlePath: string,
+  options: SubtitleSelectionOptions = {}
 ): Promise<string | undefined> {
-  return runLoadExternalSubtitle(session, filePath, subtitlePath)
+  return runLoadExternalSubtitle(session, filePath, subtitlePath, options)
 }
 
 export async function loadSubtitleFromPicker(deps: SubtitlePickerSessionDeps): Promise<void> {
@@ -227,7 +289,8 @@ export async function loadSubtitleFromPicker(deps: SubtitlePickerSessionDeps): P
 async function runLoadExternalSubtitle(
   session: OpenSession,
   filePath: string,
-  subtitlePath: string
+  subtitlePath: string,
+  options: SubtitleSelectionOptions
 ): Promise<string | undefined> {
   const { bridge, dispatch, subtitleToken, cueCache } = session
   const externalSubtitleEncoding = session.externalSubtitleEncoding ?? 'auto'
@@ -244,18 +307,60 @@ async function runLoadExternalSubtitle(
 
   const track = externalSubtitleTrack(subtitlePath, cues)
   cueCache.set(track.id, cues)
+  const previousSnapshot =
+    options.capturePrevious === false ? undefined : session.captureSubtitleSelection?.()
   dispatch({
     type: 'externalSubtitleLoaded',
     path: subtitlePath,
     track,
     cues,
-    encoding: externalSubtitleEncoding
+    encoding: externalSubtitleEncoding,
+    ...(options.provenance ? { provenance: options.provenance } : {})
   })
+  const offsetMs =
+    options.offsetMs ??
+    (options.provenance
+      ? (session.getSubtitleVersionOffset?.(options.provenance.contentVersion) ?? 0)
+      : session.getLegacySubtitleOffset?.())
+  if (options.provenance) {
+    if (offsetMs !== undefined) {
+      dispatch({
+        type: 'setSubtitleVersionOffset',
+        contentVersion: options.provenance.contentVersion,
+        value: offsetMs
+      })
+    }
+  } else {
+    applySubtitleOffset(dispatch, offsetMs)
+  }
+  if (previousSnapshot) session.onSubtitleSelectionApplied?.(previousSnapshot)
   return persistSubtitleSelection(bridge, filePath, {
     mode: 'external',
     path: subtitlePath,
-    encoding: externalSubtitleEncoding
+    encoding: externalSubtitleEncoding,
+    ...(options.provenance ? { provenance: options.provenance } : {})
   })
+}
+
+function notifyApplied(options: SubtitleSelectionOptions): void {
+  if (options.previousSnapshot) options.onApplied?.(options.previousSnapshot)
+}
+
+function applySubtitleOffset(
+  dispatch: Dispatch,
+  offsetMs: number | undefined,
+  provenance?: JimakuSubtitleProvenance
+): void {
+  if (offsetMs === undefined) return
+  if (provenance) {
+    dispatch({
+      type: 'setSubtitleVersionOffset',
+      contentVersion: provenance.contentVersion,
+      value: offsetMs
+    })
+    return
+  }
+  dispatch({ type: 'setSubtitleOffset', value: offsetMs })
 }
 
 async function persistSubtitleSelection(

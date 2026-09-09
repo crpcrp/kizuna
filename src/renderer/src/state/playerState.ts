@@ -6,6 +6,7 @@ import type { Chapter } from '../../../shared/chapter'
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
+import type { MediaPlaybackHistory, JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
 import {
   DEFAULT_APPEARANCE,
   DEFAULT_KEY_BINDINGS,
@@ -30,6 +31,8 @@ import {
 import { AUTO_AUDIO_DEVICE } from '../../../shared/audioDevice'
 import type { LoadedRendererSettings } from './rendererSettings'
 import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
+import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../shared/track'
+import { nextSubtitleVersionOffsets } from './perFileOffsets'
 
 /** The armed A–B loop endpoints (seconds), or `null` when that endpoint is
  * unset. When both are numbers mpv loops the range on its own. Normalized so
@@ -70,6 +73,8 @@ export interface PlayerState {
    * `EXTERNAL_SUBTITLE_TRACK_ID`); undefined when subtitles come from the
    * video's own streams. */
   externalSubtitlePath?: string
+  /** Trusted Jimaku metadata for the active external subtitle, when any. */
+  externalSubtitleProvenance?: JimakuSubtitleProvenance
   /** Keyboard shortcut -> action map, user-editable via the Options menu. */
   keyBindings: KeyBindings
   /** Surface to open on the next process launch. */
@@ -108,6 +113,8 @@ export interface PlayerState {
   /** Subtitle timing offset (ms) for the currently-loaded file; positive delays
    * subtitles, negative shows them earlier. See `offsetTimePos` in shared/cue. */
   subtitleOffsetMs: number
+  /** Per-video offsets for downloaded subtitle content versions. */
+  subtitleOffsetsByVersion: Record<string, number>
   /** Audio delay (ms) for the currently-loaded file; positive delays audio,
    * negative plays it earlier. Persisted per file like `subtitleOffsetMs`;
    * see `MpvController.setAudioDelay`. */
@@ -156,6 +163,7 @@ export const initialPlayerState: PlayerState = {
   selectedAudioId: undefined,
   selectedSubtitleId: null,
   externalSubtitlePath: undefined,
+  externalSubtitleProvenance: undefined,
   keyBindings: DEFAULT_KEY_BINDINGS,
   startupBehavior: 'splash',
   skipSeconds: DEFAULT_SKIP_SECONDS,
@@ -173,6 +181,7 @@ export const initialPlayerState: PlayerState = {
   subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   translationEnabled: false,
   subtitleOffsetMs: 0,
+  subtitleOffsetsByVersion: {},
   audioDelayMs: 0,
   abLoopState: EMPTY_AB_LOOP,
   appearance: DEFAULT_APPEARANCE,
@@ -208,7 +217,7 @@ export function isJapaneseSubtitleTrack(
 }
 
 export type PlayerAction =
-  | { type: 'fileLoaded'; filePath: string; tracks: Track[] }
+  | { type: 'fileLoaded'; filePath: string; tracks: Track[]; history?: MediaPlaybackHistory }
   | { type: 'mediaClosed' }
   | { type: 'cuesLoaded'; cues: Cue[] }
   | { type: 'chaptersLoaded'; chapters: Chapter[] }
@@ -228,6 +237,7 @@ export type PlayerAction =
       track: Track
       cues: Cue[]
       encoding: SubtitleEncoding
+      provenance?: JimakuSubtitleProvenance
     }
   | { type: 'setKeyBinding'; action: keyof KeyBindings; binding: KeyBinding }
   | { type: 'setStartupBehavior'; value: StartupBehavior }
@@ -240,6 +250,7 @@ export type PlayerAction =
   | { type: 'setSubtitleAutoPauseScope'; value: SubtitleAutoPauseScope }
   | { type: 'setTranslationEnabled'; value: boolean }
   | { type: 'setSubtitleOffset'; value: number }
+  | { type: 'setSubtitleVersionOffset'; contentVersion: string; value: number }
   | { type: 'setAudioDelay'; value: number }
   | { type: 'setAbLoop'; value: AbLoopState }
   | { type: 'setAppearance'; value: Appearance }
@@ -297,8 +308,13 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         // `tracks` is replaced wholesale, so the previous file's synthetic
         // external track is gone with it — drop its path too.
         externalSubtitlePath: undefined,
+        externalSubtitleProvenance:
+          action.history?.subtitle?.mode === 'external'
+            ? action.history.subtitle.provenance
+            : undefined,
         externalSubtitleEncoding: 'auto',
         subtitleOffsetMs: 0,
+        subtitleOffsetsByVersion: { ...(action.history?.subtitleOffsetsByVersion ?? {}) },
         audioDelayMs: 0,
         // A–B loop is per-file; a new file starts with no loop armed. App also
         // clears mpv's own ab-loop properties (they survive loadfile).
@@ -322,8 +338,10 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         selectedAudioId: undefined,
         selectedSubtitleId: null,
         externalSubtitlePath: undefined,
+        externalSubtitleProvenance: undefined,
         externalSubtitleEncoding: 'auto',
         subtitleOffsetMs: 0,
+        subtitleOffsetsByVersion: {},
         audioDelayMs: 0,
         abLoopState: EMPTY_AB_LOOP,
         activeTokens: [],
@@ -352,19 +370,37 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case 'selectAudio':
       return { ...state, selectedAudioId: action.id }
     case 'selectSubtitle':
-      return { ...state, selectedSubtitleId: action.id }
-    case 'externalSubtitleLoaded':
+      return action.id === EXTERNAL_SUBTITLE_TRACK_ID
+        ? { ...state, selectedSubtitleId: action.id }
+        : {
+            ...state,
+            selectedSubtitleId: action.id,
+            externalSubtitlePath: undefined,
+            externalSubtitleProvenance: undefined,
+            externalSubtitleEncoding: 'auto'
+          }
+    case 'externalSubtitleLoaded': {
       // Filter-then-append: a second external file replaces the first one's
       // synthetic track rather than adding a duplicate id.
+      const subtitleOffsetsByVersion = action.provenance
+        ? nextSubtitleVersionOffsets(
+            state.subtitleOffsetsByVersion,
+            action.provenance.contentVersion,
+            state.subtitleOffsetsByVersion[action.provenance.contentVersion] ?? 0
+          )
+        : state.subtitleOffsetsByVersion
       return {
         ...state,
         tracks: [...state.tracks.filter((track) => track.id !== action.track.id), action.track],
         cues: action.cues,
         selectedSubtitleId: action.track.id,
         externalSubtitlePath: action.path,
+        externalSubtitleProvenance: action.provenance,
         externalSubtitleEncoding: action.encoding,
+        subtitleOffsetsByVersion,
         allCueTokens: {}
       }
+    }
     case 'setKeyBinding':
       return { ...state, keyBindings: { ...state.keyBindings, [action.action]: action.binding } }
     case 'setStartupBehavior':
@@ -387,6 +423,17 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, translationEnabled: action.value }
     case 'setSubtitleOffset':
       return { ...state, subtitleOffsetMs: action.value }
+    case 'setSubtitleVersionOffset':
+      if (state.externalSubtitleProvenance?.contentVersion !== action.contentVersion) return state
+      return {
+        ...state,
+        subtitleOffsetMs: action.value,
+        subtitleOffsetsByVersion: nextSubtitleVersionOffsets(
+          state.subtitleOffsetsByVersion,
+          action.contentVersion,
+          action.value
+        )
+      }
     case 'setAudioDelay':
       return { ...state, audioDelayMs: action.value }
     case 'setAbLoop':

@@ -5,8 +5,17 @@ import {
   audioDelayForFile,
   nextAudioDelays,
   nextSubtitleOffsets,
-  subtitleOffsetForFile
+  nextSubtitleVersionOffsets,
+  subtitleOffsetForFile,
+  subtitleOffsetForSelection
 } from '@src/renderer/src/state/perFileOffsets'
+
+const jimakuProvenance = {
+  provider: 'jimaku' as const,
+  entryId: 1,
+  fileName: 'episode.srt',
+  contentVersion: 'a'.repeat(64)
+}
 
 describe('subtitleOffsetForFile', () => {
   it('returns the stored offset for a known file path', () => {
@@ -150,6 +159,41 @@ describe('nextSubtitleOffsets', () => {
   it('writes under the canonical key, so a re-spelled Windows path overwrites', () => {
     const next = nextSubtitleOffsets({ 'e:\\video\\a.mkv': 250 }, 'E:/Video/A.mkv', 500)
     expect(next).toEqual({ 'e:\\video\\a.mkv': 500 })
+  })
+})
+
+describe('subtitle version offsets', () => {
+  it('uses the downloaded version map and ignores legacy file/folder offsets', () => {
+    expect(
+      subtitleOffsetForSelection(
+        { '/videos/a.mkv': 1_500 },
+        { '/videos': -300 },
+        {},
+        '/videos/a.mkv',
+        jimakuProvenance
+      )
+    ).toBe(0)
+    expect(
+      subtitleOffsetForSelection(
+        { '/videos/a.mkv': 1_500 },
+        { '/videos': -300 },
+        { [jimakuProvenance.contentVersion]: 800 },
+        '/videos/a.mkv',
+        jimakuProvenance
+      )
+    ).toBe(800)
+  })
+
+  it('updates one version and keeps only the newest 20 entries', () => {
+    const offsets = Object.fromEntries(
+      Array.from({ length: 20 }, (_, index) => [String(index).padStart(64, '0'), index])
+    )
+    const next = nextSubtitleVersionOffsets(offsets, jimakuProvenance.contentVersion, 1_500)
+
+    expect(Object.keys(next)).toHaveLength(20)
+    expect(next[jimakuProvenance.contentVersion]).toBe(1_500)
+    expect(next['0000000000000000000000000000000000000000000000000000000000000000']).toBeUndefined()
+    expect(offsets[jimakuProvenance.contentVersion]).toBeUndefined()
   })
 })
 

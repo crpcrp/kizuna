@@ -11,6 +11,7 @@ import {
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { Cue } from '../../../shared/cue'
 import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
+import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../shared/track'
 import type { PlayerApi } from '../components/BottomBar'
 import type { MediaMenuProps } from '../components/menu/MediaMenu'
 import type { SubtitleMenuProps } from '../components/menu/SubtitleMenu'
@@ -30,13 +31,27 @@ import {
 } from './playlistController'
 import type { PlayerAction, PlayerState } from './playerState'
 import { createRecentFilesController } from './recentFilesController'
-import { loadExternalSubtitle, loadSubtitleFromPicker, selectSubtitle } from './trackSelection'
+import {
+  captureSubtitleSelectionSnapshot,
+  loadExternalSubtitle,
+  loadSubtitleFromPicker,
+  selectSubtitle,
+  type SubtitleSelectionSnapshot
+} from './trackSelection'
 import { useLatestCallback, useLatestRef } from './useLatestRef'
 
 /** The render-driven fields this feature reads. */
 type SessionState = Pick<
   PlayerState,
-  'externalSubtitleEncoding' | 'externalSubtitlePath' | 'filePath' | 'selectedSubtitleId' | 'tracks'
+  | 'externalSubtitleEncoding'
+  | 'externalSubtitlePath'
+  | 'externalSubtitleProvenance'
+  | 'filePath'
+  | 'loadGeneration'
+  | 'selectedSubtitleId'
+  | 'subtitleOffsetMs'
+  | 'subtitleOffsetsByVersion'
+  | 'tracks'
 >
 
 export interface UseMediaSessionInput {
@@ -45,6 +60,8 @@ export interface UseMediaSessionInput {
   player: Pick<PlayerApi, 'setPause'>
   state: SessionState
   stateRef: RefObject<PlayerState>
+  getLegacySubtitleOffset?: () => number
+  getSubtitleVersionOffset?: (contentVersion: string) => number
 }
 
 export interface PlaylistViewModel {
@@ -84,6 +101,7 @@ export interface UseMediaSessionResult {
   events: MediaSessionEvents
   banner: MediaSessionBanner
   navigate(direction: 'prev' | 'next'): void
+  getPreviousSubtitleSnapshot(): SubtitleSelectionSnapshot | undefined
 }
 
 /**
@@ -97,11 +115,22 @@ export function useMediaSession({
   dispatch,
   player,
   state,
-  stateRef
+  stateRef,
+  getLegacySubtitleOffset,
+  getSubtitleVersionOffset
 }: UseMediaSessionInput): UseMediaSessionResult {
   const subtitleToken = useRef<SubtitleRequestToken>({ current: 0 })
   const subtitleCueCache = useRef(new Map<number, Cue[]>())
   const fileLoadToken = useRef<SubtitleRequestToken>({ current: 0 })
+  const previousSubtitleSnapshotRef = useRef<SubtitleSelectionSnapshot | undefined>(undefined)
+  const rememberSubtitleSnapshot = useLatestCallback(
+    (snapshot: SubtitleSelectionSnapshot): void => {
+      previousSubtitleSnapshotRef.current = snapshot
+    }
+  )
+  useEffect(() => {
+    previousSubtitleSnapshotRef.current = undefined
+  }, [state.filePath, state.loadGeneration])
 
   const [recentFiles] = useState(createRecentFilesController)
   const recentFilesState = useSyncExternalStore(
@@ -121,6 +150,10 @@ export function useMediaSession({
     subtitleToken: subtitleToken.current,
     cueCache: subtitleCueCache.current,
     fileToken: fileLoadToken.current,
+    getLegacySubtitleOffset,
+    getSubtitleVersionOffset,
+    captureSubtitleSelection: () => captureSubtitleSelectionSnapshot(stateRef.current),
+    onSubtitleSelectionApplied: rememberSubtitleSnapshot,
     onPlaylistPicked: (paths) => {
       playlistController.clear()
       playlistController.addPaths(paths)
@@ -205,6 +238,9 @@ export function useMediaSession({
     const track =
       id === null ? null : state.tracks.find((item) => item.kind === 'subtitle' && item.id === id)
     if (track === undefined) return
+    const provenance =
+      track?.id === EXTERNAL_SUBTITLE_TRACK_ID ? state.externalSubtitleProvenance : undefined
+    const previousSnapshot = captureSubtitleSelectionSnapshot(state)
     selectSubtitle(
       bridge,
       dispatch,
@@ -213,7 +249,15 @@ export function useMediaSession({
       subtitleToken.current,
       subtitleCueCache.current,
       state.externalSubtitlePath,
-      state.externalSubtitleEncoding
+      state.externalSubtitleEncoding,
+      {
+        offsetMs: provenance
+          ? (state.subtitleOffsetsByVersion[provenance.contentVersion] ?? 0)
+          : getLegacySubtitleOffset?.(),
+        ...(provenance ? { provenance } : {}),
+        previousSnapshot,
+        onApplied: rememberSubtitleSnapshot
+      }
     )
   }
 
@@ -222,7 +266,16 @@ export function useMediaSession({
     void loadExternalSubtitle(
       { ...openSession(), externalSubtitleEncoding: encoding },
       state.filePath,
-      state.externalSubtitlePath
+      state.externalSubtitlePath,
+      {
+        offsetMs: state.externalSubtitleProvenance
+          ? (state.subtitleOffsetsByVersion[state.externalSubtitleProvenance.contentVersion] ?? 0)
+          : getLegacySubtitleOffset?.(),
+        ...(state.externalSubtitleProvenance
+          ? { provenance: state.externalSubtitleProvenance }
+          : {}),
+        capturePrevious: false
+      }
     ).then((warning) => {
       if (warning) recentFiles.reportError(warning)
     })
@@ -320,6 +373,7 @@ export function useMediaSession({
       reportError: recentFiles.reportError,
       reportTransient: recentFiles.reportTransient
     },
-    navigate
+    navigate,
+    getPreviousSubtitleSnapshot: () => previousSubtitleSnapshotRef.current
   }
 }

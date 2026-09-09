@@ -129,7 +129,8 @@ export const MEDIA_HISTORY_CHANNELS = {
   clearRecentFiles: 'mediaHistory:clearRecentFiles',
   checkFileAvailability: 'mediaHistory:checkFileAvailability',
   setAudioTrack: 'mediaHistory:setAudioTrack',
-  setSubtitleTrack: 'mediaHistory:setSubtitleTrack'
+  setSubtitleTrack: 'mediaHistory:setSubtitleTrack',
+  setSubtitleVersionOffset: 'mediaHistory:setSubtitleVersionOffset'
 } as const
 
 /** File-association launch bridge: main pushes explicit paths after the renderer subscribes. */

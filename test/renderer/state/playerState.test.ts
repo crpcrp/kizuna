@@ -27,6 +27,7 @@ const audioTrack: Track = { id: 1, kind: 'audio', codec: 'aac' }
 const audioTrack2: Track = { id: 2, kind: 'audio', codec: 'aac' }
 const subTrack: Track = { id: 3, kind: 'subtitle', codec: 'ass' }
 const subTrack2: Track = { id: 4, kind: 'subtitle', codec: 'subrip' }
+const contentVersion = 'a'.repeat(64)
 
 describe('initialPlayerState', () => {
   it('is the empty-file starting state', () => {
@@ -46,6 +47,7 @@ describe('initialPlayerState', () => {
       selectedAudioId: undefined,
       selectedSubtitleId: null,
       externalSubtitlePath: undefined,
+      externalSubtitleProvenance: undefined,
       keyBindings: DEFAULT_KEY_BINDINGS,
       startupBehavior: 'splash',
       skipSeconds: DEFAULT_SKIP_SECONDS,
@@ -63,6 +65,7 @@ describe('initialPlayerState', () => {
       subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
       translationEnabled: false,
       subtitleOffsetMs: 0,
+      subtitleOffsetsByVersion: {},
       audioDelayMs: 0,
       abLoopState: { a: null, b: null },
       appearance: 'system',
@@ -192,6 +195,7 @@ describe('playerReducer', () => {
       selectedAudioId: 2,
       selectedSubtitleId: 4,
       externalSubtitlePath: undefined,
+      externalSubtitleProvenance: undefined,
       keyBindings: DEFAULT_KEY_BINDINGS,
       startupBehavior: 'splash',
       skipSeconds: DEFAULT_SKIP_SECONDS,
@@ -209,6 +213,7 @@ describe('playerReducer', () => {
       subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
       translationEnabled: false,
       subtitleOffsetMs: 0,
+      subtitleOffsetsByVersion: {},
       audioDelayMs: 0,
       // A–B loop is per-file and clears on load.
       abLoopState: { a: null, b: null },
@@ -345,6 +350,69 @@ describe('playerReducer', () => {
     expect(next.externalSubtitlePath).toBe('/subs/episode.srt')
     expect(next.allCueTokens).toEqual({})
     expect(next.subtitleAutoPauseTiming).toBe('after')
+  })
+
+  it('restores downloaded provenance and updates only its version offset', () => {
+    const externalTrack: Track = {
+      id: EXTERNAL_SUBTITLE_TRACK_ID,
+      kind: 'subtitle',
+      codec: 'srt',
+      title: 'episode.srt'
+    }
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion
+    }
+    const loaded = playerReducer(initialPlayerState, {
+      type: 'fileLoaded',
+      filePath: '/video.mkv',
+      tracks: [audioTrack],
+      history: {
+        positionSeconds: 0,
+        updatedAt: 1,
+        subtitle: { mode: 'external', path: '/cache/episode.srt', encoding: 'auto', provenance },
+        subtitleOffsetsByVersion: { [contentVersion]: 1_500 }
+      }
+    })
+    const active = playerReducer(loaded, {
+      type: 'externalSubtitleLoaded',
+      path: '/cache/episode.srt',
+      track: externalTrack,
+      cues: [],
+      encoding: 'auto',
+      provenance
+    })
+    const updated = playerReducer(active, {
+      type: 'setSubtitleVersionOffset',
+      contentVersion,
+      value: -300
+    })
+
+    expect(active.externalSubtitleProvenance).toEqual(provenance)
+    expect(updated.subtitleOffsetMs).toBe(-300)
+    expect(updated.subtitleOffsetsByVersion).toEqual({ [contentVersion]: -300 })
+  })
+
+  it('clears downloaded provenance when returning to an embedded or Off selection', () => {
+    const active: PlayerState = {
+      ...initialPlayerState,
+      externalSubtitleProvenance: {
+        provider: 'jimaku',
+        entryId: 7,
+        fileName: 'episode.srt',
+        contentVersion
+      },
+      selectedSubtitleId: EXTERNAL_SUBTITLE_TRACK_ID
+    }
+
+    expect(
+      playerReducer(active, { type: 'selectSubtitle', id: 3 }).externalSubtitleProvenance
+    ).toBeUndefined()
+    expect(
+      playerReducer(active, { type: 'selectSubtitle', id: null }).externalSubtitleProvenance
+    ).toBeUndefined()
   })
 
   it('externalSubtitleLoaded replaces a previously loaded external track rather than duplicating it', () => {

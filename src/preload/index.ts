@@ -264,7 +264,14 @@ const api = {
     setAudioTrack: (path: string, track: StoredTrackSelection) =>
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setAudioTrack, path, track),
     setSubtitleTrack: (path: string, selection: StoredSubtitleSelection) =>
-      ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, selection)
+      ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, selection),
+    setSubtitleVersionOffset: (path: string, contentVersion: string, offsetMs: number) =>
+      ipcRenderer.invoke(
+        MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset,
+        path,
+        contentVersion,
+        offsetMs
+      )
   },
   mecab: {
     tokenize: (text: string): Promise<Token[]> => ipcRenderer.invoke(MECAB_CHANNELS.tokenize, text),

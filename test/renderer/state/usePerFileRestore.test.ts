@@ -72,6 +72,24 @@ describe('usePerFileRestore', () => {
     expect(result.bridge.media.getChapters).toHaveBeenCalledWith('/one.mkv')
   })
 
+  it('restores a downloaded offset by content version instead of legacy file/folder state', () => {
+    const result = setup()
+    const contentVersion = 'a'.repeat(64)
+    result.input.subtitleOffsetsRef.current = { '/one.mkv': 1_500 }
+    result.input.folderSubtitleOffsetsRef.current = { '/': -300 }
+    result.input.subtitleOffsetsByVersion = { [contentVersion]: 800 }
+    result.input.externalSubtitleProvenance = {
+      provider: 'jimaku',
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion
+    }
+    result.input.loadGeneration = 2
+    result.hook.rerender({ value: result.input })
+
+    expect(result.dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: 800 })
+  })
+
   it('reads dimensions from ffprobe (media), never mpv, for a local path', () => {
     const result = setup()
     expect(result.bridge.media.getVideoDimensions).toHaveBeenCalledWith('/one.mkv')

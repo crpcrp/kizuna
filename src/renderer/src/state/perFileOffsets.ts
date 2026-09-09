@@ -2,6 +2,11 @@
 // offset (with a per-folder fallback) and the audio delay.
 
 import { subtitleOffsetFolderKey, subtitleOffsetKey } from '../../../shared/playerSettings'
+import {
+  isContentVersion,
+  MAX_SUBTITLE_VERSION_OFFSETS,
+  type JimakuSubtitleProvenance
+} from '../../../shared/mediaHistory'
 
 interface SubtitleOffsetRefs {
   subtitleOffsets: { current: Record<string, number> }
@@ -24,6 +29,29 @@ export function subtitleOffsetForFile(
   const fileOffset = offsets[subtitleOffsetKey(filePath)]
   if (fileOffset !== undefined) return fileOffset
   return folderOffsets[subtitleOffsetFolderKey(filePath)] ?? 0
+}
+
+/** Returns a downloaded subtitle's offset, defaulting new content to zero. */
+export function subtitleOffsetForVersion(
+  offsets: Record<string, number>,
+  contentVersion: string
+): number {
+  return offsets[contentVersion] ?? 0
+}
+
+/** Chooses version-specific timing for Jimaku content and legacy timing for
+ * embedded/local/off selections. Folder offsets are intentionally ignored for
+ * downloaded subtitles. */
+export function subtitleOffsetForSelection(
+  offsets: Record<string, number>,
+  folderOffsets: Record<string, number>,
+  versionOffsets: Record<string, number>,
+  filePath: string,
+  provenance?: JimakuSubtitleProvenance
+): number {
+  return provenance
+    ? subtitleOffsetForVersion(versionOffsets, provenance.contentVersion)
+    : subtitleOffsetForFile(offsets, folderOffsets, filePath)
 }
 
 /**
@@ -87,6 +115,20 @@ export function nextSubtitleOffsets(
   offsetMs: number
 ): Record<string, number> {
   return { ...offsets, [subtitleOffsetKey(filePath)]: offsetMs }
+}
+
+/** Pure: updates one downloaded content version and keeps the most recent 20. */
+export function nextSubtitleVersionOffsets(
+  offsets: Record<string, number>,
+  contentVersion: string,
+  offsetMs: number
+): Record<string, number> {
+  if (!isContentVersion(contentVersion) || !Number.isFinite(offsetMs)) return offsets
+  const next = { ...offsets }
+  delete next[contentVersion]
+  next[contentVersion] = offsetMs
+  const entries = Object.entries(next)
+  return Object.fromEntries(entries.slice(-MAX_SUBTITLE_VERSION_OFFSETS))
 }
 
 /**

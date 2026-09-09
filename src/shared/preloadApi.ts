@@ -204,6 +204,7 @@ export interface KizunaApi {
     checkFileAvailability(path: string): Promise<FileAvailability>
     setAudioTrack(path: string, track: StoredTrackSelection): Promise<void>
     setSubtitleTrack(path: string, selection: StoredSubtitleSelection): Promise<void>
+    setSubtitleVersionOffset(path: string, contentVersion: string, offsetMs: number): Promise<void>
   }
   mecab: {
     tokenize(text: string): Promise<Token[]>

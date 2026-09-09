@@ -71,7 +71,7 @@ async function runLoadPath(
   if (fileToken.current !== loadId) return { status: 'stale' }
 
   cueCache.clear()
-  dispatch({ type: 'fileLoaded', filePath, tracks })
+  dispatch({ type: 'fileLoaded', filePath, tracks, ...(history ? { history } : {}) })
 
   // Subtitle extraction goes through ffmpeg and can take several seconds.
   // It must not keep the open action (and therefore the recent-files refresh
@@ -146,18 +146,27 @@ async function restoreSubtitle(
   // Restores an embedded stream: the saved track, else this file's default.
   // Also the fallback when a saved external file can no longer be read.
   const restoreEmbedded = async (sid: number | null): Promise<string | undefined> => {
-    if (sid === null) return undefined
+    const restoreLegacyOffset = (): void => {
+      const offsetMs = session.getLegacySubtitleOffset?.()
+      if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
+    }
+    if (sid === null) {
+      if (!superseded()) restoreLegacyOffset()
+      return undefined
+    }
     try {
       const cues = await bridge.media.loadSubtitle(filePath, sid)
       if (superseded()) return undefined
       cueCache.set(sid, cues)
       dispatch({ type: 'cuesLoaded', cues })
       dispatch({ type: 'selectSubtitle', id: sid })
+      restoreLegacyOffset()
       return undefined
     } catch (err) {
       if (superseded()) return undefined
       dispatch({ type: 'cuesLoaded', cues: [] })
       dispatch({ type: 'selectSubtitle', id: null })
+      restoreLegacyOffset()
       return errorMessage(err)
     }
   }
@@ -179,7 +188,25 @@ async function restoreSubtitle(
       if (superseded()) return undefined
       const track = externalSubtitleTrack(subtitlePath, cues)
       cueCache.set(track.id, cues)
-      dispatch({ type: 'externalSubtitleLoaded', path: subtitlePath, track, cues, encoding })
+      const provenance = history.subtitle.provenance
+      dispatch({
+        type: 'externalSubtitleLoaded',
+        path: subtitlePath,
+        track,
+        cues,
+        encoding,
+        ...(provenance ? { provenance } : {})
+      })
+      if (provenance) {
+        dispatch({
+          type: 'setSubtitleVersionOffset',
+          contentVersion: provenance.contentVersion,
+          value: history.subtitleOffsetsByVersion?.[provenance.contentVersion] ?? 0
+        })
+      } else {
+        const offsetMs = session.getLegacySubtitleOffset?.()
+        if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
+      }
       return undefined
     } catch (err) {
       if (superseded()) return undefined

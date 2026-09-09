@@ -34,6 +34,8 @@ type PlaybackWindowState = Pick<
   | 'loadGeneration'
   | 'loudnessNormalization'
   | 'subtitleOffsetMs'
+  | 'subtitleOffsetsByVersion'
+  | 'externalSubtitleProvenance'
   | 'tracks'
 >
 
@@ -254,6 +256,8 @@ export function usePlaybackWindow({
     playbackSettingsRef: stateRef,
     subtitleOffsetsRef,
     folderSubtitleOffsetsRef,
+    subtitleOffsetsByVersion: state.subtitleOffsetsByVersion,
+    externalSubtitleProvenance: state.externalSubtitleProvenance,
     audioDelaysRef,
     videoAdjustmentsRef,
     reapplyAudioDevice: audioDeviceController.reapplyAfterLoad,
@@ -279,6 +283,14 @@ export function usePlaybackWindow({
   const handleSubtitleOffsetChange = (valueMs: number): void => {
     dispatch({ type: 'setSubtitleOffset', value: valueMs })
     if (!state.filePath) return
+    if (state.externalSubtitleProvenance) {
+      const { contentVersion } = state.externalSubtitleProvenance
+      dispatch({ type: 'setSubtitleVersionOffset', contentVersion, value: valueMs })
+      void bridge.mediaHistory
+        .setSubtitleVersionOffset(state.filePath, contentVersion, valueMs)
+        .catch(() => reportError('Could not save subtitle offset.'))
+      return
+    }
     subtitleOffsetsRef.current = nextSubtitleOffsets(
       subtitleOffsetsRef.current,
       state.filePath,
@@ -300,7 +312,7 @@ export function usePlaybackWindow({
   // Subtitle menu > "Apply to folder": makes the current offset the default for
   // every video in this file's folder, present and future.
   const handleApplyOffsetToFolder = (): void => {
-    if (!state.filePath) return
+    if (!state.filePath || state.externalSubtitleProvenance) return
     applyOffsetToFolder(
       { subtitleOffsets: subtitleOffsetsRef, folderSubtitleOffsets: folderSubtitleOffsetsRef },
       state.filePath,
@@ -379,7 +391,8 @@ export function usePlaybackWindow({
     subtitleMenu: {
       subtitleOffsetMs: state.subtitleOffsetMs,
       onChangeSubtitleOffset: handleSubtitleOffsetChange,
-      onApplyOffsetToFolder: state.filePath ? handleApplyOffsetToFolder : undefined,
+      onApplyOffsetToFolder:
+        state.filePath && !state.externalSubtitleProvenance ? handleApplyOffsetToFolder : undefined,
       onToggleSidebar: handleToggleSidebar
     },
     playbackMenu: {
