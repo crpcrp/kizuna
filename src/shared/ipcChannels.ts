@@ -332,3 +332,11 @@ export const TRANSLATE_CHANNELS = {
   getSettings: 'translate:getSettings',
   setSettings: 'translate:setSettings'
 } as const
+
+/** Jimaku credential setup and explicit connection-test bridge. */
+export const JIMAKU_CHANNELS = {
+  getStatus: 'jimaku:getStatus',
+  setApiKey: 'jimaku:setApiKey',
+  clearApiKey: 'jimaku:clearApiKey',
+  testConnection: 'jimaku:testConnection'
+} as const

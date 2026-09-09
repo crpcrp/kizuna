@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   defaultSettings,
   defaultKnowledgeSettings,
+  defaultJimakuSettings,
   defaultTranslationSettings,
   mergeSettings,
   selectDict,
@@ -78,6 +79,31 @@ describe('mergeSettings — translation settings', () => {
     expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
     expect(createSettingsStore(io).get().player).toEqual(defaultSettings.player)
     expect(createSettingsStore(io).get().knowledge).toEqual(defaultSettings.knowledge)
+  })
+})
+
+describe('mergeSettings — Jimaku settings', () => {
+  it('defaults the Jimaku credential block and key', () => {
+    expect(mergeSettings({}).jimaku).toEqual(defaultJimakuSettings)
+  })
+
+  it('normalizes malformed and missing encrypted values', () => {
+    expect(mergeSettings({ jimaku: undefined }).jimaku).toEqual(defaultJimakuSettings)
+    expect(mergeSettings({ jimaku: null }).jimaku).toEqual(defaultJimakuSettings)
+    expect(mergeSettings({ jimaku: { apiKeyEnc: 42 } }).jimaku).toEqual(defaultJimakuSettings)
+    expect(mergeSettings({ jimaku: { apiKeyEnc: 'encrypted' } }).jimaku).toEqual({
+      apiKeyEnc: 'encrypted'
+    })
+  })
+
+  it('preserves the Jimaku block when unrelated settings are updated', () => {
+    const io = fakeIo(undefined)
+    const store = createSettingsStore(io)
+    store.set({ jimaku: { apiKeyEnc: 'encrypted-key' } })
+    store.set({ mecabDictId: 'unidic' })
+
+    expect(createSettingsStore(io).get().jimaku).toEqual({ apiKeyEnc: 'encrypted-key' })
+    expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
   })
 })
 
