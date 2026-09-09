@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { zipSync } from 'fflate'
 import { describe, expect, it, vi } from 'vitest'
 import type { JimakuFileRecord } from '@src/main/services/jimaku/client'
 import {
@@ -513,5 +514,79 @@ describe('Jimaku download failure and cleanup handling', () => {
     expect(fs.files.has(old)).toBe(false)
     expect(fs.files.has(fresh)).toBe(true)
     expect(fs.files.has(completed)).toBe(true)
+  })
+})
+
+describe('Jimaku package storage', () => {
+  it('stores ZIP bytes without subtitle parsing and preserves extracted-member provenance', async () => {
+    const zipBytes = zipSync({ 'Title - 07.srt': BYTES })
+    let parseCalls = 0
+    const packageFile = fileRecord(90, 'pack.zip', {
+      size: zipBytes.byteLength,
+      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/90/download/pack.zip`
+    })
+    const { store, fs, http, cacheRoot } = makeStore(
+      'linux',
+      {
+        [packageFile.url]: { bytes: zipBytes }
+      },
+      {
+        parseSubtitle: () => {
+          parseCalls += 1
+          return [{ start: 0, end: 1, text: 'x' }]
+        }
+      }
+    )
+
+    const pack = await store.preparePackage(90, packageFile)
+
+    expect(pack).toMatchObject({ ok: true, value: { format: 'zip', size: zipBytes.byteLength } })
+    expect(http.calls).toHaveLength(1)
+    expect(parseCalls).toBe(0)
+    if (!pack.ok) return
+    await expect(store.preparePackage(90, packageFile)).resolves.toMatchObject({
+      ok: true,
+      value: { format: 'zip' }
+    })
+    expect(http.calls).toHaveLength(1)
+    expect(await store.readPrepared(pack.value.handle)).toEqual(zipBytes)
+    expect(fs.files.has(pathApiFor('linux').join(cacheRoot, `${hash(zipBytes)}.zip`))).toBe(true)
+    await expect(store.lookupCachedPackage(90, packageFile)).resolves.toMatchObject({
+      format: 'zip',
+      contentVersion: hash(zipBytes)
+    })
+
+    const extracted = await store.prepareExtracted(90, packageFile, 'sub/Title - 07.srt', BYTES)
+    expect(extracted).toMatchObject({
+      ok: true,
+      value: {
+        originalName: 'sub/Title - 07.srt',
+        format: 'srt',
+        provenance: {
+          remoteFilename: 'pack.zip',
+          archiveMemberName: 'sub/Title - 07.srt'
+        }
+      }
+    })
+    expect(parseCalls).toBe(1)
+    expect(http.calls).toHaveLength(1)
+  })
+
+  it('uses the member name in extracted cache identity', async () => {
+    const zipBytes = zipSync({ 'Title - 07.srt': BYTES })
+    const packageFile = fileRecord(91, 'pack.zip', {
+      size: zipBytes.byteLength,
+      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/91/download/pack.zip`
+    })
+    const { store } = makeStore('linux', {})
+
+    const first = await store.prepareExtracted(91, packageFile, 'one.srt', BYTES)
+    const second = await store.prepareExtracted(91, packageFile, 'two.srt', BYTES)
+
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    if (!first.ok || !second.ok) return
+    expect(first.value.originalName).toBe('one.srt')
+    expect(second.value.originalName).toBe('two.srt')
   })
 })
