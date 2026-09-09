@@ -76,7 +76,16 @@ import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { OcrResult } from '../shared/ocr'
 import type { AppSurface } from '../shared/appShell'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from '../shared/translation'
-import type { JimakuSettingsStatus } from '../shared/jimaku'
+import type {
+  JimakuFileListResult,
+  JimakuPrepareResult,
+  JimakuPreparedSubtitleResult,
+  JimakuSession,
+  JimakuServiceResult,
+  JimakuSettingsStatus,
+  JimakuTitleSearchRequest,
+  JimakuTitleSearchResult
+} from '../shared/jimaku'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -423,7 +432,45 @@ const api = {
     clearApiKey: (): Promise<JimakuSettingsStatus> =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.clearApiKey),
     testConnection: (): Promise<JimakuSettingsStatus> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection)
+      ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection),
+    beginSession: (
+      mediaPath: string,
+      mediaGeneration: number
+    ): Promise<JimakuServiceResult<JimakuSession>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.beginSession, mediaPath, mediaGeneration),
+    searchTitles: (
+      sessionId: string,
+      request: JimakuTitleSearchRequest
+    ): Promise<JimakuServiceResult<JimakuTitleSearchResult>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.searchTitles, sessionId, request),
+    listFiles: (
+      sessionId: string,
+      entryId: number,
+      refresh?: boolean
+    ): Promise<JimakuServiceResult<JimakuFileListResult>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.listFiles, sessionId, entryId, refresh),
+    prepareFile: (
+      sessionId: string,
+      candidateId: string
+    ): Promise<JimakuServiceResult<JimakuPrepareResult>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.prepareFile, sessionId, candidateId),
+    prepareArchiveMember: (
+      sessionId: string,
+      packageId: string,
+      memberId: string
+    ): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.prepareArchiveMember, sessionId, packageId, memberId),
+    cancelPending: (sessionId: string): Promise<JimakuServiceResult<void>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.cancelPending, sessionId),
+    endSession: (sessionId: string): Promise<JimakuServiceResult<void>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.endSession, sessionId),
+    openSourcePage: (sessionId: string, entryId: number): Promise<JimakuServiceResult<void>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.openSourcePage, sessionId, entryId),
+    commitPreparedSubtitle: (
+      sessionId: string,
+      handle: string
+    ): Promise<JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.commitPreparedSubtitle, sessionId, handle)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the

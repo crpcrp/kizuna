@@ -22,7 +22,14 @@ describe('registerJimakuSettingsBridge', () => {
     }
     registerJimakuSettingsBridge(ipc, service)
 
-    expect([...handlers.keys()].sort()).toEqual(Object.values(JIMAKU_CHANNELS).sort())
+    expect([...handlers.keys()].sort()).toEqual(
+      [
+        JIMAKU_CHANNELS.getStatus,
+        JIMAKU_CHANNELS.setApiKey,
+        JIMAKU_CHANNELS.clearApiKey,
+        JIMAKU_CHANNELS.testConnection
+      ].sort()
+    )
     expect(handlers.get(JIMAKU_CHANNELS.getStatus)!(event)).toEqual(STATUS)
     expect(handlers.get(JIMAKU_CHANNELS.setApiKey)!(event, 'api-key')).toEqual(STATUS)
     expect(handlers.get(JIMAKU_CHANNELS.clearApiKey)!(event)).toEqual(STATUS)

@@ -63,7 +63,16 @@ import type { GameOcrSettings } from './gameOcrSettings'
 import type { OcrResult } from './ocr'
 import type { AppSurface } from './appShell'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from './translation'
-import type { JimakuSettingsStatus } from './jimaku'
+import type {
+  JimakuFileListResult,
+  JimakuPrepareResult,
+  JimakuPreparedSubtitleResult,
+  JimakuSession,
+  JimakuServiceResult,
+  JimakuSettingsStatus,
+  JimakuTitleSearchRequest,
+  JimakuTitleSearchResult
+} from './jimaku'
 
 export type FileAvailability =
   { status: 'available' } | { status: 'missing' } | { status: 'error'; message: string }
@@ -303,6 +312,35 @@ export interface KizunaApi {
     setApiKey(value: string): Promise<JimakuSettingsStatus>
     clearApiKey(): Promise<JimakuSettingsStatus>
     testConnection(): Promise<JimakuSettingsStatus>
+    beginSession(
+      mediaPath: string,
+      mediaGeneration: number
+    ): Promise<JimakuServiceResult<JimakuSession>>
+    searchTitles(
+      sessionId: string,
+      request: JimakuTitleSearchRequest
+    ): Promise<JimakuServiceResult<JimakuTitleSearchResult>>
+    listFiles(
+      sessionId: string,
+      entryId: number,
+      refresh?: boolean
+    ): Promise<JimakuServiceResult<JimakuFileListResult>>
+    prepareFile(
+      sessionId: string,
+      candidateId: string
+    ): Promise<JimakuServiceResult<JimakuPrepareResult>>
+    prepareArchiveMember(
+      sessionId: string,
+      packageId: string,
+      memberId: string
+    ): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>>
+    cancelPending(sessionId: string): Promise<JimakuServiceResult<void>>
+    endSession(sessionId: string): Promise<JimakuServiceResult<void>>
+    openSourcePage(sessionId: string, entryId: number): Promise<JimakuServiceResult<void>>
+    commitPreparedSubtitle(
+      sessionId: string,
+      handle: string
+    ): Promise<JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>>
   }
   files: {
     /** Real filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`). */
