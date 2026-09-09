@@ -6,6 +6,8 @@ architectural changes.
 
 ## Output
 
+- Keep every response and generated output laconic. Include only information
+  needed for correctness or action.
 - Be accurate. State material uncertainty or verification limits directly.
 - Minimize output and token usage without omitting information needed for
   correctness.
@@ -20,6 +22,8 @@ architectural changes.
 
 ## Working principles
 
+- This is a hobby project, not an enterprise application. Never overengineer a
+  task; choose the smallest practical solution and avoid enterprise ceremony.
 - Keep changes focused on the requested outcome and preserve unrelated work.
 - Prefer clear, conventional code over clever abstractions.
 - Add tests for meaningful behavior and likely regressions, not trivial
@@ -51,7 +55,7 @@ Focused Vitest runs must use Electron's Node ABI because of `better-sqlite3`:
 
 ```powershell
 $env:ELECTRON_RUN_AS_NODE = '1'
-& .\node_modules\electron\dist\electron.exe .\node_modules\vitest\vitest.mjs run test\<path>.test.ts
+& .\\node_modules\\electron\\dist\\electron.exe .\\node_modules\\vitest\\vitest.mjs run test\\<path>.test.ts
 ```
 
 Do not call live external integrations from tests.
