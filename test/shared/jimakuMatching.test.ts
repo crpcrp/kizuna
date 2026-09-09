@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   normalizeJimakuNameForMatch,
   parseJimakuVideoIdentity,
+  parseJimakuVideoIdentityFromPath,
   rankJimakuFiles
 } from '@src/shared/jimakuMatching'
 
@@ -47,6 +48,13 @@ describe('parseJimakuVideoIdentity', () => {
       titleQuery: '',
       episode: 7,
       unknowns: [{ field: 'title', reason: 'missing' }]
+    })
+  })
+
+  it('exposes platform-neutral path parsing for renderer callers', () => {
+    expect(parseJimakuVideoIdentityFromPath('C:\\anime\\Show\\07.mkv')).toMatchObject({
+      titleQuery: 'Show',
+      episode: 7
     })
   })
 

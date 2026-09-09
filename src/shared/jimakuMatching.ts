@@ -162,6 +162,16 @@ export function parseJimakuVideoIdentity(
   }
 }
 
+/** Parses a local media path into the editable title/episode hints. */
+export function parseJimakuVideoIdentityFromPath(
+  mediaPath: string
+): JimakuVideoIdentity | undefined {
+  const parts = mediaPath.replaceAll('\\', '/').split('/').filter(Boolean)
+  const videoBasename = parts.at(-1)
+  if (!videoBasename) return undefined
+  return parseJimakuVideoIdentity({ videoBasename, folderBasename: parts.at(-2) })
+}
+
 /**
  * Orders files for one already-selected Jimaku entry. The returned list keeps
  * the input names verbatim and never mutates the input array.

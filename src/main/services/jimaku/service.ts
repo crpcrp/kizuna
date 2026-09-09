@@ -21,7 +21,7 @@ import {
   type JimakuTitleSearchResult
 } from '../../../shared/jimaku'
 import {
-  parseJimakuVideoIdentity,
+  parseJimakuVideoIdentityFromPath,
   rankJimakuFiles,
   type JimakuVideoIdentity
 } from '../../../shared/jimakuMatching'
@@ -709,11 +709,7 @@ function normalizeMediaPathValue(value: unknown): string | undefined {
 }
 
 function identityForPath(path: string): JimakuVideoIdentity | undefined {
-  const parts = path.replaceAll('\\', '/').split('/').filter(Boolean)
-  const videoBasename = parts.at(-1)
-  if (!videoBasename) return undefined
-  const folderBasename = parts.at(-2)
-  return parseJimakuVideoIdentity({ videoBasename, folderBasename })
+  return parseJimakuVideoIdentityFromPath(path)
 }
 
 function parseTitleRequest(value: unknown): JimakuTitleSearchRequest | undefined {
