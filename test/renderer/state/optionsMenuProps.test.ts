@@ -43,6 +43,10 @@ function actionsFake(): OptionsDialogActions {
     onChangeAnkiSettings: vi.fn(async () => {}),
     onSaveAzureTranslationKey: vi.fn(async () => true),
     onSaveAzureTranslationRegion: vi.fn(async () => true),
+    onSaveJimakuApiKey: vi.fn(async () => undefined),
+    onTestJimakuConnection: vi.fn(async () => undefined),
+    onClearJimakuApiKey: vi.fn(async () => undefined),
+    onOpenJimakuAccount: vi.fn(),
     onOpenMpvConfigDir: vi.fn(),
     onOpenUserUnidicDir: vi.fn(),
     persist: vi.fn()
@@ -75,6 +79,12 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
       knowledgeError: undefined,
       translationSettings: { hasAzureKey: false, azureRegion: '' },
       translationError: undefined,
+      jimakuSettings: {
+        configured: false,
+        secretStorageAvailable: true,
+        testOutcome: { status: 'notTested' }
+      },
+      jimakuError: undefined,
       setup: undefined
     },
     actions: actionsFake(),
@@ -177,6 +187,10 @@ describe('buildOptionsMenuProps', () => {
     expect(props.subtitles.onSaveAzureTranslationRegion).toBe(
       input.actions.onSaveAzureTranslationRegion
     )
+    expect(props.subtitles.onSaveJimakuApiKey).toBe(input.actions.onSaveJimakuApiKey)
+    expect(props.subtitles.onTestJimakuConnection).toBe(input.actions.onTestJimakuConnection)
+    expect(props.subtitles.onClearJimakuApiKey).toBe(input.actions.onClearJimakuApiKey)
+    expect(props.subtitles.onOpenJimakuAccount).toBe(input.actions.onOpenJimakuAccount)
     expect(props.playback.onOpenMpvConfigDir).toBe(input.actions.onOpenMpvConfigDir)
     expect(props.dictionaries.onOpenUserUnidicDir).toBe(input.actions.onOpenUserUnidicDir)
     expect(props.playback.onSelectAudioDevice).toBe(playback.onSelectAudioDevice)

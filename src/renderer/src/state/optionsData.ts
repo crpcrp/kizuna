@@ -7,12 +7,14 @@ import {
   type PublicKnowledgeSettings,
   type SyncStatus
 } from '../../../shared/knowledge'
+import type { JimakuSettingsStatus } from '../../../shared/jimaku'
 import type { PublicTranslationSettings } from '../../../shared/translation'
 import { errorMessage } from '../util/errorMessage'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
-export type OptionsDomain = 'dictionaries' | 'anki' | 'knowledge' | 'translation' | 'setup'
+export type OptionsDomain =
+  'dictionaries' | 'anki' | 'knowledge' | 'translation' | 'jimaku' | 'setup'
 
 export interface DomainState<T> {
   status: LoadState
@@ -52,6 +54,7 @@ export interface OptionsDomainData {
   anki: AnkiData
   knowledge: KnowledgeData
   translation: PublicTranslationSettings
+  jimaku: JimakuSettingsStatus
   setup: SetupData
 }
 
@@ -77,6 +80,9 @@ export interface OptionsDataBridge {
   }
   translate: {
     getSettings(): Promise<PublicTranslationSettings>
+  }
+  jimaku: {
+    getStatus(): Promise<JimakuSettingsStatus>
   }
   integration: {
     binaryStatus(): Promise<BundledBinaryStatus>
@@ -139,6 +145,9 @@ export const optionsDataBridge: OptionsDataBridge = {
   translate: {
     getSettings: () => window.kizuna.translate.getSettings()
   },
+  jimaku: {
+    getStatus: () => window.kizuna.jimaku.getStatus()
+  },
   integration: {
     binaryStatus: () => window.kizuna.integration.binaryStatus()
   }
@@ -166,9 +175,9 @@ interface FetchOutcome {
 /**
  * Owns the Options dialog's optional-integration data (MeCab/Yomitan
  * dictionaries, Anki connection + deck/model/field lists, knowledge sync
- * settings/status) behind a small per-domain cache, so opening a tab that
- * was already loaded is instant and a failing domain (e.g. Anki not running)
- * can't block the others from loading.
+ * settings/status, and Jimaku credential status) behind a small per-domain
+ * cache, so opening a tab that was already loaded is instant and a failing
+ * domain (e.g. Anki not running) can't block the others from loading.
  */
 export function createOptionsDataController(bridge: OptionsDataBridge): OptionsDataController {
   // Untyped-by-domain internally (TS can't correlate a mapped type's value
@@ -180,6 +189,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
     anki: idleState(),
     knowledge: idleState(),
     translation: idleState(),
+    jimaku: idleState(),
     setup: idleState()
   }
   const inFlight: Partial<Record<OptionsDomain, Promise<void>>> = {}
@@ -196,6 +206,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
   // first pick's field list has loaded) discards its own result instead of
   // clobbering the newer attempt's fields.
   let ankiRequestSeq = 0
+  let jimakuRequestSeq = 0
 
   const fetchers: Record<
     OptionsDomain,
@@ -288,6 +299,16 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
       return { data: { settings, syncStatus } }
     },
     translation: async () => ({ data: await bridge.translate.getSettings() }),
+    jimaku: async () => {
+      const seq = ++jimakuRequestSeq
+      try {
+        const status = await bridge.jimaku.getStatus()
+        return seq === jimakuRequestSeq ? { data: status } : STALE
+      } catch (error: unknown) {
+        if (seq !== jimakuRequestSeq) return STALE
+        throw error
+      }
+    },
     // A down Anki is the *normal* answer this tab exists to report, not a
     // failure of the load: the ping's rejection is folded into an `ok: false`
     // reading so the binary statuses still render and the tab never shows an

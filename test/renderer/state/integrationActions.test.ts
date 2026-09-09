@@ -10,6 +10,9 @@ import {
   removeYomitanDict,
   saveWanikaniToken,
   saveAzureTranslationSettings,
+  saveJimakuApiKey,
+  clearJimakuApiKey,
+  testJimakuConnection,
   changeAnkiSettings,
   changeKnowledgeSettings,
   shouldResyncAnkiForKnowledgePatch,
@@ -33,7 +36,7 @@ describe('domainsForCategory / loadCategoryDomains', () => {
   })
 
   it('loads translation settings for Subtitles', () => {
-    expect(domainsForCategory('subtitles')).toEqual(['translation'])
+    expect(domainsForCategory('subtitles')).toEqual(['translation', 'jimaku'])
   })
 
   it('loads only dictionaries for the Parser & Dictionaries category', () => {
@@ -177,6 +180,48 @@ describe('wanikani/anki/knowledge settings actions', () => {
       azureRegion: 'westeurope'
     })
     expect(optionsData.load).toHaveBeenCalledWith('translation', { force: true })
+  })
+
+  it('saves Jimaku settings then force-refreshes their status', async () => {
+    const optionsData = fakeOptionsData()
+    const status = {
+      configured: true,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'notTested' as const }
+    }
+    const jimaku = { setApiKey: vi.fn().mockResolvedValue(status) }
+
+    await expect(saveJimakuApiKey(jimaku, optionsData, 'key123')).resolves.toEqual(status)
+    expect(jimaku.setApiKey).toHaveBeenCalledWith('key123')
+    expect(optionsData.load).toHaveBeenCalledWith('jimaku', { force: true })
+  })
+
+  it('clears Jimaku settings then force-refreshes their status', async () => {
+    const optionsData = fakeOptionsData()
+    const status = {
+      configured: false,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'notTested' as const }
+    }
+    const jimaku = { clearApiKey: vi.fn().mockResolvedValue(status) }
+
+    await expect(clearJimakuApiKey(jimaku, optionsData)).resolves.toEqual(status)
+    expect(jimaku.clearApiKey).toHaveBeenCalledOnce()
+    expect(optionsData.load).toHaveBeenCalledWith('jimaku', { force: true })
+  })
+
+  it('tests Jimaku then force-refreshes their status', async () => {
+    const optionsData = fakeOptionsData()
+    const status = {
+      configured: true,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'connected' as const }
+    }
+    const jimaku = { testConnection: vi.fn().mockResolvedValue(status) }
+
+    await expect(testJimakuConnection(jimaku, optionsData)).resolves.toEqual(status)
+    expect(jimaku.testConnection).toHaveBeenCalledOnce()
+    expect(optionsData.load).toHaveBeenCalledWith('jimaku', { force: true })
   })
 
   it('does not refresh translation after a rejected save', async () => {

@@ -6,6 +6,7 @@ import {
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { SyncStatus } from '@src/shared/knowledge'
 import type { PublicTranslationSettings } from '@src/shared/translation'
+import type { JimakuSettingsStatus } from '@src/shared/jimaku'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 function deferred<T>(): {
@@ -64,6 +65,14 @@ function fakeBridge(overrides: BridgeOverrides = {}): OptionsDataBridge {
         azureRegion: ''
       } satisfies PublicTranslationSettings),
       ...overrides.translate
+    },
+    jimaku: {
+      getStatus: vi.fn().mockResolvedValue({
+        configured: false,
+        secretStorageAvailable: true,
+        testOutcome: { status: 'notTested' }
+      } satisfies JimakuSettingsStatus),
+      ...overrides.jimaku
     },
     integration: {
       binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true }),
@@ -175,6 +184,55 @@ describe('createOptionsDataController', () => {
       status: 'ready',
       data: { hasAzureKey: true, azureRegion: 'westeurope', encryptionAvailable: true },
       error: undefined
+    })
+  })
+
+  it('loads and caches Jimaku status without exposing a key', async () => {
+    const getStatus = vi.fn().mockResolvedValue({
+      configured: true,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'notTested' }
+    } satisfies JimakuSettingsStatus)
+    const bridge = fakeBridge({ jimaku: { getStatus } })
+    const controller = createOptionsDataController(bridge)
+
+    await controller.load('jimaku')
+    await controller.load('jimaku')
+
+    expect(getStatus).toHaveBeenCalledOnce()
+    expect(controller.getState('jimaku')).toMatchObject({
+      status: 'ready',
+      data: { configured: true }
+    })
+  })
+
+  it('does not let an older forced Jimaku status load replace a newer one', async () => {
+    const first = deferred<JimakuSettingsStatus>()
+    const second = deferred<JimakuSettingsStatus>()
+    const getStatus = vi
+      .fn()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+    const bridge = fakeBridge({ jimaku: { getStatus } })
+    const controller = createOptionsDataController(bridge)
+
+    const oldLoad = controller.load('jimaku')
+    const newLoad = controller.load('jimaku', { force: true })
+    second.resolve({
+      configured: true,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'connected' }
+    })
+    first.resolve({
+      configured: false,
+      secretStorageAvailable: true,
+      testOutcome: { status: 'notTested' }
+    })
+    await Promise.all([oldLoad, newLoad])
+
+    expect(controller.getState('jimaku').data).toMatchObject({
+      configured: true,
+      testOutcome: { status: 'connected' }
     })
   })
 

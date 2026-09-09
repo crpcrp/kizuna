@@ -80,23 +80,25 @@ describe('createAppInfoService', () => {
     expect(service.get().version).toBe('1.2.4')
   })
 
-  it('opens only the three approved external destinations', async () => {
+  it('opens only the approved external destinations', async () => {
     const openExternal = vi.fn(async (_url: string) => undefined)
     const service = createAppInfoService(serviceDeps({ openExternal }))
 
     await service.openLink('repository')
     await service.openLink('license')
     await service.openLink('issues')
+    await service.openLink('jimakuAccount')
 
     expect(openExternal.mock.calls.map(([url]) => url)).toEqual([
       APP_INFO_LINKS.repository,
       APP_INFO_LINKS.license,
-      APP_INFO_LINKS.issues
+      APP_INFO_LINKS.issues,
+      APP_INFO_LINKS.jimakuAccount
     ])
     await expect(service.openLink('https://evil.example')).rejects.toThrow(
       'Unsupported About-dialog link.'
     )
-    expect(openExternal).toHaveBeenCalledTimes(3)
+    expect(openExternal).toHaveBeenCalledTimes(4)
   })
 
   it('reports an absent notice bundle without invoking the shell', async () => {

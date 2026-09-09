@@ -11,6 +11,7 @@ import type {
   PublicTranslationSettings,
   TranslationSettingsPatch
 } from '../../../shared/translation'
+import type { JimakuSettingsStatus } from '../../../shared/jimaku'
 import {
   invalidateTokenizationForDictionaryChange,
   type TokenizationInvalidationArgs
@@ -18,8 +19,8 @@ import {
 import { syncAndRefreshKnowledge, type SyncAndRefreshKnowledgeArgs } from './knowledgeActions'
 
 /** Which options-data domain(s) a category needs loaded when it's shown.
- * Keybindings/playback need none. Subtitles loads its local translation
- * settings. Known Words also loads the
+ * Keybindings/playback need none. Subtitles loads its local translation and
+ * Jimaku settings. Known Words also loads the
  * (cached, unforced) Anki domain for its deck checkboxes and field select. */
 export function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
   switch (category) {
@@ -30,7 +31,7 @@ export function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
     case 'knowledge':
       return ['knowledge', 'anki']
     case 'subtitles':
-      return ['translation']
+      return ['translation', 'jimaku']
     // The read-only status page reports on all three: its own live signals
     // (bundled binaries, AnkiConnect ping), plus the dictionary and WaniKani
     // state the other tabs already load.
@@ -171,6 +172,40 @@ export async function saveAzureTranslationSettings(
 ): Promise<void> {
   await translate.setSettings(patch)
   await optionsData.load('translation', { force: true })
+}
+
+export interface JimakuSettingsBridge {
+  setApiKey(value: string): Promise<JimakuSettingsStatus>
+  clearApiKey(): Promise<JimakuSettingsStatus>
+  testConnection(): Promise<JimakuSettingsStatus>
+}
+
+export async function saveJimakuApiKey(
+  jimaku: Pick<JimakuSettingsBridge, 'setApiKey'>,
+  optionsData: OptionsDataController,
+  value: string
+): Promise<JimakuSettingsStatus> {
+  const status = await jimaku.setApiKey(value)
+  await optionsData.load('jimaku', { force: true })
+  return status
+}
+
+export async function clearJimakuApiKey(
+  jimaku: Pick<JimakuSettingsBridge, 'clearApiKey'>,
+  optionsData: OptionsDataController
+): Promise<JimakuSettingsStatus> {
+  const status = await jimaku.clearApiKey()
+  await optionsData.load('jimaku', { force: true })
+  return status
+}
+
+export async function testJimakuConnection(
+  jimaku: Pick<JimakuSettingsBridge, 'testConnection'>,
+  optionsData: OptionsDataController
+): Promise<JimakuSettingsStatus> {
+  const status = await jimaku.testConnection()
+  await optionsData.load('jimaku', { force: true })
+  return status
 }
 
 export interface AnkiSettingsBridge {
