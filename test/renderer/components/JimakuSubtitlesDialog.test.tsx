@@ -7,7 +7,8 @@ import JimakuSubtitlesDialog, {
 import type {
   JimakuArchiveMembersResult,
   JimakuEntry,
-  JimakuFileCandidate
+  JimakuFileCandidate,
+  JimakuFolderHint
 } from '@src/shared/jimaku'
 import type { JimakuControllerState } from '@src/renderer/src/state/jimakuController'
 
@@ -21,6 +22,14 @@ const identity: NonNullable<JimakuControllerState['identity']> = {
   releaseGroup: 'Group',
   source: 'WEB-DL',
   unknowns: []
+}
+
+const rememberedTitle: JimakuFolderHint = {
+  entryId: 1,
+  name: 'Show',
+  category: 'anime',
+  season: 2,
+  updatedAt: 10
 }
 
 function entry(id: number, name = 'Show', movie = false): JimakuEntry {
@@ -178,6 +187,32 @@ describe('JimakuSubtitlesDialog title stage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(dialog.onRefresh).toHaveBeenCalledOnce()
   })
+
+  it('shows the remembered-title marker and opt-in controls', () => {
+    const onRememberTitleChange = vi.fn()
+    const onClearRememberedTitle = vi.fn()
+    const onChangeTitle = vi.fn()
+    const dialog = props({
+      rememberedTitle,
+      onRememberTitleChange,
+      onClearRememberedTitle,
+      onChangeTitle
+    })
+    render(<JimakuSubtitlesDialog {...dialog} />)
+
+    expect(screen.getByText('Using remembered title')).toBeTruthy()
+    expect(
+      (
+        screen.getByRole('checkbox', {
+          name: 'Remember this title for this folder'
+        }) as HTMLInputElement
+      ).checked
+    ).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Change title' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Clear remembered title' }))
+    expect(onChangeTitle).toHaveBeenCalledOnce()
+    expect(onClearRememberedTitle).toHaveBeenCalledOnce()
+  })
 })
 
 describe('JimakuSubtitlesDialog file and archive stages', () => {
@@ -303,6 +338,26 @@ describe('JimakuSubtitlesDialog states and actions', () => {
     expect(dialog.onRefresh).toHaveBeenCalledOnce()
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(dialog.onClose).toHaveBeenCalledOnce()
+  })
+
+  it('distinguishes an unavailable remembered title from a transient failure', () => {
+    const onClearRememberedTitle = vi.fn()
+    const onChangeTitle = vi.fn()
+    const dialog = props({
+      phase: { kind: 'error', code: 'notFound', recovery: 'files' },
+      rememberedTitle,
+      onClearRememberedTitle,
+      onChangeTitle
+    })
+    render(<JimakuSubtitlesDialog {...dialog} />)
+
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Remembered title is no longer available'
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Search titles' }))
+    expect(onChangeTitle).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear remembered title' })[0])
+    expect(onClearRememberedTitle).toHaveBeenCalledOnce()
   })
 
   it('disables episode filtering for a movie and keeps local fallback delegated', () => {

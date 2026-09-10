@@ -5,6 +5,8 @@ import type {
   JimakuArchiveMembersResult,
   JimakuEntry,
   JimakuFileCandidate,
+  JimakuFolderHint,
+  JimakuFolderHintInput,
   JimakuPreparedSubtitleResult,
   JimakuSearchCategory,
   JimakuServiceErrorCode,
@@ -24,6 +26,9 @@ import { useLatestCallback, useLatestRef } from './useLatestRef'
 type JimakuApi = Pick<
   KizunaApi['jimaku'],
   | 'getStatus'
+  | 'getFolderHint'
+  | 'setFolderHint'
+  | 'clearFolderHint'
   | 'beginSession'
   | 'searchTitles'
   | 'listFiles'
@@ -103,6 +108,7 @@ export interface JimakuControllerState {
   entries: JimakuEntry[]
   shownEntries: JimakuEntry[]
   selectedEntry?: JimakuEntry
+  rememberedTitle?: JimakuFolderHint
   /** Complete file results for the selected entry. */
   files: JimakuFileCandidate[]
   shownFiles: JimakuFileCandidate[]
@@ -125,6 +131,9 @@ export interface JimakuController {
   getState(): JimakuControllerState
   subscribe(listener: () => void): () => void
   open(): Promise<void>
+  rememberTitle(remember: boolean): Promise<void>
+  clearRememberedTitle(): Promise<void>
+  changeTitle(): void
   editIdentity(patch: JimakuIdentityPatch): void
   editEpisode(value: JimakuEpisodeEdit): void
   search(): Promise<void>
@@ -146,6 +155,9 @@ export interface JimakuController {
 export interface UseJimakuControllerResult extends JimakuControllerState {
   controller: JimakuController
   open(): Promise<void>
+  rememberTitle(remember: boolean): Promise<void>
+  clearRememberedTitle(): Promise<void>
+  changeTitle(): void
   editIdentity(patch: JimakuIdentityPatch): void
   editEpisode(value: JimakuEpisodeEdit): void
   search(): Promise<void>
@@ -167,6 +179,7 @@ const INITIAL_STATE: JimakuControllerState = {
   category: 'all',
   entries: [],
   shownEntries: [],
+  rememberedTitle: undefined,
   files: [],
   shownFiles: [],
   showingMoreFiles: false,
@@ -319,6 +332,31 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
 
   const copyEntries = (entries: readonly JimakuEntry[]): JimakuEntry[] =>
     entries.map((entry) => ({ ...entry, flags: { ...entry.flags } }))
+
+  const copyFolderHint = (hint: JimakuFolderHint): JimakuFolderHint => ({ ...hint })
+
+  const entryFromFolderHint = (hint: JimakuFolderHint): JimakuEntry => ({
+    id: hint.entryId,
+    name: hint.name,
+    ...(hint.englishName ? { englishName: hint.englishName } : {}),
+    ...(hint.japaneseName ? { japaneseName: hint.japaneseName } : {}),
+    flags: {
+      anime: hint.category === 'anime',
+      movie: false,
+      external: false,
+      unverified: false,
+      adult: false
+    }
+  })
+
+  const identityFromFolderHint = (
+    identity: JimakuVideoIdentity,
+    hint: JimakuFolderHint
+  ): JimakuVideoIdentity => ({
+    ...identity,
+    titleQuery: hint.name,
+    unknowns: identity.unknowns.filter((unknown) => unknown.field !== 'title')
+  })
 
   const copyFiles = (files: readonly JimakuFileCandidate[]): JimakuFileCandidate[] =>
     files.map((file) => ({ ...file, reasons: [...file.reasons] }))
@@ -518,6 +556,7 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
         entries: [],
         shownEntries: [],
         selectedEntry: undefined,
+        rememberedTitle: undefined,
         files: [],
         shownFiles: [],
         selectedFile: undefined,
@@ -532,7 +571,7 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
       return
     }
 
-    if (episodeChanged && state.selectedEntry) {
+    if (episodeChanged && state.selectedEntry && (state.files.length > 0 || state.archive)) {
       const files = rerankFiles(state.selectedEntry, identity, state.files)
       const archive = state.archive
         ? rerankArchive(state.archive, state.selectedEntry, identity)
@@ -558,6 +597,102 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
     })
   }
 
+  const resetTitleChoice = (): void => {
+    cancelPending()
+    ++operationId
+    cancelState = undefined
+    set({
+      ...state,
+      phase: { kind: 'choosingTitle' },
+      entries: [],
+      shownEntries: [],
+      selectedEntry: undefined,
+      rememberedTitle: undefined,
+      files: [],
+      shownFiles: [],
+      selectedFile: undefined,
+      archive: undefined,
+      selectedMember: undefined,
+      showingMoreFiles: false,
+      showingAllFiles: false,
+      partial: false,
+      failedCategories: [],
+      notice: undefined
+    })
+  }
+
+  const rememberTitle = async (remember: boolean): Promise<void> => {
+    const path = state.mediaPath
+    const generation = state.mediaGeneration
+    const entry = state.selectedEntry
+    const identity = state.identity
+    if (!path || generation === undefined || !entry || !identity) return
+
+    if (!remember) {
+      const existing = state.rememberedTitle
+      if (!existing) return
+      try {
+        await getDeps().jimaku.clearFolderHint(path, existing.season)
+      } catch {
+        return
+      }
+      if (
+        state.mediaPath === path &&
+        state.mediaGeneration === generation &&
+        state.selectedEntry?.id === entry.id
+      )
+        set({ ...state, rememberedTitle: undefined })
+      return
+    }
+
+    const input: JimakuFolderHintInput = {
+      entryId: entry.id,
+      name: entry.name,
+      ...(entry.englishName ? { englishName: entry.englishName } : {}),
+      ...(entry.japaneseName ? { japaneseName: entry.japaneseName } : {}),
+      category: entry.flags.anime ? 'anime' : 'liveAction',
+      ...(identity.season === undefined ? {} : { season: identity.season })
+    }
+    let saved: JimakuFolderHint
+    try {
+      saved = await getDeps().jimaku.setFolderHint(path, input)
+    } catch {
+      return
+    }
+    if (
+      state.phase.kind !== 'idle' &&
+      state.mediaPath === path &&
+      state.mediaGeneration === generation &&
+      state.selectedEntry?.id === entry.id
+    )
+      set({ ...state, rememberedTitle: copyFolderHint(saved) })
+  }
+
+  const clearRememberedTitle = async (): Promise<void> => {
+    const path = state.mediaPath
+    const generation = state.mediaGeneration
+    const existing = state.rememberedTitle
+    if (!path || generation === undefined || !existing) return
+    try {
+      await getDeps().jimaku.clearFolderHint(path, existing.season)
+    } catch {
+      return
+    }
+    if (
+      state.phase.kind === 'idle' ||
+      state.mediaPath !== path ||
+      state.mediaGeneration !== generation ||
+      state.rememberedTitle?.entryId !== existing.entryId
+    )
+      return
+    resetTitleChoice()
+  }
+
+  const changeTitle = (): void => {
+    if (!sessionId || state.phase.kind === 'idle' || !state.identity) return
+    resetTitleChoice()
+  }
+
   const searchTitles = async (refresh: boolean): Promise<void> => {
     if (
       !state.identity ||
@@ -575,6 +710,7 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
     const restore = { ...state, phase: { kind: 'choosingTitle' } as const, notice: undefined }
     const operation = startOperation({ kind: 'searchingTitles' }, restore)
     if (!operation) return
+    set({ ...state, rememberedTitle: undefined })
     let result: Awaited<ReturnType<JimakuApi['searchTitles']>>
     try {
       const request: JimakuTitleSearchRequest = {
@@ -972,13 +1108,33 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
       }
       knownVersionIds = new Set(activeVersionId ? [activeVersionId] : [])
       previousSelection = undefined
+      let rememberedTitle: JimakuFolderHint | undefined
+      try {
+        rememberedTitle = await getDeps().jimaku.getFolderHint(path, identity.season)
+      } catch {
+        rememberedTitle = undefined
+      }
+      if (!operationMatches(operation)) return
+      const rememberedEntry = rememberedTitle ? entryFromFolderHint(rememberedTitle) : undefined
+      const activeIdentity = rememberedTitle
+        ? identityFromFolderHint(identity, rememberedTitle)
+        : identity
       set({
         ...state,
         phase: { kind: 'choosingTitle' },
+        identity: activeIdentity,
+        category: rememberedTitle?.category ?? 'all',
+        entries: rememberedEntry ? [rememberedEntry] : [],
+        shownEntries: rememberedEntry ? [rememberedEntry] : [],
+        selectedEntry: rememberedEntry,
+        rememberedTitle: rememberedTitle ? copyFolderHint(rememberedTitle) : undefined,
         currentVersionId: activeVersionId,
         triedVersionIds: triedVersions(activeVersionId)
       })
     },
+    rememberTitle,
+    clearRememberedTitle,
+    changeTitle,
     editIdentity(patch): void {
       editTitleAndCategory(patch)
     },
@@ -997,6 +1153,8 @@ export function createJimakuController(source: ControllerDepsSource): JimakuCont
         ...state,
         phase: { kind: 'loadingFiles' },
         selectedEntry: entry,
+        rememberedTitle:
+          state.rememberedTitle?.entryId === entry.id ? state.rememberedTitle : undefined,
         files: [],
         shownFiles: [],
         selectedFile: undefined,
@@ -1239,6 +1397,9 @@ export function useJimakuController(input: JimakuControllerDeps): UseJimakuContr
     ...state,
     controller,
     open: useLatestCallback(() => controller.open()),
+    rememberTitle: useLatestCallback((remember: boolean) => controller.rememberTitle(remember)),
+    clearRememberedTitle: useLatestCallback(() => controller.clearRememberedTitle()),
+    changeTitle: useLatestCallback(() => controller.changeTitle()),
     editIdentity: useLatestCallback((patch: JimakuIdentityPatch) => controller.editIdentity(patch)),
     editEpisode: useLatestCallback((value: JimakuEpisodeEdit) => controller.editEpisode(value)),
     search: useLatestCallback(() => controller.search()),

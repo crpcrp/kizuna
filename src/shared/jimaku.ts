@@ -21,6 +21,23 @@ export interface JimakuEntry {
   tmdbId?: string
 }
 
+export const MAX_JIMAKU_FOLDER_HINTS = 100
+
+export type JimakuFolderHintCategory = 'anime' | 'liveAction'
+
+/** A user-confirmed title hint scoped to one media folder. */
+export interface JimakuFolderHint {
+  entryId: number
+  name: string
+  englishName?: string
+  japaneseName?: string
+  category: JimakuFolderHintCategory
+  season?: number
+  updatedAt: number
+}
+
+export type JimakuFolderHintInput = Omit<JimakuFolderHint, 'updatedAt'>
+
 /** A file listed by Jimaku without its main-process-only download URL. */
 export interface JimakuFile {
   name: string

@@ -15,7 +15,11 @@ import type {
 } from '@src/shared/mediaHistory'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import type { PublicTranslationSettings, TranslationSettingsPatch } from '@src/shared/translation'
-import type { JimakuSettingsStatus } from '@src/shared/jimaku'
+import type {
+  JimakuFolderHint,
+  JimakuFolderHintInput,
+  JimakuSettingsStatus
+} from '@src/shared/jimaku'
 
 // Compile-time contract checks: these guard against `window.kizuna` and the
 // preload `satisfies KizunaApi` implementation silently diverging in
@@ -119,7 +123,7 @@ describe('KizunaApi', () => {
     >()
   })
 
-  it('jimaku exposes only typed credential status operations', () => {
+  it('jimaku exposes typed settings and folder hint operations', () => {
     expectTypeOf<KizunaApi['jimaku']['getStatus']>().returns.toEqualTypeOf<
       Promise<JimakuSettingsStatus>
     >()
@@ -131,6 +135,16 @@ describe('KizunaApi', () => {
     expectTypeOf<KizunaApi['jimaku']['testConnection']>().returns.toEqualTypeOf<
       Promise<JimakuSettingsStatus>
     >()
+    expectTypeOf<KizunaApi['jimaku']['getFolderHint']>().returns.toEqualTypeOf<
+      Promise<JimakuFolderHint | undefined>
+    >()
+    expectTypeOf<KizunaApi['jimaku']['setFolderHint']>().parameters.toEqualTypeOf<
+      [string, JimakuFolderHintInput]
+    >()
+    expectTypeOf<KizunaApi['jimaku']['setFolderHint']>().returns.toEqualTypeOf<
+      Promise<JimakuFolderHint>
+    >()
+    expectTypeOf<KizunaApi['jimaku']['clearFolderHint']>().returns.toEqualTypeOf<Promise<void>>()
   })
 
   it('playerSettings round-trips the shared PlayerSettings type', () => {

@@ -9,6 +9,7 @@ import {
 import type {
   JimakuEntry,
   JimakuFileCandidate,
+  JimakuFolderHint,
   JimakuPreparedSubtitleResult,
   JimakuServiceResult
 } from '@src/shared/jimaku'
@@ -19,6 +20,9 @@ import type { SubtitleSelectionSnapshot } from '@src/renderer/src/state/trackSel
 type FakeJimaku = Pick<
   KizunaApi['jimaku'],
   | 'getStatus'
+  | 'getFolderHint'
+  | 'setFolderHint'
+  | 'clearFolderHint'
   | 'beginSession'
   | 'searchTitles'
   | 'listFiles'
@@ -139,7 +143,8 @@ interface Harness {
 }
 
 function harness(
-  initialSelection: StoredSubtitleSelection = { mode: 'track', track: { id: 7 } }
+  initialSelection: StoredSubtitleSelection = { mode: 'track', track: { id: 7 } },
+  rememberedTitle?: JimakuFolderHint
 ): Harness {
   let currentMedia = { filePath: mediaPath as string | undefined, loadGeneration: 1 }
   let current = { selection: initialSelection, offsetMs: 125 }
@@ -150,6 +155,12 @@ function harness(
       secretStorageAvailable: true,
       testOutcome: { status: 'connected' }
     }),
+    getFolderHint: vi.fn().mockResolvedValue(rememberedTitle),
+    setFolderHint: vi.fn(async (_path, hint): Promise<JimakuFolderHint> => ({
+      ...hint,
+      updatedAt: 10
+    })),
+    clearFolderHint: vi.fn().mockResolvedValue(undefined),
     beginSession: vi
       .fn()
       .mockImplementation(async (_path: string, mediaGeneration: number) =>
@@ -234,6 +245,84 @@ describe('createJimakuController', () => {
     })
     expect(h.api.searchTitles).not.toHaveBeenCalled()
     expect(h.api.prepareFile).not.toHaveBeenCalled()
+  })
+
+  it('prefills a remembered title while waiting for explicit title confirmation', async () => {
+    const remembered: JimakuFolderHint = {
+      entryId: 9,
+      name: 'Confirmed Show',
+      japaneseName: '確認番組',
+      category: 'anime',
+      season: 2,
+      updatedAt: 10
+    }
+    const h = harness({ mode: 'track', track: { id: 7 } }, remembered)
+    h.setMedia('/media/Show S02E07.mkv', 2)
+
+    await h.controller.open()
+
+    expect(h.api.getFolderHint).toHaveBeenCalledWith('/media/Show S02E07.mkv', 2)
+    expect(h.controller.getState()).toMatchObject({
+      phase: { kind: 'choosingTitle' },
+      identity: { titleQuery: 'Confirmed Show', season: 2, episode: 7 },
+      category: 'anime',
+      selectedEntry: { id: 9, name: 'Confirmed Show' },
+      rememberedTitle: remembered
+    })
+    expect(h.api.searchTitles).not.toHaveBeenCalled()
+    expect(h.api.listFiles).not.toHaveBeenCalled()
+
+    h.controller.editEpisode(8)
+    expect(h.controller.getState()).toMatchObject({
+      phase: { kind: 'choosingTitle' },
+      identity: { episode: 8 }
+    })
+
+    await h.controller.chooseTitle(9)
+    expect(h.api.listFiles).toHaveBeenCalledWith('session-1', 9, false)
+  })
+
+  it('saves only an explicit title choice and clears that hint without an episode', async () => {
+    const h = harness()
+    await openAndLoadFiles(h)
+
+    await h.controller.rememberTitle(true)
+    expect(h.api.setFolderHint).toHaveBeenCalledWith(mediaPath, {
+      entryId: 1,
+      name: 'Show',
+      category: 'anime'
+    })
+    expect(vi.mocked(h.api.setFolderHint).mock.calls[0]?.[1]).not.toHaveProperty('episode')
+    expect(h.controller.getState().rememberedTitle).toMatchObject({ entryId: 1 })
+
+    await h.controller.rememberTitle(false)
+    expect(h.api.clearFolderHint).toHaveBeenCalledWith(mediaPath, undefined)
+    expect(h.controller.getState().rememberedTitle).toBeUndefined()
+  })
+
+  it('keeps a remembered title on a missing entry but leaves transient failures ordinary', async () => {
+    const remembered: JimakuFolderHint = {
+      entryId: 9,
+      name: 'Confirmed Show',
+      category: 'anime',
+      updatedAt: 10
+    }
+    const h = harness({ mode: 'track', track: { id: 7 } }, remembered)
+    await h.controller.open()
+    vi.mocked(h.api.listFiles).mockResolvedValueOnce(failure('notFound'))
+
+    await h.controller.chooseTitle(9)
+    expect(h.controller.getState()).toMatchObject({
+      phase: { kind: 'error', code: 'notFound', recovery: 'files' },
+      rememberedTitle: remembered
+    })
+
+    h.controller.changeTitle()
+    expect(h.controller.getState()).toMatchObject({
+      phase: { kind: 'choosingTitle' },
+      rememberedTitle: undefined
+    })
+    expect(h.api.clearFolderHint).not.toHaveBeenCalled()
   })
 
   it('waits for setup and permits reopening after the key is configured', async () => {

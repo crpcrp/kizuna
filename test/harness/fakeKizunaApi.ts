@@ -9,6 +9,7 @@ import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
 import type {
+  JimakuFolderHint,
   JimakuFileListResult,
   JimakuPrepareResult,
   JimakuPreparedSubtitleResult,
@@ -267,6 +268,12 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       setApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       clearApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       testConnection: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
+      getFolderHint: vi.fn(async (): Promise<JimakuFolderHint | undefined> => undefined),
+      setFolderHint: vi.fn(async (_mediaPath, hint): Promise<JimakuFolderHint> => ({
+        ...hint,
+        updatedAt: 0
+      })),
+      clearFolderHint: vi.fn(async () => undefined),
       beginSession: vi.fn(async (): Promise<JimakuServiceResult<JimakuSession>> => ({
         ok: false,
         error: { code: 'invalidSession' }

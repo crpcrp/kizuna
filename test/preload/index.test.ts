@@ -410,6 +410,44 @@ describe('preload Jimaku session contract', () => {
   })
 })
 
+describe('preload Jimaku folder hint contract', () => {
+  beforeEach(() => {
+    electron.invoke.mockReset()
+  })
+
+  it('forwards local folder hint settings without a session', () => {
+    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+      jimaku: {
+        getFolderHint(path: string, season?: number): Promise<unknown>
+        setFolderHint(path: string, hint: unknown): Promise<unknown>
+        clearFolderHint(path: string, season?: number): Promise<unknown>
+      }
+    }
+
+    api.jimaku.getFolderHint('/media/episode.mkv', 2)
+    api.jimaku.setFolderHint('/media/episode.mkv', {
+      entryId: 42,
+      name: 'Show',
+      category: 'anime'
+    })
+    api.jimaku.clearFolderHint('/media/episode.mkv', 2)
+
+    expect(electron.invoke.mock.calls).toEqual([
+      [JIMAKU_CHANNELS.getFolderHint, '/media/episode.mkv', 2],
+      [
+        JIMAKU_CHANNELS.setFolderHint,
+        '/media/episode.mkv',
+        {
+          entryId: 42,
+          name: 'Show',
+          category: 'anime'
+        }
+      ],
+      [JIMAKU_CHANNELS.clearFolderHint, '/media/episode.mkv', 2]
+    ])
+  })
+})
+
 describe('preload media contract', () => {
   beforeEach(() => {
     electron.invoke.mockReset()

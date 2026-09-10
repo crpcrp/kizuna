@@ -697,6 +697,9 @@ export default function App({
         onRevert={jimaku.revert}
         onRefresh={jimaku.refresh}
         onOpenSourcePage={jimaku.openSourcePage}
+        onRememberTitleChange={jimaku.rememberTitle}
+        onClearRememberedTitle={jimaku.clearRememberedTitle}
+        onChangeTitle={jimaku.changeTitle}
         onOpenSettings={openJimakuSettings}
         subtitleOffsetMs={state.subtitleOffsetMs}
         onChangeSubtitleOffset={playbackWindow.subtitleMenu.onChangeSubtitleOffset}

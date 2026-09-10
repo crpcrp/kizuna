@@ -82,6 +82,8 @@ import type {
   JimakuPreparedSubtitleResult,
   JimakuSession,
   JimakuServiceResult,
+  JimakuFolderHint,
+  JimakuFolderHintInput,
   JimakuSettingsStatus,
   JimakuTitleSearchRequest,
   JimakuTitleSearchResult
@@ -433,6 +435,12 @@ const api = {
       ipcRenderer.invoke(JIMAKU_CHANNELS.clearApiKey),
     testConnection: (): Promise<JimakuSettingsStatus> =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection),
+    getFolderHint: (mediaPath: string, season?: number): Promise<JimakuFolderHint | undefined> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.getFolderHint, mediaPath, season),
+    setFolderHint: (mediaPath: string, hint: JimakuFolderHintInput): Promise<JimakuFolderHint> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.setFolderHint, mediaPath, hint),
+    clearFolderHint: (mediaPath: string, season?: number): Promise<void> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.clearFolderHint, mediaPath, season),
     beginSession: (
       mediaPath: string,
       mediaGeneration: number
