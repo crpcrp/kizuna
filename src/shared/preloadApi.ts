@@ -69,6 +69,8 @@ import type {
   JimakuPreparedSubtitleResult,
   JimakuSession,
   JimakuServiceResult,
+  JimakuFolderHint,
+  JimakuFolderHintInput,
   JimakuSettingsStatus,
   JimakuTitleSearchRequest,
   JimakuTitleSearchResult
@@ -312,6 +314,9 @@ export interface KizunaApi {
     setApiKey(value: string): Promise<JimakuSettingsStatus>
     clearApiKey(): Promise<JimakuSettingsStatus>
     testConnection(): Promise<JimakuSettingsStatus>
+    getFolderHint(mediaPath: string, season?: number): Promise<JimakuFolderHint | undefined>
+    setFolderHint(mediaPath: string, hint: JimakuFolderHintInput): Promise<JimakuFolderHint>
+    clearFolderHint(mediaPath: string, season?: number): Promise<void>
     beginSession(
       mediaPath: string,
       mediaGeneration: number

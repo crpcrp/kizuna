@@ -35,6 +35,9 @@ export interface JimakuSubtitlesDialogProps extends JimakuControllerState {
   onRevert(): void | Promise<void>
   onRefresh(): void | Promise<void>
   onOpenSourcePage(entryId?: number): void | Promise<void>
+  onRememberTitleChange?(remember: boolean): void | Promise<void>
+  onClearRememberedTitle?(): void | Promise<void>
+  onChangeTitle?(): void
   /** Supplied by the settings entry point; omitted until that slice is wired. */
   onOpenSettings?(): void
   /** Supplied by the subtitle timing controls; omitted until that slice is wired. */
@@ -124,7 +127,8 @@ function categoryLabel(category: JimakuSearchCategory): string {
 
 function errorMessage(
   phase: Extract<JimakuControllerPhase, { kind: 'error' }>,
-  retryAt?: string
+  retryAt?: string,
+  rememberedUnavailable = false
 ): string {
   if (phase.code === 'notConfigured') return 'Jimaku setup is required before searching subtitles.'
   if (phase.code === 'unauthorized') return 'The Jimaku API key is invalid. Update it in Settings.'
@@ -144,6 +148,9 @@ function errorMessage(
     return 'No matching titles. Edit the title or category and search again.'
   }
   if (phase.code === 'notFound' && phase.recovery === 'files') {
+    if (rememberedUnavailable) {
+      return 'Remembered title is no longer available. Search for a title or clear the remembered title.'
+    }
     return 'No usable subtitles were found for this title. Try another title or refresh results.'
   }
   if (phase.code === 'noMedia')
@@ -288,11 +295,17 @@ function IdentityEditor({
 function TitleSummary({
   entry,
   onChangeTitle,
-  onOpenSourcePage
+  onOpenSourcePage,
+  remembered,
+  onRememberTitleChange,
+  onClearRememberedTitle
 }: {
   entry: JimakuEntry
   onChangeTitle: () => void
   onOpenSourcePage: (entryId: number) => void | Promise<void>
+  remembered: boolean
+  onRememberTitleChange?: (remember: boolean) => void | Promise<void>
+  onClearRememberedTitle?: () => void | Promise<void>
 }): React.JSX.Element {
   const entryAliases = aliases(entry)
   return (
@@ -317,10 +330,36 @@ function TitleSummary({
           </dl>
         )}
       </div>
+      <div className="jimaku-title-summary-preferences">
+        {onRememberTitleChange && (
+          <label className="jimaku-remember-title">
+            <input
+              type="checkbox"
+              checked={remembered}
+              onChange={(event) => void onRememberTitleChange(event.target.checked)}
+            />
+            <span>Remember this title for this folder</span>
+          </label>
+        )}
+        {remembered && (
+          <p className="jimaku-remembered-title" role="status">
+            Using remembered title
+          </p>
+        )}
+      </div>
       <div className="jimaku-inline-actions">
         <button type="button" className="jimaku-link-button" onClick={onChangeTitle}>
           Change title
         </button>
+        {remembered && onClearRememberedTitle && (
+          <button
+            type="button"
+            className="jimaku-link-button"
+            onClick={() => void onClearRememberedTitle()}
+          >
+            Clear remembered title
+          </button>
+        )}
         <button
           type="button"
           className="jimaku-link-button"
@@ -837,7 +876,9 @@ function ErrorStage({
   onTryAnother,
   onLoadLocalFile,
   onOpenSourcePage,
-  onFocusTitle
+  onFocusTitle,
+  rememberedTitle,
+  onClearRememberedTitle
 }: {
   phase: Extract<JimakuControllerPhase, { kind: 'error' }>
   retryAt?: string
@@ -847,11 +888,15 @@ function ErrorStage({
   onLoadLocalFile?: () => void
   onOpenSourcePage: (entryId?: number) => void | Promise<void>
   onFocusTitle: () => void
+  rememberedTitle?: boolean
+  onClearRememberedTitle?: () => void | Promise<void>
 }): React.JSX.Element {
   const retryTitles = phase.recovery === 'titles' && TITLE_RETRY_ERRORS.has(phase.code)
   const retryFiles = phase.recovery === 'files' && FILE_RETRY_ERRORS.has(phase.code)
   const noTitles = phase.code === 'notFound' && phase.recovery === 'titles'
   const settings = phase.code === 'notConfigured' || phase.code === 'unauthorized'
+  const rememberedUnavailable =
+    rememberedTitle === true && phase.code === 'notFound' && phase.recovery === 'files'
   const chooseAnother = phase.recovery === 'files' && !retryFiles
   const localFileRelevant =
     phase.code === 'noMedia' ||
@@ -862,7 +907,7 @@ function ErrorStage({
   return (
     <section className="jimaku-error-stage" aria-label="Jimaku subtitle search error">
       <div className="jimaku-error" role="alert">
-        <p>{errorMessage(phase, retryAt)}</p>
+        <p>{errorMessage(phase, retryAt, rememberedUnavailable)}</p>
       </div>
       <div className="jimaku-dialog-actions">
         {settings && onOpenSettings && (
@@ -874,6 +919,22 @@ function ErrorStage({
           <button type="button" className="jimaku-button jimaku-primary" onClick={onFocusTitle}>
             Edit title or category
           </button>
+        )}
+        {rememberedUnavailable && (
+          <>
+            <button type="button" className="jimaku-button jimaku-primary" onClick={onFocusTitle}>
+              Search titles
+            </button>
+            {onClearRememberedTitle && (
+              <button
+                type="button"
+                className="jimaku-button"
+                onClick={() => void onClearRememberedTitle()}
+              >
+                Clear remembered title
+              </button>
+            )}
+          </>
         )}
         {(retryTitles || retryFiles) && (
           <button
@@ -990,6 +1051,7 @@ export default function JimakuSubtitlesDialog({
   category,
   shownEntries,
   selectedEntry,
+  rememberedTitle,
   files,
   shownFiles,
   showingMoreFiles,
@@ -1017,6 +1079,9 @@ export default function JimakuSubtitlesDialog({
   onRevert,
   onRefresh,
   onOpenSourcePage,
+  onRememberTitleChange,
+  onClearRememberedTitle,
+  onChangeTitle,
   onOpenSettings,
   onAdjustTiming,
   subtitleOffsetMs,
@@ -1028,6 +1093,7 @@ export default function JimakuSubtitlesDialog({
   const busy = BUSY_PHASES.has(phase.kind)
   const movie = selectedEntry?.flags.movie ?? false
   const focusTitle = (): void => {
+    onChangeTitle?.()
     titleInputRef.current?.focus()
     titleInputRef.current?.select()
   }
@@ -1145,6 +1211,8 @@ export default function JimakuSubtitlesDialog({
           onLoadLocalFile={onLoadLocalFile}
           onOpenSourcePage={onOpenSourcePage}
           onFocusTitle={focusTitle}
+          rememberedTitle={rememberedTitle !== undefined}
+          onClearRememberedTitle={onClearRememberedTitle}
         />
       )
       break
@@ -1173,6 +1241,9 @@ export default function JimakuSubtitlesDialog({
             entry={selectedEntry}
             onChangeTitle={focusTitle}
             onOpenSourcePage={onOpenSourcePage}
+            remembered={rememberedTitle !== undefined}
+            onRememberTitleChange={onRememberTitleChange}
+            onClearRememberedTitle={onClearRememberedTitle}
           />
         )}
         {body}

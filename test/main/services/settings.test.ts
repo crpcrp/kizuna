@@ -92,18 +92,68 @@ describe('mergeSettings — Jimaku settings', () => {
     expect(mergeSettings({ jimaku: null }).jimaku).toEqual(defaultJimakuSettings)
     expect(mergeSettings({ jimaku: { apiKeyEnc: 42 } }).jimaku).toEqual(defaultJimakuSettings)
     expect(mergeSettings({ jimaku: { apiKeyEnc: 'encrypted' } }).jimaku).toEqual({
-      apiKeyEnc: 'encrypted'
+      apiKeyEnc: 'encrypted',
+      folderHints: {}
     })
   })
 
   it('preserves the Jimaku block when unrelated settings are updated', () => {
     const io = fakeIo(undefined)
     const store = createSettingsStore(io)
-    store.set({ jimaku: { apiKeyEnc: 'encrypted-key' } })
+    store.set({ jimaku: { ...store.get().jimaku, apiKeyEnc: 'encrypted-key' } })
     store.set({ mecabDictId: 'unidic' })
 
-    expect(createSettingsStore(io).get().jimaku).toEqual({ apiKeyEnc: 'encrypted-key' })
+    expect(createSettingsStore(io).get().jimaku).toEqual({
+      apiKeyEnc: 'encrypted-key',
+      folderHints: {}
+    })
     expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
+  })
+
+  it('normalizes folder hints, drops malformed records, and keeps season keys aligned', () => {
+    const valid = {
+      entryId: 7,
+      name: 'Show',
+      category: 'anime',
+      season: 2,
+      updatedAt: 12
+    }
+    const merged = mergeSettings(
+      {
+        jimaku: {
+          folderHints: {
+            '/media/Show\u00002': valid,
+            '/media/mismatch\u00002': { ...valid, season: 1 },
+            '/media/bad\u0000x': valid,
+            '/media/invalid': { ...valid, entryId: 0 },
+            '/media/too-long': { ...valid, name: 'x'.repeat(513) }
+          }
+        }
+      },
+      { platform: 'posix' }
+    )
+
+    expect(merged.jimaku.folderHints).toEqual({ '/media/Show\u00002': valid })
+  })
+
+  it('prunes folder hints to the 100 most recent entries deterministically', () => {
+    const folderHints: Record<string, unknown> = {}
+    for (let index = 0; index < 102; index++) {
+      const folder = `/media/folder-${String(index).padStart(3, '0')}`
+      folderHints[folder] = {
+        entryId: index + 1,
+        name: `Show ${index}`,
+        category: 'anime',
+        updatedAt: index
+      }
+    }
+
+    const merged = mergeSettings({ jimaku: { folderHints } }, { platform: 'posix' })
+    const keys = Object.keys(merged.jimaku.folderHints)
+    expect(keys).toHaveLength(100)
+    expect(merged.jimaku.folderHints['/media/folder-000']).toBeUndefined()
+    expect(merged.jimaku.folderHints['/media/folder-001']).toBeUndefined()
+    expect(merged.jimaku.folderHints['/media/folder-002']).toMatchObject({ entryId: 3 })
   })
 })
 

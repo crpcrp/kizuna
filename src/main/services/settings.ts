@@ -22,9 +22,16 @@ import {
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
 import {
   normalizeMediaHistory,
+  mediaPathKey,
+  normalizeMediaPath,
   type MediaHistory,
   type PathNormalizationOptions
 } from '../../shared/mediaHistory'
+import {
+  MAX_JIMAKU_FOLDER_HINTS,
+  type JimakuFolderHint,
+  type JimakuFolderHintInput
+} from '../../shared/jimaku'
 import { DEFAULT_KNOWLEDGE_TUNING, type KnowledgeTuning } from '../../shared/knowledge'
 import type { UpdateSettings } from '../../shared/update'
 import {
@@ -32,6 +39,7 @@ import {
   normalizeGameOcrShortcut,
   type GameOcrSettings
 } from '../../shared/gameOcrSettings'
+import { pathApiFor } from '../platformPath'
 
 export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
@@ -44,6 +52,7 @@ export interface TranslationSettings {
 
 export interface JimakuSettings {
   apiKeyEnc: string
+  folderHints: Record<string, JimakuFolderHint>
 }
 
 export interface Settings {
@@ -74,7 +83,8 @@ export const defaultTranslationSettings: TranslationSettings = {
 }
 
 export const defaultJimakuSettings: JimakuSettings = {
-  apiKeyEnc: ''
+  apiKeyEnc: '',
+  folderHints: {}
 }
 
 export const defaultSettings: Settings = {
@@ -95,9 +105,10 @@ export const defaultSettings: Settings = {
  * version or corrupted file) into a valid `Settings`, falling back to
  * `defaultSettings` fields for anything missing or malformed. Never throws.
  *
- * `options` forwards path-normalization rules (platform, cwd) to the media
- * history. It defaults to the runtime platform, which is what production wants;
- * tests pass a platform explicitly so both variants are covered on either host.
+ * `options` forwards path-normalization rules (platform, cwd) to media history
+ * and Jimaku folder hints. It defaults to the runtime platform, which is what
+ * production wants; tests pass a platform explicitly so both variants are
+ * covered on either host.
  */
 export function mergeSettings(raw: unknown, options: PathNormalizationOptions = {}): Settings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
@@ -121,16 +132,170 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     player: mergePlayerSettings(obj.player),
     gameOcr: mergeGameOcrSettings(obj.gameOcr),
     translation: mergeTranslationSettings(obj.translation),
-    jimaku: mergeJimakuSettings(obj.jimaku),
+    jimaku: mergeJimakuSettings(obj.jimaku, options),
     mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
   }
 }
 
-function mergeJimakuSettings(raw: unknown): JimakuSettings {
+function mergeJimakuSettings(raw: unknown, options: PathNormalizationOptions): JimakuSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   return {
-    apiKeyEnc: typeof obj.apiKeyEnc === 'string' ? obj.apiKeyEnc : defaultJimakuSettings.apiKeyEnc
+    apiKeyEnc: typeof obj.apiKeyEnc === 'string' ? obj.apiKeyEnc : defaultJimakuSettings.apiKeyEnc,
+    folderHints: normalizeJimakuFolderHints(obj.folderHints, options)
   }
+}
+
+const JIMAKU_FOLDER_HINT_KEY_SEPARATOR = '\u0000'
+const JIMAKU_FOLDER_HINT_MAX_STRING_LENGTH = 512
+const JIMAKU_FOLDER_HINT_MAX_SEASON = 999
+const JIMAKU_FOLDER_HINT_MAX_TIMESTAMP = 8_640_000_000_000_000
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u
+
+/** Returns the canonical key for the media file's immediate parent folder. */
+export function jimakuFolderHintKey(
+  mediaPath: unknown,
+  season: number | undefined,
+  options: PathNormalizationOptions = {}
+): string | undefined {
+  if (!isJimakuSeason(season)) return undefined
+  const normalizedPath = normalizeMediaPath(mediaPath, options)
+  if (!normalizedPath) return undefined
+  const platform =
+    options.platform === 'win32'
+      ? 'win32'
+      : options.platform === 'posix'
+        ? 'linux'
+        : process.platform
+  const folderKey = mediaPathKey(pathApiFor(platform).dirname(normalizedPath), options)
+  if (!folderKey) return undefined
+  return season === undefined
+    ? folderKey
+    : `${folderKey}${JIMAKU_FOLDER_HINT_KEY_SEPARATOR}${season}`
+}
+
+/** Normalizes persisted folder hints; each malformed record is dropped alone. */
+export function normalizeJimakuFolderHints(
+  raw: unknown,
+  options: PathNormalizationOptions = {}
+): Record<string, JimakuFolderHint> {
+  if (!isRecord(raw)) return {}
+  const hints: Record<string, JimakuFolderHint> = {}
+  for (const [rawKey, value] of Object.entries(raw)) {
+    const key = parseJimakuFolderHintKey(rawKey, options)
+    const hint = normalizeJimakuFolderHint(value)
+    if (!key || !hint || hint.season !== key.season) continue
+    hints[key.key] = hint
+  }
+  return pruneJimakuFolderHints(hints)
+}
+
+export function normalizeJimakuFolderHint(value: unknown): JimakuFolderHint | undefined {
+  if (!isRecord(value)) return undefined
+  if (!isPositiveSafeInteger(value.entryId)) return undefined
+  const name = normalizeJimakuHintString(value.name)
+  if (!name) return undefined
+  const englishName = optionalJimakuHintString(value.englishName)
+  const japaneseName = optionalJimakuHintString(value.japaneseName)
+  if (
+    (value.englishName !== undefined && !englishName) ||
+    (value.japaneseName !== undefined && !japaneseName) ||
+    !isJimakuFolderHintCategory(value.category) ||
+    !isJimakuSeason(value.season) ||
+    !isJimakuTimestamp(value.updatedAt)
+  )
+    return undefined
+
+  return {
+    entryId: value.entryId,
+    name,
+    ...(englishName ? { englishName } : {}),
+    ...(japaneseName ? { japaneseName } : {}),
+    category: value.category,
+    ...(value.season === undefined ? {} : { season: value.season }),
+    updatedAt: value.updatedAt
+  }
+}
+
+function parseJimakuFolderHintKey(
+  rawKey: string,
+  options: PathNormalizationOptions
+): { key: string; season?: number } | undefined {
+  const separator = rawKey.lastIndexOf(JIMAKU_FOLDER_HINT_KEY_SEPARATOR)
+  const folder = separator < 0 ? rawKey : rawKey.slice(0, separator)
+  const seasonText = separator < 0 ? undefined : rawKey.slice(separator + 1)
+  const season =
+    seasonText === undefined
+      ? undefined
+      : /^(?:0|[1-9]\d{0,2})$/u.test(seasonText)
+        ? Number(seasonText)
+        : undefined
+  if (seasonText !== undefined && season === undefined) return undefined
+  const folderKey = mediaPathKey(folder, options)
+  if (!folderKey) return undefined
+  return {
+    key:
+      season === undefined ? folderKey : `${folderKey}${JIMAKU_FOLDER_HINT_KEY_SEPARATOR}${season}`,
+    ...(season === undefined ? {} : { season })
+  }
+}
+
+function pruneJimakuFolderHints(
+  hints: Record<string, JimakuFolderHint>
+): Record<string, JimakuFolderHint> {
+  const result: Record<string, JimakuFolderHint> = {}
+  const recent = Object.entries(hints)
+    .sort(([leftKey, left], [rightKey, right]) => {
+      if (left.updatedAt !== right.updatedAt) return right.updatedAt - left.updatedAt
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0
+    })
+    .slice(0, MAX_JIMAKU_FOLDER_HINTS)
+  for (const [key, hint] of recent) result[key] = hint
+  return result
+}
+
+function normalizeJimakuHintString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  return normalized !== '' &&
+    normalized.length <= JIMAKU_FOLDER_HINT_MAX_STRING_LENGTH &&
+    !CONTROL_CHARACTERS.test(normalized)
+    ? normalized
+    : undefined
+}
+
+function optionalJimakuHintString(value: unknown): string | undefined {
+  return value === undefined ? undefined : normalizeJimakuHintString(value)
+}
+
+function isJimakuFolderHintCategory(value: unknown): value is JimakuFolderHintInput['category'] {
+  return value === 'anime' || value === 'liveAction'
+}
+
+function isJimakuSeason(value: unknown): value is number | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= JIMAKU_FOLDER_HINT_MAX_SEASON)
+  )
+}
+
+function isJimakuTimestamp(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= 0 &&
+    value <= JIMAKU_FOLDER_HINT_MAX_TIMESTAMP
+  )
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function mergeTranslationSettings(raw: unknown): TranslationSettings {
@@ -316,15 +481,18 @@ export interface SettingsStore {
  * construction (so a missing/garbage file never throws); every `set` persists
  * the full merged settings via `io.write(JSON.stringify(...))`.
  */
-export function createSettingsStore(io: SettingsIO): SettingsStore {
-  let current: Settings = mergeSettings(safeParse(io.read()))
+export function createSettingsStore(
+  io: SettingsIO,
+  options: PathNormalizationOptions = {}
+): SettingsStore {
+  let current: Settings = mergeSettings(safeParse(io.read()), options)
 
   return {
     get(): Settings {
       return current
     },
     set(patch: Partial<Settings>): Settings {
-      const next = mergeSettings({ ...current, ...patch })
+      const next = mergeSettings({ ...current, ...patch }, options)
       io.write(JSON.stringify(next))
       current = next
       return next

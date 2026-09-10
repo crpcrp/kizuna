@@ -1,12 +1,20 @@
 import type {
   JimakuError,
   JimakuErrorCode,
+  JimakuFolderHint,
+  JimakuFolderHintInput,
   JimakuSearchRequest,
   JimakuSettingsStatus,
   JimakuTestOutcome
 } from '../../../shared/jimaku'
 import { readSecret, type SecretCodec } from '../secrets'
-import { defaultJimakuSettings, type SettingsStore } from '../settings'
+import {
+  defaultJimakuSettings,
+  jimakuFolderHintKey,
+  normalizeJimakuFolderHint,
+  type SettingsStore
+} from '../settings'
+import type { PathNormalizationOptions } from '../../../shared/mediaHistory'
 import type { JimakuClient } from './client'
 
 export const JIMAKU_MAX_API_KEY_LENGTH = 4096
@@ -14,6 +22,8 @@ export const JIMAKU_MAX_API_KEY_LENGTH = 4096
 export const JIMAKU_CONNECTION_TEST_QUERY = 'Kizuna'
 
 const INVALID_API_KEY = 'Invalid Jimaku API key.'
+const INVALID_MEDIA_PATH = 'Invalid Jimaku media path.'
+const INVALID_FOLDER_HINT = 'Invalid Jimaku folder hint.'
 const SAVE_FAILURE = 'Could not save Jimaku settings.'
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f-\u009f]/u
 
@@ -22,6 +32,9 @@ export interface JimakuSettingsService {
   setApiKey(value: string): JimakuSettingsStatus
   clearApiKey(): JimakuSettingsStatus
   testConnection(): Promise<JimakuSettingsStatus>
+  getFolderHint(mediaPath: string, season?: number): JimakuFolderHint | undefined
+  setFolderHint(mediaPath: string, hint: JimakuFolderHintInput): JimakuFolderHint
+  clearFolderHint(mediaPath: string, season?: number): void
 
   /** Main-process-only accessors used by the later search service. */
   getApiKey(): string
@@ -33,6 +46,8 @@ export interface CreateJimakuSettingsServiceDeps {
   settings: SettingsStore
   secrets: SecretCodec
   client: Pick<JimakuClient, 'searchEntries'>
+  pathOptions?: PathNormalizationOptions
+  now?: () => number
 }
 
 /** Owns Jimaku's encrypted credential and the explicit connection test. */
@@ -43,6 +58,7 @@ export function createJimakuSettingsService(
   let testOutcome: JimakuTestOutcome = { status: 'notTested' }
   const listeners = new Set<(generation: number) => void>()
   const activeTests = new Set<AbortController>()
+  const pathOptions = deps.pathOptions ?? {}
 
   function storedSettings() {
     try {
@@ -118,6 +134,62 @@ export function createJimakuSettingsService(
     return publicStatus()
   }
 
+  function folderHintKey(mediaPath: string, season: number | undefined): string {
+    const key = jimakuFolderHintKey(mediaPath, season, pathOptions)
+    if (!key) throw new Error(INVALID_MEDIA_PATH)
+    return key
+  }
+
+  function getFolderHint(mediaPath: string, season?: number): JimakuFolderHint | undefined {
+    const hints = storedSettings().folderHints
+    const exact = hints[folderHintKey(mediaPath, season)]
+    if (exact) return { ...exact }
+    if (season !== undefined) {
+      const unscoped = hints[folderHintKey(mediaPath, undefined)]
+      if (unscoped) return { ...unscoped }
+    }
+    return undefined
+  }
+
+  function setFolderHint(mediaPath: string, value: JimakuFolderHintInput): JimakuFolderHint {
+    let hint: JimakuFolderHint | undefined
+    try {
+      const timestamp = deps.now?.() ?? Date.now()
+      const raw = isRecord(value) ? { ...value, updatedAt: timestamp } : undefined
+      hint = normalizeJimakuFolderHint(raw)
+    } catch {
+      hint = undefined
+    }
+    if (!hint) throw new Error(INVALID_FOLDER_HINT)
+
+    const key = folderHintKey(mediaPath, hint.season)
+    try {
+      const current = deps.settings.get().jimaku
+      deps.settings.set({
+        jimaku: {
+          ...current,
+          folderHints: { ...current.folderHints, [key]: hint }
+        }
+      })
+    } catch {
+      throw new Error(SAVE_FAILURE)
+    }
+    return { ...hint }
+  }
+
+  function clearFolderHint(mediaPath: string, season?: number): void {
+    const key = folderHintKey(mediaPath, season)
+    const current = storedSettings()
+    if (!current.folderHints[key]) return
+    const folderHints = { ...current.folderHints }
+    delete folderHints[key]
+    try {
+      deps.settings.set({ jimaku: { ...current, folderHints } })
+    } catch {
+      throw new Error(SAVE_FAILURE)
+    }
+  }
+
   async function testConnection(): Promise<JimakuSettingsStatus> {
     const apiKey = readApiKey()
     const generation = configGeneration
@@ -167,6 +239,9 @@ export function createJimakuSettingsService(
       return saveApiKey('')
     },
     testConnection,
+    getFolderHint,
+    setFolderHint,
+    clearFolderHint,
     getApiKey: readApiKey,
     getConfigGeneration: () => configGeneration,
     onConfigChange(listener) {
@@ -174,6 +249,10 @@ export function createJimakuSettingsService(
       return () => listeners.delete(listener)
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function normalizeApiKey(value: unknown): string {
