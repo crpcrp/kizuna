@@ -84,6 +84,27 @@ describe('SubtitleMenu "Load subtitle file…"', () => {
   })
 })
 
+describe('SubtitleMenu "Save subtitle as…"', () => {
+  it('is disabled without an active downloaded Jimaku subtitle', () => {
+    expect(markup()).toMatch(/id="save-subtitle-as"[^>]*disabled/)
+    expect(markup({ hasActiveJimakuSubtitle: true, onExportJimakuSubtitle: vi.fn() })).not.toMatch(
+      /id="save-subtitle-as"[^>]*disabled/
+    )
+  })
+
+  it('calls the export action when enabled', () => {
+    const onExportJimakuSubtitle = vi.fn()
+    render(
+      menu({
+        hasActiveJimakuSubtitle: true,
+        onExportJimakuSubtitle
+      })
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save subtitle as' }))
+    expect(onExportJimakuSubtitle).toHaveBeenCalledOnce()
+  })
+})
+
 describe('SubtitleMenu external subtitle encoding', () => {
   it('shows the sidecar encoding control only for the external track', () => {
     const html = markup({

@@ -103,7 +103,12 @@ export interface UseMediaSessionResult {
   mediaMenu: Omit<MediaMenuProps, 'onTogglePlaylist' | 'playlistOpen' | 'onExit'>
   subtitleMenu: Pick<
     SubtitleMenuProps,
-    'mediaOpening' | 'onChangeExternalSubtitleEncoding' | 'onLoadSubtitleFile' | 'onSelectSubtitle'
+    | 'mediaOpening'
+    | 'hasActiveJimakuSubtitle'
+    | 'onChangeExternalSubtitleEncoding'
+    | 'onExportJimakuSubtitle'
+    | 'onLoadSubtitleFile'
+    | 'onSelectSubtitle'
   >
   playlist: PlaylistViewModel
   events: MediaSessionEvents
@@ -307,6 +312,29 @@ export function useMediaSession({
     })
   }
 
+  const handleExportJimakuSubtitle = (): void => {
+    const current = stateRef.current
+    const provenance = current.externalSubtitleProvenance
+    if (
+      current.filePath === undefined ||
+      current.selectedSubtitleId !== EXTERNAL_SUBTITLE_TRACK_ID ||
+      provenance === undefined
+    )
+      return
+
+    void bridge.jimaku
+      .exportActiveSubtitle({
+        mediaPath: current.filePath,
+        mediaGeneration: current.loadGeneration,
+        provenance
+      })
+      .then((result) => {
+        if (result.status !== 'error' || result.code === 'staleMedia') return
+        recentFiles.reportError(jimakuExportErrorMessage(result.code))
+      })
+      .catch(() => recentFiles.reportError('Could not save the subtitle.'))
+  }
+
   const handleDrop = (files: File[]): Promise<void> =>
     handleDroppedFiles(files, {
       hasVideo: state.filePath !== undefined,
@@ -439,7 +467,11 @@ export function useMediaSession({
     },
     subtitleMenu: {
       mediaOpening: recentFilesState.mediaOpening,
+      hasActiveJimakuSubtitle:
+        state.selectedSubtitleId === EXTERNAL_SUBTITLE_TRACK_ID &&
+        state.externalSubtitleProvenance !== undefined,
       onSelectSubtitle: handleSelectSubtitle,
+      onExportJimakuSubtitle: handleExportJimakuSubtitle,
       onLoadSubtitleFile: state.filePath ? handleLoadSubtitleFile : undefined,
       onChangeExternalSubtitleEncoding: handleChangeExternalSubtitleEncoding
     },
@@ -462,5 +494,20 @@ export function useMediaSession({
     getPreviousSubtitleSnapshot: () => previousSubtitleSnapshotRef.current,
     subtitleActions,
     subtitleRestoring
+  }
+}
+
+function jimakuExportErrorMessage(
+  code: 'notAvailable' | 'invalidDestination' | 'destinationChanged' | 'storage'
+): string {
+  switch (code) {
+    case 'notAvailable':
+      return 'The downloaded subtitle is no longer available.'
+    case 'invalidDestination':
+      return 'Choose a different destination for the subtitle.'
+    case 'destinationChanged':
+      return 'The destination changed while saving. Try again.'
+    case 'storage':
+      return 'Could not save the subtitle.'
   }
 }

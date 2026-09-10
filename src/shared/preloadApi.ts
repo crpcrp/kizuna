@@ -71,6 +71,8 @@ import type {
   JimakuServiceResult,
   JimakuFolderHint,
   JimakuFolderHintInput,
+  JimakuSubtitleExportRequest,
+  JimakuSubtitleExportResult,
   JimakuSettingsStatus,
   JimakuTitleSearchRequest,
   JimakuTitleSearchResult
@@ -346,6 +348,7 @@ export interface KizunaApi {
       sessionId: string,
       handle: string
     ): Promise<JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>>
+    exportActiveSubtitle(request: JimakuSubtitleExportRequest): Promise<JimakuSubtitleExportResult>
   }
   files: {
     /** Real filesystem path of a dropped `File` (Electron's `webUtils.getPathForFile`). */

@@ -33,6 +33,7 @@ function serviceFake(): JimakuService {
       ok: false as const,
       error: { code: 'expired' as const }
     })),
+    exportActiveSubtitle: vi.fn(async () => ({ status: 'cancelled' as const })),
     disposeSender: vi.fn(),
     dispose: vi.fn()
   }
@@ -65,6 +66,33 @@ describe('registerJimakuBridge', () => {
       category: 'all'
     })
     expect(service.listFiles).toHaveBeenCalledWith(sender, 's-1', 1, true)
+    await expect(
+      handlers.get(JIMAKU_CHANNELS.exportActiveSubtitle)!(
+        {
+          sender
+        },
+        {
+          mediaPath: '/media/a.mkv',
+          mediaGeneration: 1,
+          provenance: {
+            provider: 'jimaku',
+            entryId: 1,
+            fileName: 'a.srt',
+            contentVersion: 'a'.repeat(64)
+          }
+        }
+      )
+    ).resolves.toEqual({ status: 'cancelled' })
+    expect(service.exportActiveSubtitle).toHaveBeenCalledWith(sender, {
+      mediaPath: '/media/a.mkv',
+      mediaGeneration: 1,
+      provenance: {
+        provider: 'jimaku',
+        entryId: 1,
+        fileName: 'a.srt',
+        contentVersion: 'a'.repeat(64)
+      }
+    })
     expect([...handlers.keys()]).toEqual(
       expect.arrayContaining([
         JIMAKU_CHANNELS.beginSession,
@@ -75,7 +103,8 @@ describe('registerJimakuBridge', () => {
         JIMAKU_CHANNELS.cancelPending,
         JIMAKU_CHANNELS.endSession,
         JIMAKU_CHANNELS.openSourcePage,
-        JIMAKU_CHANNELS.commitPreparedSubtitle
+        JIMAKU_CHANNELS.commitPreparedSubtitle,
+        JIMAKU_CHANNELS.exportActiveSubtitle
       ])
     )
   })
@@ -102,6 +131,18 @@ describe('registerJimakuBridge', () => {
       })
     ).toThrow('Invalid Jimaku title search request.')
     expect(service.searchTitles).not.toHaveBeenCalled()
+
+    expect(() =>
+      handlers.get(JIMAKU_CHANNELS.exportActiveSubtitle)!(
+        { sender },
+        {
+          mediaPath: '/media/a.mkv',
+          mediaGeneration: 1,
+          provenance: { provider: 'jimaku', entryId: 1, fileName: 'a.srt' }
+        }
+      )
+    ).toThrow('Invalid Jimaku export request.')
+    expect(service.exportActiveSubtitle).not.toHaveBeenCalled()
 
     handlers.get(JIMAKU_CHANNELS.beginSession)!({ sender }, '/media/a.mkv', 1)
     destroyed?.()

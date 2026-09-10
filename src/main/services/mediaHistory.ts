@@ -44,6 +44,8 @@ export interface MediaHistoryServiceDependencies {
 export interface MediaHistoryService {
   getRecentFiles(): RecentMediaFile[]
   getPlaybackHistory(path: string): MediaPlaybackHistory | undefined
+  /** True only while the requested media path/generation is still active. */
+  isCurrentMedia(path: string, loadGeneration: number): boolean
   checkFileAvailability(path: string): Promise<FileAvailability>
   getLastOpenFolder(): string | undefined
   setLastOpenFolder(folder: string): void
@@ -238,6 +240,11 @@ export function createMediaHistoryService(
     getPlaybackHistory(path: string): MediaPlaybackHistory | undefined {
       const key = mediaPathKey(path, pathOptions)
       return key ? clonePlayback(settings.get().mediaHistory.playbackByPath[key]) : undefined
+    },
+
+    isCurrentMedia(path: string, loadGeneration: number): boolean {
+      const key = mediaPathKey(path, pathOptions)
+      return key !== undefined && !suspended && key === activeKey && loadGeneration === generation
     },
 
     async checkFileAvailability(path: string): Promise<FileAvailability> {

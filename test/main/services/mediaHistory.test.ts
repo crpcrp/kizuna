@@ -81,6 +81,24 @@ function service(initial?: MediaHistory, failWrites = false) {
 }
 
 describe('createMediaHistoryService', () => {
+  it('identifies the active media generation and suspends it during a load', () => {
+    const { history } = service()
+
+    expect(history.isCurrentMedia('/media/video.mkv', 1)).toBe(false)
+    history.recordOpened('/media/video.mkv')
+    expect(history.isCurrentMedia('/media/video.mkv', 1)).toBe(true)
+    expect(history.isCurrentMedia('/media/other.mkv', 1)).toBe(false)
+
+    history.beginLoad()
+    expect(history.isCurrentMedia('/media/video.mkv', 1)).toBe(false)
+    history.abortLoad()
+    expect(history.isCurrentMedia('/media/video.mkv', 1)).toBe(true)
+
+    history.recordOpened('/media/video.mkv')
+    expect(history.isCurrentMedia('/media/video.mkv', 1)).toBe(false)
+    expect(history.isCurrentMedia('/media/video.mkv', 2)).toBe(true)
+  })
+
   it('stores last folder and returns copies of persisted recent and playback data', () => {
     const { history } = service()
     history.setLastOpenFolder('/media/series/../series')

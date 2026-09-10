@@ -7,6 +7,8 @@ import type {
   JimakuPreparedSubtitle
 } from '@src/main/services/jimaku/downloadStore'
 import type { JimakuEntry, JimakuResult, JimakuTitleSearchRequest } from '@src/shared/jimaku'
+import type { ShowJimakuSaveDialog } from '@src/main/services/jimaku/export'
+import type { MediaPlaybackHistory } from '@src/shared/mediaHistory'
 import { deferred } from '@test/harness/deferred'
 
 const ENTRY_ANIME: JimakuEntry = {
@@ -151,6 +153,90 @@ function allEntriesRequest(): JimakuTitleSearchRequest {
 }
 
 describe('createJimakuService', () => {
+  it('exports only the active cached provenance', async () => {
+    const bytes = new Uint8Array([0, 255, 10])
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 10,
+      fileName: 'Anime title - 01.ass',
+      contentVersion: 'a'.repeat(64)
+    }
+    const downloads = {
+      prepareDirect: vi.fn(),
+      releasePrepared: vi.fn(),
+      readManagedSubtitle: vi.fn(async () => ({
+        path: `/cache/${provenance.contentVersion}.ass`,
+        bytes,
+        format: 'ass' as const
+      }))
+    }
+    const getPlaybackHistory = vi.fn((): MediaPlaybackHistory => ({
+      positionSeconds: 0,
+      updatedAt: 0,
+      subtitle: {
+        mode: 'external' as const,
+        path: '/cache/file.ass',
+        encoding: 'auto' as const,
+        provenance
+      }
+    }))
+    const history = {
+      applyPreparedSubtitle: vi.fn(),
+      getPlaybackHistory,
+      isCurrentMedia: vi.fn(() => true)
+    }
+    const showSaveDialog: ShowJimakuSaveDialog = vi.fn(async (options) => ({
+      canceled: false,
+      filePath: options.defaultPath ?? ''
+    }))
+    const fs = {
+      stat: vi.fn(async () => {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }),
+      writeFile: vi.fn(async () => undefined)
+    }
+    const service = createJimakuService({
+      client: {
+        searchEntries: vi.fn(),
+        listFiles: vi.fn()
+      },
+      settings: {
+        getConfigGeneration: vi.fn(() => 0),
+        onConfigChange: vi.fn(() => () => undefined)
+      },
+      downloads,
+      archive: {
+        inspect: vi.fn(),
+        prepareMember: vi.fn(),
+        releasePackage: vi.fn()
+      },
+      mediaHistory: history,
+      subtitleExport: { showSaveDialog, fs, platform: 'linux' },
+      openExternal: vi.fn()
+    })
+
+    await expect(
+      service.exportActiveSubtitle('window-a', {
+        mediaPath: '/media/Anime title - 01.mkv',
+        mediaGeneration: 1,
+        provenance
+      })
+    ).resolves.toEqual({ status: 'exported', path: '/media/Anime title - 01.ja.ass' })
+    expect(downloads.readManagedSubtitle).toHaveBeenCalledWith(provenance)
+    expect(fs.writeFile).toHaveBeenCalledWith('/media/Anime title - 01.ja.ass', bytes, {
+      flag: 'wx'
+    })
+
+    history.getPlaybackHistory.mockReturnValue({ positionSeconds: 0, updatedAt: 0 })
+    await expect(
+      service.exportActiveSubtitle('window-a', {
+        mediaPath: '/media/Anime title - 01.mkv',
+        mediaGeneration: 1,
+        provenance
+      })
+    ).resolves.toEqual({ status: 'error', code: 'notAvailable' })
+  })
+
   it('merges both title categories, marks partial results, and caches selected files', async () => {
     const harness = makeHarness()
     harness.client.searchEntries.mockImplementation(async ({ anime }) =>

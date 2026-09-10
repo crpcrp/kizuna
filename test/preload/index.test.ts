@@ -383,6 +383,7 @@ describe('preload Jimaku session contract', () => {
         endSession(sessionId: string): Promise<unknown>
         openSourcePage(sessionId: string, entryId: number): Promise<unknown>
         commitPreparedSubtitle(sessionId: string, handle: string): Promise<unknown>
+        exportActiveSubtitle(request: unknown): Promise<unknown>
       }
     }
 
@@ -395,6 +396,7 @@ describe('preload Jimaku session contract', () => {
     api.jimaku.endSession('session-1')
     api.jimaku.openSourcePage('session-1', 42)
     api.jimaku.commitPreparedSubtitle('session-1', 'prepared-1')
+    api.jimaku.exportActiveSubtitle({ mediaPath: '/media/episode.mkv' })
 
     expect(electron.invoke.mock.calls).toEqual([
       [JIMAKU_CHANNELS.beginSession, '/media/episode.mkv', 4],
@@ -405,7 +407,8 @@ describe('preload Jimaku session contract', () => {
       [JIMAKU_CHANNELS.cancelPending, 'session-1'],
       [JIMAKU_CHANNELS.endSession, 'session-1'],
       [JIMAKU_CHANNELS.openSourcePage, 'session-1', 42],
-      [JIMAKU_CHANNELS.commitPreparedSubtitle, 'session-1', 'prepared-1']
+      [JIMAKU_CHANNELS.commitPreparedSubtitle, 'session-1', 'prepared-1'],
+      [JIMAKU_CHANNELS.exportActiveSubtitle, { mediaPath: '/media/episode.mkv' }]
     ])
   })
 })

@@ -84,6 +84,8 @@ import type {
   JimakuServiceResult,
   JimakuFolderHint,
   JimakuFolderHintInput,
+  JimakuSubtitleExportRequest,
+  JimakuSubtitleExportResult,
   JimakuSettingsStatus,
   JimakuTitleSearchRequest,
   JimakuTitleSearchResult
@@ -478,7 +480,11 @@ const api = {
       sessionId: string,
       handle: string
     ): Promise<JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.commitPreparedSubtitle, sessionId, handle)
+      ipcRenderer.invoke(JIMAKU_CHANNELS.commitPreparedSubtitle, sessionId, handle),
+    exportActiveSubtitle: (
+      request: JimakuSubtitleExportRequest
+    ): Promise<JimakuSubtitleExportResult> =>
+      ipcRenderer.invoke(JIMAKU_CHANNELS.exportActiveSubtitle, request)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the

@@ -311,7 +311,8 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       commitPreparedSubtitle: vi.fn(async () => ({
         ok: false as const,
         error: { code: 'invalidSession' as const }
-      }))
+      })),
+      exportActiveSubtitle: vi.fn(async () => ({ status: 'cancelled' as const }))
     },
     files: {
       pathForFile: vi.fn(() => '')

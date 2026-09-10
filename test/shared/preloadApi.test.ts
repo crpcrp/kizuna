@@ -18,6 +18,8 @@ import type { PublicTranslationSettings, TranslationSettingsPatch } from '@src/s
 import type {
   JimakuFolderHint,
   JimakuFolderHintInput,
+  JimakuSubtitleExportRequest,
+  JimakuSubtitleExportResult,
   JimakuSettingsStatus
 } from '@src/shared/jimaku'
 
@@ -145,6 +147,12 @@ describe('KizunaApi', () => {
       Promise<JimakuFolderHint>
     >()
     expectTypeOf<KizunaApi['jimaku']['clearFolderHint']>().returns.toEqualTypeOf<Promise<void>>()
+    expectTypeOf<KizunaApi['jimaku']['exportActiveSubtitle']>().parameters.toEqualTypeOf<
+      [JimakuSubtitleExportRequest]
+    >()
+    expectTypeOf<KizunaApi['jimaku']['exportActiveSubtitle']>().returns.toEqualTypeOf<
+      Promise<JimakuSubtitleExportResult>
+    >()
   })
 
   it('playerSettings round-trips the shared PlayerSettings type', () => {

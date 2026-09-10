@@ -351,5 +351,6 @@ export const JIMAKU_CHANNELS = {
   cancelPending: 'jimaku:cancelPending',
   endSession: 'jimaku:endSession',
   openSourcePage: 'jimaku:openSourcePage',
-  commitPreparedSubtitle: 'jimaku:commitPreparedSubtitle'
+  commitPreparedSubtitle: 'jimaku:commitPreparedSubtitle',
+  exportActiveSubtitle: 'jimaku:exportActiveSubtitle'
 } as const
