@@ -85,6 +85,7 @@ interface SessionState {
   mediaPath: string
   mediaGeneration: number
   identity: JimakuVideoIdentity
+  rememberedEntryId?: number
   configGeneration: number
   operationToken: number
   pending?: PendingOperation
@@ -99,8 +100,8 @@ interface SessionState {
 }
 
 export interface CreateJimakuServiceDeps {
-  client: Pick<JimakuClient, 'searchEntries' | 'listFiles'>
-  settings: Pick<JimakuSettingsService, 'getConfigGeneration' | 'onConfigChange'>
+  client: Pick<JimakuClient, 'searchEntries' | 'getEntry' | 'listFiles'>
+  settings: Pick<JimakuSettingsService, 'getConfigGeneration' | 'onConfigChange' | 'getFolderHint'>
   downloads: Pick<JimakuDownloadStore, 'prepareDirect' | 'releasePrepared'> &
     Partial<Pick<JimakuDownloadStore, 'cleanup' | 'readManagedSubtitle'>>
   archive: JimakuArchiveService
@@ -322,7 +323,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
 
     const previousGeneration = lastGenerationBySender.get(sender)
-    if (previousGeneration !== undefined && mediaGenerationValue <= previousGeneration) {
+    if (previousGeneration !== undefined && mediaGenerationValue < previousGeneration) {
       return failure('staleMedia')
     }
 
@@ -338,6 +339,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       mediaPath: path,
       mediaGeneration: mediaGenerationValue,
       identity,
+      rememberedEntryId: rememberedEntryId(path, identity),
       configGeneration: currentConfigGeneration(),
       operationToken: 0,
       titleCache: new Map(),
@@ -364,6 +366,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     if (!session) return failure('invalidSession')
     const request = parseTitleRequest(requestValue)
     if (!request) return failure('invalidRequest')
+    session.rememberedEntryId = undefined
 
     const query = request.query.trim()
     const category = request.category ?? 'all'
@@ -417,10 +420,32 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     if (refreshValue !== undefined && !isRefreshValue(refreshValue)) {
       return failure('invalidRequest')
     }
-    const entry = session.entries.get(entryIdValue)
-    if (!entry) return failure('invalidEntry')
+    let entry = session.entries.get(entryIdValue)
+    if (!entry && session.rememberedEntryId !== entryIdValue) return failure('invalidEntry')
 
     const pending = beginOperation(session)
+    if (!entry) {
+      let resolved: Awaited<ReturnType<JimakuClient['getEntry']>>
+      try {
+        resolved = await deps.client.getEntry(entryIdValue, pending.controller.signal)
+      } catch {
+        resolved = failure('network') as Awaited<ReturnType<JimakuClient['getEntry']>>
+      }
+      if (!isCurrent(session, pending)) return failure('cancelled')
+      if (!resolved.ok) {
+        finishOperation(session, pending)
+        clearFileResults(session)
+        return mapError(resolved.error)
+      }
+      if (resolved.value.id !== entryIdValue) {
+        finishOperation(session, pending)
+        clearFileResults(session)
+        return failure('invalidResponse')
+      }
+      entry = resolved.value
+      session.entries.set(entry.id, entry)
+    }
+
     const cached = session.fileCache.get(entry.id)
     const refresh = refreshValue === true || isRefreshRequest(refreshValue)
     if (!refresh && cached && cached.expiresAt > safeNow()) {
@@ -679,6 +704,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
   function disposeSender(sender: unknown): void {
     const session = activeBySender.get(sender)
     if (session) releaseSession(session)
+    lastGenerationBySender.delete(sender)
   }
 
   function dispose(): void {
@@ -689,6 +715,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     for (const session of [...sessions.values()]) releaseSession(session)
     sessions.clear()
     activeBySender.clear()
+    lastGenerationBySender.clear()
   }
 
   return {
@@ -780,6 +807,14 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       entryId: entry.id,
       sourcePage: sourcePage(entry.id),
       files: candidates
+    }
+  }
+
+  function rememberedEntryId(mediaPath: string, identity: JimakuVideoIdentity): number | undefined {
+    try {
+      return deps.settings.getFolderHint(mediaPath, identity.season)?.entryId
+    } catch {
+      return undefined
     }
   }
 
