@@ -38,6 +38,8 @@ export interface SubtitleSelectionOptions {
   onApplied?: (previous: SubtitleSelectionSnapshot) => void
   /** Re-parsing the already-active subtitle (for example after encoding change) does not create a revert. */
   capturePrevious?: boolean
+  /** Drops the result when the owning media session is no longer current. */
+  isCurrent?: () => boolean
 }
 
 export interface SubtitleSelectionSnapshot {
@@ -145,22 +147,28 @@ export async function selectSubtitle(
   options: SubtitleSelectionOptions = {}
 ): Promise<string | undefined> {
   const requestId = ++subtitleToken.current
+  const isCurrent = options.isCurrent ?? (() => true)
+
+  if (!isCurrent()) return undefined
 
   if (track === null) {
+    if (!isCurrent()) return undefined
     dispatch({ type: 'cuesLoaded', cues: [] })
     dispatch({ type: 'selectSubtitle', id: null })
     applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
     notifyApplied(options)
-    return persistSubtitleSelection(bridge, filePath, { mode: 'off' })
+    const warning = await persistSubtitleSelection(bridge, filePath, { mode: 'off' })
+    return isCurrent() ? warning : undefined
   }
 
   const cached = cueCache.get(track.id)
   if (cached) {
+    if (!isCurrent()) return undefined
     dispatch({ type: 'cuesLoaded', cues: cached })
     dispatch({ type: 'selectSubtitle', id: track.id })
     applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
     notifyApplied(options)
-    return persistSubtitleTrack(
+    const warning = await persistSubtitleTrack(
       bridge,
       filePath,
       track,
@@ -168,16 +176,17 @@ export async function selectSubtitle(
       externalSubtitleEncoding,
       options.provenance
     )
+    return isCurrent() ? warning : undefined
   }
 
   const cues = await bridge.media.loadSubtitle(filePath, track.id)
-  if (subtitleToken.current !== requestId) return undefined
+  if (subtitleToken.current !== requestId || !isCurrent()) return undefined
   cueCache.set(track.id, cues)
   dispatch({ type: 'cuesLoaded', cues })
   dispatch({ type: 'selectSubtitle', id: track.id })
   applySubtitleOffset(dispatch, options.offsetMs, options.provenance)
   notifyApplied(options)
-  return persistSubtitleTrack(
+  const warning = await persistSubtitleTrack(
     bridge,
     filePath,
     track,
@@ -185,6 +194,7 @@ export async function selectSubtitle(
     externalSubtitleEncoding,
     options.provenance
   )
+  return isCurrent() ? warning : undefined
 }
 
 /**
@@ -275,6 +285,23 @@ export async function loadExternalSubtitle(
   subtitlePath: string,
   options: SubtitleSelectionOptions = {}
 ): Promise<string | undefined> {
+  const result = await loadExternalSubtitleResult(session, filePath, subtitlePath, options)
+  if (result.status === 'error') return result.message
+  return result.status === 'applied' ? result.warning : undefined
+}
+
+export type ExternalSubtitleLoadResult =
+  | { status: 'applied'; warning?: string }
+  | { status: 'stale' }
+  | { status: 'error'; message: string }
+
+/** Applies an external subtitle and reports whether it committed, failed, or went stale. */
+export async function loadExternalSubtitleResult(
+  session: OpenSession,
+  filePath: string,
+  subtitlePath: string,
+  options: SubtitleSelectionOptions = {}
+): Promise<ExternalSubtitleLoadResult> {
   return runLoadExternalSubtitle(session, filePath, subtitlePath, options)
 }
 
@@ -291,19 +318,22 @@ async function runLoadExternalSubtitle(
   filePath: string,
   subtitlePath: string,
   options: SubtitleSelectionOptions
-): Promise<string | undefined> {
+): Promise<ExternalSubtitleLoadResult> {
   const { bridge, dispatch, subtitleToken, cueCache } = session
   const externalSubtitleEncoding = session.externalSubtitleEncoding ?? 'auto'
   const requestId = ++subtitleToken.current
+  const isCurrent = options.isCurrent ?? (() => true)
+
+  if (!isCurrent()) return { status: 'stale' }
 
   let cues: Cue[]
   try {
     cues = await bridge.media.loadExternalSubtitle(subtitlePath, externalSubtitleEncoding)
   } catch (err) {
-    if (subtitleToken.current !== requestId) return undefined
-    return errorMessage(err)
+    if (subtitleToken.current !== requestId || !isCurrent()) return { status: 'stale' }
+    return { status: 'error', message: errorMessage(err) }
   }
-  if (subtitleToken.current !== requestId) return undefined
+  if (subtitleToken.current !== requestId || !isCurrent()) return { status: 'stale' }
 
   const track = externalSubtitleTrack(subtitlePath, cues)
   cueCache.set(track.id, cues)
@@ -334,12 +364,13 @@ async function runLoadExternalSubtitle(
     applySubtitleOffset(dispatch, offsetMs)
   }
   if (previousSnapshot) session.onSubtitleSelectionApplied?.(previousSnapshot)
-  return persistSubtitleSelection(bridge, filePath, {
+  const warning = await persistSubtitleSelection(bridge, filePath, {
     mode: 'external',
     path: subtitlePath,
     encoding: externalSubtitleEncoding,
     ...(options.provenance ? { provenance: options.provenance } : {})
   })
+  return isCurrent() ? { status: 'applied', ...(warning ? { warning } : {}) } : { status: 'stale' }
 }
 
 function notifyApplied(options: SubtitleSelectionOptions): void {

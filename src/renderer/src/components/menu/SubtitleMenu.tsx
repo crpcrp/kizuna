@@ -20,7 +20,9 @@ export interface SubtitleMenuProps {
   externalSubtitleEncoding?: SubtitleEncoding
   subtitleOffsetMs?: number
   sidebarOpen?: boolean
+  hasFile?: boolean
   onSelectSubtitle: (id: number | null) => void
+  onFindJapaneseSubtitles?: () => void
   onLoadSubtitleFile?: () => void
   onChangeExternalSubtitleEncoding?: (value: SubtitleEncoding) => void
   onChangeSubtitleOffset?: (value: number) => void
@@ -38,7 +40,9 @@ export function SubtitleMenu({
   externalSubtitleEncoding = 'auto',
   subtitleOffsetMs = 0,
   sidebarOpen = false,
+  hasFile = false,
   onSelectSubtitle,
+  onFindJapaneseSubtitles,
   onLoadSubtitleFile,
   onChangeExternalSubtitleEncoding,
   onChangeSubtitleOffset,
@@ -77,8 +81,18 @@ export function SubtitleMenu({
     timer.current = setTimeout(() => setApplied(false), APPLY_FOLDER_FEEDBACK_MS)
   }
   const subtitles = subtitleTracks(tracks)
+  const findAvailable = hasFile && !mediaOpening && onFindJapaneseSubtitles !== undefined
   return (
     <Menu id="subtitle" label="Subtitle" open={open} onToggle={onToggle}>
+      <CommandItem
+        label="Find Japanese subtitles…"
+        ariaLabel="Find Japanese subtitles"
+        id="find-japanese-subtitles"
+        disabled={!findAvailable}
+        title={hasFile ? undefined : 'Open a video first.'}
+        onClick={run(onFindJapaneseSubtitles ?? (() => undefined))}
+      />
+      <div className="menu-separator" />
       {onLoadSubtitleFile && (
         <>
           <CommandItem
@@ -129,6 +143,7 @@ export function SubtitleMenu({
         <button
           type="button"
           aria-label="Decrease subtitle offset"
+          title="Show subtitles earlier"
           onClick={() => onChangeSubtitleOffset?.(subtitleOffsetMs - SUBTITLE_OFFSET_STEP_MS)}
         >
           −
@@ -155,6 +170,7 @@ export function SubtitleMenu({
         <button
           type="button"
           aria-label="Increase subtitle offset"
+          title="Show subtitles later"
           onClick={() => onChangeSubtitleOffset?.(subtitleOffsetMs + SUBTITLE_OFFSET_STEP_MS)}
         >
           +

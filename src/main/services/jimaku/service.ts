@@ -87,15 +87,18 @@ interface SessionState {
   candidates: Map<string, CandidateRecord>
   packages: Map<string, PackageRecord>
   prepared: Map<string, PreparedRecord>
+  protectedPaths: Set<string>
   valid: boolean
 }
 
 export interface CreateJimakuServiceDeps {
   client: Pick<JimakuClient, 'searchEntries' | 'listFiles'>
   settings: Pick<JimakuSettingsService, 'getConfigGeneration' | 'onConfigChange'>
-  downloads: Pick<JimakuDownloadStore, 'prepareDirect' | 'releasePrepared'>
+  downloads: Pick<JimakuDownloadStore, 'prepareDirect' | 'releasePrepared'> &
+    Partial<Pick<JimakuDownloadStore, 'cleanup'>>
   archive: JimakuArchiveService
-  mediaHistory?: Pick<MediaHistoryService, 'applyPreparedSubtitle'>
+  mediaHistory?: Pick<MediaHistoryService, 'applyPreparedSubtitle'> &
+    Partial<Pick<MediaHistoryService, 'getPlaybackHistory' | 'getProtectedJimakuPaths'>>
   openExternal: (url: string) => Promise<void>
   now?: () => number
   cacheTtlMs?: number
@@ -231,10 +234,25 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
   }
 
+  const cleanupDownloads = (session?: SessionState): void => {
+    const cleanup = deps.downloads.cleanup
+    if (!cleanup) return
+    const protectedPaths = new Set(session?.protectedPaths ?? [])
+    try {
+      for (const path of deps.mediaHistory?.getProtectedJimakuPaths?.() ?? []) {
+        protectedPaths.add(path)
+      }
+    } catch {
+      // Cleanup remains best effort when history is unavailable.
+    }
+    void cleanup(protectedPaths).catch(() => undefined)
+  }
+
   const clearFileResults = (session: SessionState): void => {
     releasePackages(session)
     releasePrepared(session)
     session.candidates.clear()
+    cleanupDownloads(session)
   }
 
   const clearSearchResults = (session: SessionState): void => {
@@ -255,6 +273,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     session.prepared.clear()
     sessions.delete(session.sessionId)
     if (activeBySender.get(session.sender) === session) activeBySender.delete(session.sender)
+    cleanupDownloads(session)
   }
 
   const handleConfigChange = (generation: number): void => {
@@ -309,6 +328,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       candidates: new Map(),
       packages: new Map(),
       prepared: new Map(),
+      protectedPaths: new Set(),
       valid: true
     }
     sessions.set(session.sessionId, session)
@@ -572,6 +592,13 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     if (!record) return failure('expired')
     if (!deps.mediaHistory) return failure('storage')
     try {
+      const previous = deps.mediaHistory.getPlaybackHistory?.(session.mediaPath)
+      if (
+        previous?.subtitle?.mode === 'external' &&
+        previous.subtitle.provenance?.provider === 'jimaku'
+      ) {
+        session.protectedPaths.add(previous.subtitle.path)
+      }
       const selection = deps.mediaHistory.applyPreparedSubtitle(
         session.mediaPath,
         record.prepared,
@@ -579,6 +606,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       )
       if (!selection || selection.mode !== 'external') return failure('storage')
       record.committed = true
+      cleanupDownloads(session)
       return success(selection)
     } catch {
       return failure('storage')

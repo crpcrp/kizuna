@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type {
   JimakuArchiveMember,
   JimakuArchiveMembersResult,
@@ -16,6 +16,7 @@ import type {
 } from '../state/jimakuController'
 import type { JimakuVideoIdentity } from '../../../shared/jimakuMatching'
 import ModalOverlay from './ModalOverlay'
+import { SUBTITLE_OFFSET_STEP_MS } from './menu/utils'
 import './JimakuSubtitlesDialog.css'
 
 export interface JimakuSubtitlesDialogProps extends JimakuControllerState {
@@ -38,6 +39,8 @@ export interface JimakuSubtitlesDialogProps extends JimakuControllerState {
   onOpenSettings?(): void
   /** Supplied by the subtitle timing controls; omitted until that slice is wired. */
   onAdjustTiming?(): void
+  subtitleOffsetMs?: number
+  onChangeSubtitleOffset?: (value: number) => void
   /** Existing local subtitle picker, supplied by the media-session owner. */
   onLoadLocalFile?(): void
   /** Optional retry timestamp when the controller exposes one. */
@@ -609,6 +612,8 @@ function FileStage({
   notice,
   canRevert,
   onAdjustTiming,
+  subtitleOffsetMs,
+  onChangeSubtitleOffset,
   onRevert,
   onShowMoreFiles,
   onShowAllFiles,
@@ -629,6 +634,8 @@ function FileStage({
   notice?: JimakuControllerNotice
   canRevert: boolean
   onAdjustTiming?: () => void
+  subtitleOffsetMs?: number
+  onChangeSubtitleOffset?: (value: number) => void
   onRevert: () => void | Promise<void>
   onShowMoreFiles: () => void
   onShowAllFiles: () => void
@@ -697,6 +704,8 @@ function FileStage({
       <SuccessActions
         canRevert={canRevert}
         onAdjustTiming={onAdjustTiming}
+        subtitleOffsetMs={subtitleOffsetMs}
+        onChangeSubtitleOffset={onChangeSubtitleOffset}
         onTryAnother={onTryAnother}
         onRevert={onRevert}
         onLoadLocalFile={onLoadLocalFile}
@@ -902,22 +911,60 @@ function ErrorStage({
 function SuccessActions({
   canRevert,
   onAdjustTiming,
+  subtitleOffsetMs,
+  onChangeSubtitleOffset,
   onTryAnother,
   onRevert,
   onLoadLocalFile
 }: {
   canRevert: boolean
   onAdjustTiming?: () => void
+  subtitleOffsetMs?: number
+  onChangeSubtitleOffset?: (value: number) => void
   onTryAnother: () => void
   onRevert: () => void | Promise<void>
   onLoadLocalFile?: () => void
 }): React.JSX.Element {
+  const [adjusting, setAdjusting] = useState(false)
+  const canAdjust =
+    onAdjustTiming !== undefined ||
+    (onChangeSubtitleOffset !== undefined && subtitleOffsetMs !== undefined)
   return (
     <div className="jimaku-dialog-actions">
-      {onAdjustTiming && (
-        <button type="button" className="jimaku-button" onClick={onAdjustTiming}>
+      {canAdjust && (
+        <button
+          type="button"
+          className="jimaku-button"
+          onClick={() => {
+            setAdjusting(true)
+            onAdjustTiming?.()
+          }}
+        >
           Adjust timing
         </button>
+      )}
+      {adjusting && onChangeSubtitleOffset && subtitleOffsetMs !== undefined && (
+        <div className="jimaku-timing-controls" aria-label="Subtitle timing controls">
+          <span>{subtitleOffsetMs} ms</span>
+          <button
+            type="button"
+            className="jimaku-button"
+            aria-label="Show subtitles earlier"
+            title="Show subtitles earlier"
+            onClick={() => onChangeSubtitleOffset(subtitleOffsetMs - SUBTITLE_OFFSET_STEP_MS)}
+          >
+            Earlier
+          </button>
+          <button
+            type="button"
+            className="jimaku-button"
+            aria-label="Show subtitles later"
+            title="Show subtitles later"
+            onClick={() => onChangeSubtitleOffset(subtitleOffsetMs + SUBTITLE_OFFSET_STEP_MS)}
+          >
+            Later
+          </button>
+        </div>
       )}
       <button type="button" className="jimaku-button" onClick={onTryAnother}>
         Try another
@@ -972,6 +1019,8 @@ export default function JimakuSubtitlesDialog({
   onOpenSourcePage,
   onOpenSettings,
   onAdjustTiming,
+  subtitleOffsetMs,
+  onChangeSubtitleOffset,
   onLoadLocalFile,
   retryAt
 }: JimakuSubtitlesDialogProps): React.JSX.Element {
@@ -1049,6 +1098,8 @@ export default function JimakuSubtitlesDialog({
             notice={notice}
             canRevert={canRevert}
             onAdjustTiming={onAdjustTiming}
+            subtitleOffsetMs={subtitleOffsetMs}
+            onChangeSubtitleOffset={onChangeSubtitleOffset}
             onRevert={onRevert}
             onShowMoreFiles={onShowMoreFiles}
             onShowAllFiles={onShowAllFiles}

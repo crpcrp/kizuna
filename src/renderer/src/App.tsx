@@ -18,6 +18,8 @@ import VideoAdjustments from './components/VideoAdjustments'
 import CardImageCropDialog from './components/CardImageCropDialog'
 import BulkMiningSidebar from './components/BulkMiningSidebar'
 import WordPopup from './components/WordPopup'
+import JimakuSubtitlesDialog from './components/JimakuSubtitlesDialog'
+import NoJapaneseSubtitlePrompt from './components/NoJapaneseSubtitlePrompt'
 import { initialPlayerState, isJapaneseSubtitleTrack, type PlayerState } from './state/playerState'
 import { seekTargetForCue } from './state/cueNavigation'
 import { cycleAbLoopAction } from './state/playbackCommands'
@@ -38,6 +40,7 @@ import { useLinuxWindowShape } from './state/useLinuxWindowShape'
 import { useKeyboardShortcuts, type KeyboardShortcutContext } from './state/useKeyboardShortcuts'
 import { useLatestCallback, useLatestRef } from './state/useLatestRef'
 import { useMediaSession } from './state/useMediaSession'
+import { useJimakuController } from './state/jimakuController'
 import { useVocabularyMining } from './state/useVocabularyMining'
 import { useJlptCoverageReport } from './state/useJlptCoverageReport'
 import { useJlptBulkExport } from './state/useJlptBulkExport'
@@ -153,10 +156,23 @@ export default function App({
     getSubtitleVersionOffset: (contentVersion) =>
       stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? 0
   })
+  const jimaku = useJimakuController({
+    jimaku: kizuna.jimaku ?? ({} as KizunaApi['jimaku']),
+    getMedia: () => ({
+      filePath: stateRef.current.filePath,
+      loadGeneration: stateRef.current.loadGeneration
+    }),
+    subtitles: mediaSession.subtitleActions,
+    getSubtitleOffset: (contentVersion) =>
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? 0
+  })
   useEffect(() => {
     reportErrorRef.current = mediaSession.banner.reportError
   }, [mediaSession.banner.reportError])
   const optionsOpen = options.open
+  const mediaSessionKey = `${state.filePath ?? ''}:${state.loadGeneration}`
+  const [dismissedPromptSession, setDismissedPromptSession] = useState<string>()
+  const noJapanesePromptDismissed = dismissedPromptSession === mediaSessionKey
   const about = useAboutDialog({
     bridge: kizuna,
     reportError: mediaSession.banner.reportError
@@ -168,6 +184,22 @@ export default function App({
   const activeCue = findActiveCue(state.cues, offsetTimePos(state.timePos, state.subtitleOffsetMs))
   const activeCueKey = activeCue ? cueKey(activeCue) : undefined
   const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
+  const subtitleTracks = state.tracks.filter((track) => track.kind === 'subtitle')
+  const hasExplicitJapaneseSubtitle = subtitleTracks.some((track) => {
+    const language = track.language?.trim().toLowerCase()
+    return language === 'ja' || language === 'jpn'
+  })
+  const hasUnknownSubtitleLanguage = subtitleTracks.some((track) => {
+    const language = track.language?.trim().toLowerCase()
+    return !language || language === 'und' || language === 'unknown' || language === 'unk'
+  })
+  const showNoJapanesePrompt =
+    state.filePath !== undefined &&
+    state.loadGeneration > 0 &&
+    !mediaSession.mediaMenu.mediaOpening &&
+    !mediaSession.subtitleRestoring &&
+    !noJapanesePromptDismissed &&
+    !hasExplicitJapaneseSubtitle
   // Known-word underlines are painted only for a Japanese subtitle track, and
   // only while the Known-words option has coloring switched on.
   const coloredLevels =
@@ -203,6 +235,7 @@ export default function App({
 
   const openJlptBulkExport = useLatestCallback(
     (options: { throughLevel?: JlptLevel } = {}): void => {
+      jimaku.close()
       jlptCoverage.closeReport()
       vocabulary.report.onClose()
       vocabulary.mining.modal.onClose()
@@ -212,14 +245,17 @@ export default function App({
     }
   )
   const openJlptCoverage = useLatestCallback((): void => {
+    jimaku.close()
     jlptBulkExport.onClose()
     jlptCoverage.openReport()
   })
   const openWordReport = useLatestCallback((): void => {
+    jimaku.close()
     jlptBulkExport.onClose()
     vocabulary.vocabularyMenu.onOpenWordReport?.()
   })
   const openBulkMining = useLatestCallback((): void => {
+    jimaku.close()
     jlptBulkExport.onClose()
     vocabulary.vocabularyMenu.onOpenBulkMining?.()
   })
@@ -378,6 +414,28 @@ export default function App({
       jlptBulkExport.open
   })
 
+  const closeJimaku = jimaku.close
+  useEffect(() => {
+    if (
+      optionsOpen ||
+      about.open ||
+      updates.modal !== null ||
+      vocabulary.modalOpen ||
+      jlptCoverage.open ||
+      jlptBulkExport.open
+    ) {
+      closeJimaku()
+    }
+  }, [
+    about.open,
+    closeJimaku,
+    jlptBulkExport.open,
+    jlptCoverage.open,
+    optionsOpen,
+    updates.modal,
+    vocabulary.modalOpen
+  ])
+
   // SubtitleSidebar row click: jumps playback to the clicked cue's start,
   // respecting the current subtitle offset the same way the overlay's active
   // cue is resolved (see seekTargetForCue).
@@ -386,12 +444,34 @@ export default function App({
   }
 
   const closeOptions = options.closeDialog
-
+  const openOptions = useLatestCallback((): void => {
+    closeJimaku()
+    options.openDialog()
+  })
+  const openAbout = useLatestCallback((): void => {
+    closeJimaku()
+    about.openDialog()
+  })
+  const openJimakuSearch = useLatestCallback((): void => {
+    setDismissedPromptSession(mediaSessionKey)
+    void jimaku.open()
+  })
+  const loadLocalSubtitle = useLatestCallback((): void => {
+    setDismissedPromptSession(mediaSessionKey)
+    closeJimaku()
+    mediaSession.subtitleMenu.onLoadSubtitleFile?.()
+  })
+  const openJimakuSettings = useLatestCallback((): void => {
+    setDismissedPromptSession(mediaSessionKey)
+    closeJimaku()
+    options.openDialog('subtitles')
+  })
   // The Options dialog's props, assembled from their owners: reducer-backed
   // settings, the dialog's own integration data/actions, the playback feature's
   // mpv-output rows, and the vocabulary feature's cache-invalidating rows.
   const optionsMenu = buildOptionsMenuProps({
     open: optionsOpen,
+    requestedCategory: options.requestedCategory,
     settings: state,
     dispatch,
     heldModifiers: modifiers.held,
@@ -399,6 +479,7 @@ export default function App({
     actions: options.actions,
     onClose: closeOptions,
     onCategoryOpen: options.onCategoryOpen,
+    onCategoryRequestHandled: options.clearRequestedCategory,
     playback: playbackWindow.optionsPlayback,
     knowledge: vocabulary.knowledgeOptions,
     updates: {
@@ -444,7 +525,9 @@ export default function App({
               tracks: state.tracks,
               selectedSubtitleId: state.selectedSubtitleId,
               externalSubtitleEncoding: state.externalSubtitleEncoding,
-              sidebarOpen
+              sidebarOpen,
+              hasFile: state.filePath !== undefined,
+              onFindJapaneseSubtitles: openJimakuSearch
             }}
             playback={{
               ...playbackWindow.playbackMenu,
@@ -466,8 +549,8 @@ export default function App({
               onOpenJlptBulkExport: () => openJlptBulkExport(),
               onOpenBulkMining: openBulkMining
             }}
-            onOpenOptions={options.openDialog}
-            onOpenAbout={about.openDialog}
+            onOpenOptions={openOptions}
+            onOpenAbout={openAbout}
             onOpenChange={setMenuBarOpen}
             gameOcr={gameOcr.menu}
           />
@@ -481,6 +564,15 @@ export default function App({
             ×
           </button>
         </div>
+      )}
+
+      {showNoJapanesePrompt && (
+        <NoJapaneseSubtitlePrompt
+          conservative={hasUnknownSubtitleLanguage}
+          onFind={openJimakuSearch}
+          onLoadLocalFile={loadLocalSubtitle}
+          onDismiss={() => setDismissedPromptSession(mediaSessionKey)}
+        />
       )}
 
       <div id="player-area">
@@ -587,6 +679,29 @@ export default function App({
       />
 
       <OptionsMenu {...optionsMenu} />
+
+      <JimakuSubtitlesDialog
+        {...jimaku}
+        open={jimaku.phase.kind !== 'idle'}
+        onClose={jimaku.close}
+        onEditIdentity={jimaku.editIdentity}
+        onEditEpisode={jimaku.editEpisode}
+        onSearch={jimaku.search}
+        onChooseTitle={jimaku.chooseTitle}
+        onShowMoreFiles={jimaku.showMoreFiles}
+        onShowAllFiles={jimaku.showAllFiles}
+        onChooseFile={jimaku.chooseFile}
+        onChooseMember={jimaku.chooseMember}
+        onCancelOperation={jimaku.cancelOperation}
+        onTryAnother={jimaku.tryAnother}
+        onRevert={jimaku.revert}
+        onRefresh={jimaku.refresh}
+        onOpenSourcePage={jimaku.openSourcePage}
+        onOpenSettings={openJimakuSettings}
+        subtitleOffsetMs={state.subtitleOffsetMs}
+        onChangeSubtitleOffset={playbackWindow.subtitleMenu.onChangeSubtitleOffset}
+        onLoadLocalFile={loadLocalSubtitle}
+      />
 
       <AboutDialog
         open={about.open}

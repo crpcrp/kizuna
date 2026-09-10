@@ -45,6 +45,7 @@ export type OptionsPlaybackGroup = Pick<
 
 export interface OptionsMenuPropsInput {
   open: boolean
+  requestedCategory?: OptionsMenuProps['requestedCategory']
   settings: OptionsSettingsState
   dispatch: Dispatch<PlayerAction>
   /** Modifiers currently held down, for the keybinding capture rows. */
@@ -53,6 +54,7 @@ export interface OptionsMenuPropsInput {
   actions: OptionsDialogActions
   onClose: () => void
   onCategoryOpen: OptionsMenuProps['onCategoryOpen']
+  onCategoryRequestHandled?: OptionsMenuProps['onCategoryRequestHandled']
   playback: OptionsPlaybackGroup
   /** The rows whose effect is to invalidate or rebuild the vocabulary caches. */
   knowledge: VocabularyKnowledgeOptions
@@ -73,6 +75,7 @@ export interface OptionsMenuPropsInput {
  */
 export function buildOptionsMenuProps({
   open,
+  requestedCategory,
   settings,
   dispatch,
   heldModifiers,
@@ -80,6 +83,7 @@ export function buildOptionsMenuProps({
   actions,
   onClose,
   onCategoryOpen,
+  onCategoryRequestHandled,
   playback,
   knowledge,
   updates,
@@ -91,8 +95,10 @@ export function buildOptionsMenuProps({
   // are scheduled explicitly because nothing else writes them.
   return {
     open,
+    requestedCategory,
     onClose,
     onCategoryOpen,
+    onCategoryRequestHandled,
     keybindings: {
       keyBindings: settings.keyBindings,
       heldModifiers,

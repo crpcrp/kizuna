@@ -155,6 +155,11 @@ export interface OpenSession {
   captureSubtitleSelection?: () => SubtitleSelectionSnapshot
   /** Receives the one-step revert snapshot after a replacement commits. */
   onSubtitleSelectionApplied?: (previous: SubtitleSelectionSnapshot) => void
+  /** Fires when a new media-open attempt invalidates the previous restore. */
+  onMediaOpenStarted?: () => void
+  /** Brackets the asynchronous subtitle restoration started by a media open. */
+  onSubtitleRestoreStarted?: () => void
+  onSubtitleRestoreSettled?: () => void
   onWarning?: OpenWarningSink
   /** Fires when "Open file…" (via openAndLoad) picks a path, with the entries
    * that pick replaces the queue with — a playlist's expanded entries, or the

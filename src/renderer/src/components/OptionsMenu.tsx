@@ -35,9 +35,12 @@ import { matchSettings } from './options/settingsSearch'
 
 export interface OptionsMenuProps {
   open: boolean
+  /** Optional category requested by another dialog before it opens. */
+  requestedCategory?: OptionsCategory
   error?: string
   onClose: () => void
   onCategoryOpen: (category: OptionsCategory) => void
+  onCategoryRequestHandled?: () => void
   keybindings: Omit<KeybindingsTabProps, 'active' | 'open'>
   playback: Omit<PlaybackTabProps, 'active' | 'open'>
   appearance: Omit<AppearanceTabProps, 'active'>
@@ -72,9 +75,11 @@ const FLASH_MS = 1600
 /** Options dialog shell: navigation, search, lazy category mounting, and tab composition. */
 export default function OptionsMenu({
   open,
+  requestedCategory,
   error,
   onClose,
   onCategoryOpen,
+  onCategoryRequestHandled,
   keybindings,
   playback,
   appearance,
@@ -100,17 +105,23 @@ export default function OptionsMenu({
     ? SETTING_ENTRIES
     : SETTING_ENTRIES.filter(({ category }) => category !== 'gameOcr')
   const results = searching ? matchSettings(query, settingEntries) : []
+  const visibleCategory = requestedCategory ?? activeCategory
+
+  const selectCategory = (category: OptionsCategory): void => {
+    setActiveCategory(category)
+    onCategoryRequestHandled?.()
+  }
 
   const selectResult = (entry: SettingEntry): void => {
-    setActiveCategory(entry.category)
+    selectCategory(entry.category)
     setQuery('')
     setHighlightId(entry.targetId ?? null)
   }
 
   useEffect(() => {
     if (!open) return
-    onCategoryOpen(activeCategory)
-  }, [open, activeCategory, onCategoryOpen])
+    onCategoryOpen(visibleCategory)
+  }, [open, onCategoryOpen, visibleCategory])
 
   useEffect(() => {
     if (!open) return
@@ -180,9 +191,9 @@ export default function OptionsMenu({
                 key={id}
                 type="button"
                 role="tab"
-                aria-selected={activeCategory === id}
-                className={activeCategory === id ? 'options-nav-item active' : 'options-nav-item'}
-                onClick={() => setActiveCategory(id)}
+                aria-selected={visibleCategory === id}
+                className={visibleCategory === id ? 'options-nav-item active' : 'options-nav-item'}
+                onClick={() => selectCategory(id)}
               >
                 {label}
               </button>
@@ -223,17 +234,17 @@ export default function OptionsMenu({
             <KeybindingsTab
               {...keybindings}
               open={open}
-              active={activeCategory === 'keybindings'}
+              active={visibleCategory === 'keybindings'}
             />
-            <PlaybackTab {...playback} open={open} active={activeCategory === 'playback'} />
-            <AppearanceTab {...appearance} active={activeCategory === 'appearance'} />
+            <PlaybackTab {...playback} open={open} active={visibleCategory === 'playback'} />
+            <AppearanceTab {...appearance} active={visibleCategory === 'appearance'} />
             <SubtitlesTab
               key={open ? 'subtitles-open' : 'subtitles-closed'}
               {...subtitles}
-              active={activeCategory === 'subtitles'}
+              active={visibleCategory === 'subtitles'}
             />
 
-            {activeCategory === 'startup' && (
+            {visibleCategory === 'startup' && (
               <StartupTab
                 active
                 startupBehavior={startupBehavior}
@@ -242,19 +253,19 @@ export default function OptionsMenu({
               />
             )}
 
-            {supportsGameOcr && activeCategory === 'gameOcr' && (
+            {supportsGameOcr && visibleCategory === 'gameOcr' && (
               <GameOcrTab {...gameOcr} open={open} active />
             )}
 
-            {activeCategory === 'dictionaries' && <DictionariesTab {...dictionaries} active />}
-            {activeCategory === 'anki' && <AnkiTab {...anki} active />}
-            {activeCategory === 'knowledge' && <KnowledgeTab {...knowledge} active />}
-            {activeCategory === 'setup' && (
+            {visibleCategory === 'dictionaries' && <DictionariesTab {...dictionaries} active />}
+            {visibleCategory === 'anki' && <AnkiTab {...anki} active />}
+            {visibleCategory === 'knowledge' && <KnowledgeTab {...knowledge} active />}
+            {visibleCategory === 'setup' && (
               <SetupTab
                 {...setup}
                 active
                 nowMs={nowMs}
-                onGoToCategory={setActiveCategory}
+                onGoToCategory={selectCategory}
                 categoryLabel={categoryLabel}
               />
             )}

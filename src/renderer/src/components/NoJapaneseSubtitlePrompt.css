@@ -1,0 +1,55 @@
+#no-japanese-subtitles-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  background: var(--surface-bar);
+}
+
+#no-japanese-subtitles-prompt > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#no-japanese-subtitles-prompt span {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.no-japanese-subtitles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.no-japanese-subtitles-actions button {
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
+  color: var(--text-primary);
+  background: var(--control-bg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.no-japanese-subtitles-actions button:hover {
+  background: var(--control-hover-bg);
+}
+
+@media (max-width: 620px) {
+  #no-japanese-subtitles-prompt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .no-japanese-subtitles-actions {
+    justify-content: flex-start;
+  }
+}

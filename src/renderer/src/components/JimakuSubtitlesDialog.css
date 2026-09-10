@@ -488,6 +488,13 @@
   background: var(--surface-panel);
 }
 
+.jimaku-timing-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
 .jimaku-visually-hidden {
   position: absolute;
   width: 1px;
