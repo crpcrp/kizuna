@@ -1,5 +1,6 @@
 import { JIMAKU_CHANNELS } from '../shared/ipcChannels'
-import type { JimakuTitleSearchRequest } from '../shared/jimaku'
+import type { JimakuSubtitleExportRequest, JimakuTitleSearchRequest } from '../shared/jimaku'
+import { normalizeJimakuSubtitleProvenance } from '../shared/mediaHistory'
 import type { IpcMainHandleLike } from './ipc'
 import type { JimakuService } from './services/jimaku/service'
 
@@ -79,6 +80,9 @@ export function registerJimakuBridge<E extends JimakuBridgeEvent>(
       requiredString(handle)
     )
   )
+  ipc.handle(JIMAKU_CHANNELS.exportActiveSubtitle, (event, request) =>
+    service.exportActiveSubtitle(senderFor(event), exportRequest(request))
+  )
 }
 
 function titleRequest(value: unknown): JimakuTitleSearchRequest {
@@ -131,4 +135,25 @@ function requiredPositiveInteger(value: unknown): number {
     throw new Error('Invalid Jimaku numeric identifier.')
   }
   return value
+}
+
+function exportRequest(value: unknown): JimakuSubtitleExportRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Invalid Jimaku export request.')
+  }
+  const request = value as Record<string, unknown>
+  if (
+    Object.keys(request).some(
+      (key) => !['mediaPath', 'mediaGeneration', 'provenance'].includes(key)
+    )
+  ) {
+    throw new Error('Invalid Jimaku export request.')
+  }
+  const provenance = normalizeJimakuSubtitleProvenance(request.provenance)
+  if (!provenance) throw new Error('Invalid Jimaku export request.')
+  return {
+    mediaPath: requiredString(request.mediaPath, 'Invalid Jimaku media path.'),
+    mediaGeneration: requiredGeneration(request.mediaGeneration),
+    provenance
+  }
 }

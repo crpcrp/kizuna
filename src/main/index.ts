@@ -43,6 +43,7 @@ import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
+import { showSaveFileDialog } from './media/mediaPicker'
 import {
   missingResourceMessage,
   requiredGameOcrResources,
@@ -93,6 +94,7 @@ import {
   createJimakuDownloadStore,
   isJimakuManagedSubtitlePath
 } from './services/jimaku/downloadStore'
+import { nodeJimakuExportFs } from './services/jimaku/export'
 import { createJimakuArchiveService } from './services/jimaku/archive'
 import { createJimakuService, type JimakuService } from './services/jimaku/service'
 import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
@@ -629,6 +631,7 @@ function startJimaku(
   secrets: ReturnType<typeof createSafeStorageCodec>,
   history: MediaHistoryService
 ): void {
+  const cacheRoot = join(app.getPath('userData'), 'jimaku')
   const client = createJimakuClient({
     getApiKey: () => jimakuSettings.getApiKey(),
     fetch: httpFetch
@@ -640,7 +643,7 @@ function startJimaku(
   })
   const downloads = createJimakuDownloadStore({
     fetch: httpFetch,
-    cacheRoot: join(app.getPath('userData'), 'jimaku')
+    cacheRoot
   })
   const archive = createJimakuArchiveService({ downloads })
   const service = createJimakuService({
@@ -649,6 +652,7 @@ function startJimaku(
     downloads,
     archive,
     mediaHistory: history,
+    subtitleExport: { showSaveDialog: showSaveFileDialog, fs: nodeJimakuExportFs },
     openExternal: (url) => shell.openExternal(url)
   })
   jimakuService = service

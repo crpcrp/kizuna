@@ -614,6 +614,20 @@ describe('Jimaku package storage', () => {
     })
     expect(parseCalls).toBe(1)
     expect(http.calls).toHaveLength(1)
+    if (!extracted.ok) return
+    await expect(
+      store.readManagedSubtitle({
+        provider: 'jimaku',
+        entryId: 90,
+        fileName: extracted.value.originalName,
+        contentVersion: extracted.value.contentVersion,
+        archiveMemberName: 'sub/Title - 07.srt'
+      })
+    ).resolves.toEqual({
+      path: extracted.value.managedPath,
+      bytes: BYTES,
+      format: 'srt'
+    })
   })
 
   it('uses the member name in extracted cache identity', async () => {

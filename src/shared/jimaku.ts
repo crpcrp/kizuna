@@ -112,6 +112,20 @@ export interface JimakuPreparedSubtitleResult {
   selection: Extract<StoredSubtitleSelection, { mode: 'external' }>
 }
 
+export interface JimakuSubtitleExportRequest {
+  mediaPath: string
+  mediaGeneration: number
+  provenance: JimakuSubtitleProvenance
+}
+
+export type JimakuSubtitleExportResult =
+  | { status: 'exported'; path: string }
+  | { status: 'cancelled' }
+  | {
+      status: 'error'
+      code: 'notAvailable' | 'staleMedia' | 'invalidDestination' | 'destinationChanged' | 'storage'
+    }
+
 export interface JimakuArchiveMembersResult {
   kind: 'archiveMembers'
   packageId: string

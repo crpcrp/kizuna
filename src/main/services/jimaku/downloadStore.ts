@@ -89,6 +89,12 @@ export interface JimakuPreparedPackage {
 
 export type JimakuPreparedDownload = JimakuPreparedSubtitle | JimakuPreparedPackage
 
+export interface JimakuManagedSubtitle {
+  path: string
+  bytes: Uint8Array
+  format: JimakuSubtitleFormat
+}
+
 export interface JimakuDownloadFileStat {
   size: number
   mtimeMs: number
@@ -184,6 +190,9 @@ export interface JimakuDownloadStore {
     bytes: Uint8Array,
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<JimakuPreparedSubtitle>>
+  readManagedSubtitle(
+    provenance: JimakuSubtitleProvenance
+  ): Promise<JimakuManagedSubtitle | undefined>
   lookupPrepared(handle: string): JimakuPreparedDownload | undefined
   readPrepared(handle: string): Promise<Uint8Array | undefined>
   lookupCached(entryId: number, file: JimakuFileRecord): Promise<JimakuPreparedSubtitle | undefined>
@@ -657,6 +666,45 @@ export function createJimakuDownloadStore(
     }
   }
 
+  async function readManagedSubtitle(
+    provenance: JimakuSubtitleProvenance
+  ): Promise<JimakuManagedSubtitle | undefined> {
+    const format = subtitleFormat(provenance.fileName)
+    if (
+      provenance.provider !== 'jimaku' ||
+      !isPositiveSafeInteger(provenance.entryId) ||
+      !isSubtitleFormat(format) ||
+      !/^[a-f0-9]{64}$/u.test(provenance.contentVersion)
+    ) {
+      return undefined
+    }
+
+    try {
+      return await exclusive(async () => {
+        const currentIndex = await ensureIndex()
+        const cached = Object.values(currentIndex.entries).find(
+          (entry) =>
+            entry.entryId === provenance.entryId &&
+            entry.contentVersion === provenance.contentVersion &&
+            entry.format === format &&
+            (entry.originalName ?? entry.remoteFilename) === provenance.fileName &&
+            entry.archiveMemberName === provenance.archiveMemberName
+        )
+        if (!cached) return undefined
+
+        const path = contentPath(cached.contentVersion, cached.format)
+        if (!isWithinRoot(pathApi, deps.cacheRoot, path)) return undefined
+        const bytes = await fs.readFile(path)
+        if (bytes.byteLength !== cached.byteSize || sha256(bytes) !== cached.contentVersion)
+          return undefined
+        await touchCache(cached)
+        return { path, bytes, format }
+      })
+    } catch {
+      return undefined
+    }
+  }
+
   async function cleanup(protectedPaths: Iterable<string> = []): Promise<void> {
     try {
       await exclusive(async () => {
@@ -857,6 +905,7 @@ export function createJimakuDownloadStore(
     prepareDirect,
     preparePackage,
     prepareExtracted,
+    readManagedSubtitle,
     lookupPrepared: (handle) => active.get(handle),
     readPrepared: async (handle) => {
       const prepared = active.get(handle)

@@ -21,9 +21,11 @@ export interface SubtitleMenuProps {
   subtitleOffsetMs?: number
   sidebarOpen?: boolean
   hasFile?: boolean
+  hasActiveJimakuSubtitle?: boolean
   onSelectSubtitle: (id: number | null) => void
   onFindJapaneseSubtitles?: () => void
   onLoadSubtitleFile?: () => void
+  onExportJimakuSubtitle?: () => void
   onChangeExternalSubtitleEncoding?: (value: SubtitleEncoding) => void
   onChangeSubtitleOffset?: (value: number) => void
   onApplyOffsetToFolder?: () => void
@@ -41,9 +43,11 @@ export function SubtitleMenu({
   subtitleOffsetMs = 0,
   sidebarOpen = false,
   hasFile = false,
+  hasActiveJimakuSubtitle = false,
   onSelectSubtitle,
   onFindJapaneseSubtitles,
   onLoadSubtitleFile,
+  onExportJimakuSubtitle,
   onChangeExternalSubtitleEncoding,
   onChangeSubtitleOffset,
   onApplyOffsetToFolder,
@@ -105,6 +109,14 @@ export function SubtitleMenu({
           <div className="menu-separator" />
         </>
       )}
+      <CommandItem
+        label="Save subtitle as…"
+        ariaLabel="Save subtitle as"
+        id="save-subtitle-as"
+        disabled={mediaOpening || !hasActiveJimakuSubtitle || onExportJimakuSubtitle === undefined}
+        onClick={run(onExportJimakuSubtitle ?? (() => undefined))}
+      />
+      <div className="menu-separator" />
       {selectedSubtitleId === EXTERNAL_SUBTITLE_TRACK_ID && onChangeExternalSubtitleEncoding && (
         <div className="menu-offset-row">
           <label htmlFor="external-subtitle-encoding">Encoding</label>

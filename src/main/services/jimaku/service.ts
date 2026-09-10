@@ -17,6 +17,8 @@ import {
   type JimakuServiceResult,
   type JimakuSession,
   type JimakuSourcePage,
+  type JimakuSubtitleExportRequest,
+  type JimakuSubtitleExportResult,
   type JimakuTitleSearchRequest,
   type JimakuTitleSearchResult
 } from '../../../shared/jimaku'
@@ -37,6 +39,11 @@ import type {
   JimakuDownloadStore,
   JimakuPreparedSubtitle
 } from './downloadStore'
+import {
+  exportManagedJimakuSubtitle,
+  type JimakuExportFs,
+  type ShowJimakuSaveDialog
+} from './export'
 import type { JimakuSettingsService } from './settings'
 import type { MediaHistoryService } from '../mediaHistory'
 
@@ -95,10 +102,17 @@ export interface CreateJimakuServiceDeps {
   client: Pick<JimakuClient, 'searchEntries' | 'listFiles'>
   settings: Pick<JimakuSettingsService, 'getConfigGeneration' | 'onConfigChange'>
   downloads: Pick<JimakuDownloadStore, 'prepareDirect' | 'releasePrepared'> &
-    Partial<Pick<JimakuDownloadStore, 'cleanup'>>
+    Partial<Pick<JimakuDownloadStore, 'cleanup' | 'readManagedSubtitle'>>
   archive: JimakuArchiveService
   mediaHistory?: Pick<MediaHistoryService, 'applyPreparedSubtitle'> &
-    Partial<Pick<MediaHistoryService, 'getPlaybackHistory' | 'getProtectedJimakuPaths'>>
+    Partial<
+      Pick<MediaHistoryService, 'getPlaybackHistory' | 'getProtectedJimakuPaths' | 'isCurrentMedia'>
+    >
+  subtitleExport?: {
+    showSaveDialog: ShowJimakuSaveDialog
+    fs?: JimakuExportFs
+    platform?: NodeJS.Platform
+  }
   openExternal: (url: string) => Promise<void>
   now?: () => number
   cacheTtlMs?: number
@@ -145,6 +159,10 @@ export interface JimakuService {
     sessionId: unknown,
     handle: unknown
   ): JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>
+  exportActiveSubtitle(
+    sender: unknown,
+    request: JimakuSubtitleExportRequest
+  ): Promise<JimakuSubtitleExportResult>
   disposeSender(sender: unknown): void
   dispose(): void
 }
@@ -613,6 +631,51 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
   }
 
+  async function exportActiveSubtitle(
+    _sender: unknown,
+    request: JimakuSubtitleExportRequest
+  ): Promise<JimakuSubtitleExportResult> {
+    const history = deps.mediaHistory
+    const readManagedSubtitle = deps.downloads.readManagedSubtitle
+    const exportOptions = deps.subtitleExport
+    if (
+      !history?.getPlaybackHistory ||
+      !history.isCurrentMedia ||
+      !readManagedSubtitle ||
+      !exportOptions
+    ) {
+      return { status: 'error', code: 'notAvailable' }
+    }
+    const getPlaybackHistory = history.getPlaybackHistory
+    const isCurrentMedia = history.isCurrentMedia
+    if (!isCurrentMedia(request.mediaPath, request.mediaGeneration)) {
+      return { status: 'error', code: 'staleMedia' }
+    }
+
+    const isActive = (): boolean => {
+      try {
+        const selection = getPlaybackHistory(request.mediaPath)?.subtitle
+        return (
+          selection?.mode === 'external' &&
+          selection.provenance !== undefined &&
+          sameProvenance(selection.provenance, request.provenance)
+        )
+      } catch {
+        return false
+      }
+    }
+    if (!isActive()) return { status: 'error', code: 'notAvailable' }
+
+    return exportManagedJimakuSubtitle(request, {
+      readSource: () => readManagedSubtitle(request.provenance),
+      isCurrent: () => isCurrentMedia(request.mediaPath, request.mediaGeneration),
+      isActive,
+      showSaveDialog: exportOptions.showSaveDialog,
+      fs: exportOptions.fs,
+      platform: exportOptions.platform
+    })
+  }
+
   function disposeSender(sender: unknown): void {
     const session = activeBySender.get(sender)
     if (session) releaseSession(session)
@@ -638,6 +701,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     endSession,
     openSourcePage,
     commitPreparedSubtitle,
+    exportActiveSubtitle,
     disposeSender,
     dispose
   }
@@ -898,4 +962,14 @@ function isPositiveSafeInteger(value: unknown): value is number {
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+}
+
+function sameProvenance(left: JimakuSubtitleProvenance, right: JimakuSubtitleProvenance): boolean {
+  return (
+    left.provider === right.provider &&
+    left.entryId === right.entryId &&
+    left.fileName === right.fileName &&
+    left.contentVersion === right.contentVersion &&
+    left.archiveMemberName === right.archiveMemberName
+  )
 }
