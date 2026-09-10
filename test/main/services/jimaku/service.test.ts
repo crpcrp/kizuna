@@ -59,6 +59,7 @@ function makeHarness() {
   const configListeners = new Set<(generation: number) => void>()
   const settings = {
     getConfigGeneration: vi.fn(() => configGeneration),
+    getFolderHint: vi.fn(),
     onConfigChange: vi.fn((listener: (generation: number) => void) => {
       configListeners.add(listener)
       return () => configListeners.delete(listener)
@@ -74,8 +75,12 @@ function makeHarness() {
         value: []
       })
     ),
+    getEntry: vi.fn(async (id: number) => ({
+      ok: true as const,
+      value: { ...ENTRY_ANIME, id }
+    })),
     listFiles: vi.fn(async () => ({ ok: true as const, value: [] as JimakuFileRecord[] }))
-  } satisfies Pick<JimakuClient, 'searchEntries' | 'listFiles'>
+  } satisfies Pick<JimakuClient, 'searchEntries' | 'getEntry' | 'listFiles'>
   const downloads = {
     prepareDirect: vi.fn(async (_entryId: number, file: JimakuFileRecord) => ({
       ok: true as const,
@@ -136,6 +141,7 @@ function makeHarness() {
 
   return {
     service,
+    settings,
     client,
     downloads,
     archive,
@@ -198,10 +204,12 @@ describe('createJimakuService', () => {
     const service = createJimakuService({
       client: {
         searchEntries: vi.fn(),
+        getEntry: vi.fn(),
         listFiles: vi.fn()
       },
       settings: {
         getConfigGeneration: vi.fn(() => 0),
+        getFolderHint: vi.fn(),
         onConfigChange: vi.fn(() => () => undefined)
       },
       downloads,
@@ -292,6 +300,48 @@ describe('createJimakuService', () => {
     expect(harness.client.listFiles).toHaveBeenCalledOnce()
     await harness.service.listFiles('window-a', started.value.sessionId, ENTRY_ANIME.id, true)
     expect(harness.client.listFiles).toHaveBeenCalledTimes(2)
+  })
+
+  it('resolves a remembered folder title before listing its files', async () => {
+    const harness = makeHarness()
+    harness.settings.getFolderHint.mockReturnValue({
+      entryId: ENTRY_ANIME.id,
+      name: ENTRY_ANIME.name,
+      category: 'anime',
+      updatedAt: 1
+    })
+    harness.client.getEntry.mockResolvedValue({ ok: true, value: ENTRY_ANIME })
+    harness.client.listFiles.mockResolvedValue({ ok: true, value: [SRT_FILE] })
+
+    const started = harness.service.beginSession('window-a', '/media/Anime title - 02.mkv', 1)
+    expect(started.ok).toBe(true)
+    if (!started.ok) throw new Error('Expected the Jimaku session to start.')
+
+    const listed = await harness.service.listFiles(
+      'window-a',
+      started.value.sessionId,
+      ENTRY_ANIME.id
+    )
+
+    expect(listed).toMatchObject({ ok: true, value: { entryId: ENTRY_ANIME.id } })
+    expect(harness.client.getEntry).toHaveBeenCalledWith(ENTRY_ANIME.id, expect.any(AbortSignal))
+    expect(harness.client.listFiles).toHaveBeenCalledWith(ENTRY_ANIME.id, expect.any(AbortSignal))
+  })
+
+  it('allows the dialog to reopen for the same media generation', () => {
+    const harness = makeHarness()
+    const first = harness.service.beginSession('window-a', '/media/a.mkv', 1)
+    expect(first.ok).toBe(true)
+    if (!first.ok) throw new Error('Expected the first Jimaku session to start.')
+    expect(harness.service.endSession('window-a', first.value.sessionId)).toEqual({
+      ok: true,
+      value: undefined
+    })
+
+    expect(harness.service.beginSession('window-a', '/media/a.mkv', 1)).toMatchObject({
+      ok: true,
+      value: { mediaGeneration: 1 }
+    })
   })
 
   it('prepares direct and archive files only from session-owned candidates', async () => {

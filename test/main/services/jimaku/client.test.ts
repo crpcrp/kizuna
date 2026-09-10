@@ -274,6 +274,69 @@ describe('createJimakuClient', () => {
     })
   })
 
+  it('bounds the streamed response body and cancels it before buffering the full payload', async () => {
+    const url = searchUrl('Frieren', true)
+    let streamClosed = false
+    const response: HttpResponse = {
+      status: 200,
+      ok: true,
+      headers: { get: () => null },
+      body: (async function* () {
+        try {
+          yield new Uint8Array(JIMAKU_MAX_RESPONSE_BYTES)
+          yield new Uint8Array([1])
+        } finally {
+          streamClosed = true
+        }
+      })(),
+      json: vi.fn(),
+      text: vi.fn()
+    }
+    const client = createJimakuClient({
+      getApiKey: () => 'test-key',
+      fetch: async (requestedUrl) => {
+        expect(requestedUrl).toBe(url)
+        return response
+      }
+    })
+
+    await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
+      ok: false,
+      error: { code: 'invalidResponse' }
+    })
+    expect(response.text).not.toHaveBeenCalled()
+    expect(streamClosed).toBe(true)
+  })
+
+  it('parses a valid streamed response without using the buffered fallback', async () => {
+    const url = searchUrl('Frieren', true)
+    const body = new TextEncoder().encode('[]')
+    const response: HttpResponse = {
+      status: 200,
+      ok: true,
+      headers: { get: () => null },
+      body: (async function* () {
+        yield body.subarray(0, 1)
+        yield body.subarray(1)
+      })(),
+      json: vi.fn(),
+      text: vi.fn()
+    }
+    const client = createJimakuClient({
+      getApiKey: () => 'test-key',
+      fetch: async (requestedUrl) => {
+        expect(requestedUrl).toBe(url)
+        return response
+      }
+    })
+
+    await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
+      ok: true,
+      value: []
+    })
+    expect(response.text).not.toHaveBeenCalled()
+  })
+
   it('reads the current key once at the start of each request and never serializes it in errors', async () => {
     let apiKey = 'key-a'
     const seen: string[] = []

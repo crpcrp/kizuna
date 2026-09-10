@@ -45,6 +45,8 @@ export interface CreateJimakuClientDeps {
 const TIMEOUT = Symbol('jimaku-timeout')
 const CANCELLED = Symbol('jimaku-cancelled')
 const INVALID = Symbol('jimaku-invalid')
+const RESPONSE_TOO_LARGE = Symbol('jimaku-response-too-large')
+const INVALID_RESPONSE_BODY = Symbol('jimaku-invalid-response-body')
 
 /** Creates a read-only, fixed-origin Jimaku API client. */
 export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
@@ -152,8 +154,17 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
 
       let body: string
       try {
-        body = await Promise.race([response.text(), timeout, cancellation])
+        body = await readResponseText(
+          response,
+          JIMAKU_MAX_RESPONSE_BYTES,
+          controller,
+          timeout,
+          cancellation
+        )
       } catch (error) {
+        if (error === RESPONSE_TOO_LARGE || error === INVALID_RESPONSE_BODY) {
+          return failure('invalidResponse')
+        }
         return requestFailure(error, callerCancelled, timedOut, signal)
       }
       if (callerCancelled || signal?.aborted) return failure('cancelled')
@@ -236,6 +247,52 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
     cooldownUntilMs = Math.max(cooldownUntilMs ?? 0, requestedUntil)
     return toIsoTimestamp(cooldownUntilMs)
   }
+}
+
+async function readResponseText(
+  response: HttpResponse,
+  maxBytes: number,
+  controller: AbortController,
+  timeout: Promise<never>,
+  cancellation: Promise<never>
+): Promise<string> {
+  if (response.body === undefined || response.body === null) {
+    const text = await Promise.race([response.text(), timeout, cancellation])
+    if (typeof text !== 'string') throw INVALID_RESPONSE_BODY
+    if (utf8ByteLength(text) > maxBytes) throw RESPONSE_TOO_LARGE
+    return text
+  }
+
+  const iterator = response.body[Symbol.asyncIterator]()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  let completed = false
+  try {
+    while (true) {
+      const result = await Promise.race([iterator.next(), timeout, cancellation])
+      if (result.done) {
+        completed = true
+        break
+      }
+      if (!(result.value instanceof Uint8Array)) throw INVALID_RESPONSE_BODY
+      total += result.value.byteLength
+      if (total > maxBytes) {
+        controller.abort()
+        throw RESPONSE_TOO_LARGE
+      }
+      chunks.push(result.value)
+    }
+  } finally {
+    if (!completed) await iterator.return?.().catch(() => undefined)
+  }
+
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return new TextDecoder().decode(bytes)
 }
 
 function requestFailure<T>(
