@@ -77,6 +77,15 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       translationSettings: { hasAzureKey: false, azureRegion: '' },
       onSaveAzureTranslationKey: async () => true,
       onSaveAzureTranslationRegion: async () => true,
+      jimakuSettings: {
+        configured: false,
+        secretStorageAvailable: true,
+        testOutcome: { status: 'notTested' }
+      },
+      onSaveJimakuApiKey: async () => undefined,
+      onTestJimakuConnection: async () => undefined,
+      onClearJimakuApiKey: async () => undefined,
+      onOpenJimakuAccount: noop,
       onChangeSubtitleStyle: noop,
       onChangeSubtitleDragEnabled: noop,
       onChangeTranslationEnabled: noop

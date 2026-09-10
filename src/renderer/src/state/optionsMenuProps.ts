@@ -142,7 +142,13 @@ export function buildOptionsMenuProps({
         actions.persist({ translationEnabled: value })
       },
       onSaveAzureTranslationKey: actions.onSaveAzureTranslationKey,
-      onSaveAzureTranslationRegion: actions.onSaveAzureTranslationRegion
+      onSaveAzureTranslationRegion: actions.onSaveAzureTranslationRegion,
+      jimakuSettings: data.jimakuSettings,
+      jimakuLoadError: data.jimakuError,
+      onSaveJimakuApiKey: actions.onSaveJimakuApiKey,
+      onTestJimakuConnection: actions.onTestJimakuConnection,
+      onClearJimakuApiKey: actions.onClearJimakuApiKey,
+      onOpenJimakuAccount: actions.onOpenJimakuAccount
     },
     dictionaries: {
       mecabDicts: data.dictionaries.mecabDicts,

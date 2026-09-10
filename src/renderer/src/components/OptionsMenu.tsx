@@ -227,7 +227,11 @@ export default function OptionsMenu({
             />
             <PlaybackTab {...playback} open={open} active={activeCategory === 'playback'} />
             <AppearanceTab {...appearance} active={activeCategory === 'appearance'} />
-            <SubtitlesTab {...subtitles} active={activeCategory === 'subtitles'} />
+            <SubtitlesTab
+              key={open ? 'subtitles-open' : 'subtitles-closed'}
+              {...subtitles}
+              active={activeCategory === 'subtitles'}
+            />
 
             {activeCategory === 'startup' && (
               <StartupTab

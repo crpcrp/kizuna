@@ -11,7 +11,8 @@ export const APP_NAME = PRODUCT_NAME
 export const APP_INFO_LINKS = {
   repository: REPOSITORY_URL,
   license: `${REPOSITORY_URL}/blob/main/LICENSE`,
-  issues: `${REPOSITORY_URL}/issues`
+  issues: `${REPOSITORY_URL}/issues`,
+  jimakuAccount: 'https://jimaku.cc/account'
 } as const
 
 export type AppInfoLink = keyof typeof APP_INFO_LINKS

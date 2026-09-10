@@ -106,6 +106,19 @@ describe('OptionsMenu setting search', () => {
     ).toBeTruthy()
   })
 
+  it('finds the Jimaku API-key setup row and points to its input', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} />)
+
+    fireEvent.change(searchBox(), { target: { value: 'Jimaku account key' } })
+    fireEvent.click(screen.getByRole('option', { name: /Jimaku subtitle downloads API key/ }))
+
+    expect(tab('Subtitles').getAttribute('aria-selected')).toBe('true')
+    expect(document.getElementById('jimaku-api-key-input')).toBeTruthy()
+    expect(
+      document.getElementById('jimaku-api-key-input')?.closest('.options-row')?.className
+    ).toContain('options-row-flash')
+  })
+
   it('reaches the Startup selector from search', () => {
     render(<OptionsMenu {...baseOptionsMenuProps()} />)
 

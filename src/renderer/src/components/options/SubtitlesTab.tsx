@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import type { JimakuSettingsStatus, JimakuTestOutcome } from '../../../../shared/jimaku'
 import {
   DEFAULT_SUBTITLE_STYLE,
   SUBTITLE_FONT_SCALE_MAX,
@@ -25,6 +26,12 @@ export interface SubtitlesTabProps {
   onChangeTranslationEnabled: (enabled: boolean) => void
   onSaveAzureTranslationKey: (key: string) => boolean | Promise<boolean>
   onSaveAzureTranslationRegion: (region: string) => boolean | Promise<boolean>
+  jimakuSettings?: JimakuSettingsStatus
+  jimakuLoadError?: string
+  onSaveJimakuApiKey: (key: string) => Promise<JimakuSettingsStatus | undefined>
+  onTestJimakuConnection: () => Promise<JimakuSettingsStatus | undefined>
+  onClearJimakuApiKey: () => Promise<JimakuSettingsStatus | undefined>
+  onOpenJimakuAccount: () => void
 }
 
 export function parseFontScalePercent(rawValue: string): number | null {
@@ -57,6 +64,47 @@ export function describeTranslationKeyStorage(encryptionAvailable: boolean | und
     'The key is stored locally; the fallback is unencrypted when secure storage is unavailable. ' +
     transmission
   )
+}
+
+export function describeJimakuKeyStorage(encryptionAvailable: boolean | undefined): string {
+  if (encryptionAvailable === undefined) {
+    return 'The key is stored locally. Encryption availability is still being checked.'
+  }
+  if (encryptionAvailable) {
+    return "The key is stored locally and encrypted with your operating system's secure store."
+  }
+  return 'The key is stored locally without encryption because secure storage is unavailable.'
+}
+
+function formatRetryAt(retryAt: string | undefined): string | null {
+  if (retryAt === undefined) return null
+  const timestamp = new Date(retryAt)
+  if (Number.isNaN(timestamp.getTime())) return null
+  return timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+export function describeJimakuTestOutcome(outcome: JimakuTestOutcome | undefined): string | null {
+  if (outcome === undefined || outcome.status === 'notTested') return null
+  if (outcome.status === 'connected') {
+    return 'Connected. The read-only API check succeeded; subtitle availability is not guaranteed.'
+  }
+
+  switch (outcome.error.code) {
+    case 'unauthorized':
+      return 'Invalid API key.'
+    case 'rateLimited': {
+      const retryAt = formatRetryAt(outcome.error.retryAt)
+      return retryAt === null
+        ? 'Rate limited. Try again later.'
+        : `Rate limited. Try again after ${retryAt}.`
+    }
+    case 'notConfigured':
+      return 'Not configured. Save an API key before testing.'
+    case 'cancelled':
+      return 'Connection test was cancelled. Try again.'
+    default:
+      return 'Jimaku could not be reached. Check your connection and try again.'
+  }
 }
 
 export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
@@ -128,6 +176,13 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
     category: 'subtitles',
     keywords: ['Azure', 'translator', 'location', 'regional resource'],
     targetId: 'azure-translator-region-input'
+  },
+  {
+    id: 'jimaku-api-key',
+    label: 'Jimaku subtitle downloads API key',
+    category: 'subtitles',
+    keywords: ['Jimaku', 'Japanese subtitles', 'download', 'account'],
+    targetId: 'jimaku-api-key-input'
   }
 ]
 
@@ -143,11 +198,63 @@ export default function SubtitlesTab({
   onChangeSubtitleDragEnabled,
   onChangeTranslationEnabled,
   onSaveAzureTranslationKey,
-  onSaveAzureTranslationRegion
+  onSaveAzureTranslationRegion,
+  jimakuSettings,
+  jimakuLoadError,
+  onSaveJimakuApiKey,
+  onTestJimakuConnection,
+  onClearJimakuApiKey,
+  onOpenJimakuAccount
 }: SubtitlesTabProps): React.JSX.Element {
   const [fontScaleDraft, setFontScaleDraft] = useState<string | null>(null)
   const [azureKeyDraft, setAzureKeyDraft] = useState('')
   const [azureRegionDraft, setAzureRegionDraft] = useState<string | null>(null)
+  const [jimakuKeyDraft, setJimakuKeyDraft] = useState('')
+  const [jimakuBusy, setJimakuBusy] = useState<'save' | 'test' | 'clear' | null>(null)
+  const [jimakuTestOverride, setJimakuTestOverride] = useState<JimakuTestOutcome | undefined>()
+  const jimakuOperationRef = useRef(0)
+  const jimakuDraftRevisionRef = useRef(0)
+
+  const runJimakuAction = (
+    kind: 'save' | 'test' | 'clear',
+    action: () => Promise<JimakuSettingsStatus | undefined>,
+    draftRevision: number,
+    onSuccess: (status: JimakuSettingsStatus) => void
+  ): void => {
+    const operation = ++jimakuOperationRef.current
+    setJimakuBusy(kind)
+    let pending: Promise<JimakuSettingsStatus | undefined>
+    try {
+      pending = action()
+    } catch {
+      setJimakuBusy(null)
+      return
+    }
+    void Promise.resolve(pending)
+      .then(
+        (status) => {
+          if (operation !== jimakuOperationRef.current || status === undefined) return
+          onSuccess(status)
+          if (kind !== 'test' && draftRevision === jimakuDraftRevisionRef.current) {
+            setJimakuKeyDraft('')
+          }
+        },
+        () => undefined
+      )
+      .finally(() => {
+        if (operation === jimakuOperationRef.current) setJimakuBusy(null)
+      })
+  }
+
+  const jimakuConfigured = jimakuSettings?.configured === true
+  const jimakuTestOutcome = jimakuTestOverride ?? jimakuSettings?.testOutcome
+  const jimakuTestMessage = describeJimakuTestOutcome(jimakuTestOutcome)
+  const jimakuStatusLabel =
+    jimakuSettings === undefined
+      ? 'Checking…'
+      : jimakuConfigured
+        ? 'Configured ✓'
+        : 'Not configured'
 
   const submitAzureKey = (key: string): void => {
     let result: boolean | Promise<boolean>
@@ -391,6 +498,133 @@ export default function SubtitlesTab({
         </div>
         <p className="options-hint">
           {describeTranslationKeyStorage(translationSettings.encryptionAvailable)}
+        </p>
+      </div>
+      <div
+        className="options-section"
+        id="jimaku-subtitle-downloads"
+        aria-busy={jimakuBusy !== null}
+      >
+        <h3>Jimaku subtitle downloads</h3>
+        {jimakuLoadError && (
+          <p className="options-error" id="jimaku-load-error" role="alert">
+            {jimakuLoadError}
+          </p>
+        )}
+        <p className="options-hint">
+          A Jimaku account and personal API key are required to download subtitles. Saving only
+          updates the local key; it does not contact Jimaku.
+        </p>
+        <div className="options-row">
+          <span className="options-row-label">Jimaku account</span>
+          <button
+            type="button"
+            id="jimaku-account-link"
+            className="options-keybind-button"
+            onClick={onOpenJimakuAccount}
+          >
+            Open Jimaku account
+          </button>
+        </div>
+        <div className="options-row">
+          <label htmlFor="jimaku-api-key-input" className="options-row-label">
+            Paste API key
+          </label>
+          <input
+            type="password"
+            id="jimaku-api-key-input"
+            autoComplete="off"
+            placeholder={jimakuConfigured ? '••••••••' : 'Paste API key'}
+            value={jimakuKeyDraft}
+            onChange={(event) => {
+              jimakuDraftRevisionRef.current += 1
+              jimakuOperationRef.current += 1
+              setJimakuBusy(null)
+              setJimakuKeyDraft(event.target.value)
+            }}
+            aria-describedby="jimaku-test-hint"
+          />
+        </div>
+        <div className="options-row">
+          <span
+            id="jimaku-api-key-status"
+            className="options-row-label"
+            data-configured={jimakuConfigured}
+          >
+            {jimakuStatusLabel}
+          </span>
+          <button
+            type="button"
+            id="jimaku-api-key-save"
+            className="options-keybind-button"
+            disabled={jimakuKeyDraft.trim() === '' || jimakuBusy !== null}
+            onClick={() =>
+              runJimakuAction(
+                'save',
+                () => onSaveJimakuApiKey(jimakuKeyDraft),
+                jimakuDraftRevisionRef.current,
+                (status) => setJimakuTestOverride(status.testOutcome)
+              )
+            }
+          >
+            {jimakuBusy === 'save' ? 'Saving…' : 'Save key'}
+          </button>
+          <button
+            type="button"
+            id="jimaku-api-key-test"
+            className="options-keybind-button"
+            disabled={!jimakuConfigured || jimakuKeyDraft !== '' || jimakuBusy !== null}
+            onClick={() =>
+              runJimakuAction(
+                'test',
+                onTestJimakuConnection,
+                jimakuDraftRevisionRef.current,
+                (status) => setJimakuTestOverride(status.testOutcome)
+              )
+            }
+          >
+            {jimakuBusy === 'test' ? 'Testing…' : 'Test connection'}
+          </button>
+          <button
+            type="button"
+            id="jimaku-api-key-remove"
+            className="options-keybind-button"
+            disabled={!jimakuConfigured || jimakuBusy !== null}
+            onClick={() =>
+              runJimakuAction(
+                'clear',
+                onClearJimakuApiKey,
+                jimakuDraftRevisionRef.current,
+                (status) => setJimakuTestOverride(status.testOutcome)
+              )
+            }
+          >
+            {jimakuBusy === 'clear' ? 'Removing…' : 'Remove key'}
+          </button>
+        </div>
+        <p className="options-hint" id="jimaku-test-hint">
+          Test connection uses the saved key. Save a new key before testing; unsaved input disables
+          this action.
+        </p>
+        {jimakuTestMessage && (
+          <p
+            id="jimaku-test-status"
+            className={jimakuTestOutcome?.status === 'connected' ? 'options-hint' : 'options-error'}
+            role={jimakuTestOutcome?.status === 'connected' ? 'status' : 'alert'}
+          >
+            {jimakuTestMessage}
+          </p>
+        )}
+        <p
+          className={
+            jimakuSettings?.secretStorageAvailable === false ? 'options-warning' : 'options-hint'
+          }
+        >
+          {describeJimakuKeyStorage(jimakuSettings?.secretStorageAvailable)}
+        </p>
+        <p className="options-hint">
+          Removing the key does not delete previously downloaded subtitles; they remain usable
+          offline.
         </p>
       </div>
     </section>

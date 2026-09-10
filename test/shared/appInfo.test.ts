@@ -40,7 +40,8 @@ describe('createAppInfo', () => {
     expect(APP_INFO_LINKS).toEqual({
       repository: REPOSITORY_URL,
       license: `${REPOSITORY_URL}/blob/main/LICENSE`,
-      issues: `${REPOSITORY_URL}/issues`
+      issues: `${REPOSITORY_URL}/issues`,
+      jimakuAccount: 'https://jimaku.cc/account'
     })
   })
 })

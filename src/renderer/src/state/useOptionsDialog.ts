@@ -9,6 +9,7 @@ import type {
   AnkiSettings
 } from '../../../shared/anki'
 import type { ImportProgress } from '../../../shared/dictionary'
+import type { JimakuSettingsStatus } from '../../../shared/jimaku'
 import type { PublicKnowledgeSettings, SyncStatus } from '../../../shared/knowledge'
 import type { PlayerSettings } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
@@ -16,13 +17,16 @@ import type { PublicTranslationSettings } from '../../../shared/translation'
 import type { OptionsCategory } from '../components/options/types'
 import {
   changeAnkiSettings,
+  clearJimakuApiKey,
   importYomitanDict,
   loadCategoryDomains,
   removeYomitanDict,
   reorderYomitanDicts,
   saveAzureTranslationSettings,
+  saveJimakuApiKey,
   setYomitanEnabled,
-  setYomitanFallbackOnly
+  setYomitanFallbackOnly,
+  testJimakuConnection
 } from './integrationActions'
 import {
   createOptionsDataController,
@@ -44,7 +48,7 @@ import { errorMessage } from '../util/errorMessage'
  * state/optionsData.ts), which reaches `window.kizuna` lazily. */
 export type OptionsDialogBridge = Pick<
   KizunaApi,
-  'anki' | 'dict' | 'mecab' | 'playerSettings' | 'translate'
+  'anki' | 'appInfo' | 'dict' | 'jimaku' | 'mecab' | 'playerSettings' | 'translate'
 >
 
 export interface UseOptionsDialogInput {
@@ -71,6 +75,8 @@ export interface OptionsDialogData {
   knowledgeError: string | undefined
   translationSettings: PublicTranslationSettings
   translationError: string | undefined
+  jimakuSettings: JimakuSettingsStatus | undefined
+  jimakuError: string | undefined
   setup: SetupData | undefined
 }
 
@@ -92,6 +98,10 @@ export interface OptionsDialogActions {
   onChangeAnkiSettings(patch: Partial<AnkiSettings>): Promise<void>
   onSaveAzureTranslationKey(key: string): Promise<boolean>
   onSaveAzureTranslationRegion(region: string): Promise<boolean>
+  onSaveJimakuApiKey(key: string): Promise<JimakuSettingsStatus | undefined>
+  onTestJimakuConnection(): Promise<JimakuSettingsStatus | undefined>
+  onClearJimakuApiKey(): Promise<JimakuSettingsStatus | undefined>
+  onOpenJimakuAccount(): void
   onOpenMpvConfigDir(): void
   onOpenUserUnidicDir(): void
   /** Schedules a debounced settings write for a row the settings lifecycle
@@ -116,8 +126,9 @@ export interface UseOptionsDialogResult {
  * Owns the Options dialog's lifecycle: whether it is open, the per-domain
  * optional-integration data behind it (MeCab/Yomitan dictionaries, the Anki
  * connection and its deck/model/field lists, knowledge settings and sync
- * status), the lazy per-category loading of those domains, and the dictionary
- * and Anki actions that write through the bridge and refresh what they changed.
+ * status, and Jimaku credential status), the lazy per-category loading of
+ * those domains, and the integration actions that write through the bridge
+ * and refresh what they changed.
  *
  * The returned data is also what the subtitle surfaces read for known-word
  * coloring and what the mining flow reads for its target deck, so the domains
@@ -149,6 +160,11 @@ export function useOptionsDialog({
     controller.subscribe,
     () => controller.getState('translation'),
     () => controller.getState('translation')
+  )
+  const jimakuState = useSyncExternalStore(
+    controller.subscribe,
+    () => controller.getState('jimaku'),
+    () => controller.getState('jimaku')
   )
   const setupState = useSyncExternalStore(
     controller.subscribe,
@@ -232,6 +248,35 @@ export function useOptionsDialog({
           return false
         }
       },
+      onSaveJimakuApiKey: async (key) => {
+        try {
+          return await saveJimakuApiKey(bridge.jimaku, controller, key)
+        } catch {
+          reportError('Could not save Jimaku settings.')
+          return undefined
+        }
+      },
+      onTestJimakuConnection: async () => {
+        try {
+          return await testJimakuConnection(bridge.jimaku, controller)
+        } catch {
+          reportError('Could not test Jimaku connection.')
+          return undefined
+        }
+      },
+      onClearJimakuApiKey: async () => {
+        try {
+          return await clearJimakuApiKey(bridge.jimaku, controller)
+        } catch {
+          reportError('Could not remove Jimaku API key.')
+          return undefined
+        }
+      },
+      onOpenJimakuAccount: () => {
+        void bridge.appInfo.openLink('jimakuAccount').catch(() => {
+          reportError('Could not open Jimaku account page.')
+        })
+      },
       onOpenMpvConfigDir,
       onOpenUserUnidicDir,
       persist: (patch) => settingsPersistenceRef.current.schedule(patch)
@@ -261,6 +306,8 @@ export function useOptionsDialog({
       knowledgeError: knowledgeState.error,
       translationSettings: translationState.data ?? DEFAULT_TRANSLATION_SETTINGS,
       translationError: translationState.error,
+      jimakuSettings: jimakuState.data,
+      jimakuError: jimakuState.error,
       setup: setupState.data
     },
     actions,
