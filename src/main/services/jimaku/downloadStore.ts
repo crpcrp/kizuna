@@ -4,6 +4,7 @@ import { pathApiFor } from '../../platformPath'
 import { decodeSubtitleBytes } from '../../media/subtitleEncoding'
 import { pickParser } from '../../media/subtitleLoader'
 import type { Cue } from '../../../shared/cue'
+import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
 import type { HttpFetch, HttpResponse } from '../http'
 import { JIMAKU_API_ORIGIN, type JimakuFileRecord } from './client'
 
@@ -159,6 +160,7 @@ export interface CreateJimakuDownloadStoreDeps {
   maxPackageBytes?: number
   maxRedirects?: number
   tempMaxAgeMs?: number
+  maxCacheBytes?: number
   setTimeoutFn?: SetTimeoutFn
   clearTimeoutFn?: ClearTimeoutFn
   platform?: NodeJS.Platform
@@ -190,7 +192,7 @@ export interface JimakuDownloadStore {
     file: JimakuFileRecord
   ): Promise<JimakuPreparedPackage | undefined>
   releasePrepared(handle: string): void
-  /** Removes stale temporary files; completed-file eviction is deferred to the history slice. */
+  /** Removes stale temporary files and unprotected completed cache files. */
   cleanup(protectedPaths?: Iterable<string>): Promise<void>
 }
 
@@ -235,10 +237,12 @@ export function createJimakuDownloadStore(
   const maxPackageBytes = deps.maxPackageBytes ?? JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
   const maxRedirects = deps.maxRedirects ?? JIMAKU_MAX_REDIRECTS
   const tempMaxAgeMs = deps.tempMaxAgeMs ?? JIMAKU_TEMP_MAX_AGE_MS
+  const maxCacheBytes = deps.maxCacheBytes ?? JIMAKU_CACHE_MAX_BYTES
   const setTimeoutFn = deps.setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
   const clearTimeoutFn =
     deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
-  const pathApi = pathApiFor(deps.platform)
+  const platform = deps.platform ?? process.platform
+  const pathApi = pathApiFor(platform)
   const indexPath = pathApi.join(deps.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME)
 
   let index: CacheIndex | undefined
@@ -247,8 +251,13 @@ export function createJimakuDownloadStore(
   let handleCounter = 0
   const active = new Map<string, JimakuPreparedDownload>()
   const temporaryPaths = new Set<string>()
-  const safeUnlink = async (path: string): Promise<void> => {
-    await fs.unlink(path).catch(() => {})
+  const safeUnlink = async (path: string): Promise<boolean> => {
+    try {
+      await fs.unlink(path)
+      return true
+    } catch {
+      return false
+    }
   }
 
   function exclusive<T>(work: () => Promise<T>): Promise<T> {
@@ -651,8 +660,12 @@ export function createJimakuDownloadStore(
   async function cleanup(protectedPaths: Iterable<string> = []): Promise<void> {
     try {
       await exclusive(async () => {
-        const protectedSet = new Set(protectedPaths)
-        for (const prepared of active.values()) protectedSet.add(prepared.managedPath)
+        const canonical = (path: string): string => {
+          const resolved = pathApi.resolve(path)
+          return platform === 'win32' ? resolved.toLowerCase() : resolved
+        }
+        const protectedSet = new Set([...protectedPaths].map(canonical))
+        for (const prepared of active.values()) protectedSet.add(canonical(prepared.managedPath))
 
         let entries: readonly JimakuDownloadDirEntry[]
         try {
@@ -666,10 +679,54 @@ export function createJimakuDownloadStore(
           if (!entry.isFile || !entry.name.startsWith(TEMP_PREFIX)) continue
           const path = pathApi.join(deps.cacheRoot, entry.name)
           if (!isWithinRoot(pathApi, deps.cacheRoot, path)) continue
-          if (temporaryPaths.has(path) || protectedSet.has(path)) continue
+          if (temporaryPaths.has(path) || protectedSet.has(canonical(path))) continue
           if (!Number.isFinite(entry.mtimeMs) || entry.mtimeMs > cutoff) continue
           await safeUnlink(path)
         }
+
+        const currentIndex = await ensureIndex()
+        const filesByPath = new Map(
+          entries
+            .filter((entry) => entry.isFile)
+            .map((entry) => [canonical(pathApi.join(deps.cacheRoot, entry.name)), entry])
+        )
+        const managed = new Map<
+          string,
+          { path: string; size: number; lastUsedAt: number; keys: string[] }
+        >()
+        for (const [key, cached] of Object.entries(currentIndex.entries)) {
+          const path = contentPath(cached.contentVersion, cached.format)
+          if (!isWithinRoot(pathApi, deps.cacheRoot, path)) continue
+          const disk = filesByPath.get(canonical(path))
+          if (!disk) continue
+          const existing = managed.get(canonical(path))
+          if (existing) {
+            existing.lastUsedAt = Math.max(existing.lastUsedAt, cached.lastUsedAt)
+            existing.keys.push(key)
+          } else {
+            managed.set(canonical(path), {
+              path,
+              size: disk.size,
+              lastUsedAt: cached.lastUsedAt,
+              keys: [key]
+            })
+          }
+        }
+
+        let total = [...managed.values()].reduce((sum, file) => sum + file.size, 0)
+        if (total <= maxCacheBytes) return
+        let indexChanged = false
+        const candidates = [...managed.values()]
+          .filter((file) => !protectedSet.has(canonical(file.path)))
+          .sort((left, right) => left.lastUsedAt - right.lastUsedAt)
+        for (const file of candidates) {
+          if (total <= maxCacheBytes) break
+          if (!(await safeUnlink(file.path))) continue
+          total -= file.size
+          indexChanged = true
+          for (const key of file.keys) delete currentIndex.entries[key]
+        }
+        if (indexChanged) await saveIndex().catch(() => {})
       })
     } catch {
       // Cleanup is best effort and must never make startup or playback fail.
@@ -830,6 +887,34 @@ export function jimakuCacheKey(
   const key = [entryId, file.name, file.size, file.lastModified]
   if (archiveMemberName !== undefined) key.push(archiveMemberName)
   return JSON.stringify(key)
+}
+
+/** Checks the main-owned filename shape used for downloaded subtitle content. */
+export function isJimakuManagedSubtitlePath(
+  path: string,
+  provenance: JimakuSubtitleProvenance,
+  cacheRoot: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (
+    provenance.provider !== 'jimaku' ||
+    !/^[a-f0-9]{64}$/u.test(provenance.contentVersion) ||
+    typeof path !== 'string' ||
+    typeof cacheRoot !== 'string'
+  ) {
+    return false
+  }
+  const pathApi = pathApiFor(platform)
+  const canonical = (value: string): string => {
+    const resolved = pathApi.resolve(value)
+    return platform === 'win32' ? resolved.toLowerCase() : resolved
+  }
+  const normalizedPath = canonical(path)
+  return (['srt', 'ass', 'ssa'] as const).some(
+    (format) =>
+      normalizedPath ===
+      canonical(pathApi.join(cacheRoot, `${provenance.contentVersion}.${format}`))
+  )
 }
 
 function defaultParseSubtitle(text: string, format: JimakuSubtitleFormat): readonly Cue[] {

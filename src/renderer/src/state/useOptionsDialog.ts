@@ -111,8 +111,10 @@ export interface OptionsDialogActions {
 
 export interface UseOptionsDialogResult {
   open: boolean
-  openDialog(): void
+  requestedCategory?: OptionsCategory
+  openDialog(category?: OptionsCategory): void
   closeDialog(): void
+  clearRequestedCategory(): void
   /** Loads the domains a category needs, the first time it is shown. */
   onCategoryOpen(category: OptionsCategory): void
   data: OptionsDialogData
@@ -140,6 +142,7 @@ export function useOptionsDialog({
   reportError
 }: UseOptionsDialogInput): UseOptionsDialogResult {
   const [open, setOpen] = useState(false)
+  const [requestedCategory, setRequestedCategory] = useState<OptionsCategory | undefined>()
   const [controller] = useState(() => createOptionsDataController(optionsDataBridge))
   const dictionariesState = useSyncExternalStore(
     controller.subscribe,
@@ -181,8 +184,13 @@ export function useOptionsDialog({
 
   const closeDialog = useCallback((): void => {
     setOpen(false)
+    setRequestedCategory(undefined)
     void settingsPersistenceRef.current.flush()
   }, [settingsPersistenceRef])
+
+  const clearRequestedCategory = useCallback((): void => {
+    setRequestedCategory(undefined)
+  }, [])
 
   // Reveals Kizuna's mpv config folder in the OS file manager. `openMpvConfigDir`
   // resolves a non-empty string when the shell refused to open it, so both the
@@ -293,8 +301,13 @@ export function useOptionsDialog({
 
   return {
     open,
-    openDialog: useCallback(() => setOpen(true), []),
+    requestedCategory,
+    openDialog: useCallback((category?: OptionsCategory) => {
+      setRequestedCategory(category)
+      setOpen(true)
+    }, []),
     closeDialog,
+    clearRequestedCategory,
     onCategoryOpen,
     data: {
       dictionaries: dictionariesState.data ?? DEFAULT_DICTIONARIES_DATA,

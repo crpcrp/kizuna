@@ -89,7 +89,10 @@ import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
 import { createJimakuClient } from './services/jimaku/client'
 import { createJimakuSettingsService, type JimakuSettingsService } from './services/jimaku/settings'
-import { createJimakuDownloadStore } from './services/jimaku/downloadStore'
+import {
+  createJimakuDownloadStore,
+  isJimakuManagedSubtitlePath
+} from './services/jimaku/downloadStore'
 import { createJimakuArchiveService } from './services/jimaku/archive'
 import { createJimakuService, type JimakuService } from './services/jimaku/service'
 import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
@@ -923,7 +926,12 @@ if (!gotSingleInstanceLock) {
       fs,
       shell
     })
-    mediaHistory = createMediaHistoryService({ settings })
+    const jimakuCacheRoot = join(app.getPath('userData'), 'jimaku')
+    mediaHistory = createMediaHistoryService({
+      settings,
+      isKnownManagedSubtitle: (path, provenance) =>
+        isJimakuManagedSubtitlePath(path, provenance, jimakuCacheRoot)
+    })
     registerMediaHistoryBridge(ipcMain, mediaHistory)
 
     sweepThumbnails()

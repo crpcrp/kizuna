@@ -11,13 +11,18 @@ import {
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { Cue } from '../../../shared/cue'
 import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
-import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../shared/track'
+import { EXTERNAL_SUBTITLE_TRACK_ID, type Track } from '../../../shared/track'
 import type { PlayerApi } from '../components/BottomBar'
 import type { MediaMenuProps } from '../components/menu/MediaMenu'
 import type { SubtitleMenuProps } from '../components/menu/SubtitleMenu'
 import { handleDroppedFiles } from './dropHandling'
 import { performFileNavigation } from './keyActions'
-import type { OpenMediaResult, OpenSession, SubtitleRequestToken } from './mediaSession'
+import {
+  matchStoredTrack,
+  type OpenMediaResult,
+  type OpenSession,
+  type SubtitleRequestToken
+} from './mediaSession'
 import {
   appendPathsToPlaylist,
   appendPlaylistFile,
@@ -31,13 +36,16 @@ import {
 } from './playlistController'
 import type { PlayerAction, PlayerState } from './playerState'
 import { createRecentFilesController } from './recentFilesController'
+import type { JimakuSelectionApplyResult, JimakuSubtitleActions } from './jimakuController'
 import {
   captureSubtitleSelectionSnapshot,
   loadExternalSubtitle,
+  loadExternalSubtitleResult,
   loadSubtitleFromPicker,
   selectSubtitle,
   type SubtitleSelectionSnapshot
 } from './trackSelection'
+import type { StoredSubtitleSelection } from '../../../shared/mediaHistory'
 import { useLatestCallback, useLatestRef } from './useLatestRef'
 
 /** The render-driven fields this feature reads. */
@@ -102,6 +110,8 @@ export interface UseMediaSessionResult {
   banner: MediaSessionBanner
   navigate(direction: 'prev' | 'next'): void
   getPreviousSubtitleSnapshot(): SubtitleSelectionSnapshot | undefined
+  subtitleActions: JimakuSubtitleActions
+  subtitleRestoring: boolean
 }
 
 /**
@@ -123,6 +133,7 @@ export function useMediaSession({
   const subtitleCueCache = useRef(new Map<number, Cue[]>())
   const fileLoadToken = useRef<SubtitleRequestToken>({ current: 0 })
   const previousSubtitleSnapshotRef = useRef<SubtitleSelectionSnapshot | undefined>(undefined)
+  const [subtitleRestoring, setSubtitleRestoring] = useState(false)
   const rememberSubtitleSnapshot = useLatestCallback(
     (snapshot: SubtitleSelectionSnapshot): void => {
       previousSubtitleSnapshotRef.current = snapshot
@@ -154,6 +165,9 @@ export function useMediaSession({
     getSubtitleVersionOffset,
     captureSubtitleSelection: () => captureSubtitleSelectionSnapshot(stateRef.current),
     onSubtitleSelectionApplied: rememberSubtitleSnapshot,
+    onMediaOpenStarted: () => setSubtitleRestoring(false),
+    onSubtitleRestoreStarted: () => setSubtitleRestoring(true),
+    onSubtitleRestoreSettled: () => setSubtitleRestoring(false),
     onPlaylistPicked: (paths) => {
       playlistController.clear()
       playlistController.addPaths(paths)
@@ -305,6 +319,77 @@ export function useMediaSession({
     })
   const handleDropRef = useLatestRef(handleDrop)
 
+  const resultForSelection = (warning: string | undefined): JimakuSelectionApplyResult =>
+    warning === undefined ? { status: 'applied' } : { status: 'applied', warning: 'persistence' }
+
+  const applyJimakuExternal = async (
+    selection: Extract<StoredSubtitleSelection, { mode: 'external' }>,
+    offsetMs: number,
+    isCurrent: () => boolean
+  ): Promise<JimakuSelectionApplyResult> => {
+    const current = stateRef.current
+    if (!current.filePath) return { status: 'error', code: 'noMedia' }
+    if (!isCurrent()) return { status: 'stale' }
+    try {
+      const result = await loadExternalSubtitleResult(
+        { ...openSession(), externalSubtitleEncoding: selection.encoding },
+        current.filePath,
+        selection.path,
+        {
+          offsetMs,
+          ...(selection.provenance ? { provenance: selection.provenance } : {}),
+          capturePrevious: false,
+          isCurrent
+        }
+      )
+      if (result.status === 'stale') return result
+      if (result.status === 'error') return { status: 'error', code: 'selection' }
+      return resultForSelection(result.warning)
+    } catch {
+      return { status: 'error', code: 'selection' }
+    }
+  }
+
+  const restoreJimakuSubtitle = async (
+    snapshot: SubtitleSelectionSnapshot,
+    isCurrent: () => boolean
+  ): Promise<JimakuSelectionApplyResult> => {
+    if (!isCurrent()) return { status: 'stale' }
+    const current = stateRef.current
+    if (!current.filePath) return { status: 'error', code: 'noMedia' }
+    if (snapshot.selection.mode === 'external') {
+      return applyJimakuExternal(snapshot.selection, snapshot.offsetMs, isCurrent)
+    }
+
+    let track: Track | null = null
+    if (snapshot.selection.mode === 'track') {
+      track = matchStoredTrack(current.tracks, 'subtitle', snapshot.selection.track) ?? null
+      if (!track) return { status: 'error', code: 'notFound' }
+    }
+    try {
+      const warning = await selectSubtitle(
+        bridge,
+        dispatch,
+        current.filePath,
+        track,
+        subtitleToken.current,
+        subtitleCueCache.current,
+        current.externalSubtitlePath,
+        current.externalSubtitleEncoding,
+        { offsetMs: snapshot.offsetMs, capturePrevious: false, isCurrent }
+      )
+      return isCurrent() ? resultForSelection(warning) : { status: 'stale' }
+    } catch {
+      return isCurrent() ? { status: 'error', code: 'selection' } : { status: 'stale' }
+    }
+  }
+
+  const subtitleActions: JimakuSubtitleActions = {
+    capture: () => captureSubtitleSelectionSnapshot(stateRef.current),
+    applyExternal: applyJimakuExternal,
+    restore: restoreJimakuSubtitle
+  }
+
   useEffect(() => {
     void recentFiles.init(bridge)
     return () => recentFiles.dispose()
@@ -374,6 +459,8 @@ export function useMediaSession({
       reportTransient: recentFiles.reportTransient
     },
     navigate,
-    getPreviousSubtitleSnapshot: () => previousSubtitleSnapshotRef.current
+    getPreviousSubtitleSnapshot: () => previousSubtitleSnapshotRef.current,
+    subtitleActions,
+    subtitleRestoring
   }
 }

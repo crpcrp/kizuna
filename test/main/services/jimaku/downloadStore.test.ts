@@ -491,7 +491,7 @@ describe('Jimaku download failure and cleanup handling', () => {
     expect([...indexFailure.fs.files.keys()].some((value) => value.endsWith('.srt'))).toBe(true)
   })
 
-  it('removes only stale temporary files and leaves completed cache files above the soft cap', async () => {
+  it('removes only stale temporary files and leaves unindexed completed files alone', async () => {
     const entryId = 82
     const file = fileRecord(entryId)
     const { store, fs, cacheRoot, setTime } = makeStore(
@@ -514,6 +514,50 @@ describe('Jimaku download failure and cleanup handling', () => {
     expect(fs.files.has(old)).toBe(false)
     expect(fs.files.has(fresh)).toBe(true)
     expect(fs.files.has(completed)).toBe(true)
+  })
+
+  it('evicts unprotected indexed files while retaining active and protected paths', async () => {
+    const makeBytes = (text: string) =>
+      new TextEncoder().encode(`1\n00:00:01,000 --> 00:00:02,000\n${text}\n`)
+    const bytesA = makeBytes('A')
+    const bytesB = makeBytes('B')
+    const bytesC = makeBytes('C')
+    const fileA = fileRecord(83, 'a.srt', {
+      size: bytesA.byteLength,
+      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/83/download/a.srt`
+    })
+    const fileB = fileRecord(84, 'b.srt', {
+      size: bytesB.byteLength,
+      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/84/download/b.srt`
+    })
+    const fileC = fileRecord(85, 'c.srt', {
+      size: bytesC.byteLength,
+      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/85/download/c.srt`
+    })
+    const { store, fs, http } = makeStore(
+      'linux',
+      {
+        [fileA.url]: { bytes: bytesA },
+        [fileB.url]: { bytes: bytesB },
+        [fileC.url]: { bytes: bytesC }
+      },
+      { maxCacheBytes: bytesA.byteLength + bytesB.byteLength }
+    )
+
+    const first = await store.prepareDirect(83, fileA)
+    const protectedFile = await store.prepareDirect(84, fileB)
+    const evictable = await store.prepareDirect(85, fileC)
+    expect(first.ok && protectedFile.ok && evictable.ok).toBe(true)
+    if (!first.ok || !protectedFile.ok || !evictable.ok) return
+    store.releasePrepared(protectedFile.value.handle)
+    store.releasePrepared(evictable.value.handle)
+
+    await store.cleanup([protectedFile.value.managedPath])
+
+    expect(http.calls).toHaveLength(3)
+    expect(fs.files.has(first.value.managedPath)).toBe(true)
+    expect(fs.files.has(protectedFile.value.managedPath)).toBe(true)
+    expect(fs.files.has(evictable.value.managedPath)).toBe(false)
   })
 })
 

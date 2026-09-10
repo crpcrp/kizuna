@@ -35,6 +35,7 @@ export async function loadPath(
   filePath: string,
   loadId?: number
 ): Promise<OpenMediaResult> {
+  if (loadId === undefined) session.onMediaOpenStarted?.()
   return runLoadPath(session, filePath, loadId)
 }
 
@@ -81,9 +82,15 @@ async function runLoadPath(
   // warning reaches the caller through `onWarning` rather than `warnings`,
   // and the file token is re-checked at delivery so a warning from a
   // superseded open never reaches the file the user now has open.
-  void restoreSubtitle(session, filePath, { tracks, history }, loadId).then((warning) => {
-    if (warning !== undefined && fileToken.current === loadId) onWarning(warning)
-  })
+  session.onSubtitleRestoreStarted?.()
+  void restoreSubtitle(session, filePath, { tracks, history }, loadId)
+    .then((warning) => {
+      if (warning !== undefined && fileToken.current === loadId) onWarning(warning)
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (fileToken.current === loadId) session.onSubtitleRestoreSettled?.()
+    })
   const results = await Promise.all([
     restoreAudio(session, tracks, history, loadId),
     restoreResume(session, history, loadId)
@@ -314,6 +321,7 @@ async function runOpenRecentFile(
 ): Promise<OpenMediaResult> {
   const { bridge, fileToken } = session
   const loadId = ++fileToken.current
+  session.onMediaOpenStarted?.()
   if (isRemoteUrl(filePath)) {
     return { status: 'failed', filePath, message: LOCAL_MEDIA_ONLY_MESSAGE }
   }
