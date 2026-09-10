@@ -252,6 +252,7 @@ and are currently unsigned. See
 - [Security policy](SECURITY.md)
 - [Architecture](docs/architecture-plan.md)
 - [Codebase map](docs/codebase-map.md)
+- [Jimaku subtitles](docs/jimaku.md)
 - [Binary setup](docs/binaries.md)
 - [Game OCR (Windows, experimental)](docs/game-ocr.md)
 - [Licensing and notices](docs/licensing.md)

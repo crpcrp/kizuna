@@ -203,6 +203,15 @@ cannot provide encrypted storage.
 
 Network access is limited to user-initiated features such as subtitle
 translation, WaniKani sync, and AnkiConnect.
+
+Jimaku is another explicit opt-in boundary owned by the main process. The
+fixed-origin client in `src/main/services/jimaku/client.ts` is the only remote
+provider path; `service.ts` starts requests only after the renderer asks to
+find or select a subtitle, and `settings.ts` keeps the credential encrypted
+and local. Only normalized entries/files and main-validated managed subtitle
+selections cross preload; Jimaku never receives a video upload, subtitle
+track, or full local video path. Startup and media open/close perform no
+Jimaku request, and cached downloaded subtitles restore offline.
 Translation uses the official Microsoft Azure Translator service and is explicitly opt-in.
 Only explicitly selected subtitle or OCR text is sent. Kizuna supports a single-service
 Global or regional Azure Translator resource, or a multi-service resource, using standard
