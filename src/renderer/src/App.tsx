@@ -123,7 +123,6 @@ export default function App({
     [dispatch, subtitleAutoPauseController]
   )
   const pausedRef = useLatestRef(state.paused)
-  const reveal = useFullscreenReveal(state.fullscreen)
   const cursorHidden = useFullscreenCursor(state.fullscreen)
   // The per-cue loop is stored together with the cue list it was picked from,
   // so a new list (file or subtitle-track switch) drops it by derivation
@@ -308,6 +307,7 @@ export default function App({
     rightSidebarStack: rightSidebarStackRef
   } = playbackWindow.layoutRefs
   const miniPlayerActive = playbackWindow.miniPlayer.active
+  const reveal = useFullscreenReveal(state.fullscreen, bottomBarRef)
 
   // mpv/window event pushes (time/duration/pause/EOF/fullscreen/media keys)
   // and file-association launch delivery.

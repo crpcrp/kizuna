@@ -55,6 +55,23 @@ describe('useFullscreenReveal', () => {
     expect(result.current).toEqual({ top: false, bottom: false })
   })
 
+  it('keeps the bottom controls visible while the pointer is over the revealed bar', () => {
+    const bottomBar = document.createElement('div')
+    Object.defineProperty(bottomBar, 'offsetHeight', { value: 140 })
+    const bottomBarRef = { current: bottomBar }
+    const { result } = renderHook(() => useFullscreenReveal(true, bottomBarRef))
+
+    act(() => {
+      moveMouse(window.innerHeight - 130)
+    })
+    expect(result.current.bottom).toBe(true)
+
+    act(() => {
+      moveMouse(window.innerHeight - 141)
+    })
+    expect(result.current.bottom).toBe(false)
+  })
+
   it('leaving fullscreen clears the state and removes the listener', () => {
     const removeSpy = vi.spyOn(window, 'removeEventListener')
     const { result, rerender } = renderHook(
