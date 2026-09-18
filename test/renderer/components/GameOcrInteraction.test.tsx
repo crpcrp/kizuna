@@ -165,13 +165,14 @@ describe('GameOcrInteraction', () => {
     fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
     await waitFor(() => expect(container.querySelector('#word-popup.open')).not.toBeNull())
 
-    // The frame ends on a background press, so a press anywhere in the popup —
-    // its close button included — must not reach that path.
+    // A press anywhere in the popup — its close button included — must not
+    // reach the frame's background-dismissal path.
     fireEvent.pointerDown(container.querySelector('.word-popup-close')!, { button: 0 })
     fireEvent.click(container.querySelector('.word-popup-close')!)
     expect(onClose).not.toHaveBeenCalled()
 
     fireEvent.pointerDown(container.querySelector('main')!, { button: 0 })
+    fireEvent.pointerUp(container.querySelector('main')!, { button: 0 })
     expect(onClose).toHaveBeenCalledOnce()
   })
 
@@ -452,6 +453,7 @@ describe('GameOcrInteraction', () => {
     fireEvent.contextMenu(box)
 
     fireEvent.pointerDown(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
+    fireEvent.pointerUp(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
     expect(onClose).toHaveBeenCalledOnce()
     expect(cancel).toHaveBeenCalledWith('close-me')
 

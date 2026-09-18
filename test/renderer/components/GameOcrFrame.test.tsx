@@ -68,7 +68,7 @@ describe('GameOcrFrame', () => {
     expect(css).toMatch(/\.game-ocr-frame__indicator\s*\{[^}]*pointer-events:\s*none;/s)
   })
 
-  it('closes on one background press or Escape but not from content presses', () => {
+  it('closes after one complete background press or Escape but not from content presses', () => {
     const onClose = vi.fn()
     render(
       <GameOcrFrame presentation={presentation} onClose={onClose}>
@@ -80,21 +80,37 @@ describe('GameOcrFrame', () => {
     expect(onClose).not.toHaveBeenCalled()
 
     fireEvent.pointerDown(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.pointerUp(screen.getByRole('main', { name: 'Frozen game frame' }), { button: 0 })
     expect(onClose).toHaveBeenCalledTimes(1)
 
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
-  it('closes on the press rather than the click it would become', () => {
+  it('keeps the overlay up until release so the game cannot receive the dismissal click', () => {
     const onClose = vi.fn()
     render(<GameOcrFrame presentation={presentation} onClose={onClose} />)
     const background = screen.getByRole('main', { name: 'Frozen game frame' })
 
-    // A release that lands elsewhere, an unmounting popup, or the activation of
-    // a window the game still held focus over can all swallow the click, and a
-    // swallowed click used to leave the screenshot up for a second press.
-    fireEvent.pointerDown(background, { button: 0 })
+    const pointerDown = new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      pointerId: 1
+    })
+    fireEvent(background, pointerDown)
+    expect(pointerDown.defaultPrevented).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
+
+    const pointerUp = new PointerEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      pointerId: 1
+    })
+    fireEvent(background, pointerUp)
+    expect(pointerUp.defaultPrevented).toBe(true)
     expect(onClose).toHaveBeenCalledTimes(1)
 
     fireEvent.click(background)
@@ -111,8 +127,11 @@ describe('GameOcrFrame', () => {
     const background = screen.getByRole('main', { name: 'Frozen game frame' })
 
     // A press that starts on a box may be a selection drag onto the screenshot.
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'OCR text box' }), { button: 0 })
-    fireEvent.pointerUp(background)
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'OCR text box' }), {
+      button: 0,
+      pointerId: 1
+    })
+    fireEvent.pointerUp(background, { button: 0, pointerId: 1 })
     fireEvent.click(background)
     expect(onClose).not.toHaveBeenCalled()
 
@@ -120,7 +139,9 @@ describe('GameOcrFrame', () => {
     fireEvent.pointerDown(background, { button: 2 })
     expect(onClose).not.toHaveBeenCalled()
 
-    fireEvent.pointerDown(background, { button: 0 })
+    fireEvent.pointerDown(background, { button: 0, pointerId: 2 })
+    expect(onClose).not.toHaveBeenCalled()
+    fireEvent.pointerUp(background, { button: 0, pointerId: 2 })
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 

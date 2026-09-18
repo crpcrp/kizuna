@@ -59,6 +59,7 @@ export default function GameOcrFrame({
   children
 }: GameOcrFrameProps): React.JSX.Element {
   const closeHandlersRef = useRef(new Set<GameOcrFrameCloseHandler>())
+  const backgroundPressRef = useRef<number | null>(null)
   const registerCloseHandler = useCallback((handler: GameOcrFrameCloseHandler): (() => void) => {
     closeHandlersRef.current.add(handler)
     return () => closeHandlersRef.current.delete(handler)
@@ -87,28 +88,27 @@ export default function GameOcrFrame({
     }
   }, [close])
 
-  /**
-   * The press itself ends the frame, rather than the click it would become.
-   * `click` only fires once the pointer is released and only when the browser
-   * still considers the press and the release one gesture on a shared
-   * ancestor, so a release that lands elsewhere, a popup unmounting in
-   * between, or the activation of a window the game still held focus over can
-   * all swallow it — and a swallowed click leaves the screenshot up until the
-   * user presses a second time. Pointer-down is the moment the user asked for
-   * the game back, it cannot be lost the same way, and the capture phase
-   * reaches it before a box or popup stops the event bubbling.
-   *
-   * A press that starts on a box or popup is a content press: it may be the
-   * start of a selection drag out onto the screenshot, so it never closes
-   * anything. Only the primary button counts, which leaves a right-click on
-   * the screenshot free to do nothing rather than dismiss the frame.
-   */
+  /** Keep the native overlay up through the matching release so the live game
+   * cannot receive half of the dismissal click after the overlay disappears. */
   const onPointerDownCapture = (event: React.PointerEvent<HTMLElement>): void => {
     traceInput('pointerdown', event.button, event.target)
     if (event.button !== 0) return
     const target = event.target as Element | null
     if (target?.closest?.('.game-ocr-frame__content')) return
+    event.preventDefault()
+    backgroundPressRef.current = event.pointerId
+  }
+
+  const onPointerUpCapture = (event: React.PointerEvent<HTMLElement>): void => {
+    traceInput('pointerup', event.button, event.target)
+    if (event.button !== 0 || backgroundPressRef.current !== event.pointerId) return
+    event.preventDefault()
+    backgroundPressRef.current = null
     close()
+  }
+
+  const onPointerCancelCapture = (event: React.PointerEvent<HTMLElement>): void => {
+    if (backgroundPressRef.current === event.pointerId) backgroundPressRef.current = null
   }
 
   return (
@@ -117,6 +117,8 @@ export default function GameOcrFrame({
         className="game-ocr-frame"
         aria-label="Frozen game frame"
         onPointerDownCapture={onPointerDownCapture}
+        onPointerUpCapture={onPointerUpCapture}
+        onPointerCancelCapture={onPointerCancelCapture}
         data-image-size={
           presentation
             ? `${presentation.imageSize.width}x${presentation.imageSize.height}`

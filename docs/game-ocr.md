@@ -63,7 +63,7 @@ OCR still armed.
 | Hover or click a word | The usual dictionary popup, with knowledge coloring and Anki mining |
 | Click inside a box | Native text selection; **Ctrl+C** copies it |
 | Right-click a selection | Translation popup, when experimental translation is enabled |
-| Press the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. One press is enough: the frame ends on pointer-down, not on the click it would become. A press that started on a box or popup is a selection drag, not a close, and a right-click closes nothing |
+| Press the screenshot background | Closes the whole frozen frame — screenshot, boxes, popups, and selection — revealing the live game. The overlay stays up through the matching release so the game does not receive the dismissal click. A press that started on a box or popup is a selection drag, not a close, and a right-click closes nothing |
 | Escape | The same, and Game OCR stays armed. Registered as a global shortcut for exactly as long as a frame is visible (see below), so it is the game's own Escape again the moment the frame closes |
 | Press the shortcut again | Recapture (see below) |
 
