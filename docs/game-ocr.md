@@ -186,37 +186,26 @@ text selection at each frame boundary. The dictionary and knowledge caches it
 built are deliberately kept: they are what makes a second frame's lookups
 faster than the first's.
 
-### The frame never takes focus
+### The frame owns input focus
 
-The frozen-frame window is created `focusable: false`, so Windows never
-activates it and the game keeps the foreground the whole time a frame is up.
+The frozen-frame window is focusable and requests focus after the screenshot
+is drawn and raised above the game. Keeping the game in the foreground allowed
+foreground input polling to observe overlay clicks, including right-clicks
+that never dismissed the frame. Renderer `preventDefault()` and waiting for
+pointer-up cannot block that separate input path.
 
-That is not a preference. Windows refuses a cross-process foreground steal, and
-Electron does not report the refusal: measured against an external application
-holding the foreground, it kept the real foreground window for the entire time
-the frame was shown while Electron's own `isFocused()` returned `true`. A window
-the system has not activated spends the user's first mouse press on activation
-rather than delivering it to the page — which is why dismissing a frame took two
-presses, and why moving the dismissal from `click` to pointer-down did not help.
-Never activating means there is no activation press to spend. It also means the
-game keeps rendering behind the frame instead of stalling until it is clicked
-back.
+The background left-click still closes on release, keeping both halves of the
+click over the overlay. Right-clicking selected text opens translation without
+closing the frame. Games that pause on focus loss may pause while inspecting.
 
-Not activating has a second consequence that has to be handled explicitly:
-always-on-top is a *band*, not a position, and inside it Windows orders by
-which window was activated most recently. A window that never activates
-therefore loses to a game that is itself topmost — the frame is shown, behind
-the game, and nothing appears to happen at all while OCR runs normally on a
-correct screenshot. The frame is put in the higher `screen-saver` band and
-raised with `moveTop`, neither of which asks for focus.
+Windows can refuse programmatic foreground activation; the window also permits
+normal mouse activation. The previous non-focusable configuration prevented
+that fallback. Native first-click behavior still needs the manual checks below;
+DOM tests cannot establish what a real game receives.
 
-The cost is that the page has no keyboard focus and therefore receives no key
-events. **Escape** and **Ctrl+C** are registered as global shortcuts for exactly
-as long as a frame is visible, and released the moment it goes; Ctrl+C asks the
-frame to put its current text selection on the clipboard, and does nothing when
-nothing is selected. If another application already owns one of them the
-conflict is reported and the frame stays usable — a background press still
-closes it, and the box text is still selectable.
+Recapturing while the OCR window owns focus reuses its capture target. A newly
+foreground game is still selected after alt-tab. Escape and Ctrl+C remain global
+shortcuts while the frame is visible, and are released when it closes.
 
 ### Capture latency
 
@@ -488,8 +477,8 @@ given environment.
 | 7e | Two windows with the same title | The focused instance is chosen; identity is the HWND |
 | 7f | Game on a 125%/150% secondary monitor, including negative coordinates | No offset or crop; boxes sit over their source text |
 | 7g | Minimized, cloaked, protected, or exclusive-fullscreen target | Display fallback captures normally, Game OCR stays armed, and the development log names the reason |
-| 7h | Kizuna focused when the shortcut is pressed | Display fallback; Kizuna's own window is never captured |
-| 8 | Press screenshot background once | Whole frame closes on that one press; live game visible; still armed |
+| 7h | Kizuna player focused when the shortcut is pressed | Display fallback; Kizuna's own window is never captured |
+| 8 | Press screenshot background once | Whole frame closes on the first release; the game receives neither button-down nor button-up and dialogue does not advance; still armed |
 | 9 | Escape | Same as row 8 |
 | 10 | Rapid recapture with changing game content | The second screenshot shows newer live-game content, never Kizuna's previous frozen frame |
 | 11 | Recognition indicator | Appears with the screenshot, disappears when boxes appear |
@@ -497,7 +486,7 @@ given environment.
 | 12a | Numbered dialogue menu (several options stacked) | Each marker sits in its option's line, no box overlaps another's text, and the lines keep the game's spacing |
 | 13 | Hover/click lookup | Dictionary popup opens with knowledge coloring |
 | 14 | Selection and Ctrl+C | Selected OCR text reaches the clipboard |
-| 15 | Right-click translation (enabled) | Translation popup opens for the selection only |
+| 15 | Right-click translation (enabled) | Translation popup opens for the selection; frame stays visible and game receives neither right-button event |
 | 15a | Regional Translator configured with its identifier (for example, `northeurope`) | Translation succeeds; a portal display name containing spaces is not used as the header value |
 | 16 | Worker failure and Retry | Error is reported in Options; Retry recovers without restarting Kizuna |
 | 17 | Quit Kizuna from tray | Shortcut, worker process, frozen window, screenshot, and tray are all released |

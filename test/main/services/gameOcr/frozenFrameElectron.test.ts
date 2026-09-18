@@ -7,7 +7,7 @@ import {
 import { fakeNativeWindow } from '@test/harness/fakeFrozenFrame'
 
 describe('getGameOcrWindowOptions', () => {
-  it('creates an opaque, never-focused, always-on-top full-display window', () => {
+  it('creates an opaque, focusable, always-on-top full-display window', () => {
     const options = getGameOcrWindowOptions('/fake/preload.js', {
       x: -1920,
       y: 40,
@@ -25,10 +25,8 @@ describe('getGameOcrWindowOptions', () => {
       backgroundColor: '#000000',
       show: false,
       skipTaskbar: true,
-      // Never focusable: Windows refuses a cross-process foreground steal, and a
-      // window it has not activated spends the user's first press on activation
-      // instead of delivering it to the page.
-      focusable: false,
+      // Foreground input must belong to the overlay while inspecting text.
+      focusable: true,
       alwaysOnTop: true,
       resizable: false,
       fullscreenable: false

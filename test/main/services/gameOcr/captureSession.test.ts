@@ -296,6 +296,44 @@ describe('Game OCR capture sessions', () => {
 })
 
 describe('Game OCR focused-window capture', () => {
+  it('recaptures the game while its overlay owns focus, then follows an alt-tab', async () => {
+    const game = windowTarget('123', { x: 20, y: 30, width: 800, height: 600 })
+    const otherGame = windowTarget('456', { x: 40, y: 50, width: 900, height: 700 })
+    const fake = setup({
+      queue: [game, { ...target(1), fallbackReason: 'own-process' }, otherGame]
+    })
+    await fake.controller.arm()
+    await fake.controller.capture()
+    await fake.controller.capture()
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: game.sourceId, targetKind: 'window' })
+    )
+    expect(fake.windows[0].discard).not.toHaveBeenCalled()
+
+    await fake.controller.capture()
+    expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+      expect.objectContaining({ sourceId: otherGame.sourceId, targetKind: 'window' })
+    )
+  })
+
+  it.each(['dismissed', 'another Kizuna window'])(
+    'does not reuse the game when the overlay is %s',
+    async (state) => {
+      const game = windowTarget('123', { x: 20, y: 30, width: 800, height: 600 })
+      const display = { ...target(1), fallbackReason: 'own-process' as const }
+      const fake = setup({ queue: [game, display] })
+      await fake.controller.arm()
+      await fake.controller.capture()
+      if (state === 'dismissed') fake.windows[0].triggerDismissed()
+      else vi.mocked(fake.windows[0].isFocused).mockReturnValue(false)
+
+      await fake.controller.capture()
+      expect(fake.windows[0].freeze).toHaveBeenLastCalledWith(
+        expect.objectContaining({ sourceId: display.sourceId, targetKind: 'display' })
+      )
+    }
+  )
+
   it('covers only the window, and sends only its pixels to OCR', async () => {
     // The acceptance criterion: a 1024x768 game on a 2560x1440 display.
     const fake = setup({

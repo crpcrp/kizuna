@@ -234,8 +234,9 @@ describe('GameOcrInteraction', () => {
     const translation = deferred<string>()
     const translate = vi.fn(() => translation.promise)
     const cancel = vi.fn()
+    const onClose = vi.fn()
     const { container } = render(
-      <GameOcrFrame onClose={vi.fn()}>
+      <GameOcrFrame onClose={onClose}>
         <GameOcrInteraction
           regions={[region('one', '  選択された文字  ', 0)]}
           bridge={bridge(vi.fn(), { translate: { translate, cancel } })}
@@ -253,9 +254,12 @@ describe('GameOcrInteraction', () => {
     expect(readGameOcrSelection(selection)).not.toBeNull()
 
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true })
+    fireEvent.pointerDown(box, { button: 2, pointerId: 1 })
+    fireEvent.pointerUp(box, { button: 2, pointerId: 1 })
     fireEvent(box, event)
 
     expect(event.defaultPrevented).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
     expect(selection.toString()).toContain('選択された文字')
     expect(translate).toHaveBeenCalledWith('選択された文字', 'translation-1')
     expect(screen.getByText('Translating…')).not.toBeNull()
