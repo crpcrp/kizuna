@@ -47,20 +47,10 @@ export interface GameOcrDisplayEvents {
  * bounds are logical desktop coordinates, so negative secondary-monitor
  * origins are preserved exactly.
  *
- * It is deliberately **not focusable**. Windows refuses a cross-process
- * foreground steal — measured: an external application keeps the real
- * foreground window for the whole time this window is shown, while Electron's
- * own `isFocused()` reports true and does not say so — and the cost of that is
- * paid by the user: the first mouse press on a window the system has not
- * activated is spent activating it rather than reaching the page, so
- * dismissing the frame took two presses. A window that never activates has no
- * activation click to spend, and the game keeps the foreground, which also
- * means it keeps rendering behind the frozen frame instead of stalling until
- * the user clicks it back.
- *
- * The cost is that the page has no keyboard focus, so Escape and Ctrl+C cannot
- * arrive as page events. The coordinator registers those as global shortcuts
- * for exactly as long as a frame is visible.
+ * It must be focusable: leaving the game in the foreground lets games that
+ * poll foreground input observe clicks even when the page handles them.
+ * The controller requests focus after the screenshot is drawn. Windows can
+ * refuse programmatic activation, so mouse activation must remain enabled too.
  */
 export function getGameOcrWindowOptions(
   preloadPath: string,
@@ -77,7 +67,7 @@ export function getGameOcrWindowOptions(
     backgroundColor: '#000000',
     show: false,
     skipTaskbar: true,
-    focusable: false,
+    focusable: true,
     alwaysOnTop: true,
     resizable: false,
     movable: false,
@@ -216,6 +206,7 @@ function unsupportedWindow(): GameOcrWindow {
     dismiss: async () => {},
     close: async () => {},
     isVisible: () => false,
+    isFocused: () => false,
     onDismissed: () => () => {},
     onClosed: () => () => {},
     onRegionsRendered: () => () => {}

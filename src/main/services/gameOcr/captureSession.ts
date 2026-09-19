@@ -126,6 +126,7 @@ export function createGameOcrCaptureCoordinator(
   const { now } = options
   let activeSession: Session | undefined
   let presentation: GameOcrWindow | undefined
+  let presentedTarget: GameOcrCaptureTarget | undefined
   let nextSessionId = 0
   let nextCaptureId = 0
 
@@ -165,6 +166,7 @@ export function createGameOcrCaptureCoordinator(
    */
   const handleFrameEnded = (target: GameOcrWindow, destroyed: boolean): void => {
     if (presentation !== target) return
+    presentedTarget = undefined
     options.releaseFrameShortcuts()
     if (destroyed) {
       presentation = undefined
@@ -212,6 +214,7 @@ export function createGameOcrCaptureCoordinator(
 
   /** Ends a failed frame without destroying the retained renderer. */
   const discardPresentation = (): Promise<void> => {
+    presentedTarget = undefined
     const target = presentation
     if (!target) return Promise.resolve()
     try {
@@ -333,6 +336,7 @@ export function createGameOcrCaptureCoordinator(
       // canvas next; hiding here would make the newer shortcut visibly flash.
       return 'superseded'
     }
+    presentedTarget = target
     // Claimed only once the frame is actually up, so a capture that failed
     // on its way here never leaves Escape taken away from the game.
     options.holdFrameShortcuts({
@@ -366,6 +370,17 @@ export function createGameOcrCaptureCoordinator(
       // which can postpone the Promise continuation by seconds on Windows.
       let target = isPromiseLike(targetOrPromise) ? await targetOrPromise : targetOrPromise
       if (!isCurrent(session)) return
+      // Focusing the OCR frame must not turn its next shortcut into a desktop
+      // capture. Only reuse its target when Kizuna is foreground AND this
+      // frame has focus; alt-tabbing to another application still retargets.
+      if (
+        target.kind === 'display' &&
+        target.fallbackReason === 'own-process' &&
+        presentation?.isFocused() &&
+        presentedTarget
+      ) {
+        target = presentedTarget
+      }
       options.reportDiagnostic(describeCaptureTarget(target))
 
       const outcome = await attemptCapture(session, target, dequeuedAt, now())
@@ -411,6 +426,7 @@ export function createGameOcrCaptureCoordinator(
       // already destroyed resolves without emitting anything, and a retained
       // reference to it would leave the next armed run without a usable frame.
       presentation = undefined
+      presentedTarget = undefined
       try {
         return Promise.resolve(target.close())
       } catch (error) {

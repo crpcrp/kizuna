@@ -20,6 +20,7 @@ export interface GameOcrNativeWindow extends SendTarget {
   setAlwaysOnTop?(flag: boolean, level?: string): void
   close(): void
   isVisible(): boolean
+  isFocused(): boolean
   setBounds(bounds: OcrDisplayBounds): void
   on(event: 'closed' | 'hide', listener: () => void): unknown
   webContents: SendTarget['webContents'] & {
@@ -63,7 +64,7 @@ export interface GameOcrWindow {
   rendererReady(): void
   /**
    * Asks the frame to put its current text selection on the clipboard. The
-   * window is never focused, so the copy arrives from a global shortcut.
+   * copy can also arrive from the frame's global shortcut.
    */
   copySelection(): void
   /** Places the retained window on the display being captured. */
@@ -79,6 +80,7 @@ export interface GameOcrWindow {
   /** Clears state, closes the native window, and resolves after it is closed. */
   close(): Promise<void>
   isVisible(): boolean
+  isFocused(): boolean
   /** Subscribes to renderer-requested dismissals of the current frame. */
   onDismissed(listener: () => void): () => void
   /** Subscribes to native close/crash cleanup notifications. */
@@ -190,18 +192,12 @@ export function createGameOcrWindowController({
 
   const showFrozen = (): void => {
     if (closed) return
-    // Shown, never focused. `focus()` on a non-focusable window is at best a
-    // no-op and at worst an attempt to take a foreground Windows will refuse,
-    // and taking it is precisely what stalls the game behind the frame.
     if (!window.isVisible()) window.show()
-    // Raised without being activated. Always-on-top is a band, not a position:
-    // inside it Windows orders by which window was most recently activated, and
-    // a window that never activates therefore loses to a game that is itself
-    // topmost — the frame is shown, behind the game, and nothing appears to
-    // happen. `screen-saver` puts it in a higher band than an ordinary topmost
-    // window, and `moveTop` raises it there without asking for focus.
+    // Keep the overlay above games that are themselves topmost, then take
+    // input focus before the user interacts with the screenshot or text.
     window.setAlwaysOnTop?.(true, 'screen-saver')
     window.moveTop?.()
+    window.focus()
   }
 
   const requestHide = (): void => {
@@ -377,6 +373,10 @@ export function createGameOcrWindowController({
 
     isVisible(): boolean {
       return !closed && !window.isDestroyed() && window.isVisible()
+    },
+
+    isFocused(): boolean {
+      return !closed && !window.isDestroyed() && window.isVisible() && window.isFocused()
     },
 
     onDismissed(listener): () => void {

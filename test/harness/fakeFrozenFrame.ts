@@ -33,6 +33,7 @@ export function fakeNativeWindow(): FakeNativeWindow {
   const window = {
     isDestroyed: () => destroyed,
     isVisible: () => visible,
+    isFocused: vi.fn(() => visible),
     show: vi.fn(() => {
       visible = true
     }),

@@ -145,6 +145,7 @@ function makeWindow(id: number, events: string[], options: FakeWindowOptions = {
       triggerClosed()
     }),
     isVisible: () => visible,
+    isFocused: vi.fn(() => visible),
     onDismissed: (listener) => {
       dismissedListeners.add(listener)
       return () => dismissedListeners.delete(listener)

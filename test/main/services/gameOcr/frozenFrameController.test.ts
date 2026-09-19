@@ -75,12 +75,13 @@ async function freezeWith(
 }
 
 describe('createGameOcrWindowController', () => {
-  it('waits for the renderer, asks it to freeze, and shows it without focusing', async () => {
+  it('waits for the screenshot, then raises and focuses the input overlay', async () => {
     const fake = fakeNativeWindow()
     const controller = createGameOcrWindowController({ window: fake.window })
 
     const freezing = controller.freeze(freezeRequest)
     expect(fake.window.show).not.toHaveBeenCalled()
+    expect(fake.window.focus).not.toHaveBeenCalled()
 
     fake.fireRenderer('did-finish-load')
     controller.rendererReady()
@@ -98,14 +99,26 @@ describe('createGameOcrWindowController', () => {
     controller.reportFrozen({ sessionId: 1, captureId: 1, imageSize: freezeRequest.imageSize })
     await expect(freezing).resolves.toEqual(freezeRequest.imageSize)
     expect(fake.window.show).toHaveBeenCalledOnce()
-    // Taking the foreground is what stalls the game behind the frame.
-    expect(fake.window.focus).not.toHaveBeenCalled()
-    // But it still has to be raised: always-on-top is a band, and inside it a
-    // window that never activates loses to a game that is itself topmost, so
-    // the frame would be shown behind the game and appear not to open at all.
+    expect(fake.window.focus).toHaveBeenCalledOnce()
+    expect(fake.window.focus).toHaveBeenCalledAfter(vi.mocked(fake.window.moveTop!))
     expect(fake.window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'screen-saver')
     expect(fake.window.moveTop).toHaveBeenCalledOnce()
     expect(controller.isVisible()).toBe(true)
+    expect(controller.isFocused()).toBe(true)
+  })
+
+  it('reacquires input focus on each presentation and drops it on dismissal', async () => {
+    const fake = fakeNativeWindow()
+    const controller = createGameOcrWindowController({ window: fake.window, loaded: true })
+    await freezeWith(controller)
+    await freezeWith(controller, { ...freezeRequest, captureId: 2 })
+    expect(fake.window.show).toHaveBeenCalledOnce()
+    expect(fake.window.focus).toHaveBeenCalledTimes(2)
+    await controller.dismiss()
+    expect(controller.isFocused()).toBe(false)
+    await freezeWith(controller, { ...freezeRequest, captureId: 3 })
+    expect(fake.window.focus).toHaveBeenCalledTimes(3)
+    expect(controller.isFocused()).toBe(true)
   })
 
   it('resolves the encoded screenshot only after the frame is already shown', async () => {
