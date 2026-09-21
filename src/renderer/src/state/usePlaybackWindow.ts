@@ -312,7 +312,7 @@ export function usePlaybackWindow({
   // Subtitle menu > "Apply to folder": makes the current offset the default for
   // every video in this file's folder, present and future.
   const handleApplyOffsetToFolder = (): void => {
-    if (!state.filePath || state.externalSubtitleProvenance) return
+    if (!state.filePath) return
     applyOffsetToFolder(
       { subtitleOffsets: subtitleOffsetsRef, folderSubtitleOffsets: folderSubtitleOffsetsRef },
       state.filePath,
@@ -391,8 +391,7 @@ export function usePlaybackWindow({
     subtitleMenu: {
       subtitleOffsetMs: state.subtitleOffsetMs,
       onChangeSubtitleOffset: handleSubtitleOffsetChange,
-      onApplyOffsetToFolder:
-        state.filePath && !state.externalSubtitleProvenance ? handleApplyOffsetToFolder : undefined,
+      onApplyOffsetToFolder: state.filePath ? handleApplyOffsetToFolder : undefined,
       onToggleSidebar: handleToggleSidebar
     },
     playbackMenu: {

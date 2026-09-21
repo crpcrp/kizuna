@@ -205,10 +205,14 @@ async function restoreSubtitle(
         ...(provenance ? { provenance } : {})
       })
       if (provenance) {
+        const offsetMs =
+          history.subtitleOffsetsByVersion?.[provenance.contentVersion] ??
+          session.getLegacySubtitleOffset?.() ??
+          0
         dispatch({
           type: 'setSubtitleVersionOffset',
           contentVersion: provenance.contentVersion,
-          value: history.subtitleOffsetsByVersion?.[provenance.contentVersion] ?? 0
+          value: offsetMs
         })
       } else {
         const offsetMs = session.getLegacySubtitleOffset?.()

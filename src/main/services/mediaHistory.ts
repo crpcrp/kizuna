@@ -352,10 +352,6 @@ export function createMediaHistoryService(
       if (!trusted) return
       updatePlayback(path, (entry) => {
         entry.subtitle = trusted
-        if (trusted.mode === 'external' && trusted.provenance) {
-          const current = entry.subtitleOffsetsByVersion?.[trusted.provenance.contentVersion]
-          updateVersionOffset(entry, trusted.provenance.contentVersion, current ?? 0)
-        }
       })
     },
 
@@ -368,12 +364,6 @@ export function createMediaHistoryService(
       if (!selection || selection.mode !== 'external' || !selection.provenance) return undefined
       updatePlayback(path, (entry) => {
         entry.subtitle = selection
-        const contentVersion = selection.provenance!.contentVersion
-        updateVersionOffset(
-          entry,
-          contentVersion,
-          entry.subtitleOffsetsByVersion?.[contentVersion] ?? 0
-        )
       })
       return selection
     },

@@ -153,7 +153,14 @@ export default function App({
           )
         : 0,
     getSubtitleVersionOffset: (contentVersion) =>
-      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? 0
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ??
+      (stateRef.current.filePath
+        ? subtitleOffsetForFile(
+            perFileValues.subtitleOffsetsRef.current,
+            perFileValues.folderSubtitleOffsetsRef.current,
+            stateRef.current.filePath
+          )
+        : 0)
   })
   const jimaku = useJimakuController({
     jimaku: kizuna.jimaku ?? ({} as KizunaApi['jimaku']),
@@ -163,7 +170,14 @@ export default function App({
     }),
     subtitles: mediaSession.subtitleActions,
     getSubtitleOffset: (contentVersion) =>
-      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? 0
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ??
+      (stateRef.current.filePath
+        ? subtitleOffsetForFile(
+            perFileValues.subtitleOffsetsRef.current,
+            perFileValues.folderSubtitleOffsetsRef.current,
+            stateRef.current.filePath
+          )
+        : 0)
   })
   useEffect(() => {
     reportErrorRef.current = mediaSession.banner.reportError

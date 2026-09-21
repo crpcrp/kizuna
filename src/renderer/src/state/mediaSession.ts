@@ -149,7 +149,7 @@ export interface OpenSession {
   externalSubtitleEncoding?: SubtitleEncoding
   /** Current video's legacy local/embedded offset. */
   getLegacySubtitleOffset?: () => number
-  /** Existing per-video downloaded-version offset, or zero for a new version. */
+  /** Existing per-video downloaded-version offset, or the file/folder fallback. */
   getSubtitleVersionOffset?: (contentVersion: string) => number
   /** Captures the active selection immediately before a successful replacement. */
   captureSubtitleSelection?: () => SubtitleSelectionSnapshot

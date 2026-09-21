@@ -110,6 +110,23 @@ describe('parseFfprobeTracks', () => {
     expect(engSub?.title).toBeUndefined()
   })
 
+  it('excludes bitmap subtitle tracks that cannot be converted to text cues', () => {
+    const tracks = parseFfprobeTracks(
+      JSON.stringify({
+        streams: [
+          { index: 1, codec_type: 'audio', codec_name: 'aac' },
+          { index: 2, codec_type: 'subtitle', codec_name: 'hdmv_pgs_subtitle' },
+          { index: 3, codec_type: 'subtitle', codec_name: 'dvd_subtitle' },
+          { index: 4, codec_type: 'subtitle', codec_name: 'dvb_subtitle' },
+          { index: 5, codec_type: 'subtitle', codec_name: 'xsub' },
+          { index: 6, codec_type: 'subtitle', codec_name: 'ass' }
+        ]
+      })
+    )
+
+    expect(tracks.map((track) => track.id)).toEqual([1, 6])
+  })
+
   it('returns [] for malformed JSON instead of throwing', () => {
     expect(() => parseFfprobeTracks('{not json')).not.toThrow()
     expect(parseFfprobeTracks('{not json')).toEqual([])

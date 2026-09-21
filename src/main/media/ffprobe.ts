@@ -52,10 +52,19 @@ interface FfprobeOutput {
   chapters?: FfprobeChapter[]
 }
 
+// Kizuna renders subtitles as parsed text cues. FFmpeg cannot convert these
+// bitmap codecs to the ASS text file consumed by the subtitle loader.
+const BITMAP_SUBTITLE_CODECS = new Set([
+  'dvb_subtitle',
+  'dvd_subtitle',
+  'hdmv_pgs_subtitle',
+  'xsub'
+])
+
 /**
- * Parses ffprobe's `-show_streams` JSON stdout into `Track[]`, keeping only
- * audio and subtitle streams (video and others are excluded) and preserving
- * stream order. Missing `tags.language`/`tags.title` become undefined
+ * Parses ffprobe's `-show_streams` JSON stdout into `Track[]`, keeping audio
+ * and text subtitle streams (video, bitmap subtitles, and others are excluded)
+ * and preserving stream order. Missing `tags.language`/`tags.title` become undefined
  * fields; a present-but-'und' language is kept as-is (it's still real
  * ffprobe-reported metadata, and the UI can decide how to label it).
  * Malformed/empty JSON or unexpected shapes are tolerated by returning [].
@@ -72,6 +81,12 @@ export function parseFfprobeTracks(stdout: string): Track[] {
 
   const tracks: Track[] = []
   for (const stream of parsed.streams) {
+    if (
+      stream.codec_type === 'subtitle' &&
+      BITMAP_SUBTITLE_CODECS.has(stream.codec_name?.toLowerCase() ?? '')
+    ) {
+      continue
+    }
     const kind =
       stream.codec_type === 'audio' || stream.codec_type === 'subtitle'
         ? (stream.codec_type as 'audio' | 'subtitle')
