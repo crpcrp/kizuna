@@ -300,9 +300,7 @@ describe('createMediaHistoryService', () => {
     expect(history.getProtectedJimakuPaths()).toEqual(['/cache/a-renamed.srt'])
 
     history.applyPreparedSubtitle('/media/b.mkv', prepared('/cache/a.srt', contentA, 'a.srt'))
-    expect(history.getPlaybackHistory('/media/b.mkv')?.subtitleOffsetsByVersion).toEqual({
-      [contentA]: 0
-    })
+    expect(history.getPlaybackHistory('/media/b.mkv')?.subtitleOffsetsByVersion).toBeUndefined()
 
     history.setSubtitleTrack('/media/untrusted.mkv', {
       mode: 'external',

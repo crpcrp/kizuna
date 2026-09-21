@@ -163,16 +163,10 @@ describe('nextSubtitleOffsets', () => {
 })
 
 describe('subtitle version offsets', () => {
-  it('uses the downloaded version map and ignores legacy file/folder offsets', () => {
+  it('uses the folder default until a downloaded version has an explicit override', () => {
     expect(
-      subtitleOffsetForSelection(
-        { '/videos/a.mkv': 1_500 },
-        { '/videos': -300 },
-        {},
-        '/videos/a.mkv',
-        jimakuProvenance
-      )
-    ).toBe(0)
+      subtitleOffsetForSelection({}, { '/videos': -300 }, {}, '/videos/a.mkv', jimakuProvenance)
+    ).toBe(-300)
     expect(
       subtitleOffsetForSelection(
         { '/videos/a.mkv': 1_500 },

@@ -31,17 +31,16 @@ export function subtitleOffsetForFile(
   return folderOffsets[subtitleOffsetFolderKey(filePath)] ?? 0
 }
 
-/** Returns a downloaded subtitle's offset, defaulting new content to zero. */
+/** Returns a downloaded subtitle's explicit offset, when one has been set. */
 export function subtitleOffsetForVersion(
   offsets: Record<string, number>,
   contentVersion: string
-): number {
-  return offsets[contentVersion] ?? 0
+): number | undefined {
+  return offsets[contentVersion]
 }
 
-/** Chooses version-specific timing for Jimaku content and legacy timing for
- * embedded/local/off selections. Folder offsets are intentionally ignored for
- * downloaded subtitles. */
+/** Chooses an explicit version offset for Jimaku content when present;
+ * otherwise every subtitle source uses the file/folder fallback. */
 export function subtitleOffsetForSelection(
   offsets: Record<string, number>,
   folderOffsets: Record<string, number>,
@@ -49,9 +48,11 @@ export function subtitleOffsetForSelection(
   filePath: string,
   provenance?: JimakuSubtitleProvenance
 ): number {
-  return provenance
-    ? subtitleOffsetForVersion(versionOffsets, provenance.contentVersion)
-    : subtitleOffsetForFile(offsets, folderOffsets, filePath)
+  if (provenance) {
+    const versionOffset = subtitleOffsetForVersion(versionOffsets, provenance.contentVersion)
+    if (versionOffset !== undefined) return versionOffset
+  }
+  return subtitleOffsetForFile(offsets, folderOffsets, filePath)
 }
 
 /**

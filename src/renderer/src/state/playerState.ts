@@ -382,13 +382,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
     case 'externalSubtitleLoaded': {
       // Filter-then-append: a second external file replaces the first one's
       // synthetic track rather than adding a duplicate id.
-      const subtitleOffsetsByVersion = action.provenance
-        ? nextSubtitleVersionOffsets(
-            state.subtitleOffsetsByVersion,
-            action.provenance.contentVersion,
-            state.subtitleOffsetsByVersion[action.provenance.contentVersion] ?? 0
-          )
-        : state.subtitleOffsetsByVersion
       return {
         ...state,
         tracks: [...state.tracks.filter((track) => track.id !== action.track.id), action.track],
@@ -397,7 +390,7 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         externalSubtitlePath: action.path,
         externalSubtitleProvenance: action.provenance,
         externalSubtitleEncoding: action.encoding,
-        subtitleOffsetsByVersion,
+        subtitleOffsetsByVersion: state.subtitleOffsetsByVersion,
         allCueTokens: {}
       }
     }

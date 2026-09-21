@@ -473,6 +473,15 @@ describe('Jimaku player composition', () => {
     expect(
       (screen.getByLabelText('Subtitle offset in milliseconds') as HTMLInputElement).value
     ).toBe('1500')
+    const applyToFolder = screen.getByRole('button', {
+      name: 'Apply subtitle offset to folder'
+    })
+    fireEvent.click(applyToFolder)
+    await waitFor(() =>
+      expect(api.playerSettings.setSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ folderSubtitleOffsets: { 'c:\\media': 1500 } })
+      )
+    )
   })
 
   it('drops a stale download when the video changes', async () => {

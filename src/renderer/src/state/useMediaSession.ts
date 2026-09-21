@@ -271,7 +271,8 @@ export function useMediaSession({
       state.externalSubtitleEncoding,
       {
         offsetMs: provenance
-          ? (state.subtitleOffsetsByVersion[provenance.contentVersion] ?? 0)
+          ? (state.subtitleOffsetsByVersion[provenance.contentVersion] ??
+            getLegacySubtitleOffset?.())
           : getLegacySubtitleOffset?.(),
         ...(provenance ? { provenance } : {}),
         previousSnapshot,
@@ -288,7 +289,8 @@ export function useMediaSession({
       state.externalSubtitlePath,
       {
         offsetMs: state.externalSubtitleProvenance
-          ? (state.subtitleOffsetsByVersion[state.externalSubtitleProvenance.contentVersion] ?? 0)
+          ? (state.subtitleOffsetsByVersion[state.externalSubtitleProvenance.contentVersion] ??
+            getLegacySubtitleOffset?.())
           : getLegacySubtitleOffset?.(),
         ...(state.externalSubtitleProvenance
           ? { provenance: state.externalSubtitleProvenance }

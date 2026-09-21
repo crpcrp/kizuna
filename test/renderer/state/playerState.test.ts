@@ -395,6 +395,30 @@ describe('playerReducer', () => {
     expect(updated.subtitleOffsetsByVersion).toEqual({ [contentVersion]: -300 })
   })
 
+  it('does not create a version override when downloaded subtitles first load', () => {
+    const provenance = {
+      provider: 'jimaku' as const,
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion
+    }
+    const active = playerReducer(initialPlayerState, {
+      type: 'externalSubtitleLoaded',
+      path: '/cache/episode.srt',
+      track: {
+        id: EXTERNAL_SUBTITLE_TRACK_ID,
+        kind: 'subtitle',
+        codec: 'srt',
+        title: 'episode.srt'
+      },
+      cues: [],
+      encoding: 'auto',
+      provenance
+    })
+
+    expect(active.subtitleOffsetsByVersion).toEqual({})
+  })
+
   it('clears downloaded provenance when returning to an embedded or Off selection', () => {
     const active: PlayerState = {
       ...initialPlayerState,

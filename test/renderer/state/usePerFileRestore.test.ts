@@ -90,6 +90,23 @@ describe('usePerFileRestore', () => {
     expect(result.dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: 800 })
   })
 
+  it('restores the folder default for downloaded subtitles without an explicit override', () => {
+    const result = setup('/videos/one.mkv')
+    const contentVersion = 'a'.repeat(64)
+    result.input.folderSubtitleOffsetsRef.current = { '/videos': -300 }
+    result.input.subtitleOffsetsByVersion = {}
+    result.input.externalSubtitleProvenance = {
+      provider: 'jimaku',
+      entryId: 7,
+      fileName: 'episode.srt',
+      contentVersion
+    }
+    result.input.loadGeneration = 2
+    result.hook.rerender({ value: result.input })
+
+    expect(result.dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: -300 })
+  })
+
   it('reads dimensions from ffprobe (media), never mpv, for a local path', () => {
     const result = setup()
     expect(result.bridge.media.getVideoDimensions).toHaveBeenCalledWith('/one.mkv')
