@@ -219,6 +219,8 @@ export class MpvController {
   private readonly unlinkFn: UnlinkFn
   private proc: MpvProcessLike | null = null
   private ipcEndpoint: string | null = null
+  /** Rejecters for `loadFile` promises still waiting on mpv. */
+  private readonly pendingLoads = new Set<(error: Error) => void>()
   constructor(deps: MpvControllerDeps = {}) {
     this.spawnFn =
       deps.spawnFn ??
@@ -242,6 +244,13 @@ export class MpvController {
     }
   }
 
+  /** Rejects every in-flight `loadFile`; mpv is gone, so nothing is playing. */
+  private abortPendingLoads(): void {
+    const error = new MpvLoadError('MpvController: mpv exited while loading the file')
+    for (const abort of [...this.pendingLoads]) abort(error)
+    this.pendingLoads.clear()
+  }
+
   /**
    * A native mpv exit is a complete controller teardown too. Without this
    * path, a crash after startup leaves the Linux socket owned by Kizuna and
@@ -252,6 +261,7 @@ export class MpvController {
     // installed the next process. Never let a late event tear down that new
     // controller instance.
     if (this.proc !== proc) return
+    this.abortPendingLoads()
     this.proc = null
     try {
       this.client.dispose()
@@ -340,7 +350,17 @@ export class MpvController {
       const cleanup = (): void => {
         this.client.off('file-loaded', onFileLoaded)
         this.client.off('end-file', onEndFile)
+        this.pendingLoads.delete(abort)
       }
+      // mpv exiting after acknowledging loadfile drops the event listeners
+      // without either firing; the controller rejects through this instead.
+      const abort = (error: Error): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error)
+      }
+      this.pendingLoads.add(abort)
       const onFileLoaded = (): void => {
         fileLoaded = true
         resolveWhenReady()
@@ -594,6 +614,7 @@ export class MpvController {
 
   /** Hard teardown: drops the IPC client and kills the mpv process. */
   dispose(): void {
+    this.abortPendingLoads()
     const proc = this.proc
     this.proc = null
     try {
