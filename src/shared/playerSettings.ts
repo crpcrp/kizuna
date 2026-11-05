@@ -444,7 +444,7 @@ export const MPV_EXTRA_ARG_MAX_LENGTH = 256
  * Individual bad entries are dropped rather than discarding the whole list,
  * so one over-long line doesn't wipe every other arg. Note this only shapes
  * the values; the launch-time `sanitizeExtraMpvArgs` still strips
- * embedding/config-owning options.
+ * bare tokens and the reserved `--config`/`--config-dir` options.
  */
 export function normalizeMpvExtraArgs(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []

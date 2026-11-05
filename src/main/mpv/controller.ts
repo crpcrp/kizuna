@@ -49,61 +49,14 @@ export interface BuildMpvArgsOptions {
   /**
    * Advanced user escape-hatch args, inserted before the forced embedding args
    * (which always win, since for a repeated mpv option the later one wins).
-   * Passed through `sanitizeExtraMpvArgs` so integration-breaking or
-   * file-smuggling args can't slip in.
+   * Passed through `sanitizeExtraMpvArgs`, which drops bare tokens and the
+   * reserved `--config`/`--config-dir` options.
    */
   extraArgs?: string[]
 }
 
-/**
- * mpv options a user may set through `extraArgs`, by option name.
- *
- * This is an allowlist on purpose. A denylist cannot hold: mpv exposes several
- * unrelated-looking options that reach code execution or arbitrary file reads —
- * `--script`/`--scripts` (runs Lua), `--input-conf` (reads any file),
- * `--input-commands` (runs input.conf commands, and the `run` command spawns a
- * detached process) — and every new mpv release can add more. Since `extraArgs` comes from
- * `settings.json` / `playerSettings:setSettings`, an unknown option must fail
- * closed, not open.
- *
- * Entries are playback-tuning options only: nothing that names a file, a
- * command, or a script, and nothing Kizuna owns (`--wid`,
- * `--input-ipc-server`, `--config`/`--config-dir`). Every name here was checked
- * against the mpv manual. Adding to this list is the intended way to support a
- * new power-user option.
- */
-const ALLOWED_EXTRA_ARGS: ReadonlySet<string> = new Set([
-  // Decoding and video output
-  'hwdec',
-  'hwdec-codecs',
-  'vo',
-  'gpu-api',
-  'gpu-context',
-  'profile',
-  // Scaling and quality
-  'scale',
-  'cscale',
-  'dscale',
-  'tscale',
-  'deband',
-  'interpolation',
-  'video-sync',
-  'framedrop',
-  'keepaspect',
-  // Audio
-  'volume',
-  'audio-channels',
-  'audio-device',
-  'audio-delay',
-  // Cache and demuxer
-  'cache',
-  'cache-secs',
-  'demuxer-max-bytes',
-  // On-screen display
-  'osc',
-  'osd-level',
-  'sub-scale'
-])
+/** Options Kizuna sets itself before user args, so a user arg would override them. */
+const RESERVED_EXTRA_ARGS: ReadonlySet<string> = new Set(['config', 'config-dir'])
 
 /**
  * Pure. Reduces one raw token to the mpv option name it sets, or `null` if it
@@ -118,14 +71,13 @@ function extraArgName(arg: string): string | null {
 }
 
 /**
- * Pure. Filters user-supplied extra mpv args down to the allowlisted
- * playback-tuning options. Anything unrecognized — including options that only
- * exist in newer mpv builds — is dropped.
+ * Pure. Keeps every `--option` except the config-selection ones Kizuna owns;
+ * bare tokens are dropped so mpv never treats them as files to play.
  */
 export function sanitizeExtraMpvArgs(args: string[]): string[] {
   return args.filter((arg) => {
     const name = extraArgName(arg)
-    return name !== null && ALLOWED_EXTRA_ARGS.has(name)
+    return name !== null && !RESERVED_EXTRA_ARGS.has(name)
   })
 }
 
@@ -207,7 +159,8 @@ export interface StartOptions {
   /** Kizuna-owned mpv config dir; forwarded to `buildMpvArgs`. Undefined =
    * `--no-config` (mpv ignores every config source). */
   userConfigDir?: string
-  /** User escape-hatch args; sanitized and forwarded to `buildMpvArgs`. */
+  /** User escape-hatch args; any `--option` except `--config`/`--config-dir`,
+   * forwarded to `buildMpvArgs`. */
   extraArgs?: string[]
 }
 

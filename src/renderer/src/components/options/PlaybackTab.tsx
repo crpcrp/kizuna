@@ -335,8 +335,8 @@ export default function PlaybackTab({
           <label htmlFor="mpv-extra-args-input" className="options-row-label">
             Extra mpv arguments
             <span className="options-row-description">
-              One argument per line. Only known playback-tuning options are passed to mpv; anything
-              else is ignored.
+              One argument per line. Any --option is passed to mpv; --config/--config-dir are
+              managed by Kizuna.
             </span>
           </label>
           <textarea
