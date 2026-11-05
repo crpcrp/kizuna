@@ -2,6 +2,7 @@ import './BulkMining.css'
 import { BulkMiningStatusMarker, BulkMiningSummary } from './BulkMiningStatus'
 import {
   displayedCandidates,
+  hiddenNoDataCount,
   hiddenTargetDeckMatchCount,
   miningSet,
   type BulkMiningFilters,
@@ -162,12 +163,7 @@ export default function BulkMining(props: BulkMiningProps): React.JSX.Element | 
       phase.resolved,
       filters
     )
-    const hiddenNoDataCount =
-      props.frequencyDictConfigured && phase.threshold !== null
-        ? phase.candidates.filter(
-            (candidate) => phase.resolved[candidate.lemma]?.frequency === null
-          ).length
-        : 0
+    const hiddenNoDataTotal = hiddenNoDataCount(phase.candidates, phase.resolved, filters)
     return (
       <section className="bulk-mining" aria-label="Bulk Anki mining">
         <div className="bulk-mining-controls">
@@ -204,9 +200,9 @@ export default function BulkMining(props: BulkMiningProps): React.JSX.Element | 
               Choose a frequency dictionary in Options to filter by frequency.
             </span>
           )}
-          {hiddenNoDataCount > 0 && (
+          {hiddenNoDataTotal > 0 && (
             <span className="bulk-mining-hint">
-              {hiddenNoDataCount} words without frequency data are hidden.
+              {hiddenNoDataTotal} words without frequency data are hidden.
             </span>
           )}
           <label className="bulk-mining-target-filter">

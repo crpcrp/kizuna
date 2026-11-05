@@ -152,6 +152,27 @@ describe('BulkMining SSR', () => {
     )
   })
 
+  it('counts only no-frequency words hidden by the frequency filter alone', () => {
+    const html = render({
+      phase: {
+        kind: 'ready' as const,
+        candidates: [
+          { lemma: 'kept', token: token('kept'), sentence: '', count: 3 },
+          { lemma: 'rare', token: token('rare'), sentence: '', count: 1 }
+        ],
+        resolving: false,
+        threshold: 5000,
+        minimumCount: 2,
+        selected: {},
+        resolved: {
+          kept: { entry: entry(null), frequency: null },
+          rare: { entry: entry(null), frequency: null }
+        }
+      }
+    })
+    expect(html).toContain('1 words without frequency data are hidden.')
+  })
+
   it('forwards the minimum count and keeps rows and Mine N on the same combined filter set', () => {
     const composedCandidates = [
       { lemma: 'target', token: token('target'), sentence: '', count: 2 },
