@@ -445,18 +445,13 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     const pending = beginOperation(session)
 
     if (candidate.format === 'zip') {
-      let inspected: Awaited<ReturnType<JimakuArchiveService['inspect']>>
-      try {
-        inspected = await deps.archive.inspect(
-          entry.id,
-          candidate.file,
-          session.identity,
-          entry.flags.movie,
-          pending.controller.signal
-        )
-      } catch {
-        inspected = failure('storage') as Awaited<ReturnType<JimakuArchiveService['inspect']>>
-      }
+      const inspected = await deps.archive.inspect(
+        entry.id,
+        candidate.file,
+        session.identity,
+        entry.flags.movie,
+        pending.controller.signal
+      )
       if (!isCurrent(session, pending)) {
         if (inspected.ok) deps.archive.releasePackage(inspected.value.packageHandle)
         return failure('cancelled')
@@ -479,16 +474,11 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       return success(toArchiveMembersResult(packageId, entry.id, inspected.value))
     }
 
-    let prepared: Awaited<ReturnType<JimakuDownloadStore['prepareDirect']>>
-    try {
-      prepared = await deps.downloads.prepareDirect(
-        entry.id,
-        candidate.file,
-        pending.controller.signal
-      )
-    } catch {
-      prepared = failure('storage') as Awaited<ReturnType<JimakuDownloadStore['prepareDirect']>>
-    }
+    const prepared = await deps.downloads.prepareDirect(
+      entry.id,
+      candidate.file,
+      pending.controller.signal
+    )
     if (!isCurrent(session, pending)) {
       if (prepared.ok) deps.downloads.releasePrepared(prepared.value.handle)
       return failure('cancelled')
@@ -517,16 +507,11 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     if (!packageRecord.memberIds.has(memberId)) return failure('invalidMember')
 
     const pending = beginOperation(session)
-    let prepared: Awaited<ReturnType<JimakuArchiveService['prepareMember']>>
-    try {
-      prepared = await deps.archive.prepareMember(
-        packageRecord.archiveHandle,
-        memberId,
-        pending.controller.signal
-      )
-    } catch {
-      prepared = failure('storage') as Awaited<ReturnType<JimakuArchiveService['prepareMember']>>
-    }
+    const prepared = await deps.archive.prepareMember(
+      packageRecord.archiveHandle,
+      memberId,
+      pending.controller.signal
+    )
     if (!isCurrent(session, pending)) {
       if (prepared.ok) deps.downloads.releasePrepared(prepared.value.handle)
       return failure('cancelled')
