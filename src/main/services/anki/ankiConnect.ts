@@ -1,10 +1,11 @@
 // HttpFetch is injected so client tests do not require AnkiConnect.
 
-import type { HttpFetch } from '../http'
+import { isTimeoutError, type HttpFetch } from '../http'
 import type { AnkiMediaAttachment } from './audioSource'
 import type { AnkiNote } from './noteBuilder'
 
 export const ANKI_CONNECT_VERSION = 6
+export const ANKI_REQUEST_TIMEOUT_MS = 60_000
 
 /**
  * JSON body for one AnkiConnect request: `{ action, version, params }`, plus a
@@ -130,8 +131,9 @@ export interface AnkiClient {
 /**
  * Creates an `AnkiClient` that POSTs every action to `deps.url` via the
  * injected `deps.fetch`. A rejected `fetch` (Anki not running / connection
- * refused) is remapped to an `AnkiConnectError` with a user-facing hint,
- * rather than surfacing a raw network error.
+ * refused) or a request exceeding `ANKI_REQUEST_TIMEOUT_MS` is remapped to an
+ * `AnkiConnectError` with a user-facing hint, rather than surfacing a raw
+ * network error.
  */
 export function createAnkiClient(deps: {
   url: string
@@ -143,8 +145,17 @@ export function createAnkiClient(deps: {
   async function invoke<T>(action: string, params?: unknown): Promise<T> {
     let res
     try {
-      res = await fetch(url, { method: 'POST', body: buildRequest(action, params, apiKey) })
-    } catch {
+      res = await fetch(url, {
+        method: 'POST',
+        body: buildRequest(action, params, apiKey),
+        timeoutMs: ANKI_REQUEST_TIMEOUT_MS
+      })
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        throw new AnkiConnectError(
+          'AnkiConnect did not respond. Close any open Anki dialogs and try again.'
+        )
+      }
       throw new AnkiConnectError('Is Anki running?')
     }
     const body = await res.json()

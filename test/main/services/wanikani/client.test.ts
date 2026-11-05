@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   createWaniKaniClient,
   WaniKaniAuthError,
   WANIKANI_BASE,
-  WANIKANI_REVISION
+  WANIKANI_REVISION,
+  WANIKANI_REQUEST_TIMEOUT_MS
 } from '@src/main/services/wanikani/client'
 import { fakeHttp } from '@test/harness/fakeHttp'
 
@@ -53,27 +54,17 @@ describe('createWaniKaniClient', () => {
     expect(http.calls).toHaveLength(1)
   })
 
-  it('aborts a stalled request at the configured timeout', async () => {
+  it('maps a request timeout to an actionable error', async () => {
     const url = `${WANIKANI_BASE}assignments`
-    const http = fakeHttp({ [url]: { deferred: true } })
-    const timers: Array<() => void> = []
-    const client = createWaniKaniClient({
-      token: 'tok',
-      fetch: http.fetch,
-      requestTimeoutMs: 25,
-      setTimeoutFn: (callback) => {
-        timers.push(callback)
-        return 0 as unknown as ReturnType<typeof setTimeout>
-      },
-      clearTimeoutFn: vi.fn()
+    const http = fakeHttp({
+      [url]: { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) }
     })
-    const request = collect(client.collection('assignments'))
+    const client = createWaniKaniClient({ token: 'tok', fetch: http.fetch })
 
-    await vi.waitFor(() => expect(http.calls).toHaveLength(1))
-    timers[0]!()
-
-    await expect(request).rejects.toThrow('WaniKani request timed out after 25ms')
-    expect(http.calls[0]?.init?.signal?.aborted).toBe(true)
+    await expect(collect(client.collection('assignments'))).rejects.toThrow(
+      `WaniKani request timed out after ${WANIKANI_REQUEST_TIMEOUT_MS}ms`
+    )
+    expect(http.calls[0]?.init?.timeoutMs).toBe(WANIKANI_REQUEST_TIMEOUT_MS)
   })
 
   it('sends Authorization and Wanikani-Revision headers on every request', async () => {

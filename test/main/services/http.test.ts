@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { httpFetch, type HttpRequest } from '@src/main/services/http'
+import { httpFetch, isTimeoutError, type HttpRequest } from '@src/main/services/http'
 
 const realFetch = globalThis.fetch
 
@@ -50,7 +50,30 @@ describe('httpFetch', () => {
 
     await httpFetch('https://example.test/x')
 
-    expect(spy.mock.calls[0]![1]).toBeUndefined()
+    expect(spy.mock.calls[0]![1]?.signal).toBeUndefined()
+  })
+
+  it('passes a timeout signal without forwarding timeoutMs to fetch', async () => {
+    const spy = mockFetch()
+
+    await httpFetch('https://example.test/x', { timeoutMs: 1000 })
+
+    const init = spy.mock.calls[0]![1]
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    expect(init?.signal?.aborted).toBe(false)
+    expect(init).not.toHaveProperty('timeoutMs')
+  })
+
+  it('combines the caller signal with the timeout', async () => {
+    const spy = mockFetch()
+    const controller = new AbortController()
+
+    await httpFetch('https://example.test/x', { signal: controller.signal, timeoutMs: 1000 })
+
+    const signal = spy.mock.calls[0]![1]?.signal
+    expect(signal).not.toBe(controller.signal)
+    controller.abort()
+    expect(signal?.aborted).toBe(true)
   })
 
   it('maps status, ok, headers and bodies from the real Response', async () => {
@@ -92,5 +115,14 @@ describe('httpFetch', () => {
     await expect(
       httpFetch('https://example.test/x', { signal: controller.signal })
     ).rejects.toThrow(/aborted/i)
+  })
+})
+
+describe('isTimeoutError', () => {
+  it('recognises a TimeoutError and nothing else', () => {
+    expect(isTimeoutError(new DOMException('timed out', 'TimeoutError'))).toBe(true)
+    expect(isTimeoutError(new DOMException('aborted', 'AbortError'))).toBe(false)
+    expect(isTimeoutError(new Error('boom'))).toBe(false)
+    expect(isTimeoutError('TimeoutError')).toBe(false)
   })
 })

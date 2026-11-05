@@ -15,6 +15,8 @@ export interface FakeHttpRoute {
   bytes?: Uint8Array | Uint8Array[]
   /** Keep this response pending until the caller aborts its request. */
   deferred?: boolean
+  /** Reject the request with this error (e.g. a `TimeoutError`). */
+  error?: Error
 }
 
 export interface FakeHttpCall {
@@ -45,6 +47,7 @@ export function fakeHttp(routes: Record<string, FakeHttpRoute | FakeHttpRoute[]>
     }
 
     const entry = Array.isArray(route) ? nextScripted(route, url, cursors) : route
+    if (entry.error) throw entry.error
     if (entry.deferred) {
       await waitForAbort(init?.signal)
     }
