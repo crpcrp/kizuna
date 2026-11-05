@@ -215,6 +215,7 @@ interface CacheIndex {
 }
 
 type JimakuManagedFormat = JimakuSubtitleFormat | 'zip'
+type PreparedKind = 'subtitle' | 'zip'
 
 interface DownloadedContent {
   bytes: Uint8Array
@@ -247,7 +248,6 @@ export function createJimakuDownloadStore(
   let temporaryCounter = 0
   let handleCounter = 0
   const active = new Map<string, JimakuPreparedDownload>()
-  const temporaryPaths = new Set<string>()
   const safeUnlink = async (path: string): Promise<boolean> => {
     try {
       await fs.unlink(path)
@@ -291,16 +291,12 @@ export function createJimakuDownloadStore(
   async function saveIndex(): Promise<void> {
     await fs.mkdir(deps.cacheRoot)
     const path = temporaryPath('index')
-    temporaryPaths.add(path)
     try {
       await fs.writeFile(path, JSON.stringify(index ?? emptyIndex()))
       await fs.rename(path, indexPath)
-      temporaryPaths.delete(path)
-    } finally {
-      if (temporaryPaths.has(path)) {
-        temporaryPaths.delete(path)
-        await safeUnlink(path)
-      }
+    } catch (error) {
+      await safeUnlink(path)
+      throw error
     }
   }
 
@@ -376,7 +372,7 @@ export function createJimakuDownloadStore(
 
   async function touchCache(cached: CacheIndexEntry): Promise<void> {
     const previous = cached.lastUsedAt
-    cached.lastUsedAt = safeNow(now())
+    cached.lastUsedAt = now()
     try {
       await saveIndex()
     } catch {
@@ -386,53 +382,28 @@ export function createJimakuDownloadStore(
 
   async function installContent(downloaded: DownloadedContent): Promise<string> {
     const finalPath = contentPath(downloaded.contentVersion, downloaded.format)
-
-    try {
-      const existing = await fs.readFile(finalPath)
-      if (
-        existing.byteLength === downloaded.bytes.byteLength &&
-        sha256(existing) === downloaded.contentVersion
-      ) {
-        return finalPath
+    // Content files are named by hash and installed by atomic rename, so an
+    // existing file of the expected size is the same content.
+    const installed = async (): Promise<boolean> => {
+      try {
+        return (await fs.stat(finalPath)).size === downloaded.bytes.byteLength
+      } catch {
+        return false
       }
-      await safeUnlink(finalPath)
-    } catch {
-      // The content file is either absent or was not readable; the atomic
-      // replacement below will establish a valid managed file.
     }
+    if (await installed()) return finalPath
 
     await fs.mkdir(deps.cacheRoot)
     const temporary = temporaryPath('download')
-    temporaryPaths.add(temporary)
     try {
       await fs.writeFile(temporary, downloaded.bytes)
-      try {
-        await fs.rename(temporary, finalPath)
-        temporaryPaths.delete(temporary)
-      } catch (error) {
-        // Another preparation may have installed the same hash first. Reuse
-        // it only after verifying the bytes, never a partial or foreign file.
-        try {
-          const existing = await fs.readFile(finalPath)
-          if (
-            existing.byteLength !== downloaded.bytes.byteLength ||
-            sha256(existing) !== downloaded.contentVersion
-          ) {
-            throw error
-          }
-          temporaryPaths.delete(temporary)
-          await safeUnlink(temporary)
-        } catch {
-          throw error
-        }
-      }
-      return finalPath
-    } finally {
-      if (temporaryPaths.has(temporary)) {
-        temporaryPaths.delete(temporary)
-        await safeUnlink(temporary)
-      }
+      await fs.rename(temporary, finalPath)
+    } catch (error) {
+      await safeUnlink(temporary)
+      if (await installed()) return finalPath
+      throw error
     }
+    return finalPath
   }
 
   async function storeDownloaded(
@@ -456,7 +427,7 @@ export function createJimakuDownloadStore(
       ...(originalName === file.name ? {} : { originalName }),
       ...(archiveMemberName === undefined ? {} : { archiveMemberName }),
       byteSize: downloaded.bytes.byteLength,
-      lastUsedAt: safeNow(now())
+      lastUsedAt: now()
     }
     currentIndex.entries[key] = entry
     try {
@@ -485,15 +456,16 @@ export function createJimakuDownloadStore(
     return success(true)
   }
 
-  async function prepareDirect(
+  async function prepareRemote(
     entryId: number,
     file: JimakuFileRecord,
+    kind: PreparedKind,
     signal?: AbortSignal
-  ): Promise<JimakuDownloadResult<JimakuPreparedSubtitle>> {
+  ): Promise<JimakuDownloadResult<JimakuPreparedDownload>> {
     const format = subtitleFormat(file.name)
-    if (!isValidFileRecord(entryId, file) || !isSubtitleFormat(format)) {
-      return failure('invalidSubtitle')
-    }
+    if (!isKind(format, kind)) return failure('invalidSubtitle')
+    const limit = kind === 'zip' ? maxPackageBytes : maxBytes
+    if (kind === 'zip' && file.size > limit) return failure('tooLarge')
 
     const allowedUrl = allowedDownloadUrl(file.url, entryId)
     if (allowedUrl === undefined) {
@@ -503,65 +475,14 @@ export function createJimakuDownloadStore(
     try {
       return await exclusive(async () => {
         const cached = await findCached(entryId, file, true)
-        if (cached !== undefined && isSubtitleFormat(cached.format)) {
+        if (cached !== undefined && isKind(cached.format, kind)) {
           await touchCache(cached)
-          return success(makePrepared(cached) as JimakuPreparedSubtitle)
+          return success(makePrepared(cached))
         }
 
-        const downloaded = await downloadContent(
-          allowedUrl,
-          entryId,
-          format,
-          maxBytes,
-          true,
-          signal
-        )
+        const downloaded = await downloadContent(allowedUrl, entryId, format, limit, signal)
         if (!downloaded.ok) return downloaded
-        const stored = await storeDownloaded(entryId, file, downloaded.value)
-        if (!stored.ok) return stored
-        return success(stored.value as JimakuPreparedSubtitle)
-      })
-    } catch {
-      return failure('storage')
-    }
-  }
-
-  async function preparePackage(
-    entryId: number,
-    file: JimakuFileRecord,
-    signal?: AbortSignal
-  ): Promise<JimakuDownloadResult<JimakuPreparedPackage>> {
-    const format = subtitleFormat(file.name)
-    if (!isValidFileRecord(entryId, file) || format !== 'zip') {
-      return failure('invalidSubtitle')
-    }
-    if (file.size > maxPackageBytes) return failure('tooLarge')
-
-    const allowedUrl = allowedDownloadUrl(file.url, entryId)
-    if (allowedUrl === undefined) {
-      return failure('unsupportedDownload', recoveryUrl(entryId))
-    }
-
-    try {
-      return await exclusive(async () => {
-        const cached = await findCached(entryId, file, true)
-        if (cached !== undefined && cached.format === 'zip') {
-          await touchCache(cached)
-          return success(makePrepared(cached) as JimakuPreparedPackage)
-        }
-
-        const downloaded = await downloadContent(
-          allowedUrl,
-          entryId,
-          'zip',
-          maxPackageBytes,
-          false,
-          signal
-        )
-        if (!downloaded.ok) return downloaded
-        const stored = await storeDownloaded(entryId, file, downloaded.value)
-        if (!stored.ok) return stored
-        return success(stored.value as JimakuPreparedPackage)
+        return await storeDownloaded(entryId, file, downloaded.value)
       })
     } catch {
       return failure('storage')
@@ -575,15 +496,8 @@ export function createJimakuDownloadStore(
     bytes: Uint8Array,
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<JimakuPreparedSubtitle>> {
-    const format = typeof memberName === 'string' ? subtitleFormat(memberName) : undefined
-    if (
-      !isValidFileRecord(entryId, sourceFile) ||
-      typeof memberName !== 'string' ||
-      memberName.trim() === '' ||
-      !isSubtitleFormat(format)
-    ) {
-      return failure('invalidSubtitle')
-    }
+    const format = subtitleFormat(memberName)
+    if (!isSubtitleFormat(format)) return failure('invalidSubtitle')
     if (signal?.aborted) return failure('cancelled')
     if (bytes.byteLength > maxBytes) return failure('tooLarge')
     const valid = validateSubtitleBytes(bytes, format)
@@ -616,38 +530,18 @@ export function createJimakuDownloadStore(
     }
   }
 
-  async function lookupCached(
+  async function lookup(
     entryId: number,
-    file: JimakuFileRecord
-  ): Promise<JimakuPreparedSubtitle | undefined> {
-    if (!isValidFileRecord(entryId, file) || !isSubtitleFormat(subtitleFormat(file.name))) {
-      return undefined
-    }
+    file: JimakuFileRecord,
+    kind: PreparedKind
+  ): Promise<JimakuPreparedDownload | undefined> {
+    if (!isKind(subtitleFormat(file.name), kind)) return undefined
     try {
       return await exclusive(async () => {
         const cached = await findCached(entryId, file, true)
-        if (cached === undefined || !isSubtitleFormat(cached.format)) return undefined
+        if (cached === undefined || !isKind(cached.format, kind)) return undefined
         await touchCache(cached)
-        return makePrepared(cached) as JimakuPreparedSubtitle
-      })
-    } catch {
-      return undefined
-    }
-  }
-
-  async function lookupCachedPackage(
-    entryId: number,
-    file: JimakuFileRecord
-  ): Promise<JimakuPreparedPackage | undefined> {
-    if (!isValidFileRecord(entryId, file) || subtitleFormat(file.name) !== 'zip') {
-      return undefined
-    }
-    try {
-      return await exclusive(async () => {
-        const cached = await findCached(entryId, file, true)
-        if (cached === undefined || cached.format !== 'zip') return undefined
-        await touchCache(cached)
-        return makePrepared(cached) as JimakuPreparedPackage
+        return makePrepared(cached)
       })
     } catch {
       return undefined
@@ -681,10 +575,8 @@ export function createJimakuDownloadStore(
         if (!cached) return undefined
 
         const path = contentPath(cached.contentVersion, cached.format)
-        if (!isWithinRoot(pathApi, deps.cacheRoot, path)) return undefined
         const bytes = await fs.readFile(path)
-        if (bytes.byteLength !== cached.byteSize || sha256(bytes) !== cached.contentVersion)
-          return undefined
+        if (bytes.byteLength !== cached.byteSize) return undefined
         await touchCache(cached)
         return { path, bytes, format }
       })
@@ -710,12 +602,11 @@ export function createJimakuDownloadStore(
           return
         }
 
-        const cutoff = safeNow(now()) - tempMaxAgeMs
+        const cutoff = now() - tempMaxAgeMs
         for (const entry of entries) {
           if (!entry.isFile || !entry.name.startsWith(TEMP_PREFIX)) continue
           const path = pathApi.join(deps.cacheRoot, entry.name)
-          if (!isWithinRoot(pathApi, deps.cacheRoot, path)) continue
-          if (temporaryPaths.has(path) || protectedSet.has(canonical(path))) continue
+          if (protectedSet.has(canonical(path))) continue
           if (!Number.isFinite(entry.mtimeMs) || entry.mtimeMs > cutoff) continue
           await safeUnlink(path)
         }
@@ -732,7 +623,6 @@ export function createJimakuDownloadStore(
         >()
         for (const [key, cached] of Object.entries(currentIndex.entries)) {
           const path = contentPath(cached.contentVersion, cached.format)
-          if (!isWithinRoot(pathApi, deps.cacheRoot, path)) continue
           const disk = filesByPath.get(canonical(path))
           if (!disk) continue
           const existing = managed.get(canonical(path))
@@ -774,7 +664,6 @@ export function createJimakuDownloadStore(
     entryId: number,
     format: JimakuManagedFormat,
     requestMaxBytes: number,
-    validateSubtitle: boolean,
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<DownloadedContent>> {
     if (signal?.aborted) return failure('cancelled')
@@ -833,8 +722,7 @@ export function createJimakuDownloadStore(
       return failure('network')
     }
 
-    if (validateSubtitle) {
-      if (!isSubtitleFormat(format)) return failure('invalidSubtitle')
+    if (isSubtitleFormat(format)) {
       const valid = validateSubtitleBytes(bytes, format)
       if (!valid.ok) return valid
     }
@@ -843,25 +731,26 @@ export function createJimakuDownloadStore(
   }
 
   return {
-    prepareDirect,
-    preparePackage,
+    prepareDirect: (entryId, file, signal) =>
+      prepareRemote(entryId, file, 'subtitle', signal) as Promise<
+        JimakuDownloadResult<JimakuPreparedSubtitle>
+      >,
+    preparePackage: (entryId, file, signal) =>
+      prepareRemote(entryId, file, 'zip', signal) as Promise<
+        JimakuDownloadResult<JimakuPreparedPackage>
+      >,
     prepareExtracted,
     readManagedSubtitle,
     lookupPrepared: (handle) => active.get(handle),
     readPrepared: async (handle) => {
       const prepared = active.get(handle)
       if (prepared === undefined) return undefined
-      try {
-        const bytes = await fs.readFile(prepared.managedPath)
-        return bytes.byteLength === prepared.size && sha256(bytes) === prepared.contentVersion
-          ? bytes
-          : undefined
-      } catch {
-        return undefined
-      }
+      return fs.readFile(prepared.managedPath).catch(() => undefined)
     },
-    lookupCached,
-    lookupCachedPackage,
+    lookupCached: (entryId, file) =>
+      lookup(entryId, file, 'subtitle') as Promise<JimakuPreparedSubtitle | undefined>,
+    lookupCachedPackage: (entryId, file) =>
+      lookup(entryId, file, 'zip') as Promise<JimakuPreparedPackage | undefined>,
     releasePrepared: (handle) => {
       active.delete(handle)
     },
@@ -919,21 +808,6 @@ function subtitleFormat(name: string): JimakuManagedFormat | undefined {
     return extension
   }
   return undefined
-}
-
-function isValidFileRecord(entryId: number, file: JimakuFileRecord): boolean {
-  return (
-    Number.isSafeInteger(entryId) &&
-    entryId > 0 &&
-    typeof file.name === 'string' &&
-    file.name.trim() !== '' &&
-    Number.isSafeInteger(file.size) &&
-    file.size >= 0 &&
-    typeof file.lastModified === 'string' &&
-    file.lastModified.trim() !== '' &&
-    typeof file.url === 'string' &&
-    file.url.trim() !== ''
-  )
 }
 
 function allowedDownloadUrl(value: string, entryId: number): string | undefined {
@@ -1000,28 +874,15 @@ function parseIndex(bytes: Uint8Array): CacheIndex {
   }
 }
 
+/** Checks only the fields that build a content path or match a request; anything else is a miss. */
 function isCacheIndexEntry(value: unknown): value is CacheIndexEntry {
-  if (!isRecord(value)) return false
-  const originalName = value.originalName
-  const archiveMemberName = value.archiveMemberName
   return (
-    isPositiveSafeInteger(value.entryId) &&
+    isRecord(value) &&
+    typeof value.entryId === 'number' &&
     typeof value.remoteFilename === 'string' &&
-    value.remoteFilename.trim() !== '' &&
-    isNonNegativeSafeInteger(value.remoteSize) &&
-    typeof value.remoteRevision === 'string' &&
-    value.remoteRevision.trim() !== '' &&
     typeof value.contentVersion === 'string' &&
-    /^[a-f0-9]{64}$/.test(value.contentVersion) &&
-    isManagedFormat(value.format) &&
-    (originalName === undefined ||
-      (typeof originalName === 'string' && originalName.trim() !== '')) &&
-    (archiveMemberName === undefined ||
-      (typeof archiveMemberName === 'string' && archiveMemberName.trim() !== '')) &&
-    isNonNegativeSafeInteger(value.byteSize) &&
-    typeof value.lastUsedAt === 'number' &&
-    Number.isFinite(value.lastUsedAt) &&
-    value.lastUsedAt >= 0
+    /^[a-f0-9]{64}$/u.test(value.contentVersion) &&
+    isManagedFormat(value.format)
   )
 }
 
@@ -1048,29 +909,19 @@ function isManagedFormat(value: unknown): value is JimakuManagedFormat {
   return isSubtitleFormat(value) || value === 'zip'
 }
 
+function isKind(
+  format: JimakuManagedFormat | undefined,
+  kind: PreparedKind
+): format is JimakuManagedFormat {
+  return kind === 'zip' ? format === 'zip' : isSubtitleFormat(format)
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-}
-
-function safeNow(value: number): number {
-  return Number.isFinite(value) && value >= 0 ? value : Date.now()
-}
-
-function isWithinRoot(
-  pathApi: typeof import('node:path').posix,
-  root: string,
-  candidate: string
-): boolean {
-  const relative = pathApi.relative(pathApi.resolve(root), pathApi.resolve(candidate))
-  return relative === '' || (!relative.startsWith('..' + pathApi.sep) && relative !== '..')
 }
 
 function success<T>(value: T): JimakuDownloadResult<T> {

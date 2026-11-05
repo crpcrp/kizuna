@@ -425,6 +425,40 @@ describe('Jimaku download cache', () => {
     })
   })
 
+  it('loads a cache written by a previous version without redownloading', async () => {
+    const entryId = 75
+    const file = fileRecord(entryId)
+    const { store, fs, http, cacheRoot } = makeStore('linux', { [file.url]: { bytes: BYTES } })
+    const join = pathApiFor('linux').join
+    fs.put(join(cacheRoot, `${hash(BYTES)}.srt`), BYTES)
+    fs.put(
+      join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
+      new TextEncoder().encode(
+        JSON.stringify({
+          version: 1,
+          entries: {
+            [JSON.stringify([entryId, file.name, file.size, file.lastModified])]: {
+              entryId,
+              remoteFilename: file.name,
+              remoteSize: file.size,
+              remoteRevision: file.lastModified,
+              contentVersion: hash(BYTES),
+              format: 'srt',
+              byteSize: BYTES.byteLength,
+              lastUsedAt: 1
+            }
+          }
+        })
+      )
+    )
+
+    await expect(store.prepareDirect(entryId, file)).resolves.toMatchObject({
+      ok: true,
+      value: { contentVersion: hash(BYTES), managedPath: join(cacheRoot, `${hash(BYTES)}.srt`) }
+    })
+    expect(http.calls).toHaveLength(0)
+  })
+
   it('serializes concurrent duplicate preparations', async () => {
     const entryId = 74
     const file = fileRecord(entryId)
