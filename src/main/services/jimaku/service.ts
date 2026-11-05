@@ -33,12 +33,8 @@ import {
   type JimakuClient,
   type JimakuFileRecord
 } from './client'
-import type { JimakuArchiveError, JimakuArchiveInspection, JimakuArchiveService } from './archive'
-import type {
-  JimakuDownloadError,
-  JimakuDownloadStore,
-  JimakuPreparedSubtitle
-} from './downloadStore'
+import type { JimakuArchiveInspection, JimakuArchiveService } from './archive'
+import type { JimakuDownloadStore, JimakuPreparedSubtitle } from './downloadStore'
 import {
   exportManagedJimakuSubtitle,
   type JimakuExportFs,
@@ -123,42 +119,42 @@ export interface CreateJimakuServiceDeps {
 export interface JimakuService {
   beginSession(
     sender: unknown,
-    mediaPath: unknown,
-    mediaGeneration: unknown
+    mediaPath: string,
+    mediaGeneration: number
   ): JimakuServiceResult<JimakuSession>
   searchTitles(
     sender: unknown,
-    sessionId: unknown,
-    request: unknown
+    sessionId: string,
+    request: JimakuTitleSearchRequest
   ): Promise<JimakuServiceResult<JimakuTitleSearchResult>>
   listFiles(
     sender: unknown,
-    sessionId: unknown,
-    entryId: unknown,
-    refresh?: unknown
+    sessionId: string,
+    entryId: number,
+    refresh?: boolean
   ): Promise<JimakuServiceResult<JimakuFileListResult>>
   prepareFile(
     sender: unknown,
-    sessionId: unknown,
-    candidateId: unknown
+    sessionId: string,
+    candidateId: string
   ): Promise<JimakuServiceResult<JimakuPrepareResult>>
   prepareArchiveMember(
     sender: unknown,
-    sessionId: unknown,
-    packageId: unknown,
-    memberId: unknown
+    sessionId: string,
+    packageId: string,
+    memberId: string
   ): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>>
-  cancelPending(sender: unknown, sessionId: unknown): JimakuServiceResult<void>
-  endSession(sender: unknown, sessionId: unknown): JimakuServiceResult<void>
+  cancelPending(sender: unknown, sessionId: string): JimakuServiceResult<void>
+  endSession(sender: unknown, sessionId: string): JimakuServiceResult<void>
   openSourcePage(
     sender: unknown,
-    sessionId: unknown,
-    entryId: unknown
+    sessionId: string,
+    entryId: number
   ): Promise<JimakuServiceResult<void>>
   commitPreparedSubtitle(
     sender: unknown,
-    sessionId: unknown,
-    handle: unknown
+    sessionId: string,
+    handle: string
   ): JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>
   exportActiveSubtitle(
     sender: unknown,
@@ -185,21 +181,9 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     )
   }
 
-  const currentConfigGeneration = (): number => {
-    try {
-      return deps.settings.getConfigGeneration()
-    } catch {
-      return 0
-    }
-  }
+  const currentConfigGeneration = (): number => deps.settings.getConfigGeneration()
 
-  const safeNow = (): number => {
-    const value = now()
-    return Number.isFinite(value) ? value : Date.now()
-  }
-
-  const sessionFor = (sender: unknown, sessionId: unknown): SessionState | undefined => {
-    if (typeof sessionId !== 'string' || sessionId === '') return undefined
+  const sessionFor = (sender: unknown, sessionId: string): SessionState | undefined => {
     const session = sessions.get(sessionId)
     return session &&
       session.valid &&
@@ -304,26 +288,19 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
   }
 
-  let removeConfigListener: (() => void) | undefined
-  try {
-    removeConfigListener = deps.settings.onConfigChange(handleConfigChange)
-  } catch {
-    removeConfigListener = undefined
-  }
+  let removeConfigListener: (() => void) | undefined =
+    deps.settings.onConfigChange(handleConfigChange)
 
   function beginSession(
     sender: unknown,
-    mediaPathValue: unknown,
-    mediaGenerationValue: unknown
+    path: string,
+    mediaGeneration: number
   ): JimakuServiceResult<JimakuSession> {
     if (disposed) return failure('invalidSession')
-    const path = normalizeMediaPathValue(mediaPathValue)
-    if (!path || !isNonNegativeSafeInteger(mediaGenerationValue)) {
-      return failure('invalidRequest')
-    }
+    if (isRemoteUrl(path)) return failure('invalidRequest')
 
     const previousGeneration = lastGenerationBySender.get(sender)
-    if (previousGeneration !== undefined && mediaGenerationValue < previousGeneration) {
+    if (previousGeneration !== undefined && mediaGeneration < previousGeneration) {
       return failure('staleMedia')
     }
 
@@ -337,7 +314,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       sender,
       sessionId: makeId('session'),
       mediaPath: path,
-      mediaGeneration: mediaGenerationValue,
+      mediaGeneration: mediaGeneration,
       identity,
       rememberedEntryId: rememberedEntryId(path, identity),
       configGeneration: currentConfigGeneration(),
@@ -353,19 +330,17 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
     sessions.set(session.sessionId, session)
     activeBySender.set(sender, session)
-    lastGenerationBySender.set(sender, mediaGenerationValue)
-    return success({ sessionId: session.sessionId, mediaGeneration: mediaGenerationValue })
+    lastGenerationBySender.set(sender, mediaGeneration)
+    return success({ sessionId: session.sessionId, mediaGeneration: mediaGeneration })
   }
 
   async function searchTitles(
     sender: unknown,
-    sessionId: unknown,
-    requestValue: unknown
+    sessionId: string,
+    request: JimakuTitleSearchRequest
   ): Promise<JimakuServiceResult<JimakuTitleSearchResult>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    const request = parseTitleRequest(requestValue)
-    if (!request) return failure('invalidRequest')
     session.rememberedEntryId = undefined
 
     const query = request.query.trim()
@@ -379,19 +354,14 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     const refresh = request.refresh === true
     const pending = beginOperation(session)
 
-    if (!refresh && cached && cached.expiresAt > safeNow()) {
+    if (!refresh && cached && cached.expiresAt > now()) {
       clearSearchResults(session)
       session.entries = new Map(cached.result.entries.map((entry) => [entry.id, entry]))
       finishOperation(session, pending)
-      return success(copyTitleResult(cached.result))
+      return success(cached.result)
     }
 
-    let result: JimakuServiceResult<JimakuTitleSearchResult>
-    try {
-      result = await searchCategory(category, query, pending.controller.signal)
-    } catch {
-      result = failure('network')
-    }
+    const result = await searchCategory(category, query, pending.controller.signal)
     if (!isCurrent(session, pending)) return failure('cancelled')
     finishOperation(session, pending)
     if (!result.ok) {
@@ -402,42 +372,33 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     clearSearchResults(session)
     session.entries = new Map(result.value.entries.map((entry) => [entry.id, entry]))
     session.titleCache.set(cacheKey, {
-      expiresAt: safeNow() + cacheTtlMs,
-      result: copyTitleResult(result.value)
+      expiresAt: now() + cacheTtlMs,
+      result: result.value
     })
-    return success(copyTitleResult(result.value))
+    return success(result.value)
   }
 
   async function listFiles(
     sender: unknown,
-    sessionId: unknown,
-    entryIdValue: unknown,
-    refreshValue?: unknown
+    sessionId: string,
+    entryId: number,
+    refresh?: boolean
   ): Promise<JimakuServiceResult<JimakuFileListResult>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    if (!isPositiveSafeInteger(entryIdValue)) return failure('invalidRequest')
-    if (refreshValue !== undefined && !isRefreshValue(refreshValue)) {
-      return failure('invalidRequest')
-    }
-    let entry = session.entries.get(entryIdValue)
-    if (!entry && session.rememberedEntryId !== entryIdValue) return failure('invalidEntry')
+    let entry = session.entries.get(entryId)
+    if (!entry && session.rememberedEntryId !== entryId) return failure('invalidEntry')
 
     const pending = beginOperation(session)
     if (!entry) {
-      let resolved: Awaited<ReturnType<JimakuClient['getEntry']>>
-      try {
-        resolved = await deps.client.getEntry(entryIdValue, pending.controller.signal)
-      } catch {
-        resolved = failure('network') as Awaited<ReturnType<JimakuClient['getEntry']>>
-      }
+      const resolved = await deps.client.getEntry(entryId, pending.controller.signal)
       if (!isCurrent(session, pending)) return failure('cancelled')
       if (!resolved.ok) {
         finishOperation(session, pending)
         clearFileResults(session)
-        return mapError(resolved.error)
+        return { ok: false, error: resolved.error }
       }
-      if (resolved.value.id !== entryIdValue) {
+      if (resolved.value.id !== entryId) {
         finishOperation(session, pending)
         clearFileResults(session)
         return failure('invalidResponse')
@@ -447,41 +408,34 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
 
     const cached = session.fileCache.get(entry.id)
-    const refresh = refreshValue === true || isRefreshRequest(refreshValue)
-    if (!refresh && cached && cached.expiresAt > safeNow()) {
+    if (refresh !== true && cached && cached.expiresAt > now()) {
       clearFileResults(session)
       const value = materializeFiles(session, entry, cached.files)
       finishOperation(session, pending)
       return success(value)
     }
 
-    let result: Awaited<ReturnType<JimakuClient['listFiles']>>
-    try {
-      result = await deps.client.listFiles(entry.id, pending.controller.signal)
-    } catch {
-      result = failure('network') as Awaited<ReturnType<JimakuClient['listFiles']>>
-    }
+    const result = await deps.client.listFiles(entry.id, pending.controller.signal)
     if (!isCurrent(session, pending)) return failure('cancelled')
     finishOperation(session, pending)
     if (!result.ok) {
       clearFileResults(session)
-      return mapError(result.error)
+      return { ok: false, error: result.error }
     }
 
     clearFileResults(session)
     const files = result.value.map((file) => ({ ...file }))
-    session.fileCache.set(entry.id, { expiresAt: safeNow() + cacheTtlMs, files })
+    session.fileCache.set(entry.id, { expiresAt: now() + cacheTtlMs, files })
     return success(materializeFiles(session, entry, files))
   }
 
   async function prepareFile(
     sender: unknown,
-    sessionId: unknown,
-    candidateId: unknown
+    sessionId: string,
+    candidateId: string
   ): Promise<JimakuServiceResult<JimakuPrepareResult>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    if (typeof candidateId !== 'string' || candidateId === '') return failure('invalidRequest')
     const candidate = session.candidates.get(candidateId)
     if (!candidate) return failure('invalidCandidate')
     const entry = session.entries.get(candidate.entryId)
@@ -511,7 +465,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       if (!inspected.ok) {
         releasePackages(session)
         releasePrepared(session)
-        return mapError(inspected.error)
+        return { ok: false, error: inspected.error }
       }
 
       releasePackages(session)
@@ -543,7 +497,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     if (!prepared.ok) {
       releasePackages(session)
       releasePrepared(session)
-      return mapError(prepared.error)
+      return { ok: false, error: prepared.error }
     }
     releasePackages(session)
     releasePrepared(session)
@@ -552,14 +506,12 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
 
   async function prepareArchiveMember(
     sender: unknown,
-    sessionId: unknown,
-    packageId: unknown,
-    memberId: unknown
+    sessionId: string,
+    packageId: string,
+    memberId: string
   ): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    if (typeof packageId !== 'string' || packageId === '') return failure('invalidRequest')
-    if (typeof memberId !== 'string' || memberId === '') return failure('invalidRequest')
     const packageRecord = session.packages.get(packageId)
     if (!packageRecord) return failure('invalidPackage')
     if (!packageRecord.memberIds.has(memberId)) return failure('invalidMember')
@@ -582,7 +534,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     finishOperation(session, pending)
     if (!prepared.ok) {
       releasePrepared(session)
-      return mapError(prepared.error)
+      return { ok: false, error: prepared.error }
     }
     releasePackages(session, packageId)
     releasePrepared(session)
@@ -590,14 +542,14 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     return success(result)
   }
 
-  function cancelPending(sender: unknown, sessionId: unknown): JimakuServiceResult<void> {
+  function cancelPending(sender: unknown, sessionId: string): JimakuServiceResult<void> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
     abortPending(session)
     return success(undefined)
   }
 
-  function endSession(sender: unknown, sessionId: unknown): JimakuServiceResult<void> {
+  function endSession(sender: unknown, sessionId: string): JimakuServiceResult<void> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
     releaseSession(session)
@@ -606,13 +558,12 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
 
   async function openSourcePage(
     sender: unknown,
-    sessionId: unknown,
-    entryIdValue: unknown
+    sessionId: string,
+    entryId: number
   ): Promise<JimakuServiceResult<void>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    if (!isPositiveSafeInteger(entryIdValue)) return failure('invalidRequest')
-    const entry = session.entries.get(entryIdValue)
+    const entry = session.entries.get(entryId)
     if (!entry) return failure('invalidEntry')
     const url = sourcePage(entry.id).url
     try {
@@ -625,12 +576,11 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
 
   function commitPreparedSubtitle(
     sender: unknown,
-    sessionId: unknown,
-    handle: unknown
+    sessionId: string,
+    handle: string
   ): JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return failure('invalidSession')
-    if (typeof handle !== 'string' || handle === '') return failure('invalidRequest')
     const record = session.prepared.get(handle)
     if (!record) return failure('expired')
     if (!deps.mediaHistory) return failure('storage')
@@ -740,7 +690,9 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
   ): Promise<JimakuServiceResult<JimakuTitleSearchResult>> {
     if (category !== 'all') {
       const result = await deps.client.searchEntries({ query, anime: category === 'anime' }, signal)
-      return result.ok ? success({ entries: result.value, partial: false }) : mapError(result.error)
+      return result.ok
+        ? success({ entries: result.value, partial: false })
+        : { ok: false, error: result.error }
     }
 
     const [anime, liveAction] = await Promise.all([
@@ -751,8 +703,8 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       (result): result is { ok: true; value: JimakuEntry[] } => result.ok
     )
     if (successes.length === 0) {
-      if (!anime.ok) return mapError(anime.error)
-      if (!liveAction.ok) return mapError(liveAction.error)
+      if (!anime.ok) return { ok: false, error: anime.error }
+      if (!liveAction.ok) return { ok: false, error: liveAction.error }
       return failure('network')
     }
 
@@ -828,42 +780,8 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
   }
 }
 
-function normalizeMediaPathValue(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined
-  const path = value.trim()
-  if (path === '' || isRemoteUrl(path)) return undefined
-  return path
-}
-
 function identityForPath(path: string): JimakuVideoIdentity | undefined {
   return parseJimakuVideoIdentityFromPath(path)
-}
-
-function parseTitleRequest(value: unknown): JimakuTitleSearchRequest | undefined {
-  if (!isRecord(value)) return undefined
-  if (typeof value.query !== 'string') return undefined
-  if (
-    value.category !== undefined &&
-    value.category !== 'anime' &&
-    value.category !== 'liveAction' &&
-    value.category !== 'all'
-  ) {
-    return undefined
-  }
-  if (value.refresh !== undefined && typeof value.refresh !== 'boolean') return undefined
-  return {
-    query: value.query,
-    ...(value.category === undefined ? {} : { category: value.category }),
-    ...(value.refresh === undefined ? {} : { refresh: value.refresh })
-  }
-}
-
-function isRefreshValue(value: unknown): boolean {
-  return typeof value === 'boolean' || isRefreshRequest(value)
-}
-
-function isRefreshRequest(value: unknown): value is { refresh?: boolean } {
-  return isRecord(value) && (value.refresh === undefined || typeof value.refresh === 'boolean')
 }
 
 function sourcePage(entryId: number): JimakuSourcePage {
@@ -922,81 +840,12 @@ function mergeEntries(entries: readonly JimakuEntry[]): JimakuEntry[] {
   return [...unique.values()]
 }
 
-function copyTitleResult(result: JimakuTitleSearchResult): JimakuTitleSearchResult {
-  return {
-    entries: result.entries.map((entry) => ({
-      ...entry,
-      flags: { ...entry.flags }
-    })),
-    partial: result.partial,
-    ...(result.failedCategories === undefined
-      ? {}
-      : { failedCategories: [...result.failedCategories] })
-  }
-}
-
-function mapError(
-  error: JimakuDownloadError | JimakuArchiveError | { code: string }
-): JimakuServiceResult<never> {
-  const value = error as { code?: unknown; retryAt?: unknown; recoveryUrl?: unknown }
-  const mapped: JimakuServiceError = {
-    code: isServiceErrorCode(value.code) ? value.code : 'network',
-    ...(typeof value.retryAt === 'string' ? { retryAt: value.retryAt } : {}),
-    ...(typeof value.recoveryUrl === 'string' ? { recoveryUrl: value.recoveryUrl } : {})
-  }
-  return { ok: false, error: mapped }
-}
-
-function isServiceErrorCode(value: unknown): value is JimakuServiceError['code'] {
-  return (
-    typeof value === 'string' &&
-    [
-      'cancelled',
-      'timeout',
-      'network',
-      'unauthorized',
-      'notFound',
-      'rateLimited',
-      'serviceUnavailable',
-      'invalidResponse',
-      'notConfigured',
-      'invalidRequest',
-      'invalidSession',
-      'staleMedia',
-      'invalidEntry',
-      'invalidCandidate',
-      'invalidPackage',
-      'invalidMember',
-      'expired',
-      'openExternalFailed',
-      'storage',
-      'tooLarge',
-      'invalidSubtitle',
-      'unsupportedDownload',
-      'unsupportedArchive',
-      'invalidArchive'
-    ].includes(value)
-  )
-}
-
 function success<T>(value: T): JimakuServiceResult<T> {
   return { ok: true, value }
 }
 
 function failure<T>(code: JimakuServiceError['code']): JimakuServiceResult<T> {
   return { ok: false, error: { code } }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 function sameProvenance(left: JimakuSubtitleProvenance, right: JimakuSubtitleProvenance): boolean {

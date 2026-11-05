@@ -131,6 +131,20 @@ describe('registerJimakuBridge', () => {
       })
     ).toThrow('Invalid Jimaku title search request.')
     expect(service.searchTitles).not.toHaveBeenCalled()
+    expect(() => handlers.get(JIMAKU_CHANNELS.listFiles)!({ sender }, 's-1', 1, {})).toThrow(
+      'Invalid Jimaku refresh flag.'
+    )
+    expect(() => handlers.get(JIMAKU_CHANNELS.listFiles)!({ sender }, 's-1', 0)).toThrow(
+      'Invalid Jimaku numeric identifier.'
+    )
+    expect(service.listFiles).not.toHaveBeenCalled()
+    expect(() => handlers.get(JIMAKU_CHANNELS.prepareFile)!({ sender }, 1, 'candidate')).toThrow(
+      'Invalid Jimaku session ID.'
+    )
+    expect(() => handlers.get(JIMAKU_CHANNELS.prepareFile)!({ sender }, 's-1', '')).toThrow(
+      'Invalid Jimaku identifier.'
+    )
+    expect(service.prepareFile).not.toHaveBeenCalled()
 
     expect(() =>
       handlers.get(JIMAKU_CHANNELS.exportActiveSubtitle)!(
