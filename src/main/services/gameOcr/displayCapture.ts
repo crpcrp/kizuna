@@ -5,6 +5,7 @@ import {
   type OcrDisplayCaptureMetadata,
   type OcrImageSize
 } from '../../../shared/ocr'
+import { isFiniteNumber } from '../../../shared/guards'
 
 /** Maximum number of physical pixels one display capture may cover. */
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
@@ -419,10 +420,6 @@ function deniedSources(): GameOcrDisplaySources {
     },
     invalidate: () => {}
   }
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isPositiveFiniteNumber(value: unknown): value is number {

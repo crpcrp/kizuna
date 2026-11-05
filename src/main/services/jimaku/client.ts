@@ -12,6 +12,7 @@ import {
   type HttpFetch,
   type HttpResponse
 } from '../http'
+import { isRecord, isPositiveSafeInteger, isNonNegativeSafeInteger } from '../../../shared/guards'
 
 export const JIMAKU_API_ORIGIN = 'https://jimaku.cc'
 export const JIMAKU_API_BASE = `${JIMAKU_API_ORIGIN}/api`
@@ -248,18 +249,6 @@ function optionalString(value: unknown): string | undefined | typeof INVALID {
 function optionalId(value: unknown): number | undefined | typeof INVALID {
   if (value === undefined || value === null) return undefined
   return isPositiveSafeInteger(value) ? value : INVALID
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isNonNegativeSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
 function parseNonNegativeNumber(value: string | null): number | undefined {

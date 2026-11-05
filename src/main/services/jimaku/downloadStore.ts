@@ -7,6 +7,7 @@ import type { Cue } from '../../../shared/cue'
 import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
 import { HttpBodyTooLargeError, isTimeoutError, readBody, type HttpFetch } from '../http'
 import { JIMAKU_API_ORIGIN, type JimakuFileRecord } from './client'
+import { isRecord, isPositiveSafeInteger } from '../../../shared/guards'
 
 export const JIMAKU_DOWNLOAD_ORIGIN = JIMAKU_API_ORIGIN
 export const JIMAKU_DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024
@@ -914,14 +915,6 @@ function isKind(
   kind: PreparedKind
 ): format is JimakuManagedFormat {
   return kind === 'zip' ? format === 'zip' : isSubtitleFormat(format)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
 }
 
 function success<T>(value: T): JimakuDownloadResult<T> {

@@ -16,6 +16,7 @@ import {
 } from '../settings'
 import type { PathNormalizationOptions } from '../../../shared/mediaHistory'
 import type { JimakuClient } from './client'
+import { isRecord } from '../../../shared/guards'
 
 export const JIMAKU_MAX_API_KEY_LENGTH = 4096
 /** A harmless, fixed read-only query used only to verify authentication. */
@@ -249,10 +250,6 @@ export function createJimakuSettingsService(
       return () => listeners.delete(listener)
     }
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export function normalizeApiKey(value: unknown): string {

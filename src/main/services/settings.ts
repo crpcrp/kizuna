@@ -40,6 +40,7 @@ import {
   type GameOcrSettings
 } from '../../shared/gameOcrSettings'
 import { pathApiFor } from '../platformPath'
+import { isRecord, isPositiveSafeInteger } from '../../shared/guards'
 
 export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
@@ -288,14 +289,6 @@ function isJimakuTimestamp(value: unknown): value is number {
     value >= 0 &&
     value <= JIMAKU_FOLDER_HINT_MAX_TIMESTAMP
   )
-}
-
-function isPositiveSafeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function mergeTranslationSettings(raw: unknown): TranslationSettings {

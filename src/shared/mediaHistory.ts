@@ -29,6 +29,7 @@ export interface JimakuSubtitleProvenance {
 
 import { isSubtitleEncoding, type SubtitleEncoding } from './subtitleEncoding'
 import { isRemoteUrl } from './mediaFileTypes'
+import { isRecord, isFiniteNumber, isPositiveSafeInteger } from './guards'
 
 export type StoredSubtitleSelection =
   | { mode: 'off' }
@@ -384,16 +385,8 @@ function boundedNonEmptyString(value: unknown, maxLength: number): string | unde
   return trimmed !== '' && trimmed.length <= maxLength ? trimmed : undefined
 }
 
-function isPositiveSafeInteger(value: unknown): value is number {
-  return Number.isSafeInteger(value) && (value as number) > 0
-}
-
 export function isContentVersion(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function isTrackId(value: unknown): value is number {
@@ -406,8 +399,4 @@ function isTimestamp(value: unknown): value is number {
 
 function isNonNegativeFinite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }

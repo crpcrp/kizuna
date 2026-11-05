@@ -63,6 +63,9 @@ when several focused tests cover one area.
 
 ## Common changes
 
+Runtime type guards (`isRecord`, `isFiniteNumber`, …) live in
+`src/shared/guards.ts`; import them instead of redefining.
+
 ### Add an IPC operation
 
 1. Declare the channel in `src/shared/ipcChannels.ts`.

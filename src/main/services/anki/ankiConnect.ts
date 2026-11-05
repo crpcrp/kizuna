@@ -3,6 +3,7 @@
 import { isTimeoutError, type HttpFetch } from '../http'
 import type { AnkiMediaAttachment } from './audioSource'
 import type { AnkiNote } from './noteBuilder'
+import { isRecord } from '../../../shared/guards'
 
 export const ANKI_CONNECT_VERSION = 6
 export const ANKI_REQUEST_TIMEOUT_MS = 60_000
@@ -67,10 +68,6 @@ export interface AnkiModelTemplate {
 }
 
 export type AnkiModelTemplates = Record<string, AnkiModelTemplate>
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
 
 function parseStringArray(raw: unknown, action: string): string[] {
   if (!Array.isArray(raw) || !raw.every((value): value is string => typeof value === 'string')) {

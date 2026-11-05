@@ -35,6 +35,7 @@ import {
   type DisplayCapturePoint
 } from './displayCapture'
 import type { PhysicalRect } from './foregroundWindow'
+import { isFiniteNumber } from '../../../shared/guards'
 
 /** Screen surface needed to place a physical window rectangle on a display. */
 export interface WindowCaptureScreen {
@@ -197,10 +198,6 @@ function isUsableDisplay(
     isFiniteNumber(display.scaleFactor) &&
     display.scaleFactor > 0
   )
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isPositiveInteger(value: unknown): value is number {
