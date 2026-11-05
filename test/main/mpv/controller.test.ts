@@ -715,6 +715,33 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(client.listenerCount('end-file')).toBe(0)
   })
 
+  it('rejects loadFile with MpvLoadError when mpv exits after acknowledging loadfile', async () => {
+    const { controller, client, spawns } = makeFixture()
+    await controller.start({ mpvPath: 'mpv.exe', windowId: 1n })
+    const load = controller.loadFile('a.mkv')
+    await Promise.resolve() // loadfile command acknowledged
+
+    spawns[0].proc.emit('exit', 1, null)
+
+    await expect(load).rejects.toBeInstanceOf(MpvLoadError)
+    await expect(load).rejects.toThrow('mpv exited while loading the file')
+    expect(client.listenerCount('file-loaded')).toBe(0)
+    expect(client.listenerCount('end-file')).toBe(0)
+  })
+
+  it('rejects loadFile with MpvLoadError when the controller is disposed mid-load', async () => {
+    const { controller, client } = makeFixture()
+    await controller.start({ mpvPath: 'mpv.exe', windowId: 1n })
+    const load = controller.loadFile('a.mkv')
+    await Promise.resolve()
+
+    controller.dispose()
+
+    await expect(load).rejects.toBeInstanceOf(MpvLoadError)
+    expect(client.listenerCount('file-loaded')).toBe(0)
+    expect(client.listenerCount('end-file')).toBe(0)
+  })
+
   it('ignores a pre-load end-file with a non-error reason (replacing the playing file)', async () => {
     const { controller, client } = makeFixture()
     const load = controller.loadFile('E:\\anime\\ep2.mkv')
