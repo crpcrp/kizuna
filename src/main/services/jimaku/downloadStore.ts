@@ -5,7 +5,7 @@ import { decodeSubtitleBytes } from '../../media/subtitleEncoding'
 import { pickParser } from '../../media/subtitleLoader'
 import type { Cue } from '../../../shared/cue'
 import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
-import type { HttpFetch, HttpResponse } from '../http'
+import { HttpBodyTooLargeError, isTimeoutError, readBody, type HttpFetch } from '../http'
 import { JIMAKU_API_ORIGIN, type JimakuFileRecord } from './client'
 
 export const JIMAKU_DOWNLOAD_ORIGIN = JIMAKU_API_ORIGIN
@@ -19,13 +19,6 @@ export const JIMAKU_DOWNLOAD_INDEX_NAME = 'index.json'
 
 const INDEX_VERSION = 1
 const TEMP_PREFIX = '.jimaku-'
-const TIMEOUT = Symbol('jimaku-download-timeout')
-const CANCELLED = Symbol('jimaku-download-cancelled')
-const TOO_LARGE = Symbol('jimaku-download-too-large')
-
-type TimerHandle = ReturnType<typeof setTimeout>
-type SetTimeoutFn = (callback: () => void, delayMs: number) => TimerHandle
-type ClearTimeoutFn = (handle: TimerHandle) => void
 
 export type JimakuSubtitleFormat = 'srt' | 'ass' | 'ssa'
 
@@ -167,8 +160,6 @@ export interface CreateJimakuDownloadStoreDeps {
   maxRedirects?: number
   tempMaxAgeMs?: number
   maxCacheBytes?: number
-  setTimeoutFn?: SetTimeoutFn
-  clearTimeoutFn?: ClearTimeoutFn
   platform?: NodeJS.Platform
 }
 
@@ -247,9 +238,6 @@ export function createJimakuDownloadStore(
   const maxRedirects = deps.maxRedirects ?? JIMAKU_MAX_REDIRECTS
   const tempMaxAgeMs = deps.tempMaxAgeMs ?? JIMAKU_TEMP_MAX_AGE_MS
   const maxCacheBytes = deps.maxCacheBytes ?? JIMAKU_CACHE_MAX_BYTES
-  const setTimeoutFn = deps.setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
-  const clearTimeoutFn =
-    deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
   const platform = deps.platform ?? process.platform
   const pathApi = pathApiFor(platform)
   const indexPath = pathApi.join(deps.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME)
@@ -791,59 +779,21 @@ export function createJimakuDownloadStore(
   ): Promise<JimakuDownloadResult<DownloadedContent>> {
     if (signal?.aborted) return failure('cancelled')
 
-    const controller = new AbortController()
-    let callerCancelled = false
-    let timedOut = false
-    let timer: TimerHandle | undefined
-    let rejectCancellation: ((reason?: unknown) => void) | undefined
-
-    const cancellation = signal
-      ? new Promise<never>((_, reject) => {
-          rejectCancellation = reject
-        })
-      : new Promise<never>(() => {})
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeoutFn(() => {
-        timedOut = true
-        controller.abort()
-        reject(TIMEOUT)
-      }, timeoutMs)
-    })
-    const onAbort = () => {
-      callerCancelled = true
-      controller.abort()
-      rejectCancellation?.(CANCELLED)
-    }
-
-    signal?.addEventListener('abort', onAbort, { once: true })
-
+    let bytes: Uint8Array
     try {
       let url = initialUrl
       let redirectCount = 0
       while (true) {
-        let response: HttpResponse
-        try {
-          response = await Promise.race([
-            deps.fetch(url, {
-              method: 'GET',
-              redirect: 'manual',
-              signal: controller.signal
-            }),
-            timeout,
-            cancellation
-          ])
-        } catch (error) {
-          return downloadFailure(error, callerCancelled, timedOut, signal)
-        }
-
-        if (callerCancelled || signal?.aborted) return failure('cancelled')
-        if (!Number.isInteger(response.status) || response.status < 100) {
-          return failure('invalidResponse')
-        }
+        const response = await deps.fetch(url, {
+          method: 'GET',
+          redirect: 'manual',
+          signal,
+          timeoutMs
+        })
 
         if (isRedirect(response.status)) {
           if (redirectCount >= maxRedirects) return failure('invalidResponse')
-          const location = responseHeader(response, 'location')
+          const location = response.headers.get('location')
           if (location === null) return failure('invalidResponse')
           let next: URL
           try {
@@ -868,37 +818,28 @@ export function createJimakuDownloadStore(
           return failure('invalidResponse')
         }
 
-        const advertisedSize = parseContentLength(responseHeader(response, 'content-length'))
+        const advertisedSize = parseContentLength(response.headers.get('content-length'))
         if (advertisedSize !== undefined && advertisedSize > requestMaxBytes) {
-          controller.abort()
           return failure('tooLarge')
         }
 
-        let bytes: Uint8Array
-        try {
-          bytes = await readResponseBytes(
-            response,
-            requestMaxBytes,
-            controller,
-            timeout,
-            cancellation
-          )
-        } catch (error) {
-          return downloadFailure(error, callerCancelled, timedOut, signal)
-        }
-
-        if (validateSubtitle) {
-          if (!isSubtitleFormat(format)) return failure('invalidSubtitle')
-          const valid = validateSubtitleBytes(bytes, format)
-          if (!valid.ok) return valid
-        }
-
-        return success({ bytes, format, contentVersion: sha256(bytes) })
+        bytes = await readBody(response, requestMaxBytes)
+        break
       }
-    } finally {
-      if (timer !== undefined) clearTimeoutFn(timer)
-      signal?.removeEventListener('abort', onAbort)
+    } catch (error) {
+      if (signal?.aborted) return failure('cancelled')
+      if (isTimeoutError(error)) return failure('timeout')
+      if (error instanceof HttpBodyTooLargeError) return failure('tooLarge')
+      return failure('network')
     }
+
+    if (validateSubtitle) {
+      if (!isSubtitleFormat(format)) return failure('invalidSubtitle')
+      const valid = validateSubtitleBytes(bytes, format)
+      if (!valid.ok) return valid
+    }
+
+    return success({ bytes, format, contentVersion: sha256(bytes) })
   }
 
   return {
@@ -1016,106 +957,10 @@ function isRedirect(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
 }
 
-function responseHeader(response: HttpResponse, name: string): string | null {
-  const aliases = [name, name.toLowerCase(), titleCaseHeader(name)]
-  for (const alias of aliases) {
-    try {
-      const value = response.headers.get(alias)
-      if (value !== null) return value
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-function titleCaseHeader(name: string): string {
-  return name
-    .split('-')
-    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-    .join('-')
-}
-
 function parseContentLength(value: string | null): number | undefined {
   if (value === null || value.trim() === '') return undefined
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : undefined
-}
-
-async function readResponseBytes(
-  response: HttpResponse,
-  maxBytes: number,
-  controller: AbortController,
-  timeout: Promise<never>,
-  cancellation: Promise<never>
-): Promise<Uint8Array> {
-  if (response.body !== undefined && response.body !== null) {
-    const iterator = response.body[Symbol.asyncIterator]()
-    const chunks: Uint8Array[] = []
-    let total = 0
-    let completed = false
-    try {
-      while (true) {
-        const result = await Promise.race([iterator.next(), timeout, cancellation])
-        if (result.done) {
-          completed = true
-          break
-        }
-        const chunk = result.value
-        if (!(chunk instanceof Uint8Array)) throw new Error('invalid response body')
-        total += chunk.byteLength
-        if (total > maxBytes) {
-          controller.abort()
-          throw TOO_LARGE
-        }
-        chunks.push(chunk)
-      }
-      return joinChunks(chunks, total)
-    } finally {
-      if (!completed) await iterator.return?.().catch(() => {})
-    }
-  }
-
-  if (response.arrayBuffer !== undefined) {
-    const bytes = new Uint8Array(
-      await Promise.race([response.arrayBuffer(), timeout, cancellation])
-    )
-    if (bytes.byteLength > maxBytes) {
-      controller.abort()
-      throw TOO_LARGE
-    }
-    return bytes
-  }
-
-  const text = await Promise.race([response.text(), timeout, cancellation])
-  const bytes = new TextEncoder().encode(text)
-  if (bytes.byteLength > maxBytes) {
-    controller.abort()
-    throw TOO_LARGE
-  }
-  return bytes
-}
-
-function joinChunks(chunks: readonly Uint8Array[], total: number): Uint8Array {
-  const bytes = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return bytes
-}
-
-function downloadFailure<T>(
-  error: unknown,
-  callerCancelled: boolean,
-  timedOut: boolean,
-  signal: AbortSignal | undefined
-): JimakuDownloadResult<T> {
-  if (error === CANCELLED || callerCancelled || signal?.aborted) return failure('cancelled')
-  if (error === TIMEOUT || timedOut) return failure('timeout')
-  if (error === TOO_LARGE) return failure('tooLarge')
-  return failure('network')
 }
 
 function sha256(bytes: Uint8Array): string {

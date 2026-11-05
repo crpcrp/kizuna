@@ -127,6 +127,7 @@ describe('createAnkiClient', () => {
         status: 200,
         ok: true,
         headers: { get: () => null },
+        body: (async function* () {})(),
         json: async () => ({ result: 6, error: null }),
         text: async () => ''
       }
@@ -150,6 +151,7 @@ describe('createAnkiClient', () => {
         status: 200,
         ok: true,
         headers: { get: () => null },
+        body: (async function* () {})(),
         json: async () => ({ result: [[], []], error: null }),
         text: async () => ''
       }
@@ -392,6 +394,7 @@ describe('createAnkiClient', () => {
         status: 200,
         ok: true,
         headers: { get: () => null },
+        body: (async function* () {})(),
         json: async () => ({ result: 6, error: null }),
         text: async () => ''
       }

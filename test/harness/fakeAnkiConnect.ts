@@ -89,6 +89,7 @@ export function fakeAnkiConnect(
       status: 200,
       ok: true,
       headers: { get: () => null },
+      body: (async function* () {})(),
       json: async () => envelope,
       text: async () => JSON.stringify(envelope)
     }

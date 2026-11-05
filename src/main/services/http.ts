@@ -5,10 +5,8 @@ export interface HttpResponse {
   status: number
   ok: boolean
   headers: { get(name: string): string | null }
-  /** The response body as chunks, when the caller needs bounded streaming. */
-  body?: AsyncIterable<Uint8Array>
-  /** Optional binary fallback for injected responses without a stream. */
-  arrayBuffer?(): Promise<ArrayBuffer>
+  /** The response body as chunks, for bounded reads via `readBody`. */
+  body: AsyncIterable<Uint8Array>
   json(): Promise<unknown>
   text(): Promise<string>
 }
@@ -31,6 +29,28 @@ export function isTimeoutError(error: unknown): boolean {
   return error instanceof Error && error.name === 'TimeoutError'
 }
 
+export class HttpBodyTooLargeError extends Error {
+  override name = 'HttpBodyTooLargeError'
+}
+
+/** Reads the whole body; throws HttpBodyTooLargeError once it exceeds `maxBytes`. */
+export async function readBody(response: HttpResponse, maxBytes: number): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for await (const chunk of response.body) {
+    total += chunk.byteLength
+    if (total > maxBytes) throw new HttpBodyTooLargeError(`Response body exceeds ${maxBytes} bytes`)
+    chunks.push(chunk)
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
 /** Thin wrapper over Electron's global `fetch`. */
 export const httpFetch: HttpFetch = async (url, init) => {
   const signals = [
@@ -50,12 +70,13 @@ export const httpFetch: HttpFetch = async (url, init) => {
     status: res.status,
     ok: res.ok,
     headers: { get: (name: string) => res.headers.get(name) },
-    body: res.body === null ? undefined : readableBody(res.body),
-    arrayBuffer: () => res.arrayBuffer(),
+    body: res.body === null ? emptyBody() : readableBody(res.body),
     json: () => res.json(),
     text: () => res.text()
   }
 }
+
+async function* emptyBody(): AsyncIterable<Uint8Array> {}
 
 async function* readableBody(body: ReadableStream<Uint8Array>): AsyncIterable<Uint8Array> {
   const reader = body.getReader()

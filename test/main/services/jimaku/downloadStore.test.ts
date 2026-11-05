@@ -285,6 +285,7 @@ describe('Jimaku download redirects and limits', () => {
       error: { code: 'invalidResponse' }
     })
     expect(http.calls).toHaveLength(4)
+    for (const call of http.calls) expect(call.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
   })
 
   it('rejects a cross-origin redirect with Jimaku recovery and does not follow it', async () => {
@@ -317,7 +318,7 @@ describe('Jimaku download redirects and limits', () => {
       ok: false,
       error: { code: 'tooLarge' }
     })
-    expect(http.calls[0]?.init?.signal?.aborted).toBe(true)
+    expect(http.calls).toHaveLength(1)
   })
 
   it('enforces a streamed byte limit when Content-Length is absent or false', async () => {
@@ -339,7 +340,7 @@ describe('Jimaku download redirects and limits', () => {
         ok: false,
         error: { code: 'tooLarge' }
       })
-      expect(http.calls[0]?.init?.signal?.aborted).toBe(true)
+      expect(http.calls).toHaveLength(1)
     }
   })
 })
@@ -443,30 +444,23 @@ describe('Jimaku download failure and cleanup handling', () => {
   it('maps timeout and caller abort to sanitized results and removes no usable handle', async () => {
     const entryId = 80
     const file = fileRecord(entryId)
-    const timers: Array<() => void> = []
-    const { store, http } = makeStore(
-      'linux',
-      { [file.url]: { deferred: true } },
-      {
-        setTimeoutFn: (callback) => {
-          timers.push(callback)
-          return 0 as unknown as ReturnType<typeof setTimeout>
-        },
-        clearTimeoutFn: vi.fn()
-      }
-    )
-    const timedOut = store.prepareDirect(entryId, file)
-    await vi.waitFor(() => expect(http.calls).toHaveLength(1))
-    expect(timers).toHaveLength(1)
-    timers[0]()
-    await expect(timedOut).resolves.toEqual({ ok: false, error: { code: 'timeout' } })
+    const { store, http } = makeStore('linux', {
+      [file.url]: [
+        { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) },
+        { deferred: true }
+      ]
+    })
+    await expect(store.prepareDirect(entryId, file)).resolves.toEqual({
+      ok: false,
+      error: { code: 'timeout' }
+    })
+    expect(http.calls[0]?.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
 
     const controller = new AbortController()
     const cancelled = store.prepareDirect(entryId, file, controller.signal)
     await vi.waitFor(() => expect(http.calls).toHaveLength(2))
     controller.abort()
     await expect(cancelled).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
-    expect(JIMAKU_DOWNLOAD_TIMEOUT_MS).toBeGreaterThan(0)
   })
 
   it('sanitizes content and index write failures and never returns a handle', async () => {
