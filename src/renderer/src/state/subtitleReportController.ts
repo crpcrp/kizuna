@@ -1,11 +1,8 @@
-import type { Cue } from '../../../shared/cue'
 import type { KnowledgeDetails, SyncStatus } from '../../../shared/knowledge'
-import type { Token } from '../../../shared/token'
 import { errorMessage } from '../util/errorMessage'
 import { buildSubtitleReport, reportLemmas, type SubtitleReport } from './subtitleReport'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 import type { KnowledgeDetailsBridge } from './wordPopupActions'
-import { cueHasUnknownVocabulary } from './vocabularyUnits'
 
 export type SubtitleReportPhase =
   | { kind: 'idle' }
@@ -31,20 +28,11 @@ export interface SubtitleReportOpenInput {
   snapshot: WholeTrackSnapshotSource
 }
 
-/** Legacy input accepted when the caller already has a token cache. */
-export interface LegacySubtitleReportOpenInput {
-  bridges: SubtitleReportBridges
-  cues: Cue[]
-  japaneseSubtitleSelected: boolean
-  tokenCache: Map<string, Token[]>
-  acceptedSpansByCue?: Record<string, import('./vocabularySpans').VocabularySpan[]>
-}
-
 export interface SubtitleReportController {
   getState(): SubtitleReportPhase
   subscribe(listener: () => void): () => void
   /** Opens immediately, then derives the report from the injected snapshot. */
-  open(input: SubtitleReportOpenInput | LegacySubtitleReportOpenInput): Promise<void>
+  open(input: SubtitleReportOpenInput): Promise<void>
   close(): void
 }
 
@@ -74,7 +62,7 @@ export function createSubtitleReportController(): SubtitleReportController {
       set({ kind: 'preparing' })
 
       try {
-        const prepared = await resolveSnapshot(snapshotFor(input))
+        const prepared = await resolveSnapshot(input.snapshot)
         if (requestToken !== request) return
         if (prepared.kind === 'stale') {
           set({ kind: 'unavailable' })
@@ -117,32 +105,6 @@ export function createSubtitleReportController(): SubtitleReportController {
       set(IDLE_STATE)
     }
   }
-}
-
-function snapshotFor(
-  input: SubtitleReportOpenInput | LegacySubtitleReportOpenInput
-): WholeTrackSnapshotSource {
-  if ('snapshot' in input) return input.snapshot
-  if (!input.japaneseSubtitleSelected || input.cues.length === 0)
-    return Promise.resolve({ kind: 'stale' })
-  const cueTokens = input.cues.map((cue) => ({
-    cueKey: `${cue.start}:${cue.end}:${cue.text}`,
-    tokens: input.tokenCache.get(`${cue.start}:${cue.end}:${cue.text}`) ?? []
-  }))
-  const spansByCue = input.acceptedSpansByCue ?? {}
-  return Promise.resolve({
-    kind: 'ready',
-    snapshot: {
-      cueTokens,
-      spansByCue,
-      cueHasUnknown: Object.fromEntries(
-        cueTokens.map((cue) => [
-          cue.cueKey,
-          cueHasUnknownVocabulary({ ...cue, spans: spansByCue[cue.cueKey] ?? [] }, {})
-        ])
-      )
-    }
-  })
 }
 
 function resolveSnapshot(source: WholeTrackSnapshotSource): Promise<WholeTrackVocabularyResult> {

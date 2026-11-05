@@ -4,8 +4,6 @@ import {
   applyReloadGuard,
   getMainWindowOptions,
   registerWindowControls,
-  capturePreFullscreenBounds,
-  restorePreFullscreenBounds,
   sendToWindow,
   type WindowControlTarget,
   type WindowBounds,
@@ -215,9 +213,12 @@ describe('registerWindowControls', () => {
   /** A full fake window target (minimize/close/fullscreen/bounds). */
   function fakeTarget(
     fullscreen = false,
-    bounds: WindowBounds = { x: 10, y: 20, width: 800, height: 600 }
+    bounds: WindowBounds = { x: 10, y: 20, width: 800, height: 600 },
+    hasSavedBounds = false
   ) {
     return {
+      capturePreFullscreenBounds: vi.fn(),
+      hasPreFullscreenBounds: () => hasSavedBounds,
       minimize: vi.fn(),
       close: vi.fn(),
       focus: vi.fn(),
@@ -319,7 +320,7 @@ describe('registerWindowControls', () => {
 
     listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, true)
 
-    expect(target.getBounds).toHaveBeenCalledTimes(1)
+    expect(target.capturePreFullscreenBounds).toHaveBeenCalledOnce()
     expect(target.setFullScreen).toHaveBeenCalledWith(true)
   })
 
@@ -329,7 +330,7 @@ describe('registerWindowControls', () => {
 
     listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, false)
 
-    expect(target.getBounds).not.toHaveBeenCalled()
+    expect(target.capturePreFullscreenBounds).not.toHaveBeenCalled()
     expect(target.setFullScreen).toHaveBeenCalledWith(false)
   })
 
@@ -346,23 +347,22 @@ describe('registerWindowControls', () => {
     const enteringTarget = fakeTarget(false)
     const { listeners: enteringListeners } = setup(enteringTarget)
     enteringListeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(enteringTarget.getBounds).toHaveBeenCalledTimes(1)
+    expect(enteringTarget.capturePreFullscreenBounds).toHaveBeenCalledOnce()
 
     const leavingTarget = fakeTarget(true)
     const { listeners: leavingListeners } = setup(leavingTarget)
     leavingListeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(leavingTarget.getBounds).not.toHaveBeenCalled()
+    expect(leavingTarget.capturePreFullscreenBounds).not.toHaveBeenCalled()
   })
 
   it('toggleFullscreen exits without overwriting saved bounds when Electron reports windowed', () => {
-    const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 })
-    capturePreFullscreenBounds(target)
+    const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 }, true)
     const { listeners } = setup(target)
 
     listeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
 
     expect(target.setFullScreen).toHaveBeenCalledWith(false)
-    expect(target.getBounds).toHaveBeenCalledTimes(1)
+    expect(target.capturePreFullscreenBounds).not.toHaveBeenCalled()
   })
 
   it('setSize resizes the window, keeping its current position', () => {
@@ -572,80 +572,5 @@ describe('sendToWindow', () => {
   it('does not send and does not throw when the window is null or undefined', () => {
     expect(() => sendToWindow(null, 'launch:error', 'boom')).not.toThrow()
     expect(() => sendToWindow(undefined, 'launch:error', 'boom')).not.toThrow()
-  })
-})
-
-describe('capturePreFullscreenBounds / restorePreFullscreenBounds', () => {
-  function fakeTarget(fullscreen: boolean, bounds: WindowBounds): WindowControlTarget {
-    return {
-      minimize: vi.fn(),
-      close: vi.fn(),
-      focus: vi.fn(),
-      setFullScreen: vi.fn(),
-      isFullScreen: () => fullscreen,
-      getBounds: vi.fn(() => bounds),
-      setBounds: vi.fn(),
-      setAlwaysOnTop: vi.fn()
-    }
-  }
-
-  it('restores the exact bounds captured before entering fullscreen', () => {
-    const bounds: WindowBounds = { x: 5, y: 5, width: 1024, height: 768 }
-    const win = fakeTarget(false, bounds)
-
-    capturePreFullscreenBounds(win)
-    restorePreFullscreenBounds(win)
-
-    expect(win.setBounds).toHaveBeenCalledWith(bounds)
-  })
-
-  it('does nothing when no bounds were ever captured', () => {
-    const win = fakeTarget(false, { x: 0, y: 0, width: 1280, height: 720 })
-
-    restorePreFullscreenBounds(win)
-
-    expect(win.setBounds).not.toHaveBeenCalled()
-  })
-
-  it('is idempotent: a second restore without a new capture is a no-op', () => {
-    const bounds: WindowBounds = { x: 5, y: 5, width: 1024, height: 768 }
-    const win = fakeTarget(false, bounds)
-
-    capturePreFullscreenBounds(win)
-    restorePreFullscreenBounds(win)
-    restorePreFullscreenBounds(win)
-
-    expect(win.setBounds).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not capture bounds when the window is already fullscreen', () => {
-    const win = fakeTarget(true, { x: 0, y: 0, width: 1920, height: 1080 })
-
-    capturePreFullscreenBounds(win)
-    restorePreFullscreenBounds(win)
-
-    expect(win.setBounds).not.toHaveBeenCalled()
-  })
-
-  it('does not overwrite bounds already saved for the current fullscreen cycle', () => {
-    const win = fakeTarget(false, { x: 0, y: 0, width: 1280, height: 720 })
-
-    capturePreFullscreenBounds(win)
-    capturePreFullscreenBounds(win)
-
-    expect(win.getBounds).toHaveBeenCalledTimes(1)
-  })
-
-  it('tracks bounds independently per window', () => {
-    const winA = fakeTarget(false, { x: 1, y: 1, width: 100, height: 100 })
-    const winB = fakeTarget(false, { x: 2, y: 2, width: 200, height: 200 })
-
-    capturePreFullscreenBounds(winA)
-    capturePreFullscreenBounds(winB)
-    restorePreFullscreenBounds(winA)
-    restorePreFullscreenBounds(winB)
-
-    expect(winA.setBounds).toHaveBeenCalledWith({ x: 1, y: 1, width: 100, height: 100 })
-    expect(winB.setBounds).toHaveBeenCalledWith({ x: 2, y: 2, width: 200, height: 200 })
   })
 })

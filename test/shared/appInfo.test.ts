@@ -1,19 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import packageMetadata from '../../package.json'
-import { APP_INFO_LINKS, APP_NAME, appTitle, createAppInfo } from '@src/shared/appInfo'
+import { APP_INFO_LINKS, APP_NAME, createAppInfo } from '@src/shared/appInfo'
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from '@src/shared/appIdentity'
 
-describe('appTitle', () => {
-  it('formats name and version', () => {
-    expect(appTitle('0.0.1')).toBe(`${PRODUCT_NAME} v0.0.1`)
-  })
-
+describe('APP_NAME', () => {
   it('takes its name from the app-identity configuration', () => {
     expect(APP_NAME).toBe(PRODUCT_NAME)
-  })
-
-  it('uses the shared APP_NAME constant', () => {
-    expect(appTitle('9.9.9').startsWith(APP_NAME)).toBe(true)
   })
 })
 

@@ -18,33 +18,6 @@ export interface RankedResult {
 }
 
 /**
- * Stable sort of `results` by frequency. Rank dictionaries use lower values
- * first, while occurrence dictionaries use higher values first. Lookup itself
- * applies match-group and form relevance before this frequency comparison.
- *
- * Entries with frequency === null keep their original relative order and sort
- * after scored entries. Returns a new array; does not mutate `results`.
- */
-export function sortByFrequency(results: LookupResult[], mode: FrequencyMode): LookupResult[] {
-  const decorated = results.map((result, index) => ({ result, index }))
-
-  decorated.sort((a, b) => {
-    const lengthDiff = b.result.expression.length - a.result.expression.length
-    if (lengthDiff !== 0) return lengthDiff
-
-    const aFreq = a.result.frequency
-    const bFreq = b.result.frequency
-    if (aFreq === null && bFreq === null) return a.index - b.index
-    if (aFreq === null) return 1
-    if (bFreq === null) return -1
-    const diff = mode === 'rank-based' ? aFreq - bFreq : bFreq - aFreq
-    return diff !== 0 ? diff : a.index - b.index
-  })
-
-  return decorated.map((d) => d.result)
-}
-
-/**
  * Orders collected lookup rows by fallback status, match group, then (when both
  * entries have it) frequency, exact written form, priority tags, remaining
  * frequency presence, score, and finally stable dictionary order.

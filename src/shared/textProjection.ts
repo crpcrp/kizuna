@@ -73,30 +73,6 @@ export function displayTextProjection(displayText: string): TextProjection {
   return createTextProjection(displayText.split('\n'))
 }
 
-/**
- * Maps an analysis boundary to the display boundary before its next visible
- * character. At a line boundary this therefore skips the inserted newline;
- * the end of the analysis text maps to the end of the display text.
- */
-export function mapAnalysisOffsetToDisplayOffset(
-  projection: TextProjection,
-  offset: number
-): number {
-  assertOffset(offset, projection.analysisText.length, 'analysis offset')
-
-  for (const line of projection.lines) {
-    const lineEnd = line.analysisStartOffset + line.text.length
-    if (offset >= line.analysisStartOffset && offset < lineEnd) {
-      return line.displayStartOffset + offset - line.analysisStartOffset
-    }
-    if (offset === line.analysisStartOffset && line.text.length > 0) {
-      return line.displayStartOffset
-    }
-  }
-
-  return projection.displayText.length
-}
-
 /** Maps a display boundary to the number of visible UTF-16 code units before it. */
 export function mapDisplayOffsetToAnalysisOffset(
   projection: TextProjection,
@@ -163,15 +139,6 @@ export function mapDisplayRangeToAnalysisRange(
     startOffset: mapDisplayOffsetToAnalysisOffset(projection, range.startOffset),
     endOffset: mapDisplayOffsetToAnalysisOffset(projection, range.endOffset)
   }
-}
-
-/** Returns the continuous analysis text represented by a display selection. */
-export function displayRangeToAnalysisText(
-  projection: TextProjection,
-  range: TextOffsetRange
-): string {
-  const analysisRange = mapDisplayRangeToAnalysisRange(projection, range)
-  return projection.analysisText.slice(analysisRange.startOffset, analysisRange.endOffset)
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

@@ -44,7 +44,7 @@ export function closeWindow(controls?: WindowControls): void {
   resolveControls(controls).close()
 }
 
-/** Window-button handler: exits fullscreen, restoring the pre-fullscreen size (see windowOptions.ts's restorePreFullscreenBounds). */
+/** Window-button handler: exits fullscreen, restoring the pre-fullscreen size (see windowPair.ts's restorePreFullscreenBounds). */
 export function restoreWindow(controls?: WindowControls): void {
   resolveControls(controls).setFullscreen(false)
 }

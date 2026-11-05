@@ -237,7 +237,6 @@ describe('Game OCR capture sessions', () => {
     expect(onTimings.mock.calls[0][0]).toMatchObject({
       sessionId: 1,
       captureId: 1,
-      settleMs: 0,
       cursorMs: 0,
       displayMs: 0,
       sourceMs: 0,

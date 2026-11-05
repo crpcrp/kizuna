@@ -50,8 +50,3 @@ export function createAppInfo(version: string, metadata: AppInfoMetadata): AppIn
     copyright: metadata.copyright ?? COPYRIGHT
   }
 }
-
-/** Formats the string shown in the window / title bar. */
-export function appTitle(version: string): string {
-  return `${APP_NAME} v${version}`
-}

@@ -1,7 +1,7 @@
 // Pure policy for turning WaniKani/Anki source data into a KnowledgeLevel,
 // and for merging/staleness across sources. No DB, no HTTP.
 
-import { maxKnowledgeLevel, type KnowledgeLevel } from '../../../shared/knowledge'
+import type { KnowledgeLevel } from '../../../shared/knowledge'
 import type { AnkiCardInfo } from '../anki/ankiConnect'
 
 export interface IntervalThresholds {
@@ -36,11 +36,6 @@ export function levelFromAnkiCard(card: AnkiCardInfo, t: IntervalThresholds): Kn
   if (card.interval >= t.wellKnownIntervalDays) return 'wellKnown'
   if (card.interval >= t.knownIntervalDays) return 'known'
   return 'learning'
-}
-
-/** @deprecated Use maxKnowledgeLevel from shared/knowledge in new code. */
-export function mergeLevel(a: KnowledgeLevel, b: KnowledgeLevel): KnowledgeLevel {
-  return maxKnowledgeLevel(a, b)
 }
 
 /**

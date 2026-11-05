@@ -43,20 +43,6 @@ export function capturePixelToCssPoint(
   }
 }
 
-/** Converts a captured-image rectangle into logical desktop CSS coordinates. */
-export function capturePixelsToCssBounds(
-  metadata: Pick<OcrDisplayCaptureMetadata, 'displayBounds' | 'scaleFactor'>,
-  bounds: OcrBounds
-): OcrDisplayBounds {
-  const topLeft = capturePixelToCssPoint(metadata, bounds)
-  return {
-    x: topLeft.x,
-    y: topLeft.y,
-    width: bounds.width / metadata.scaleFactor,
-    height: bounds.height / metadata.scaleFactor
-  }
-}
-
 /** An integer rectangle in captured-image pixel coordinates. */
 export interface OcrBounds {
   x: number

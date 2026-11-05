@@ -3,7 +3,6 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
 import {
   createVocabularySpanController,
-  retryStaleVocabularySpanResolve,
   type VocabularySpanEpoch
 } from '@src/renderer/src/state/vocabularySpanController'
 import { deriveMiningCandidates } from '@src/renderer/src/state/bulkMining'
@@ -36,17 +35,6 @@ const deferred = <T>() => {
 }
 
 describe('vocabulary span controller', () => {
-  it('returns a stale resolution once without retrying', async () => {
-    const resolve = vi.fn().mockResolvedValue({ kind: 'stale' })
-    const isCurrent = vi.fn().mockReturnValue(true)
-
-    await expect(retryStaleVocabularySpanResolve(resolve, isCurrent)).resolves.toEqual({
-      kind: 'stale'
-    })
-    expect(resolve).toHaveBeenCalledOnce()
-    expect(isCurrent).not.toHaveBeenCalled()
-  })
-
   it('joins identical concurrent requests and performs each lookup once', async () => {
     const controller = createVocabularySpanController()
     const lookup = deferred<LookupResult[]>()

@@ -2,9 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clipAnalysisRangeToDisplayRanges,
   createTextProjection,
-  displayRangeToAnalysisText,
   displayTextProjection,
-  mapAnalysisOffsetToDisplayOffset,
   mapAnalysisRangeToDisplayRanges,
   mapDisplayOffsetToAnalysisOffset,
   mapDisplayRangeToAnalysisRange,
@@ -22,7 +20,6 @@ describe('text projection', () => {
 
     expect(projection.displayText).toBe('日本語')
     expect(projection.analysisText).toBe('日本語')
-    expect(mapAnalysisOffsetToDisplayOffset(projection, 2)).toBe(2)
     expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
     expect(mapAnalysisRangeToDisplayRanges(projection, range(1, 3))).toEqual([range(1, 3)])
   })
@@ -32,7 +29,6 @@ describe('text projection', () => {
 
     expect(projection.displayText).toBe('棒人間が描か\nれている。')
     expect(projection.analysisText).toBe('棒人間が描かれている。')
-    expect(mapAnalysisOffsetToDisplayOffset(projection, 6)).toBe(7)
     expect(mapDisplayOffsetToAnalysisOffset(projection, 7)).toBe(6)
   })
 
@@ -63,18 +59,16 @@ describe('text projection', () => {
     expect(mapAnalysisRangeToDisplayRanges(projection, input)).toEqual(expected)
   })
 
-  it('maps display selections across lines back to continuous analysis text', () => {
+  it('maps display selections across lines back to a continuous analysis range', () => {
     const projection = createTextProjection(['描か', 'れている'])
     const selection = range(1, 6)
 
     expect(mapDisplayRangeToAnalysisRange(projection, selection)).toEqual(range(1, 5))
-    expect(displayRangeToAnalysisText(projection, selection)).toBe('かれてい')
   })
 
-  it('maps a selection containing only an inserted newline to no semantic text', () => {
+  it('maps a selection containing only an inserted newline to an empty analysis range', () => {
     const projection = createTextProjection(['前', '後'])
 
-    expect(displayRangeToAnalysisText(projection, range(1, 2))).toBe('')
     expect(mapDisplayRangeToAnalysisRange(projection, range(1, 2))).toEqual(range(1, 1))
   })
 
@@ -83,7 +77,6 @@ describe('text projection', () => {
 
     expect(mapDisplayOffsetToAnalysisOffset(projection, 2)).toBe(2)
     expect(mapDisplayOffsetToAnalysisOffset(projection, 3)).toBe(2)
-    expect(mapAnalysisOffsetToDisplayOffset(projection, 2)).toBe(3)
     expect(mapAnalysisRangeToDisplayRanges(projection, range(2, 2))).toEqual([])
   })
 
@@ -91,16 +84,14 @@ describe('text projection', () => {
     const projection = createTextProjection(['猫', '猫'])
 
     expect(mapAnalysisRangeToDisplayRanges(projection, range(1, 2))).toEqual([range(2, 3)])
-    expect(displayRangeToAnalysisText(projection, range(2, 3))).toBe('猫')
   })
 
   it('rejects malformed offsets and ranges consistently', () => {
     const projection = createTextProjection(['abc'])
 
-    expect(() => mapAnalysisOffsetToDisplayOffset(projection, -1)).toThrow(RangeError)
     expect(() => mapDisplayOffsetToAnalysisOffset(projection, 4)).toThrow(RangeError)
     expect(() => mapAnalysisRangeToDisplayRanges(projection, range(2, 1))).toThrow(RangeError)
-    expect(() => displayRangeToAnalysisText(projection, range(0, 4))).toThrow(RangeError)
+    expect(() => mapDisplayRangeToAnalysisRange(projection, range(0, 4))).toThrow(RangeError)
   })
 
   it('rejects source lines containing embedded newlines', () => {

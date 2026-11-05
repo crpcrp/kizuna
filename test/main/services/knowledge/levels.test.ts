@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   levelFromSrsStage,
   levelFromAnkiCard,
-  mergeLevel,
   isStale,
   canSyncNow,
   type IntervalThresholds
@@ -103,26 +102,6 @@ describe('levelFromAnkiCard', () => {
     for (const c of cards) {
       expect(levelFromAnkiCard(c, thresholds)).not.toBe('unknown')
     }
-  })
-})
-
-describe('mergeLevel', () => {
-  it('picks the higher-ranked level regardless of argument order', () => {
-    expect(mergeLevel('known', 'learning')).toBe('known')
-    expect(mergeLevel('learning', 'known')).toBe('known')
-  })
-
-  it('is commutative for every pair', () => {
-    const levels = ['unknown', 'inDeck', 'learning', 'known', 'wellKnown'] as const
-    for (const a of levels) {
-      for (const b of levels) {
-        expect(mergeLevel(a, b)).toBe(mergeLevel(b, a))
-      }
-    }
-  })
-
-  it('returns the same level when both sides match', () => {
-    expect(mergeLevel('wellKnown', 'wellKnown')).toBe('wellKnown')
   })
 })
 

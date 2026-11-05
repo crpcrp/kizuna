@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Cue } from '../../../src/shared/cue'
 import {
   activeLoopCue,
-  currentChapterIndex,
   loopSeekTarget,
   nextChapterStart,
   nextCue,
@@ -76,12 +75,6 @@ describe('chapter navigation helpers', () => {
     { start: 35, end: 60, title: 'B' },
     { start: 60, end: 90, title: 'C' }
   ]
-
-  it('finds the current chapter and handles gaps', async () => {
-    expect(currentChapterIndex([], 10)).toBe(-1)
-    expect(currentChapterIndex(chapters, 10)).toBe(0)
-    expect(currentChapterIndex(chapters, 32)).toBe(-1)
-  })
 
   it('seeks to previous chapter using the restart threshold', async () => {
     expect(prevChapterStart([], 10)).toBeUndefined()

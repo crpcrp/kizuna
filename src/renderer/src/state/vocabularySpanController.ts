@@ -43,17 +43,6 @@ export interface VocabularySpanController {
   invalidate(): void
 }
 
-/**
- * Resolves once. Callers that receive stale may explicitly request their new snapshot;
- * this boundary never retries indefinitely.
- */
-export async function retryStaleVocabularySpanResolve(
-  resolve: () => Promise<VocabularySpanResolveResult>,
-  _isCurrent: () => boolean
-): Promise<VocabularySpanResolveResult> {
-  return resolve()
-}
-
 interface ResolvedLookup {
   cueKey: string
   tokenOffset: number

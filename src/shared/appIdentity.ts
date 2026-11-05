@@ -41,7 +41,6 @@ export const APP_ID = APP_IDENTITY.appId
 export const USER_DATA_DIR_NAME = APP_IDENTITY.userDataDirName
 export const COPYRIGHT = APP_IDENTITY.copyright
 export const REPOSITORY_URL = APP_IDENTITY.repositoryUrl
-export const VENDOR_REPOSITORY_URL = APP_IDENTITY.vendorRepositoryUrl
 
 /**
  * Whether `id` is a usable Windows AppUserModelID / electron-builder `appId`:

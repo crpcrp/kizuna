@@ -157,8 +157,3 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
     }
   }
 }
-
-/** Backward-compatible handler factory for callers that only need normal quit. */
-export function createQuitCoordinator(deps: QuitCoordinatorDeps): QuitHandler {
-  return createAppLifecycleCoordinator(deps).handleBeforeQuit
-}

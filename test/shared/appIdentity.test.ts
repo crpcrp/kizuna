@@ -7,8 +7,7 @@ import {
   isValidAppId,
   PRODUCT_NAME,
   REPOSITORY_URL,
-  USER_DATA_DIR_NAME,
-  VENDOR_REPOSITORY_URL
+  USER_DATA_DIR_NAME
 } from '@src/shared/appIdentity'
 
 describe('isValidAppId', () => {
@@ -42,7 +41,6 @@ describe('APP_IDENTITY', () => {
     expect(USER_DATA_DIR_NAME).toBe(APP_IDENTITY.userDataDirName)
     expect(COPYRIGHT).toBe(APP_IDENTITY.copyright)
     expect(REPOSITORY_URL).toBe(APP_IDENTITY.repositoryUrl)
-    expect(VENDOR_REPOSITORY_URL).toBe(APP_IDENTITY.vendorRepositoryUrl)
   })
 
   it('carries a usable Windows appId', () => {
@@ -55,7 +53,7 @@ describe('APP_IDENTITY', () => {
   })
 
   it('names https repositories', () => {
-    for (const url of [REPOSITORY_URL, VENDOR_REPOSITORY_URL]) {
+    for (const url of [REPOSITORY_URL, APP_IDENTITY.vendorRepositoryUrl]) {
       expect(url.startsWith('https://github.com/')).toBe(true)
       expect(url.endsWith('/')).toBe(false)
     }

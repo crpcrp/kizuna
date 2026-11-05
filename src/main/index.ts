@@ -951,20 +951,6 @@ if (!gotSingleInstanceLock) {
     startAppInfo()
     registerClipboardBridge(ipcMain, clipboard)
     createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
-
-    // macOS dock re-activation. This path is dead on Windows (the primary
-    // target): `window-all-closed` quits the app there, so all windows are
-    // never simultaneously closed while the process lives. It is left minimal
-    // rather than fixed because re-opening a window here would re-enter
-    // `ensureStarted` reuses the process-lifetime runtime, but the new window
-    // would still be bound to the old bridge, whose `send` closure targets the
-    // destroyed window (pushes dropped via the `isDestroyed` guard). A correct
-    // macOS revival needs a fresh controller/bridge per window — out of scope
-    // until macOS is supported.
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0 && mediaHistory)
-        createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
-    })
   })
 
   app.on('before-quit', lifecycle.handleBeforeQuit)
@@ -975,6 +961,6 @@ if (!gotSingleInstanceLock) {
   })
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
+    app.quit()
   })
 }
