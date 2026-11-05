@@ -40,6 +40,10 @@ vi.mock('electron', () => ({
 import '@src/preload/index'
 import { windowShapeApi } from '@src/preload/index'
 
+// Captured once: the preload exposes its API at import time, and Vitest clears
+// mock call history before each test.
+const exposedApi: unknown = electron.exposeInMainWorld.mock.calls[0]?.[1]
+
 describe('preload launch contract', () => {
   beforeEach(() => {
     electron.on.mockReset()
@@ -48,7 +52,7 @@ describe('preload launch contract', () => {
   })
 
   it('subscribes to launch paths before signalling renderer readiness', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       launch: { onOpenPath(cb: (path: string) => void): () => void; rendererReady(): void }
     }
     const cb = vi.fn()
@@ -66,7 +70,7 @@ describe('preload launch contract', () => {
   })
 
   it('forwards launch errors and unsubscribes on teardown', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       launch: { onError(cb: (message: string) => void): () => void }
     }
     const cb = vi.fn()
@@ -93,7 +97,7 @@ describe('preload app-shell contract', () => {
   })
 
   it('routes surface commands and unsubscribes surface changes', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       appShell: {
         getSurface(): Promise<unknown>
         showSplash(): Promise<unknown>
@@ -137,7 +141,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes playback speed through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { setSpeed(speed: number): Promise<unknown> }
     }
 
@@ -147,7 +151,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes audio delay through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { setAudioDelay(delayMs: number): Promise<unknown> }
     }
 
@@ -157,7 +161,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes the A–B loop through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { setAbLoop(a: number | null, b: number | null): Promise<unknown> }
     }
 
@@ -169,7 +173,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes frameStep and frameBackStep through their dedicated IPC channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { frameStep(): Promise<unknown>; frameBackStep(): Promise<unknown> }
     }
 
@@ -181,7 +185,7 @@ describe('preload player contract', () => {
   })
 
   it('subscribes to mpv pause pushes and unsubscribes on teardown', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { onPause(cb: (value: boolean) => void): () => void }
     }
     const cb = vi.fn()
@@ -197,7 +201,7 @@ describe('preload player contract', () => {
   })
 
   it('subscribes to system media-key pushes and unsubscribes on teardown', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { onMediaKey(cb: (value: string) => void): () => void }
     }
     const cb = vi.fn()
@@ -213,7 +217,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes video adjustments through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { setVideoAdjustments(adjustments: unknown): Promise<unknown> }
     }
     const adjustments = {
@@ -232,7 +236,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes the audio device and loudness-normalization channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: {
         getAudioDevices(): Promise<unknown>
         setAudioDevice(name: string): Promise<unknown>
@@ -250,7 +254,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes screenshot through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { screenshot(mediaPath: string, timePos: number): Promise<string> }
     }
 
@@ -260,7 +264,7 @@ describe('preload player contract', () => {
   })
 
   it('exposes captureFrame through the dedicated IPC channel with no arguments', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       player: { captureFrame(): Promise<string | null> }
     }
 
@@ -276,7 +280,7 @@ describe('preload clipboard contract', () => {
   })
 
   it('exposes clipboard.writeText through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       clipboard: { writeText(text: string): Promise<void> }
     }
 
@@ -291,7 +295,7 @@ describe('preload clipboard contract', () => {
 
 describe('preload updater contract', () => {
   it('routes commands and removes the state listener on teardown', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       updates: {
         getState(): Promise<unknown>
         getSettings(): Promise<unknown>
@@ -335,7 +339,7 @@ describe('preload translation contract', () => {
   })
 
   it('forwards translation requests and cancellation through their dedicated IPC channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       translate: {
         translate(text: string, requestId: string): Promise<string>
         cancel(requestId: string): void
@@ -368,7 +372,7 @@ describe('preload Jimaku session contract', () => {
   })
 
   it('forwards the sender-scoped search and preparation operations', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       jimaku: {
         beginSession(path: string, generation: number): Promise<unknown>
         searchTitles(sessionId: string, request: unknown): Promise<unknown>
@@ -419,7 +423,7 @@ describe('preload Jimaku folder hint contract', () => {
   })
 
   it('forwards local folder hint settings without a session', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       jimaku: {
         getFolderHint(path: string, season?: number): Promise<unknown>
         setFolderHint(path: string, hint: unknown): Promise<unknown>
@@ -457,7 +461,7 @@ describe('preload media contract', () => {
   })
 
   it('forwards a supplied external subtitle encoding and defaults omission to auto', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       media: {
         loadExternalSubtitle(path: string, encoding?: 'auto' | 'shift_jis'): Promise<unknown>
       }
@@ -473,7 +477,7 @@ describe('preload media contract', () => {
   })
 
   it('exposes the playlist file-IO operations through their channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       media: {
         openFiles(): Promise<unknown>
         openFolder(): Promise<unknown>
@@ -496,7 +500,7 @@ describe('preload media contract', () => {
   })
 
   it('forwards a seekbar thumbnail request through the thumbnail channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       media: { getThumbnail(path: string, timeSec: number, durationSec: number): Promise<unknown> }
     }
 
@@ -517,7 +521,7 @@ describe('preload media-history contract', () => {
   })
 
   it('exposes every media-history operation through its dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       mediaHistory: {
         getRecentFiles(): Promise<unknown>
         getPlaybackHistory(path: string): Promise<unknown>
@@ -563,7 +567,7 @@ describe('preload files contract', () => {
   })
 
   it('resolves a dropped File to its real path through webUtils', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       files: { pathForFile(file: File): string }
     }
     const file = new File(['data'], 'episode.mkv')
@@ -580,7 +584,7 @@ describe('preload dictionary contract', () => {
   })
 
   it('forwards fallback-only changes through the dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       dict: { setFallbackOnly(id: number, fallbackOnly: boolean): Promise<void> }
     }
 
@@ -590,7 +594,7 @@ describe('preload dictionary contract', () => {
   })
 
   it('passes dictionary lookup results through without reshaping JLPT metadata', async () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       dict: { lookup(lemma: string, reading?: string): Promise<unknown> }
     }
     const lookupResult = { expression: '猫', reading: 'ねこ', jlptLevel: 'N4' }
@@ -615,7 +619,7 @@ describe('preload Anki contract', () => {
   })
 
   it('forwards one target-deck membership batch through its dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       anki: { findTargetDeckMembership(expressions: string[]): Promise<unknown> }
     }
     const expressions = ['猫', '犬']
@@ -630,7 +634,7 @@ describe('preload Anki contract', () => {
   })
 
   it('forwards JLPT setup through its dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       anki: { setupJlptField(): Promise<unknown> }
     }
 
@@ -640,7 +644,7 @@ describe('preload Anki contract', () => {
   })
 
   it('forwards addNote through the dedicated IPC channel without reshaping its result', async () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       anki: { addNote(request: unknown): Promise<unknown> }
     }
     const request = { token: { lemma: 'cat' }, result: { expression: 'cat' }, sentence: 'cat' }
@@ -652,7 +656,7 @@ describe('preload Anki contract', () => {
   })
 
   it('forwards the sentence-audio media context on the mine request unreshaped', async () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       anki: { addNote(request: unknown): Promise<unknown> }
     }
     // The main process clips sentence audio from exactly these fields, so the
@@ -677,7 +681,7 @@ describe('preload knowledge contract', () => {
   })
 
   it('requests the local JLPT coverage report through its dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       knowledge: {
         jlptCoverageReport(): Promise<unknown>
         jlptUnknownItems(request: unknown): Promise<unknown>
@@ -701,7 +705,7 @@ describe('preload player-settings contract', () => {
   })
 
   it('opens the mpv config folder through its dedicated IPC channel', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       playerSettings: { openMpvConfigDir(): Promise<string> }
     }
 
@@ -717,7 +721,7 @@ describe('preload window-controls contract', () => {
   })
 
   it('reads and writes window bounds through invoke/handle channels', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       windowControls: {
         getBounds(): Promise<unknown>
         setBounds(request: SetWindowBoundsRequest): Promise<unknown>
@@ -756,7 +760,7 @@ describe('preload window-shape exposure', () => {
   })
 
   it('sends shape rects on the setShape channel from the exposed API', () => {
-    const api = electron.exposeInMainWorld.mock.calls[0]?.[1] as {
+    const api = exposedApi as {
       windowControls: { setShape?(rects: unknown[]): void }
     }
 
