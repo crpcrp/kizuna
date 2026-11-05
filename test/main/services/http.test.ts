@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { httpFetch, isTimeoutError, type HttpRequest } from '@src/main/services/http'
+import {
+  HttpBodyTooLargeError,
+  httpFetch,
+  isTimeoutError,
+  readBody,
+  type HttpRequest,
+  type HttpResponse
+} from '@src/main/services/http'
 
 const realFetch = globalThis.fetch
 
@@ -124,5 +131,31 @@ describe('isTimeoutError', () => {
     expect(isTimeoutError(new DOMException('aborted', 'AbortError'))).toBe(false)
     expect(isTimeoutError(new Error('boom'))).toBe(false)
     expect(isTimeoutError('TimeoutError')).toBe(false)
+  })
+})
+
+describe('readBody', () => {
+  function response(chunks: Uint8Array[]): HttpResponse {
+    return {
+      status: 200,
+      ok: true,
+      headers: { get: () => null },
+      body: (async function* () {
+        yield* chunks
+      })(),
+      json: async () => null,
+      text: async () => ''
+    }
+  }
+
+  it('joins chunks up to the limit', async () => {
+    const bytes = await readBody(response([new Uint8Array([1, 2]), new Uint8Array([3])]), 3)
+    expect([...bytes]).toEqual([1, 2, 3])
+  })
+
+  it('throws HttpBodyTooLargeError once the limit is exceeded', async () => {
+    await expect(
+      readBody(response([new Uint8Array([1, 2]), new Uint8Array([3])]), 2)
+    ).rejects.toBeInstanceOf(HttpBodyTooLargeError)
   })
 })

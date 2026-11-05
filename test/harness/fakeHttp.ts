@@ -80,21 +80,27 @@ function nextScripted(
 
 function toResponse(route: FakeHttpRoute): HttpResponse {
   const status = route.status ?? 200
-  const headers = route.headers ?? {}
+  // Real `Headers.get` is case-insensitive.
+  const headers = new Map(
+    Object.entries(route.headers ?? {}).map(([name, value]) => [name.toLowerCase(), value])
+  )
+  const text = route.text ?? (route.json === undefined ? '' : JSON.stringify(route.json))
+  const chunks =
+    route.bytes === undefined
+      ? [new TextEncoder().encode(text)]
+      : Array.isArray(route.bytes)
+        ? route.bytes
+        : [route.bytes]
   return {
     status,
     ok: status >= 200 && status < 300,
-    headers: { get: (name: string) => headers[name] ?? null },
-    body: route.bytes === undefined ? undefined : byteChunks(route.bytes),
+    headers: { get: (name: string) => headers.get(name.toLowerCase()) ?? null },
+    body: byteChunks(chunks),
     json: async () => route.json,
-    text: async () => route.text ?? (route.json === undefined ? '' : JSON.stringify(route.json))
+    text: async () => text
   }
 }
 
-async function* byteChunks(bytes: Uint8Array | Uint8Array[]): AsyncIterable<Uint8Array> {
-  if (Array.isArray(bytes)) {
-    for (const chunk of bytes) yield chunk
-    return
-  }
-  yield bytes
+async function* byteChunks(chunks: Uint8Array[]): AsyncIterable<Uint8Array> {
+  for (const chunk of chunks) yield chunk
 }

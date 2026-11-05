@@ -80,6 +80,7 @@ function jsonResponse(json: unknown) {
     status: 200,
     ok: true,
     headers: { get: () => null },
+    body: (async function* () {})(),
     json: async () => json,
     text: async () => JSON.stringify(json)
   }

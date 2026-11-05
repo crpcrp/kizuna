@@ -4,6 +4,7 @@ import {
   createJimakuClient,
   JIMAKU_API_BASE,
   JIMAKU_MAX_RESPONSE_BYTES,
+  JIMAKU_REQUEST_TIMEOUT_MS,
   type CreateJimakuClientDeps
 } from '@src/main/services/jimaku/client'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
@@ -50,7 +51,8 @@ describe('createJimakuClient', () => {
       url,
       init: {
         method: 'GET',
-        headers: { Authorization: 'test-key' }
+        headers: { Authorization: 'test-key' },
+        timeoutMs: JIMAKU_REQUEST_TIMEOUT_MS
       }
     })
   })
@@ -244,22 +246,14 @@ describe('createJimakuClient', () => {
     controller.abort()
     await expect(cancelled).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
 
-    const timers: Array<() => void> = []
     const timeoutClient = makeClient(
-      { [url]: { deferred: true } },
-      {
-        requestTimeoutMs: 25,
-        setTimeoutFn: (callback) => {
-          timers.push(callback)
-          return 0 as unknown as ReturnType<typeof setTimeout>
-        },
-        clearTimeoutFn: vi.fn()
-      }
-    ).client
-    const timedOut = timeoutClient.searchEntries({ query: 'Frieren', anime: true })
-    await vi.waitFor(() => expect(timers).toHaveLength(1))
-    timers[0]!()
-    await expect(timedOut).resolves.toEqual({ ok: false, error: { code: 'timeout' } })
+      { [url]: { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) } },
+      { requestTimeoutMs: 25 }
+    )
+    await expect(
+      timeoutClient.client.searchEntries({ query: 'Frieren', anime: true })
+    ).resolves.toEqual({ ok: false, error: { code: 'timeout' } })
+    expect(timeoutClient.http.calls[0]?.init?.timeoutMs).toBe(25)
   })
 
   it('rejects an oversized body even when Content-Length is absent', async () => {
@@ -308,7 +302,7 @@ describe('createJimakuClient', () => {
     expect(streamClosed).toBe(true)
   })
 
-  it('parses a valid streamed response without using the buffered fallback', async () => {
+  it('parses a response body delivered in several chunks', async () => {
     const url = searchUrl('Frieren', true)
     const body = new TextEncoder().encode('[]')
     const response: HttpResponse = {
@@ -334,22 +328,23 @@ describe('createJimakuClient', () => {
       ok: true,
       value: []
     })
-    expect(response.text).not.toHaveBeenCalled()
   })
 
   it('reads the current key once at the start of each request and never serializes it in errors', async () => {
     let apiKey = 'key-a'
     const seen: string[] = []
-    const response: HttpResponse = {
-      status: 200,
-      ok: true,
-      headers: { get: () => null },
-      json: async () => [],
-      text: async () => '[]'
-    }
     const fetch: HttpFetch = async (_url, init) => {
       seen.push(init?.headers?.Authorization ?? '')
-      return response
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => null },
+        body: (async function* () {
+          yield new TextEncoder().encode('[]')
+        })(),
+        json: async () => [],
+        text: async () => '[]'
+      }
     }
     const deps: CreateJimakuClientDeps = { getApiKey: () => apiKey, fetch }
     const client = createJimakuClient(deps)
