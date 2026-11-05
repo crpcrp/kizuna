@@ -16,7 +16,11 @@ export interface WindowCloseEvent {
   preventDefault(): void
 }
 
-interface ManagedWindow extends WindowControlTarget {
+/** A raw native window; the coordinator owns fullscreen bounds bookkeeping. */
+interface ManagedWindow extends Omit<
+  WindowControlTarget,
+  'capturePreFullscreenBounds' | 'hasPreFullscreenBounds'
+> {
   isDestroyed(): boolean
   isMinimized(): boolean
   show(): void

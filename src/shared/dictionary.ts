@@ -2,7 +2,7 @@
 
 import type { JlptLevel } from './jlpt'
 
-/** How a frequency dict's `term_meta` value should be ranked (see `sortByFrequency`). */
+/** How a frequency dict's `term_meta` value should be ranked (see `sortRankedResults`). */
 export type FrequencyMode = 'rank-based' | 'occurrence-based'
 
 /**

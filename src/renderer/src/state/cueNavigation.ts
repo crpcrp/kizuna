@@ -67,17 +67,11 @@ export function loopSeekTarget(
   return t >= loopCue.end ? seekTargetForCueStart(loopCue, offsetMs) : undefined
 }
 
-/** Index of the chapter containing timePos, -1 when none/empty. */
-export function currentChapterIndex(chapters: Chapter[], timePos: number): number {
-  return chapters.findIndex((chapter) => timePos >= chapter.start && timePos < chapter.end)
-}
-
 /** Previous chapter target using the mpv/VLC restart threshold convention. */
 export function prevChapterStart(chapters: Chapter[], timePos: number): number | undefined {
   if (chapters.length === 0) return undefined
-  // The chapter we are logically in: the greatest start <= timePos. Unlike
-  // currentChapterIndex this also covers gaps between chapters and the region
-  // after the last chapter's end, so end credits rewind to the last chapter
+  // The chapter we are logically in: the greatest start <= timePos. This also
+  // covers gaps between chapters and the region after the last chapter's end, so end credits rewind to the last chapter
   // rather than to 0:00.
   let currentStart: number | undefined
   for (const chapter of chapters) {

@@ -7,11 +7,7 @@ import {
   type DisplayCaptureScreen,
   type DisplayCaptureSource
 } from '@src/main/services/gameOcr/displayCapture'
-import {
-  capturePixelToCssPoint,
-  capturePixelsToCssBounds,
-  type OcrDisplayCaptureMetadata
-} from '@src/shared/ocr'
+import { capturePixelToCssPoint, type OcrDisplayCaptureMetadata } from '@src/shared/ocr'
 
 function display(overrides: Partial<DisplayCaptureDisplay> = {}): DisplayCaptureDisplay {
   return {
@@ -211,14 +207,6 @@ describe('createGameOcrDisplaySources', () => {
       expect(
         capturePixelToCssPoint(metadata, { x: 100 * scaleFactor, y: 80 * scaleFactor })
       ).toEqual({ x: -1180, y: 40 })
-      expect(
-        capturePixelsToCssBounds(metadata, {
-          x: 100 * scaleFactor,
-          y: 80 * scaleFactor,
-          width: 200 * scaleFactor,
-          height: 40 * scaleFactor
-        })
-      ).toEqual({ x: -1180, y: 40, width: 200, height: 40 })
     }
   })
 })

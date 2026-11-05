@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAppLifecycleCoordinator,
-  createQuitCoordinator,
   SHUTDOWN_TIMEOUT_MS,
   type PreventableQuitEvent,
   type QuitHandler
@@ -45,7 +44,7 @@ function makeFixture(appQuit?: () => void) {
     }),
     dispose: vi.fn(() => calls.push('dispose'))
   }
-  const handler = createQuitCoordinator({
+  const { handleBeforeQuit: handler } = createAppLifecycleCoordinator({
     defaultSession: session,
     controller,
     flushHistory: vi.fn(() => calls.push('history')),
@@ -57,7 +56,7 @@ function makeFixture(appQuit?: () => void) {
   return { calls, controllerQuit, controller, errors, handler }
 }
 
-describe('createQuitCoordinator', () => {
+describe('handleBeforeQuit', () => {
   beforeEach(() => {
     vi.useFakeTimers()
   })

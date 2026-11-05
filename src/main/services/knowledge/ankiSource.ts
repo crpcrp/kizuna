@@ -8,8 +8,8 @@ import type { AnkiCardInfo, AnkiClient } from '../anki/ankiConnect'
 import type { KnowledgeDb, KnownRow } from './store'
 import { replaceSource, setSyncState } from './store'
 import type { IntervalThresholds } from './levels'
-import { levelFromAnkiCard, mergeLevel } from './levels'
-import type { AnkiSourceDetail } from '../../../shared/knowledge'
+import { levelFromAnkiCard } from './levels'
+import { maxKnowledgeLevel, type AnkiSourceDetail } from '../../../shared/knowledge'
 
 /** cardsInfo request-size chunk — matches wanikani/sync.ts's chunking idiom. */
 const CARDS_INFO_CHUNK_SIZE = 500
@@ -62,7 +62,7 @@ export function normalizeAnkiField(html: string): string {
  * row count therefore covers every card in the selected decks, learned or not.
  * A word mined into more than one
  * selected deck collapses to a single row keyed by `lemma+reading`, folding
- * the colliding levels with `mergeLevel` (higher rank wins) while retaining
+ * the colliding levels with `maxKnowledgeLevel` (higher rank wins) while retaining
  * every card's provenance — otherwise it would violate `replaceSource`'s
  * `(source, lemma, reading)` primary key.
  * With no selected decks it purges prior Anki rows without contacting Anki;
@@ -121,7 +121,7 @@ export async function syncAnki(deps: {
       existing
         ? {
             ...existing,
-            level: mergeLevel(existing.level, level),
+            level: maxKnowledgeLevel(existing.level, level),
             metadata: [
               ...(Array.isArray(existing.metadata) ? existing.metadata : [existing.metadata!]),
               detail

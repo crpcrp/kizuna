@@ -107,17 +107,22 @@ describe('createSubtitleReportController preparation', () => {
     expect(second.getState().kind).toBe('ready')
   })
 
-  it('accepts a pre-populated token cache without calling a tokenizer', async () => {
+  it('counts tokens across every cue in an already-prepared snapshot', async () => {
     const controller = createSubtitleReportController()
-    const cached = new Map([['0:1:cue', [token('cached')]]])
+    const snapshot: WholeTrackVocabularyResult = {
+      kind: 'ready',
+      snapshot: {
+        cueTokens: [
+          { cueKey: 'a', tokens: [token('first')] },
+          { cueKey: 'b', tokens: [token('second')] }
+        ],
+        spansByCue: {},
+        cueHasUnknown: { a: true, b: true }
+      }
+    }
 
-    await controller.open({
-      bridges: bridges(),
-      cues: [{ start: 0, end: 1, text: 'cue' }],
-      japaneseSubtitleSelected: true,
-      tokenCache: cached
-    })
+    await controller.open({ bridges: bridges(), snapshot: Promise.resolve(snapshot) })
 
-    expect(controller.getState()).toMatchObject({ kind: 'ready', report: { totalTokens: 1 } })
+    expect(controller.getState()).toMatchObject({ kind: 'ready', report: { totalTokens: 2 } })
   })
 })

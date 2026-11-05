@@ -6,12 +6,9 @@ import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../sha
 import { cueKey } from '../state/tokenization'
 import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
-import InteractiveText, { tokenLevels } from './InteractiveText'
+import InteractiveText from './InteractiveText'
 
 export { tokenSpans, type TokenSpanItem } from './InteractiveText'
-
-/** Backwards-compatible name for callers that used the old overlay helper. */
-export const cueTokenLevels = tokenLevels
 
 // Presentational overlay: shows the cue the caller resolved as active at the
 // current playback time (App looks it up, so playback ticks that stay inside
@@ -44,7 +41,7 @@ export interface SubtitleOverlayProps {
    * and renders no `data-level` attribute at all (no regression for callers
    * that haven't wired this yet); an object (even `{}`) means coloring is on
    * and a word missing from the map defaults to `'unknown'`. How a token's
-   * level follows from this map is `cueTokenLevels` below.
+   * level follows from this map is `tokenLevels` in InteractiveText.
    */
   levels?: Record<string, KnowledgeLevel>
   /** Compound projections for this cue; member tokens render as one word. */

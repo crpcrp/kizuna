@@ -202,6 +202,3 @@ export function createAppShellCoordinator(deps: AppShellCoordinatorDeps): AppShe
     }
   }
 }
-
-/** Short factory name for callers that do not need the longer type name. */
-export const createAppShell = createAppShellCoordinator

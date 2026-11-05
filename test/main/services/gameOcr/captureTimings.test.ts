@@ -35,9 +35,7 @@ describe('createGameOcrCaptureTimingRecorder', () => {
     expect(recorder.complete(430)).toEqual<GameOcrCaptureTimings>({
       sessionId: 3,
       captureId: 7,
-      dismissMs: 0,
       queueMs: 10,
-      settleMs: 0,
       captureMs: 40,
       foregroundMs: 0,
       cursorMs: 5,
@@ -133,9 +131,7 @@ describe('writeGameOcrTotalTime', () => {
   const base: GameOcrCaptureTimings = {
     sessionId: 1,
     captureId: 1,
-    dismissMs: 0,
     queueMs: 1,
-    settleMs: 0,
     captureMs: 12,
     foregroundMs: 3,
     cursorMs: 2,

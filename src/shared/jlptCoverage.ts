@@ -65,12 +65,6 @@ export function masteredCount(buckets: Pick<KnowledgeBucketCounts, 'known' | 'we
   return buckets.known + buckets.wellKnown
 }
 
-export function studiedCount(
-  buckets: Pick<KnowledgeBucketCounts, 'learning' | 'known' | 'wellKnown'>
-): number {
-  return buckets.learning + buckets.known + buckets.wellKnown
-}
-
 /** Returns an unrounded display percentage without producing NaN or Infinity. */
 export function percent(numerator: number, denominator: number): number {
   return denominator === 0 ? 0 : (numerator / denominator) * 100

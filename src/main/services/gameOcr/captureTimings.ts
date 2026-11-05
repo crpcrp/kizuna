@@ -8,12 +8,8 @@ import type { GameOcrCaptureTarget, GameOcrTargetDiagnostics } from './captureTa
 export interface GameOcrCaptureTimings {
   sessionId: number
   captureId: number
-  /** Reserved for backwards-compatible timing output; now always zero. */
-  dismissMs: number
   /** Shortcut dispatch to capture entry; no longer waits on another capture. */
   queueMs: number
-  /** Reserved for backwards-compatible timing output; now always zero. */
-  settleMs: number
   /** Locating what the renderer is already streaming, display or window. */
   captureMs: number
   /** The native foreground-window query. Zero when it was not consulted. */
@@ -52,8 +48,7 @@ export function writeGameOcrTotalTime(
         `target ${timings.targetCacheHit ? 'cached' : 'resolved'}`
   write(
     `[game-ocr] shortcut to word boxes: ${timings.totalMs}ms ` +
-      `(dismiss ${timings.dismissMs}ms, queue ${timings.queueMs}ms, ` +
-      `settle ${timings.settleMs}ms, ` +
+      `(queue ${timings.queueMs}ms, ` +
       `capture ${timings.captureMs}ms ` +
       `(${targetDetail}, event-loop ${timings.captureEventLoopMs}ms), ` +
       `present ${timings.presentMs}ms, ` +
@@ -115,9 +110,7 @@ export function createGameOcrCaptureTimingRecorder(
       const timings: GameOcrCaptureTimings = {
         sessionId: stages.sessionId,
         captureId: stages.captureId,
-        dismissMs: 0,
         queueMs: stages.dequeuedAt - startedAt,
-        settleMs: 0,
         captureMs,
         foregroundMs: diagnostics.foregroundMs,
         targetKind: stages.targetKind,

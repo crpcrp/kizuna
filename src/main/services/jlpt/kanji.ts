@@ -126,6 +126,3 @@ export function buildJlptKanjiInventory(snapshot: JlptKanjiSnapshot): JlptKanjiI
 }
 
 export const bundledJlptKanjiSnapshot = kanji as unknown as JlptKanjiSnapshot
-
-/** Inventory backed by the pinned OpenJLPT kanji snapshot. */
-export const bundledJlptKanjiInventory = buildJlptKanjiInventory(bundledJlptKanjiSnapshot)

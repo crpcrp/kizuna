@@ -8,7 +8,7 @@ import {
   buildJlptCoverageInventory,
   type JlptCoverageInventory
 } from '@src/main/services/jlpt/coverage'
-import { masteredCount, percent, studiedCount } from '@src/shared/jlptCoverage'
+import { masteredCount, percent } from '@src/shared/jlptCoverage'
 
 const SOURCE = {
   name: 'OpenJLPT',
@@ -193,11 +193,10 @@ describe('aggregateJlptCoverage', () => {
 })
 
 describe('JLPT coverage helpers', () => {
-  it('keeps queued out of mastered and studied counts and does not round percentages', () => {
+  it('keeps queued out of mastered counts and does not round percentages', () => {
     const buckets = { unknown: 1, inDeck: 2, learning: 3, known: 4, wellKnown: 5 }
 
     expect(masteredCount(buckets)).toBe(9)
-    expect(studiedCount(buckets)).toBe(12)
     expect(percent(0, 0)).toBe(0)
     expect(percent(1, 3)).toBeCloseTo(33.33333333333333, 12)
     expect(percent(1, 3)).not.toBe(33.3)

@@ -12,7 +12,6 @@ import {
   type KnowledgeSource,
   type KnowledgeSourceDetail
 } from '../../../shared/knowledge'
-import { mergeLevel } from './levels'
 
 /** Structural subset of better-sqlite3's `Database` this module needs. */
 export interface KnowledgeDb extends DbLike {
@@ -83,7 +82,7 @@ export function replaceSource(
 /**
  * Looks up every `known_words` row whose lemma is in `lemmas`, chunking the
  * `IN (...)` query at `LEMMA_CHUNK_SIZE` params. A lemma known from more
- * than one source merges to the higher-ranked level (`mergeLevel`); a lemma
+ * than one source merges to the higher-ranked level (`maxKnowledgeLevel`); a lemma
  * with no row anywhere is simply absent from the result (never 'unknown' —
  * absence *is* unknown, per the schema's design).
  */
@@ -97,7 +96,7 @@ export function levelsFor(db: KnowledgeDb, lemmas: string[]): Record<string, Kno
       .all(...batch) as Array<{ lemma: string; level: KnowledgeLevel }>
     for (const row of rows) {
       const existing = result[row.lemma]
-      result[row.lemma] = existing ? mergeLevel(existing, row.level) : row.level
+      result[row.lemma] = existing ? maxKnowledgeLevel(existing, row.level) : row.level
     }
   }
   return result
