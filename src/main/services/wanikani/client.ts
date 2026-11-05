@@ -1,6 +1,6 @@
 // HttpFetch is injected so client tests do not call WaniKani.
 
-import type { HttpFetch } from '../http'
+import { isTimeoutError, type HttpFetch } from '../http'
 
 export const WANIKANI_BASE = 'https://api.wanikani.com/v2/'
 export const WANIKANI_REVISION = '20170710'
@@ -17,10 +17,6 @@ interface WaniKaniPage {
   total_count: number
   data: unknown[]
 }
-
-type TimeoutHandle = ReturnType<typeof setTimeout>
-type SetTimeoutFn = (callback: () => void, delayMs: number) => TimeoutHandle
-type ClearTimeoutFn = (handle: TimeoutHandle) => void
 
 function buildUrl(path: string, params?: Record<string, string>): string {
   const base = `${WANIKANI_BASE}${path}`
@@ -44,38 +40,26 @@ export function createWaniKaniClient(deps: {
   sleep?: (ms: number) => Promise<void>
   now?: () => number
   requestTimeoutMs?: number
-  setTimeoutFn?: SetTimeoutFn
-  clearTimeoutFn?: ClearTimeoutFn
 }): WaniKaniClient {
   const {
     token,
     fetch,
     sleep = defaultSleep,
     now = Date.now,
-    requestTimeoutMs = WANIKANI_REQUEST_TIMEOUT_MS,
-    setTimeoutFn = (callback, delayMs) => setTimeout(callback, delayMs),
-    clearTimeoutFn = (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>)
+    requestTimeoutMs = WANIKANI_REQUEST_TIMEOUT_MS
   } = deps
 
   async function fetchWithAuth(url: string) {
-    const controller = new AbortController()
-    let timedOut = false
-    const timer = setTimeoutFn(() => {
-      timedOut = true
-      controller.abort()
-    }, requestTimeoutMs)
     try {
       return await fetch(url, {
         headers: { Authorization: `Bearer ${token}`, 'Wanikani-Revision': WANIKANI_REVISION },
-        signal: controller.signal
+        timeoutMs: requestTimeoutMs
       })
     } catch (error) {
-      if (timedOut) {
+      if (isTimeoutError(error)) {
         throw new Error(`WaniKani request timed out after ${requestTimeoutMs}ms`)
       }
       throw error
-    } finally {
-      clearTimeoutFn(timer)
     }
   }
 

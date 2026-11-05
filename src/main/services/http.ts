@@ -20,13 +20,32 @@ export interface HttpRequest {
   redirect?: 'follow' | 'error' | 'manual'
   /** Caller-owned cancellation. Aborting rejects the returned promise. */
   signal?: AbortSignal
+  /** Abort after this many milliseconds; rejects with a `TimeoutError`. */
+  timeoutMs?: number
 }
 
 export type HttpFetch = (url: string, init?: HttpRequest) => Promise<HttpResponse>
 
-/** Thin wrapper over global `fetch` (Electron 43 ships undici). Never run in tests. */
+/** True for the rejection produced when `HttpRequest.timeoutMs` elapses. */
+export function isTimeoutError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'TimeoutError'
+}
+
+/** Thin wrapper over Electron's global `fetch`. */
 export const httpFetch: HttpFetch = async (url, init) => {
-  const res = await fetch(url, init)
+  const signals = [
+    init?.signal,
+    init?.timeoutMs === undefined ? undefined : AbortSignal.timeout(init.timeoutMs)
+  ].filter((s): s is AbortSignal => s !== undefined)
+  const signal =
+    signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
+  const res = await fetch(url, {
+    method: init?.method,
+    headers: init?.headers,
+    body: init?.body,
+    redirect: init?.redirect,
+    signal
+  })
   return {
     status: res.status,
     ok: res.ok,

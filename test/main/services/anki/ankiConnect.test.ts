@@ -4,7 +4,8 @@ import {
   parseResponse,
   createAnkiClient,
   AnkiConnectError,
-  ANKI_CONNECT_VERSION
+  ANKI_CONNECT_VERSION,
+  ANKI_REQUEST_TIMEOUT_MS
 } from '@src/main/services/anki/ankiConnect'
 import type { AnkiNote } from '@src/main/services/anki/noteBuilder'
 import type { HttpFetch } from '@src/main/services/http'
@@ -381,6 +382,36 @@ describe('createAnkiClient', () => {
     const client = createAnkiClient({ url: 'http://127.0.0.1:8765', fetch: refusingFetch })
 
     await expect(client.version()).rejects.toThrow('Is Anki running?')
+    await expect(client.version()).rejects.toBeInstanceOf(AnkiConnectError)
+  })
+  it('sends every request with the AnkiConnect timeout', async () => {
+    let timeoutMs: number | undefined
+    const capturingFetch: HttpFetch = async (_url, init) => {
+      timeoutMs = init?.timeoutMs
+      return {
+        status: 200,
+        ok: true,
+        headers: { get: () => null },
+        json: async () => ({ result: 6, error: null }),
+        text: async () => ''
+      }
+    }
+    const client = createAnkiClient({ url: 'http://127.0.0.1:8765', fetch: capturingFetch })
+
+    await client.version()
+
+    expect(timeoutMs).toBe(ANKI_REQUEST_TIMEOUT_MS)
+  })
+
+  it('maps a timed-out request to a dialog hint', async () => {
+    const timingOutFetch = async (): Promise<never> => {
+      throw Object.assign(new Error('t'), { name: 'TimeoutError' })
+    }
+    const client = createAnkiClient({ url: 'http://127.0.0.1:8765', fetch: timingOutFetch })
+
+    await expect(client.version()).rejects.toThrow(
+      'AnkiConnect did not respond. Close any open Anki dialogs and try again.'
+    )
     await expect(client.version()).rejects.toBeInstanceOf(AnkiConnectError)
   })
 })
