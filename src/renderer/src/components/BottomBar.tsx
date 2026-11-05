@@ -5,6 +5,12 @@ import { SPEED_PRESETS } from './menu/utils'
 import type { Chapter } from '../../../shared/chapter'
 import type { AbLoopState } from '../state/playerState'
 import { formatTime } from './playbackTime'
+import {
+  quantizeTimePos,
+  seekDisplayRate,
+  type TimePosStore,
+  useTimePos
+} from '../state/timePosStore'
 import SeekPreview from './SeekPreview'
 import {
   HIDDEN_PREVIEW,
@@ -504,4 +510,17 @@ export default function BottomBar({
       </div>
     </div>
   )
+}
+
+/**
+ * BottomBar fed from the time-pos store: playback ticks re-render only this
+ * bar, and only when the slider or time readout would visibly change.
+ */
+export function LiveBottomBar({
+  timePosStore,
+  ...props
+}: Omit<BottomBarProps, 'currentTime'> & { timePosStore: TimePosStore }): React.JSX.Element {
+  const rate = seekDisplayRate(props.duration)
+  const currentTime = useTimePos(timePosStore, (timePos) => quantizeTimePos(timePos, rate))
+  return <BottomBar {...props} currentTime={currentTime} />
 }

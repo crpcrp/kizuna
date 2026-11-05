@@ -7,6 +7,7 @@ import { INACTIVE_MINI_PLAYER } from '@src/renderer/src/state/miniPlayer'
 import type { KizunaApi } from '@src/shared/preloadApi'
 import type { MediaSessionEvents } from '@src/renderer/src/state/useMediaSession'
 import type { PlayerApi } from '@src/renderer/src/components/BottomBar'
+import { createTimePosStore } from '@src/renderer/src/state/timePosStore'
 
 /** A minimal `onX(cb) => unsub` registry: tracks active listeners per event
  * name so tests can assert registration/unsubscription counts and emit events
@@ -68,6 +69,7 @@ function setup() {
   }
   const input: UsePlayerEventsInput = {
     dispatch,
+    timePosStore: createTimePosStore(),
     bridge,
     playerAdapter,
     stateRef: { current: { autoPlayNext: false, filePath: '/a.mkv', paused: false } },
@@ -103,12 +105,13 @@ describe('usePlayerEvents', () => {
     )
   })
 
-  it('routes timePos/duration/pause pushes to the exact dispatch action', () => {
+  it('routes timePos to the store and duration/pause pushes to the exact dispatch action', () => {
     const { registry, input } = setup()
     registry.emit('timePos', 12.5)
     registry.emit('duration', 90)
     registry.emit('pause', true)
-    expect(input.dispatch).toHaveBeenCalledWith({ type: 'timePos', value: 12.5 })
+    expect(input.timePosStore.get()).toBe(12.5)
+    expect(input.dispatch).toHaveBeenCalledTimes(2)
     expect(input.dispatch).toHaveBeenCalledWith({ type: 'duration', value: 90 })
     expect(input.dispatch).toHaveBeenCalledWith({ type: 'setPaused', value: true })
   })
@@ -197,5 +200,6 @@ describe('usePlayerEvents', () => {
     registry.emit('timePos', 999)
     registry.emit('eof', true)
     expect(input.dispatch).not.toHaveBeenCalled()
+    expect(input.timePosStore.get()).toBe(0)
   })
 })

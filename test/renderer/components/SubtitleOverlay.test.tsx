@@ -11,7 +11,7 @@ import InteractiveText, {
   type InteractiveTextProps
 } from '@src/renderer/src/components/InteractiveText'
 import { DEFAULT_SUBTITLE_STYLE } from '@src/shared/playerSettings'
-import type { Cue } from '@src/shared/cue'
+import { findActiveCue, type Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
 import { makeToken } from '@test/harness/tokenFixtures'
 import { REPO_ROOT } from '@test/paths'
@@ -77,42 +77,42 @@ describe('theme.css --subtitle-outline (issue #132)', () => {
 
 describe('SubtitleOverlay markup', () => {
   it('renders the active cue text', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={1} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 1)} />)
     expect(html).toContain('id="subtitle"')
     expect(html).toContain('hello')
   })
 
   it('renders empty when no cue is active (gap between cues)', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={2.5} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 2.5)} />)
     expect(html).toMatch(/<div id="subtitle"[^>]*><\/div>/)
   })
 
   it('renders empty when before the first cue', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={-1} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, -1)} />)
     expect(html).toMatch(/<div id="subtitle"[^>]*><\/div>/)
   })
 
   it('renders empty when after the last cue', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={10} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 10)} />)
     expect(html).toMatch(/<div id="subtitle"[^>]*><\/div>/)
   })
 
   it('splits a multi-line cue into separate lines', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={4} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 4)} />)
     expect(html).toContain('a')
     expect(html).toContain('<br/>')
     expect(html).toContain('b')
   })
 
   it('falls back to plain text when tokens is an empty array', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={1} tokens={[]} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 1)} tokens={[]} />)
     expect(html).toContain('id="subtitle"')
     expect(html).toContain('hello')
     expect(html).not.toContain('data-token')
   })
 
   it('applies the default position/font-size inline style when style is omitted', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={1} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 1)} />)
     expect(html).toContain('left:50%')
     expect(html).toContain('top:82%')
     expect(html).toContain('font-size:1.1rem')
@@ -121,8 +121,7 @@ describe('SubtitleOverlay markup', () => {
   it('applies a custom style prop to left/top/font-size', () => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={cues}
-        timePos={1}
+        cue={findActiveCue(cues, 1)}
         style={{ fontScale: 2, outlineSizePx: 3, xPct: 25, yPct: 60, backgroundEnabled: true }}
       />
     )
@@ -138,8 +137,7 @@ describe('SubtitleOverlay markup', () => {
   ])('marks the background as disabled for %s rendering', (_label, tokens) => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={cues}
-        timePos={1}
+        cue={findActiveCue(cues, 1)}
         tokens={tokens}
         style={{ ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false }}
       />
@@ -148,7 +146,7 @@ describe('SubtitleOverlay markup', () => {
   })
 
   it('does not add disabled-background markup when the background is enabled', () => {
-    const html = renderToStaticMarkup(<SubtitleOverlay cues={cues} timePos={1} />)
+    const html = renderToStaticMarkup(<SubtitleOverlay cue={findActiveCue(cues, 1)} />)
     expect(html).not.toContain('data-background-enabled')
   })
 })
@@ -182,7 +180,7 @@ describe('subtitleBoxStyle (pure)', () => {
     const cue: Cue = { start: 0, end: 2, text: '｡' }
     const punctuation = makeToken({ surface: '｡', pos: '記号' })
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={[cue]} timePos={1} tokens={[punctuation]} />
+      <SubtitleOverlay cue={findActiveCue([cue], 1)} tokens={[punctuation]} />
     )
 
     expect(subtitleBoxStyle(DEFAULT_SUBTITLE_STYLE).fontFamily).toContain('Yu Gothic UI')
@@ -195,7 +193,7 @@ describe('SubtitleOverlay drag handling', () => {
 
   it('fires onDragStart when mousedown lands on the box background itself', () => {
     const onDragStart = vi.fn()
-    const element = SubtitleOverlay({ cues: [cue], timePos: 1, onDragStart })
+    const element = SubtitleOverlay({ cue: findActiveCue([cue], 1), onDragStart })
     const target = {}
     const event = { target, currentTarget: target } as unknown as React.MouseEvent<HTMLDivElement>
     element.props.onMouseDown(event)
@@ -204,7 +202,7 @@ describe('SubtitleOverlay drag handling', () => {
 
   it('does not fire onDragStart when mousedown lands on a child (e.g. a word span)', () => {
     const onDragStart = vi.fn()
-    const element = SubtitleOverlay({ cues: [cue], timePos: 1, onDragStart })
+    const element = SubtitleOverlay({ cue: findActiveCue([cue], 1), onDragStart })
     const event = {
       target: {},
       currentTarget: {}
@@ -214,7 +212,7 @@ describe('SubtitleOverlay drag handling', () => {
   })
 
   it('does not throw when onDragStart is omitted', () => {
-    const element = SubtitleOverlay({ cues: [cue], timePos: 1 })
+    const element = SubtitleOverlay({ cue: findActiveCue([cue], 1) })
     const target = {}
     const event = { target, currentTarget: target } as unknown as React.MouseEvent<HTMLDivElement>
     expect(() => element.props.onMouseDown(event)).not.toThrow()
@@ -222,7 +220,11 @@ describe('SubtitleOverlay drag handling', () => {
 
   it('does not fire onDragStart and marks the text selectable when dragging is disabled', () => {
     const onDragStart = vi.fn()
-    const element = SubtitleOverlay({ cues: [cue], timePos: 1, onDragStart, dragEnabled: false })
+    const element = SubtitleOverlay({
+      cue: findActiveCue([cue], 1),
+      onDragStart,
+      dragEnabled: false
+    })
     const target = {}
     const event = { target, currentTarget: target } as unknown as React.MouseEvent<HTMLDivElement>
     element.props.onMouseDown(event)
@@ -313,8 +315,7 @@ describe('SubtitleOverlay optional event parameters', () => {
     onWordLeave?: () => void
   ): TokenSpanProps {
     const element = SubtitleOverlay({
-      cues: [cue],
-      timePos: 1,
+      cue,
       tokens: [token],
       onWordClick,
       onWordHover,
@@ -376,7 +377,7 @@ describe('SubtitleOverlay markup with tokens', () => {
 
   it('renders one data-token span per token, with the surface as its text', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} />
     )
     expect(html).toContain('id="subtitle"')
     const matches = [...html.matchAll(/<span data-token="">([^<]*)<\/span>/g)]
@@ -386,7 +387,7 @@ describe('SubtitleOverlay markup with tokens', () => {
 
   it('inserts a line break between tokens that straddle the cue newline', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} />
     )
     expect(html).toContain('<br/>')
   })
@@ -394,8 +395,7 @@ describe('SubtitleOverlay markup with tokens', () => {
   it('marks only the given highlightedTokens with data-highlighted', () => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={tokenCues}
-        timePos={1}
+        cue={findActiveCue(tokenCues, 1)}
         tokens={tokens}
         highlightedTokens={[tokens[0], tokens[1]]}
       />
@@ -407,7 +407,7 @@ describe('SubtitleOverlay markup with tokens', () => {
 
   it('marks no tokens with data-highlighted when the prop is omitted', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} />
     )
     expect(html).not.toContain('data-highlighted')
   })
@@ -427,7 +427,7 @@ describe('SubtitleOverlay word wrapped across the cue line break', () => {
 
   function render(extra: Partial<React.ComponentProps<typeof SubtitleOverlay>> = {}): string {
     return renderToStaticMarkup(
-      <SubtitleOverlay cues={wrappedCues} timePos={1} tokens={tokens} {...extra} />
+      <SubtitleOverlay cue={findActiveCue(wrappedCues, 1)} tokens={tokens} {...extra} />
     )
   }
 
@@ -464,8 +464,7 @@ describe('SubtitleOverlay knowledge-level coloring', () => {
   it('renders data-level from the levels map, keyed by lemma', () => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={tokenCues}
-        timePos={1}
+        cue={findActiveCue(tokenCues, 1)}
         tokens={tokens}
         levels={{ 猫: 'learning', は: 'wellKnown', 可愛い: 'known' }}
       />
@@ -478,8 +477,7 @@ describe('SubtitleOverlay knowledge-level coloring', () => {
   it('renders data-level="inDeck" for a lemma whose card is mined but not yet learned', () => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={tokenCues}
-        timePos={1}
+        cue={findActiveCue(tokenCues, 1)}
         tokens={tokens}
         levels={{ 猫: 'inDeck', 可愛い: 'known' }}
       />
@@ -489,14 +487,18 @@ describe('SubtitleOverlay knowledge-level coloring', () => {
 
   it('defaults to data-level="unknown" for a content lemma absent from levels', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} levels={{ 猫: 'learning' }} />
+      <SubtitleOverlay
+        cue={findActiveCue(tokenCues, 1)}
+        tokens={tokens}
+        levels={{ 猫: 'learning' }}
+      />
     )
     expect(html).toContain('data-level="unknown">可愛い</span>')
   })
 
   it('defaults content tokens to "unknown" when levels is an empty object (grammar は excluded)', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} levels={{}} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} levels={{}} />
     )
     expect((html.match(/data-level="unknown"/g) ?? []).length).toBe(2)
     expect(html).toContain('data-level="wellKnown">は</span>')
@@ -504,7 +506,7 @@ describe('SubtitleOverlay knowledge-level coloring', () => {
 
   it('renders no data-level attribute at all when levels is undefined', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} />
     )
     expect(html).not.toContain('data-level')
   })
@@ -521,7 +523,7 @@ describe('SubtitleOverlay symbol tokens always render as known', () => {
 
   it('renders "wellKnown" for symbol tokens even when absent from levels (would otherwise default to unknown)', () => {
     const html = renderToStaticMarkup(
-      <SubtitleOverlay cues={tokenCues} timePos={1} tokens={tokens} levels={{}} />
+      <SubtitleOverlay cue={findActiveCue(tokenCues, 1)} tokens={tokens} levels={{}} />
     )
     expect(html).toContain('data-level="unknown">猫</span>')
     expect(html).toContain('data-level="wellKnown">(</span>')
@@ -541,8 +543,7 @@ describe('SubtitleOverlay grammar tokens always render as wellKnown (QA-4)', () 
   it('renders "wellKnown" for particles/auxiliaries even when levels maps their lemma to unknown', () => {
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={tokenCues}
-        timePos={1}
+        cue={findActiveCue(tokenCues, 1)}
         tokens={tokens}
         levels={{ に: 'unknown', だ: 'unknown' }}
       />

@@ -9,6 +9,7 @@ import { CueRowContent } from '@src/renderer/src/components/SubtitleSidebar'
 import { cueKey } from '@src/renderer/src/state/tokenization'
 import { type DictLookupBridge, lookupWordPopup } from '@src/renderer/src/state/wordLookup'
 import type { Token } from '@src/shared/token'
+import { findActiveCue } from '@src/shared/cue'
 import { createVocabularySpanController } from '@src/renderer/src/state/vocabularySpanController'
 import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
@@ -105,8 +106,7 @@ describe('word popup highlight production path', () => {
       )
       const html = renderToStaticMarkup(
         <SubtitleOverlay
-          cues={[{ start: 0, end: 1, text: `${phrase}ね` }]}
-          timePos={0.5}
+          cue={findActiveCue([{ start: 0, end: 1, text: `${phrase}ね` }], 0.5)}
           tokens={tokens}
           highlightedTokens={popup.highlightedTokens}
         />
@@ -160,8 +160,7 @@ describe('compound knowledge projection rendering', () => {
     const spans = await resolvedSpans()
     const html = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={[cue]}
-        timePos={0.5}
+        cue={findActiveCue([cue], 0.5)}
         tokens={tokens}
         levels={{ 神: 'unknown', 様: 'unknown' }}
         vocabularySpans={spans}
@@ -180,8 +179,7 @@ describe('compound knowledge projection rendering', () => {
     const spans = await resolvedSpans()
     const sameCue = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={[cue]}
-        timePos={0.5}
+        cue={findActiveCue([cue], 0.5)}
         tokens={tokens}
         levels={{}}
         vocabularySpans={spans}
@@ -189,15 +187,14 @@ describe('compound knowledge projection rendering', () => {
     )
     const standalone = renderToStaticMarkup(
       <SubtitleOverlay
-        cues={[otherCue]}
-        timePos={2.5}
+        cue={findActiveCue([otherCue], 2.5)}
         tokens={[{ ...tokens[1], startOffset: 0 }]}
         levels={{}}
         vocabularySpans={spans}
       />
     )
     const disabled = renderToStaticMarkup(
-      <SubtitleOverlay cues={[cue]} timePos={0.5} tokens={tokens} vocabularySpans={spans} />
+      <SubtitleOverlay cue={findActiveCue([cue], 0.5)} tokens={tokens} vocabularySpans={spans} />
     )
 
     expect(sameCue).toContain('data-level="unknown">様</span>')
