@@ -226,26 +226,22 @@ describe('buildMpvArgs', () => {
     ])
   })
 
-  it('drops embedding/config-owning and non---prefixed args from extraArgs', () => {
+  it('drops reserved config and bare args from extraArgs; embedding args still win', () => {
     const args = buildMpvArgs({
       platform: 'win32',
       windowId: 1n,
       ipcEndpoint: '\\\\.\\pipe\\p',
       extraArgs: [
-        '--wid=999', // steals the window
-        '--input-ipc-server=\\\\.\\pipe\\evil', // steals the IPC socket
-        '--config-dir=/somewhere', // we own the config dir
-        '--include=/etc/passwd', // footgun
-        '--input-terminal=yes', // footgun
-        'E:\\smuggled.mkv', // positional file smuggle
-        '--hwdec=auto' // legitimate — kept
+        '--wid=999', // passed through, but the later forced --wid wins
+        '--config-dir=/somewhere', // reserved
+        'E:\\smuggled.mkv', // bare token
+        '--hwdec=auto'
       ]
     })
-    // Only the legitimate option survives, sitting between --no-config and --wid.
-    // The user's --hwdec follows the default, so mpv applies the user's value.
     expect(args).toEqual([
       '--no-config',
       '--hwdec=auto-safe',
+      '--wid=999',
       '--hwdec=auto',
       '--wid=1',
       '--input-ipc-server=\\\\.\\pipe\\p',
@@ -262,66 +258,24 @@ describe('buildMpvArgs', () => {
 })
 
 describe('sanitizeExtraMpvArgs', () => {
-  it('keeps --prefixed args that do not touch the embedding/config options', () => {
-    expect(sanitizeExtraMpvArgs(['--hwdec=auto', '--vo=gpu-next', '--profile=fast'])).toEqual([
-      '--hwdec=auto',
-      '--vo=gpu-next',
-      '--profile=fast'
-    ])
+  it('keeps any --option, including ones outside the old allowlist', () => {
+    expect(
+      sanitizeExtraMpvArgs(['--sub-auto=fuzzy', '--script=foo.lua', '--hwdec', '--no-osc'])
+    ).toEqual(['--sub-auto=fuzzy', '--script=foo.lua', '--hwdec', '--no-osc'])
   })
 
-  it('drops bare tokens and the embedding/config options Kizuna owns', () => {
+  it('drops the reserved config options and bare tokens', () => {
     expect(
       sanitizeExtraMpvArgs([
-        'not-an-option',
-        '',
-        '--wid=1',
-        '--input-ipc-server=x',
-        '--input-terminal=no',
-        '--include=y',
-        '--config-dir=z',
-        '--config=yes',
+        '--config-dir=x',
+        '--config=no',
+        '--no-config',
         '--config',
-        '--sub-scale=2' // allowlisted — --sid=no owns subs but this is harmless
+        'movie.mkv',
+        '',
+        '--hr-seek=yes'
       ])
-    ).toEqual(['--sub-scale=2'])
-  })
-
-  it('drops options that execute code or read arbitrary files', () => {
-    expect(
-      sanitizeExtraMpvArgs([
-        '--script=/x.lua', // runs Lua
-        '--scripts=/a.lua:/b.lua',
-        '--load-scripts=yes',
-        '--script-opts=foo=1',
-        '--input-conf=/x', // reads any file
-        '--input-commands=run "calc.exe"', // `run` spawns a detached process
-        '--osc=no'
-      ])
-    ).toEqual(['--osc=no'])
-  })
-
-  it('fails closed on unknown options rather than passing them through', () => {
-    // The allowlist's whole point: an option nobody has vetted — including one
-    // a future mpv release adds — is dropped, not forwarded.
-    expect(
-      sanitizeExtraMpvArgs(['--some-future-mpv-option=1', '--widget-scale=1', '--hwdec=auto'])
-    ).toEqual(['--hwdec=auto'])
-  })
-
-  it('accepts the value-less and negated spellings of an allowlisted option', () => {
-    expect(sanitizeExtraMpvArgs(['--deband', '--no-osc', '--interpolation'])).toEqual([
-      '--deband',
-      '--no-osc',
-      '--interpolation'
-    ])
-  })
-
-  it('does not let a prefix collision smuggle in a forbidden option', () => {
-    // "--script-opts" shares a prefix with nothing allowlisted, and "--cache-secs"
-    // must not be admitted merely because "cache" is allowed as a separate name.
-    expect(sanitizeExtraMpvArgs(['--cache-secs=30'])).toEqual(['--cache-secs=30'])
-    expect(sanitizeExtraMpvArgs(['--cache-evil=1'])).toEqual([])
+    ).toEqual(['--hr-seek=yes'])
   })
 })
 
@@ -502,8 +456,8 @@ describe('MpvController (fake spawn + fake client)', () => {
     expect(args[0]).toBe('--config=yes')
     expect(args[1]).toBe('--config-dir=/data/mpv')
     expect(args).toContain('--hwdec=auto')
-    // The sanitizer strips the smuggled --wid; only the forced one remains.
-    expect(args.filter((a) => a.startsWith('--wid='))).toEqual(['--wid=658188'])
+    // The forced --wid comes after the user's, so mpv applies Kizuna's.
+    expect(args.filter((a) => a.startsWith('--wid=')).at(-1)).toBe('--wid=658188')
   })
 
   it('maps each command method to the exact mpv IPC command array', async () => {
