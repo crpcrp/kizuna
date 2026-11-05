@@ -8,6 +8,8 @@ import type {
 } from '../../../shared/playerSettings'
 import type { PlayerAdapter } from './playerAdapter'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
+import type { TimePosStore } from './timePosStore'
+import { useLatestRef } from './useLatestRef'
 
 /** Keeps an automatically paused completed subtitle visible by about 10 ms. */
 export const AUTO_PAUSE_END_INSET_SECONDS = 0.01
@@ -233,7 +235,8 @@ export function createSubtitleAutoPauseController(): SubtitleAutoPauseController
   return { observe, notifyUserSeek, reset }
 }
 
-export interface UseSubtitleAutoPauseInput extends SubtitleAutoPauseObservation {
+export interface UseSubtitleAutoPauseInput extends Omit<SubtitleAutoPauseObservation, 'timePos'> {
+  timePosStore: TimePosStore
   controller: SubtitleAutoPauseController
   player: Pick<PlayerAdapter, 'setPause' | 'seekWithoutUserNotification'>
   scope: SubtitleAutoPauseScope
@@ -242,9 +245,10 @@ export interface UseSubtitleAutoPauseInput extends SubtitleAutoPauseObservation 
   reportError: (message: string) => void
 }
 
-/** Runs the pure controller from reducer-driven time-pos updates. */
+/** Runs the pure controller on every time-pos update and on each render. */
 export function useSubtitleAutoPause({
   controller,
+  timePosStore,
   player,
   scope,
   japaneseSubtitleSelected,
@@ -314,13 +318,22 @@ export function useSubtitleAutoPause({
     scope
   ])
 
-  useEffect(() => {
-    const effect = controller.observe({ ...input, scope, cueEligibility })
+  const observeRef = useLatestRef((): void => {
+    const effect = controller.observe({
+      ...input,
+      timePos: timePosStore.get(),
+      scope,
+      cueEligibility
+    })
     if (!effect) return
 
     void player
       .setPause(true)
       .then(() => player.seekWithoutUserNotification(effect.seekTarget, true))
       .catch(() => undefined)
-  }, [controller, cueEligibility, input, player, scope])
+  })
+  // Renders deliver config changes (cues, pause, offset); the store delivers
+  // the per-frame position without re-rendering anything.
+  useEffect(() => observeRef.current())
+  useEffect(() => timePosStore.subscribe(() => observeRef.current()), [observeRef, timePosStore])
 }

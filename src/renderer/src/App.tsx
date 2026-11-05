@@ -1,9 +1,9 @@
 import './theme.css'
 import './App.css'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import WindowChrome from './components/WindowChrome'
 import MenuBar from './components/MenuBar'
-import BottomBar from './components/BottomBar'
+import { LiveBottomBar } from './components/BottomBar'
 import OptionsMenu from './components/OptionsMenu'
 import AboutDialog from './components/AboutDialog'
 import UpdateNotifications from './components/UpdateNotifications'
@@ -30,6 +30,7 @@ import { buildPlayerAdapter } from './state/playerAdapter'
 import { createSubtitleAutoPauseController, useSubtitleAutoPause } from './state/subtitleAutoPause'
 import { miniPlayerSubtitleStyle } from './state/miniPlayer'
 import { usePlayerEvents } from './state/usePlayerEvents'
+import { createTimePosStore, useTimePos } from './state/timePosStore'
 import { usePlaybackWindow } from './state/usePlaybackWindow'
 import { useAboutDialog } from './state/useAboutDialog'
 import { buildOptionsMenuProps } from './state/optionsMenuProps'
@@ -115,6 +116,12 @@ export default function App({
     modifiers
   } = optionsController
   const subtitleAutoPauseController = useMemo(() => createSubtitleAutoPauseController(), [])
+  // mpv's per-frame position; kept out of `state` so ticks don't re-render App.
+  const timePosStore = useMemo(() => createTimePosStore(), [])
+  // A new or closed file starts from 0 until mpv reports the new position.
+  useLayoutEffect(() => {
+    timePosStore.set(0)
+  }, [timePosStore, state.filePath, state.loadGeneration])
   const playerAdapter = useMemo(
     () =>
       buildPlayerAdapter(dispatch, undefined, (seconds, absolute) =>
@@ -194,7 +201,10 @@ export default function App({
   // also the drag-to-reposition gesture's coordinate frame.
   const contentRef = useRef<HTMLDivElement>(null)
 
-  const activeCue = findActiveCue(state.cues, offsetTimePos(state.timePos, state.subtitleOffsetMs))
+  // Re-renders App only when playback crosses into a different cue.
+  const activeCue = useTimePos(timePosStore, (timePos) =>
+    findActiveCue(state.cues, offsetTimePos(timePos, state.subtitleOffsetMs))
+  )
   const activeCueKey = activeCue ? cueKey(activeCue) : undefined
   const japaneseSubtitleSelected = isJapaneseSubtitleTrack(state.tracks, state.selectedSubtitleId)
   const subtitleTracks = state.tracks.filter((track) => track.kind === 'subtitle')
@@ -282,7 +292,7 @@ export default function App({
     filePath: state.filePath,
     loadGeneration: state.loadGeneration,
     subtitleOffsetMs: state.subtitleOffsetMs,
-    timePos: state.timePos,
+    timePosStore,
     paused: state.paused,
     japaneseSubtitleSelected,
     prepareCueEligibility: vocabulary.autoPause.prepareCueEligibility,
@@ -327,6 +337,7 @@ export default function App({
   // and file-association launch delivery.
   usePlayerEvents({
     dispatch,
+    timePosStore,
     bridge: kizuna,
     playerAdapter,
     stateRef,
@@ -345,16 +356,20 @@ export default function App({
 
   useEffect(() => {
     if (!loopCue) return
-    const target = loopSeekTarget(loopCue, state.timePos, state.subtitleOffsetMs)
-    if (target !== undefined) void playerAdapter.seek(target, true)
-  }, [state.timePos, loopCue, state.subtitleOffsetMs, playerAdapter])
+    const checkLoop = (): void => {
+      const target = loopSeekTarget(loopCue, timePosStore.get(), state.subtitleOffsetMs)
+      if (target !== undefined) void playerAdapter.seek(target, true)
+    }
+    checkLoop()
+    return timePosStore.subscribe(checkLoop)
+  }, [timePosStore, loopCue, state.subtitleOffsetMs, playerAdapter])
 
   const handleToggleLoopLine = (): void => {
     if (loopCue) {
       setLoopCue(null)
       return
     }
-    const cue = replayCue(state.cues, state.timePos, state.subtitleOffsetMs)
+    const cue = replayCue(state.cues, timePosStore.get(), state.subtitleOffsetMs)
     if (!cue) return
     // Engaging the per-cue loop clears any armed A–B loop: the two fighting over
     // playback position produces stutter (see media-player-features-plan #3).
@@ -367,7 +382,7 @@ export default function App({
   // Advances the A–B loop cycle (no-loop → A → B → clear); engaging it clears any
   // active per-cue loop so the two loops never fight over the playback position.
   const handleCycleAbLoop = (): void => {
-    cycleAbLoopAction(window.kizuna.player, dispatch, state.abLoopState, state.timePos, () =>
+    cycleAbLoopAction(window.kizuna.player, dispatch, state.abLoopState, timePosStore.get(), () =>
       setLoopCue(null)
     )
   }
@@ -379,7 +394,7 @@ export default function App({
   const handleScreenshot = async (): Promise<void> => {
     if (!state.filePath) return
     try {
-      const path = await window.kizuna.player.screenshot(state.filePath, state.timePos)
+      const path = await window.kizuna.player.screenshot(state.filePath, timePosStore.get())
       mediaSession.banner.reportTransient(`Screenshot saved: ${path}`)
     } catch (err) {
       mediaSession.banner.reportError(errorMessage(err))
@@ -402,7 +417,10 @@ export default function App({
     speed: state.speed,
     cues: state.cues,
     chapters: state.chapters,
-    timePos: state.timePos,
+    // Read at keypress time: App no longer re-renders on every position tick.
+    get timePos() {
+      return timePosStore.get()
+    },
     subtitleOffsetMs: state.subtitleOffsetMs,
     onToggleLoopLine: handleToggleLoopLine,
     onCycleAbLoop: handleCycleAbLoop,
@@ -623,8 +641,7 @@ export default function App({
           }}
         >
           <SubtitleOverlay
-            cues={state.cues}
-            timePos={offsetTimePos(state.timePos, state.subtitleOffsetMs)}
+            cue={activeCue}
             tokens={japaneseSubtitleSelected ? state.activeTokens : undefined}
             levels={coloredLevels}
             {...vocabulary.subtitleOverlay}
@@ -663,9 +680,9 @@ export default function App({
           )}
       </div>
 
-      <BottomBar
+      <LiveBottomBar
+        timePosStore={timePosStore}
         paused={state.paused}
-        currentTime={state.timePos}
         duration={state.duration}
         volume={state.volume}
         muted={state.muted}

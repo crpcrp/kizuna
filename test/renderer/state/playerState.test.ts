@@ -37,7 +37,6 @@ describe('initialPlayerState', () => {
       tracks: [],
       cues: [],
       chapters: [],
-      timePos: 0,
       duration: 0,
       paused: false,
       volume: 100,
@@ -139,7 +138,6 @@ describe('playerReducer', () => {
       tracks: [audioTrack],
       cues: [{ start: 0, end: 1, text: 'hi' }],
       chapters: [{ start: 0, end: 10, title: 'Old' }],
-      timePos: 42,
       duration: 100,
       paused: true,
       volume: 55,
@@ -185,7 +183,6 @@ describe('playerReducer', () => {
       tracks: [audioTrack2, subTrack2],
       cues: [],
       chapters: [],
-      timePos: 0,
       duration: 0,
       paused: false,
       volume: 55,
@@ -255,7 +252,6 @@ describe('playerReducer', () => {
       ...loaded,
       cues: [{ start: 0, end: 1, text: 'hi' }],
       chapters: [{ start: 0, end: 10, title: 'One' }],
-      timePos: 42,
       duration: 100,
       paused: true,
       subtitleOffsetMs: 250,
@@ -272,7 +268,6 @@ describe('playerReducer', () => {
     expect(next.tracks).toEqual([])
     expect(next.cues).toEqual([])
     expect(next.chapters).toEqual([])
-    expect(next.timePos).toBe(0)
     expect(next.duration).toBe(0)
     expect(next.paused).toBe(false)
     expect(next.selectedAudioId).toBeUndefined()
@@ -555,11 +550,6 @@ describe('playerReducer', () => {
     expect(changed).not.toBe(first)
     expect(cleared).not.toBe(changed)
     expect(cleared.allCueTokens).toEqual({})
-  })
-
-  it('timePos sets timePos', () => {
-    const next = playerReducer(initialPlayerState, { type: 'timePos', value: 12.5 })
-    expect(next.timePos).toBe(12.5)
   })
 
   it('duration sets duration', () => {

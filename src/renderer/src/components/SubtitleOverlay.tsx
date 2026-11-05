@@ -1,5 +1,5 @@
 import './SubtitleOverlay.css'
-import { findActiveCue, type Cue } from '../../../shared/cue'
+import { type Cue } from '../../../shared/cue'
 import { type Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
 import { DEFAULT_SUBTITLE_STYLE, type SubtitleStyleSettings } from '../../../shared/playerSettings'
@@ -13,8 +13,9 @@ export { tokenSpans, type TokenSpanItem } from './InteractiveText'
 /** Backwards-compatible name for callers that used the old overlay helper. */
 export const cueTokenLevels = tokenLevels
 
-// Presentational overlay: shows whichever cue is active at the current
-// playback time. Derived from props — no internal state; dragging is
+// Presentational overlay: shows the cue the caller resolved as active at the
+// current playback time (App looks it up, so playback ticks that stay inside
+// one cue never reach this component). Derived from props — no internal state; dragging is
 // reported to the caller via onDragStart rather than tracked here, so the
 // component itself stays a pure function of its props.
 //
@@ -25,8 +26,8 @@ export const cueTokenLevels = tokenLevels
 // Japanese" cases.
 
 export interface SubtitleOverlayProps {
-  cues: Cue[]
-  timePos: number
+  /** The active cue, or undefined between lines. */
+  cue?: Cue
   /** Tokens for the currently-active cue only; caller matches them to the cue. */
   tokens?: Token[]
   /**
@@ -87,8 +88,7 @@ export function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSPropert
 }
 
 export default function SubtitleOverlay({
-  cues,
-  timePos,
+  cue,
   tokens,
   highlightedTokens,
   levels,
@@ -100,8 +100,6 @@ export default function SubtitleOverlay({
   onDragStart,
   dragEnabled = true
 }: SubtitleOverlayProps): React.JSX.Element {
-  const cue = findActiveCue(cues, timePos)
-
   // Only starts a drag when the mousedown lands on the box itself (not a
   // word span), so repositioning the subtitle never steals a word click/hover.
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {

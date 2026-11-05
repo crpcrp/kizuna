@@ -11,6 +11,7 @@ import {
   type MiniPlayerState
 } from './miniPlayer'
 import type { MediaSessionEvents } from './useMediaSession'
+import type { TimePosStore } from './timePosStore'
 
 interface LaunchHandlerDeps {
   bridge: Pick<KizunaApi, 'launch'>
@@ -32,6 +33,7 @@ function registerLaunchOpenHandler(deps: LaunchHandlerDeps): () => void {
 
 export interface UsePlayerEventsInput {
   dispatch: Dispatch<PlayerAction>
+  timePosStore: TimePosStore
   bridge: KizunaApi
   playerAdapter: PlayerApi
   stateRef: RefObject<Pick<PlayerState, 'autoPlayNext' | 'filePath' | 'paused'>>
@@ -48,6 +50,7 @@ export interface UsePlayerEventsInput {
 /** Wires mpv/window event pushes and file-association launch delivery. */
 export function usePlayerEvents({
   dispatch,
+  timePosStore,
   bridge,
   playerAdapter,
   stateRef,
@@ -62,7 +65,8 @@ export function usePlayerEvents({
 
   // mpv time/duration/EOF pushes + window fullscreen transitions.
   useEffect(() => {
-    const offTimePos = bridge.player.onTimePos((value) => dispatch({ type: 'timePos', value }))
+    // Per-frame position bypasses the reducer; see timePosStore.ts.
+    const offTimePos = bridge.player.onTimePos((value) => timePosStore.set(value))
     const offDuration = bridge.player.onDuration((value) => dispatch({ type: 'duration', value }))
     // mpv is the source of truth for pause: this reflects self-pauses the
     // renderer never issued (frame-step lands here, EOF with keep-open).
@@ -134,13 +138,14 @@ export function usePlayerEvents({
       offMediaKey()
     }
     // The player adapter and media-session event group are render-stable; the
-    // remaining values are the preload bridge, refs, reducer dispatch and
-    // state setters.
+    // remaining values are the preload bridge, refs, reducer dispatch, the
+    // time-pos store and state setters.
   }, [
     playerAdapter,
     bridge.player,
     bridge.windowControls,
     dispatch,
+    timePosStore,
     stateRef,
     miniPlayerRef,
     mediaSession,

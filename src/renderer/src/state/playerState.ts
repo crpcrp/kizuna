@@ -56,7 +56,6 @@ export interface PlayerState {
   tracks: Track[]
   cues: Cue[]
   chapters: Chapter[]
-  timePos: number
   duration: number
   paused: boolean
   /** 0..100 */
@@ -153,7 +152,6 @@ export const initialPlayerState: PlayerState = {
   tracks: [],
   cues: [],
   chapters: [],
-  timePos: 0,
   duration: 0,
   paused: false,
   volume: 100,
@@ -221,7 +219,6 @@ export type PlayerAction =
   | { type: 'mediaClosed' }
   | { type: 'cuesLoaded'; cues: Cue[] }
   | { type: 'chaptersLoaded'; chapters: Chapter[] }
-  | { type: 'timePos'; value: number }
   | { type: 'duration'; value: number }
   | { type: 'setPaused'; value: boolean }
   | { type: 'setVolume'; value: number }
@@ -299,7 +296,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         tracks: action.tracks,
         cues: [],
         chapters: [],
-        timePos: 0,
         duration: 0,
         paused: false,
         speed: 1,
@@ -332,7 +328,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         tracks: [],
         cues: [],
         chapters: [],
-        timePos: 0,
         duration: 0,
         paused: false,
         selectedAudioId: undefined,
@@ -353,8 +348,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return { ...state, cues: action.cues, allCueTokens: {} }
     case 'chaptersLoaded':
       return { ...state, chapters: action.chapters }
-    case 'timePos':
-      return { ...state, timePos: action.value }
     case 'duration':
       return { ...state, duration: action.value }
     case 'setPaused':

@@ -8,6 +8,7 @@ import {
   useSubtitleAutoPause
 } from '@src/renderer/src/state/subtitleAutoPause'
 import type { WholeTrackVocabularyResult } from '@src/renderer/src/state/wholeTrackVocabulary'
+import { createTimePosStore } from '@src/renderer/src/state/timePosStore'
 import { deferred } from '@test/harness/deferred'
 
 const CUE: Cue = { start: 2, end: 3, text: 'line' }
@@ -31,7 +32,7 @@ function input(overrides: Partial<UseSubtitleAutoPauseInput> = {}): UseSubtitleA
     filePath: 'episode.mkv',
     loadGeneration: 1,
     subtitleOffsetMs: 0,
-    timePos: 0,
+    timePosStore: createTimePosStore(),
     paused: false,
     japaneseSubtitleSelected: true,
     prepareCueEligibility: vi.fn().mockResolvedValue(ready({ [CUE_KEY]: true })),
@@ -75,20 +76,19 @@ describe('useSubtitleAutoPause eligibility preparation', () => {
   it('allows playback while pending, then pauses only a ready true cue', async () => {
     const gate = deferred<WholeTrackVocabularyResult>()
     const props = input({ prepareCueEligibility: vi.fn(() => gate.promise) })
-    const { rerender } = renderHook(
-      (current: UseSubtitleAutoPauseInput) => useSubtitleAutoPause(current),
-      { initialProps: props }
-    )
+    renderHook((current: UseSubtitleAutoPauseInput) => useSubtitleAutoPause(current), {
+      initialProps: props
+    })
 
-    rerender({ ...props, timePos: 2.1 })
+    act(() => props.timePosStore.set(2.1))
     expect(props.player.setPause).not.toHaveBeenCalled()
 
     await act(async () => {
       gate.resolve(ready({ [CUE_KEY]: true }))
       await gate.promise
     })
-    rerender({ ...props, timePos: 1 })
-    rerender({ ...props, timePos: 2.2 })
+    act(() => props.timePosStore.set(1))
+    act(() => props.timePosStore.set(2.2))
 
     await waitFor(() => expect(props.player.setPause).toHaveBeenCalledWith(true))
     expect(props.player.seekWithoutUserNotification).toHaveBeenCalledWith(2, true)
@@ -103,19 +103,18 @@ describe('useSubtitleAutoPause eligibility preparation', () => {
       { initialProps: falseProps }
     )
     await waitFor(() => expect(falseProps.prepareCueEligibility).toHaveBeenCalledOnce())
-    falseHook.rerender({ ...falseProps, timePos: 2.1 })
+    act(() => falseProps.timePosStore.set(2.1))
     expect(falseProps.player.setPause).not.toHaveBeenCalled()
     falseHook.unmount()
 
     const absentProps = input({
       prepareCueEligibility: vi.fn().mockResolvedValue(ready({}))
     })
-    const absentHook = renderHook(
-      (current: UseSubtitleAutoPauseInput) => useSubtitleAutoPause(current),
-      { initialProps: absentProps }
-    )
+    renderHook((current: UseSubtitleAutoPauseInput) => useSubtitleAutoPause(current), {
+      initialProps: absentProps
+    })
     await waitFor(() => expect(absentProps.prepareCueEligibility).toHaveBeenCalledOnce())
-    absentHook.rerender({ ...absentProps, timePos: 2.1 })
+    act(() => absentProps.timePosStore.set(2.1))
     expect(absentProps.player.setPause).not.toHaveBeenCalled()
   })
 
@@ -145,7 +144,7 @@ describe('useSubtitleAutoPause eligibility preparation', () => {
     await waitFor(() =>
       expect(reportError).toHaveBeenCalledWith('Could not prepare unknown-word auto-pause.')
     )
-    rerender({ ...secondProps, timePos: 2.1 })
+    act(() => secondProps.timePosStore.set(2.1))
     expect(prepare).toHaveBeenCalledTimes(2)
     expect(reportError).toHaveBeenCalledTimes(1)
   })
