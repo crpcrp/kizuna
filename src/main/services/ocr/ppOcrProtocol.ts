@@ -8,6 +8,7 @@ import {
   type OcrImageSize,
   type OcrResult
 } from '../../../shared/ocr'
+import { isRecord } from '../../../shared/guards'
 
 /**
  * The newline-delimited JSON protocol spoken by the PP-OCR sidecar: argument
@@ -365,10 +366,6 @@ function isOcrIdentifier(value: unknown): value is number {
     value >= 0 &&
     value <= MAX_OCR_IDENTIFIER
   )
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {

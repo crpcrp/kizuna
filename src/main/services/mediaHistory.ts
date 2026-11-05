@@ -21,6 +21,7 @@ import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 import { stat as statFile } from 'node:fs/promises'
 import type { SettingsStore } from './settings'
 import type { JimakuPreparedSubtitle } from './jimaku/downloadStore'
+import { isFiniteNumber } from '../../shared/guards'
 
 export interface MediaHistoryTimers {
   setTimer(callback: () => void, delayMs: number): unknown
@@ -460,10 +461,6 @@ function cloneSubtitleSelection(value: StoredSubtitleSelection): StoredSubtitleS
 
 function isContentVersion(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
 }
 
 function isNonNegativeFinite(value: unknown): value is number {

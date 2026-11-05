@@ -1,5 +1,7 @@
 /** Shared, serializable data contracts for spatial game OCR. */
 
+import { isRecord, isFiniteNumber } from './guards'
+
 /** Physical pixel dimensions of the captured image. */
 export interface OcrImageSize {
   width: number
@@ -259,10 +261,6 @@ function normalizeConfidence(value: unknown): number | undefined {
     : undefined
 }
 
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
 function normalizeIdentifier(value: unknown): number | undefined {
   return typeof value === 'number' &&
     Number.isInteger(value) &&
@@ -274,10 +272,6 @@ function normalizeIdentifier(value: unknown): number | undefined {
 
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[]): boolean {
