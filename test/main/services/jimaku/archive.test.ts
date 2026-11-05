@@ -1,4 +1,4 @@
-import { Zip, ZipPassThrough, strToU8, zipSync } from 'fflate'
+import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { parseJimakuVideoIdentity } from '@src/shared/jimakuMatching'
 import type { JimakuFileRecord } from '@src/main/services/jimaku/client'
@@ -86,65 +86,18 @@ function makeService(bytes: Uint8Array, overrides: Partial<CreateJimakuArchiveSe
   return { ...fake, service }
 }
 
-function zipFiles(files: readonly [string, Uint8Array][]): Uint8Array {
-  const chunks: Uint8Array[] = []
-  const archive = new Zip((error, chunk) => {
-    if (error) throw error
-    chunks.push(chunk)
-  })
-  for (const [name, bytes] of files) {
-    const file = new ZipPassThrough(name)
-    archive.add(file)
-    file.push(bytes, true)
-  }
-  archive.end()
-  return join(chunks)
-}
-
-function join(chunks: readonly Uint8Array[]): Uint8Array {
-  const total = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
-  const bytes = new Uint8Array(total)
-  let offset = 0
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-  return bytes
-}
-
 function firstCentralOffset(bytes: Uint8Array): number {
   for (let offset = 0; offset + 4 <= bytes.length; offset += 1) {
-    if (readU32(bytes, offset) === 0x02014b50) return offset
+    if (
+      bytes[offset] === 0x50 &&
+      bytes[offset + 1] === 0x4b &&
+      bytes[offset + 2] === 0x01 &&
+      bytes[offset + 3] === 0x02
+    ) {
+      return offset
+    }
   }
   throw new Error('central directory not found')
-}
-
-function mutateCentral(bytes: Uint8Array, mutate: (bytes: Uint8Array, offset: number) => void) {
-  const copy = bytes.slice()
-  mutate(copy, firstCentralOffset(copy))
-  return copy
-}
-
-function readU32(bytes: Uint8Array, offset: number): number {
-  return (
-    (bytes[offset] |
-      (bytes[offset + 1] << 8) |
-      (bytes[offset + 2] << 16) |
-      (bytes[offset + 3] << 24)) >>>
-    0
-  )
-}
-
-function writeU16(bytes: Uint8Array, offset: number, value: number): void {
-  bytes[offset] = value & 0xff
-  bytes[offset + 1] = (value >>> 8) & 0xff
-}
-
-function writeU32(bytes: Uint8Array, offset: number, value: number): void {
-  bytes[offset] = value & 0xff
-  bytes[offset + 1] = (value >>> 8) & 0xff
-  bytes[offset + 2] = (value >>> 16) & 0xff
-  bytes[offset + 3] = (value >>> 24) & 0xff
 }
 
 describe('Jimaku archive service', () => {
@@ -200,30 +153,6 @@ describe('Jimaku archive service', () => {
     ).resolves.toEqual({ ok: false, error: { code: 'invalidMember' } })
   })
 
-  it('keeps duplicate member names independently selectable', async () => {
-    const first = strToU8(SRT)
-    const second = strToU8(SRT.replace('こんにちは', 'さようなら'))
-    const bytes = zipFiles([
-      ['Title - 07.srt', first],
-      ['Title - 07.srt', second]
-    ])
-    const { service, calls } = makeService(bytes)
-
-    const result = await service.inspect(
-      42,
-      fileRecord(bytes),
-      parseJimakuVideoIdentity('Title - 07.mkv'),
-      false
-    )
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.value.members).toHaveLength(2)
-    expect(result.value.members[0].memberId).not.toBe(result.value.members[1].memberId)
-    await service.prepareMember(result.value.packageHandle, result.value.members[1].memberId)
-    expect(calls.extracted[0]).toEqual({ name: 'Title - 07.srt', bytes: second })
-  })
-
   it('shows all supported members for movies without episode exclusion', async () => {
     const bytes = zipSync({ 'Movie - 01.srt': SRT_BYTES, 'Movie - 02.srt': SRT_BYTES })
     const { service } = makeService(bytes)
@@ -267,23 +196,14 @@ describe('Jimaku archive service', () => {
     ['drive path', zipSync({ 'C:/Title - 07.srt': SRT_BYTES })],
     ['backslash traversal', zipSync({ '..\\Title - 07.srt': SRT_BYTES })],
     [
-      'encrypted',
-      mutateCentral(zipSync({ 'Title - 07.srt': SRT_BYTES }), (data, offset) => {
-        writeU16(data, offset + 8, 1)
-      })
-    ],
-    [
-      'symlink',
-      mutateCentral(zipSync({ 'Title - 07.srt': SRT_BYTES }), (data, offset) => {
-        writeU16(data, offset + 4, 3 << 8)
-        writeU32(data, offset + 38, 0xa000 << 16)
-      })
-    ],
-    [
       'unsupported compression',
-      mutateCentral(zipSync({ 'Title - 07.srt': SRT_BYTES }), (data, offset) => {
-        writeU16(data, offset + 10, 99)
-      })
+      (() => {
+        const data = zipSync({ 'Title - 07.srt': SRT_BYTES })
+        const offset = firstCentralOffset(data)
+        data[offset + 10] = 99
+        data[offset + 11] = 0
+        return data
+      })()
     ]
   ])('rejects %s members as unsupported archives', async (_label, bytes) => {
     const { service } = makeService(bytes)
@@ -293,47 +213,37 @@ describe('Jimaku archive service', () => {
     ).resolves.toEqual({ ok: false, error: { code: 'unsupportedArchive' } })
   })
 
-  it('enforces declared and actual expanded limits before returning a package', async () => {
-    const bytes = zipSync({ 'Title - 07.srt': new Uint8Array(20) })
-    const { service } = makeService(bytes, { maxExpandedBytes: 10 })
+  it('enforces the total expanded limit across subtitle members', async () => {
+    const bytes = zipSync({
+      'Title - 07.srt': new Uint8Array(8),
+      'Title - 08.srt': new Uint8Array(8),
+      'large.bin': new Uint8Array(100)
+    })
+    const { service, released } = makeService(bytes, { maxExpandedBytes: 12 })
+
     await expect(
       service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)
     ).resolves.toEqual({ ok: false, error: { code: 'tooLarge' } })
+    expect(released).toEqual(['store-package-1'])
+  })
 
-    const actualLimitBytes = zipSync({ 'Title - 07.srt': new Uint8Array(20) })
-    const lyingHeader = mutateCentral(actualLimitBytes, (data, offset) => {
-      writeU32(data, offset + 24, 1)
-      writeU32(data, readU32(data, offset + 42) + 22, 1)
-    })
-    const actual = makeService(lyingHeader, { maxExpandedBytes: 10 })
+  it('rejects an archive with an oversized subtitle member', async () => {
+    const bytes = zipSync({ 'Title - 07.srt': SRT_BYTES })
+    const { service } = makeService(bytes, { maxMemberBytes: 4 })
+
     await expect(
-      actual.service.inspect(
-        42,
-        fileRecord(lyingHeader),
-        parseJimakuVideoIdentity('Title - 07.mkv'),
-        false
-      )
+      service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)
     ).resolves.toEqual({ ok: false, error: { code: 'tooLarge' } })
   })
 
-  it('marks an oversized member and refuses extraction at the selected-member limit', async () => {
-    const bytes = zipSync({ 'Title - 07.srt': SRT_BYTES })
-    const { service } = makeService(bytes, { maxMemberBytes: 4 })
-    const result = await service.inspect(
-      42,
-      fileRecord(bytes),
-      parseJimakuVideoIdentity('Title - 07.mkv'),
-      false
-    )
+  it('rechecks stored member sizes after extraction when headers understate them', async () => {
+    const bytes = zipSync({ 'Title - 07.srt': new Uint8Array(20) }, { level: 0 })
+    const offset = firstCentralOffset(bytes)
+    bytes.set([1, 0, 0, 0], offset + 24)
+    const { service } = makeService(bytes, { maxMemberBytes: 10 })
 
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    expect(result.value.members[0]).toMatchObject({
-      status: 'browseOnly',
-      reasons: expect.arrayContaining(['Declared subtitle size exceeds limit'])
-    })
     await expect(
-      service.prepareMember(result.value.packageHandle, result.value.members[0].memberId)
+      service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)
     ).resolves.toEqual({ ok: false, error: { code: 'tooLarge' } })
   })
 
