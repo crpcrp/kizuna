@@ -142,9 +142,11 @@ export function buildMpvArgs({
   userConfigDir,
   extraArgs = []
 }: BuildMpvArgsOptions): string[] {
+  // Hardware decoding is only a default for the built-in config: a command-line
+  // option would override a user mpv.conf, and extraArgs come later so they win.
   const configArgs =
     userConfigDir === undefined
-      ? ['--no-config'] // block mpv from reading the user's global config
+      ? ['--no-config', '--hwdec=auto-safe'] // block mpv from reading the user's global config
       : ['--config=yes', `--config-dir=${userConfigDir}`]
   // Linux embedding runs through Electron's X11 path under X11/XWayland.
   // The legacy X11 output is intentionally the correctness baseline: unlike

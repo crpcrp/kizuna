@@ -169,6 +169,7 @@ describe('buildMpvArgs', () => {
     })
     expect(args).toEqual([
       '--no-config',
+      '--hwdec=auto-safe',
       '--wid=658188',
       '--input-ipc-server=\\\\.\\pipe\\kizuna-mpv-1',
       '--idle=yes',
@@ -195,6 +196,8 @@ describe('buildMpvArgs', () => {
       '--config-dir=C:\\Users\\a\\AppData\\Roaming\\Kizuna\\mpv'
     ])
     expect(args).not.toContain('--no-config')
+    // A user mpv.conf owns decoding; a command-line default would override it.
+    expect(args).not.toContain('--hwdec=auto-safe')
   })
 
   it('inserts sanitized user extraArgs after the config block and before the forced args', () => {
@@ -239,8 +242,10 @@ describe('buildMpvArgs', () => {
       ]
     })
     // Only the legitimate option survives, sitting between --no-config and --wid.
+    // The user's --hwdec follows the default, so mpv applies the user's value.
     expect(args).toEqual([
       '--no-config',
+      '--hwdec=auto-safe',
       '--hwdec=auto',
       '--wid=1',
       '--input-ipc-server=\\\\.\\pipe\\p',
