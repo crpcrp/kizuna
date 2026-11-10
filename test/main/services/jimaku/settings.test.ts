@@ -332,20 +332,23 @@ describe('createJimakuSettingsService', () => {
     expect(service.getStatus().configured).toBe(true)
   })
 
-  it('sanitizes persistence failures without exposing the key', () => {
-    const settings = createSettingsStore({
-      read: () => undefined,
-      write: () => {
-        throw new Error('write failed')
-      }
-    })
+  it('keeps the key configured when the settings write fails', () => {
+    const settings = createSettingsStore(
+      {
+        read: () => undefined,
+        write: () => {
+          throw new Error('write failed')
+        }
+      },
+      { onWriteError: () => {} }
+    )
     const service = createJimakuSettingsService({
       settings,
       secrets: reversingCodec,
       client: makeClient()
     })
 
-    expect(() => service.setApiKey('secret-token')).toThrow('Could not save Jimaku settings.')
-    expect(() => service.setApiKey('secret-token')).not.toThrow('secret-token')
+    expect(service.setApiKey('secret-token').configured).toBe(true)
+    expect(settings.hasPendingWrite()).toBe(true)
   })
 })

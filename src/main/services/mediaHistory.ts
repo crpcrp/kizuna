@@ -107,8 +107,10 @@ export function createMediaHistoryService(
   let observedKey: string | undefined
   let pathObservationEnabled = false
 
-  function persist(history: MediaHistory): void {
+  /** Returns false when the write failed; the store keeps it in memory and retries. */
+  function persist(history: MediaHistory): boolean {
     settings.set({ mediaHistory: history })
+    return !settings.hasPendingWrite()
   }
 
   function history(): MediaHistory {
@@ -211,6 +213,8 @@ export function createMediaHistoryService(
       if (scheduledGeneration !== generation || timer !== scheduledTimer) return
       timer = undefined
       flush()
+      // A failed write leaves the position dirty; keep retrying on the timer.
+      if (dirty) scheduleFlush()
     }, HISTORY_FLUSH_DELAY_MS)
     timer = scheduledTimer
   }
@@ -229,8 +233,7 @@ export function createMediaHistoryService(
     entry.updatedAt = now()
     next.playbackByPath[activeKey] = entry
     pruneHistory(next)
-    persist(next)
-    dirty = false
+    dirty = !persist(next)
   }
 
   return {
@@ -287,6 +290,9 @@ export function createMediaHistoryService(
       const existing = settings.get().mediaHistory.playbackByPath[key]
       pendingPosition = undefined
       pendingDuration = existing?.durationSeconds
+      // The outgoing file's position is already in the store's memory even if
+      // its write failed; the store retries it, so don't re-attribute it here.
+      dirty = false
 
       const next = history()
       next.recentFiles = [

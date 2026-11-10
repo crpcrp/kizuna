@@ -187,6 +187,22 @@ describe('registerPlayerBridge', () => {
     expect(history.recordOpened).toHaveBeenCalledWith('/tmp/video.mp4')
   })
 
+  it('resolves the load when recording the recent fails', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { controller } = fakeController()
+    const history = fakeHistory()
+    vi.mocked(history.recordOpened).mockImplementation(() => {
+      throw new Error('EPERM')
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    registerPlayerBridge(ipc, controller, vi.fn(), history)
+
+    await handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4')
+    expect(history.abortLoad).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
   it('does not record a recent when loading rejects', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()

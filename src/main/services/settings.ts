@@ -466,7 +466,25 @@ export interface SettingsIO {
 
 export interface SettingsStore {
   get(): Settings
+  /**
+   * Merges `patch` into memory and tries to persist it. Never throws: a failed
+   * write is reported through `onWriteError` and retried on the next `set` or
+   * `flush`.
+   */
   set(patch: Partial<Settings>): Settings
+  /** Retries a pending failed write. Returns true when nothing is left unsaved. */
+  flush(): boolean
+  /** True while the in-memory settings differ from the last successful write. */
+  hasPendingWrite(): boolean
+}
+
+export interface SettingsStoreOptions extends PathNormalizationOptions {
+  /** Called once per run of consecutive write failures. Defaults to `console.warn`. */
+  onWriteError?: (error: unknown) => void
+}
+
+function defaultOnWriteError(error: unknown): void {
+  console.warn('[kizuna] failed to save settings; will retry', error)
 }
 
 /**
@@ -476,19 +494,47 @@ export interface SettingsStore {
  */
 export function createSettingsStore(
   io: SettingsIO,
-  options: PathNormalizationOptions = {}
+  options: SettingsStoreOptions = {}
 ): SettingsStore {
-  let current: Settings = mergeSettings(safeParse(io.read()), options)
+  const { onWriteError = defaultOnWriteError, ...pathOptions } = options
+  let current: Settings = mergeSettings(safeParse(io.read()), pathOptions)
+  let pending = false
+  let failureReported = false
+
+  function write(): boolean {
+    try {
+      io.write(JSON.stringify(current))
+      pending = false
+      failureReported = false
+      return true
+    } catch (error) {
+      pending = true
+      if (!failureReported) {
+        failureReported = true
+        try {
+          onWriteError(error)
+        } catch {
+          // Reporting must never turn a failed write back into a throw.
+        }
+      }
+      return false
+    }
+  }
 
   return {
     get(): Settings {
       return current
     },
     set(patch: Partial<Settings>): Settings {
-      const next = mergeSettings({ ...current, ...patch }, options)
-      io.write(JSON.stringify(next))
-      current = next
-      return next
+      current = mergeSettings({ ...current, ...patch }, pathOptions)
+      write()
+      return current
+    },
+    flush(): boolean {
+      return pending ? write() : true
+    },
+    hasPendingWrite(): boolean {
+      return pending
     }
   }
 }

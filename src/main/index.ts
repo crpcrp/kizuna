@@ -157,6 +157,15 @@ if (process.platform === 'win32') app.disableHardwareAcceleration()
 // sets. When on, the app reports its startup milestones on stdout and quits
 // itself as soon as all three land — so the smoke test asserts on a real
 // launch rather than on a timer.
+// Log instead of Electron's modal "JavaScript error in the main process" dialog;
+// a stray failure (e.g. a transient disk error) must not take the player down.
+process.on('uncaughtException', (error) => {
+  console.error('[kizuna] uncaught exception in main process', error)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[kizuna] unhandled rejection in main process', reason)
+})
+
 const startupProbe = createStartupProbe({
   enabled: process.env[STARTUP_PROBE_ENV] === '1',
   log: (line) => console.log(line),
@@ -170,6 +179,7 @@ const startupProbe = createStartupProbe({
 // (currently single) main window.
 const controller = new MpvController()
 let mediaHistory: MediaHistoryService | undefined
+let appSettings: SettingsStore | undefined
 let playerRuntime: PlayerRuntime | undefined
 let mpvConfig: MpvConfigManager | undefined
 let updates: UpdateService | undefined
@@ -862,7 +872,11 @@ if (!gotSingleInstanceLock) {
       if (gameOcrLifecycle) await gameOcrLifecycle.stop(false)
       else await gameOcr?.stop()
     },
-    flushHistory: () => mediaHistory?.flush(),
+    flushHistory: () => {
+      mediaHistory?.flush()
+      // Retry a settings write that failed earlier (e.g. a locked settings.json).
+      appSettings?.flush()
+    },
     releasePowerSave: () => playerRuntime?.releasePowerSave(),
     disposeSystemMedia: () => playerRuntime?.disposeSystemMedia(),
     onShutdownStart: () => {
@@ -915,6 +929,7 @@ if (!gotSingleInstanceLock) {
     })
     migrateLegacyUnidicFromResources(binaryPaths, userUnidic)
     const settings = createAppSettingsStore()
+    appSettings = settings
     const secrets = createSafeStorageCodec(safeStorage)
     const decision = resolveStartupDecision({
       startupBehavior: settings.get().player.startupBehavior,
