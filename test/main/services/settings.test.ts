@@ -157,64 +157,24 @@ describe('mergeSettings — Jimaku settings', () => {
   })
 })
 
-describe('mergeSettings — media history', () => {
-  // Path normalization is the platform-shaped part of settings, so the platform
-  // is passed explicitly instead of stubbing `process.platform`: both variants
-  // then run on either host, and neither depends on a mutated global.
-  it('adds empty history to pre-feature settings without changing other values', () => {
-    const merged = mergeSettings({ mecabDictId: 'unidic', dictOrder: [3] }, { platform: 'win32' })
+describe('settings — legacy media history', () => {
+  it('drops a legacy mediaHistory key from merged and serialized settings', () => {
+    const legacy = {
+      mecabDictId: 'unidic',
+      mediaHistory: {
+        recentFiles: [{ path: '/media/a.mkv', openedAt: 1 }],
+        playbackByPath: { '/media/a.mkv': { positionSeconds: 42, updatedAt: 2 } }
+      }
+    }
+    expect(mergeSettings(legacy, { platform: 'posix' })).not.toHaveProperty('mediaHistory')
 
-    expect(merged.mediaHistory).toEqual({ recentFiles: [], playbackByPath: {} })
-    expect(merged.mecabDictId).toBe('unidic')
-    expect(merged.dictOrder).toEqual([3])
-  })
+    const io = fakeIo(JSON.stringify(legacy))
+    const store = createSettingsStore(io, { platform: 'posix' })
+    store.set({ dictOrder: [1] })
 
-  it('folds separators and lowercases drive letters for a Windows history', () => {
-    const merged = mergeSettings(
-      {
-        mediaHistory: {
-          lastOpenFolder: 'C:/Media',
-          recentFiles: [{ path: 'C:/Media/episode.mkv', openedAt: 12 }],
-          playbackByPath: {
-            'C:/Media/episode.mkv': { positionSeconds: 42, updatedAt: 13 },
-            bad: { positionSeconds: 14, updatedAt: -1 }
-          }
-        }
-      },
-      { platform: 'win32' }
-    )
-
-    expect(merged.mediaHistory.recentFiles).toEqual([
-      { path: 'C:\\Media\\episode.mkv', openedAt: 12 }
-    ])
-    expect(merged.mediaHistory.lastOpenFolder).toBe('C:\\Media')
-    expect(merged.mediaHistory.playbackByPath).toEqual({
-      'c:\\media\\episode.mkv': { positionSeconds: 42, updatedAt: 13 }
-    })
-  })
-
-  it('keeps a POSIX history case-sensitive and unfolded', () => {
-    const merged = mergeSettings(
-      {
-        mediaHistory: {
-          lastOpenFolder: '/srv/Media',
-          recentFiles: [{ path: '/srv/Media/Episode.mkv', openedAt: 12 }],
-          playbackByPath: {
-            '/srv/Media/Episode.mkv': { positionSeconds: 42, updatedAt: 13 },
-            bad: { positionSeconds: 14, updatedAt: -1 }
-          }
-        }
-      },
-      { platform: 'posix' }
-    )
-
-    expect(merged.mediaHistory.recentFiles).toEqual([
-      { path: '/srv/Media/Episode.mkv', openedAt: 12 }
-    ])
-    expect(merged.mediaHistory.lastOpenFolder).toBe('/srv/Media')
-    expect(merged.mediaHistory.playbackByPath).toEqual({
-      '/srv/Media/Episode.mkv': { positionSeconds: 42, updatedAt: 13 }
-    })
+    const written = JSON.parse(io.read()!) as Record<string, unknown>
+    expect(written).not.toHaveProperty('mediaHistory')
+    expect(written.mecabDictId).toBe('unidic')
   })
 })
 

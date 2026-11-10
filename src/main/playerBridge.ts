@@ -29,6 +29,8 @@ export interface PlayerHistoryObserver {
   observePath(value: unknown): void
   observePosition(value: unknown): void
   observeDuration(value: unknown): void
+  /** Saves the buffered position now (pause and end of file). */
+  flush(): void
 }
 
 /** The slice of MpvController this bridge needs (fakeable in tests). */
@@ -196,6 +198,7 @@ export function registerPlayerBridge<E>(
   controller.observePause((v) => {
     if (typeof v !== 'boolean') return
     paused = v
+    if (v) history?.flush()
     syncPowerSave()
     syncSystemMedia()
     // Renderer's source of truth for pause: mpv self-pauses (frame-step,
@@ -203,6 +206,7 @@ export function registerPlayerBridge<E>(
     send(PLAYER_CHANNELS.pause, v)
   })
   controller.observeEofReached((v) => {
+    if (v === true) history?.flush()
     send(PLAYER_CHANNELS.eofReached, v)
   })
 }

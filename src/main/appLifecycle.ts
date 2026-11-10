@@ -27,7 +27,8 @@ export interface QuitCoordinatorDeps {
   defaultSession: FlushableSession
   controller: QuittableController
   stopGameOcr?: () => Promise<void>
-  flushHistory?: () => void
+  /** Starts the history save; shutdown waits for it (bounded by SHUTDOWN_TIMEOUT_MS). */
+  flushHistory?: () => Promise<void> | void
   releasePowerSave?: () => void
   disposeSystemMedia?: () => void
   appQuit: () => void
@@ -121,18 +122,18 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
     runSafely('system-media disposal', disposeSystemMedia)
     runSafely('power-save release', releasePowerSave)
 
-    runSafely('history flush', flushHistory)
+    const historyFlush = startAsync(async () => flushHistory())
     runSafely('session storage flush', () => deps.defaultSession.flushStorageData())
     const controllerQuit = startAsync(() => deps.controller.quit())
     const gameOcrStop = startAsync(() => deps.stopGameOcr?.() ?? Promise.resolve())
-    const cleanup = Promise.allSettled([controllerQuit, gameOcrStop])
+    const cleanup = Promise.allSettled([controllerQuit, gameOcrStop, historyFlush])
     const timer = setTimeoutFn(() => {
       disposeHard()
       finishShutdown()
     }, SHUTDOWN_TIMEOUT_MS)
 
     shutdownPromise = cleanup.then((results) => {
-      const operations = ['mpv quit', 'Game OCR cleanup']
+      const operations = ['mpv quit', 'Game OCR cleanup', 'history flush']
       for (const [index, result] of results.entries()) {
         if (result.status === 'rejected') reportFailure(operations[index], result.reason)
       }
