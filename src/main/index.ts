@@ -770,7 +770,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
     createPresentation: (bounds) =>
       createGameOcrWindow({
         platform: process.platform,
-        preloadPath: join(__dirname, '../preload/index.js'),
+        preloadPath: join(__dirname, '../preload/gameOcr.js'),
         displayBounds: bounds,
         devUrl: process.env['ELECTRON_RENDERER_URL'],
         packagedHtmlPath: join(__dirname, '../renderer/gameOcr.html'),

@@ -90,6 +90,7 @@ import type {
   JimakuTitleSearchRequest,
   JimakuTitleSearchResult
 } from '../shared/jimaku'
+import { subscribe } from './bridge'
 
 /**
  * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
@@ -106,12 +107,6 @@ export function windowShapeApi(
   platform: NodeJS.Platform = process.platform
 ): { setShape?(rects: WindowShapeRect[]): void } {
   return platform === 'linux' ? { setShape } : {}
-}
-
-function subscribe<T>(channel: string, callback: (value: T) => void): () => void {
-  const listener = (_event: Electron.IpcRendererEvent, value: T): void => callback(value)
-  ipcRenderer.on(channel, listener)
-  return () => ipcRenderer.removeListener(channel, listener)
 }
 
 const api = {

@@ -1,17 +1,21 @@
-import type { KizunaApi } from '../../../shared/preloadApi'
+import type { KizunaGameOcrApi } from '../../../shared/preloadApi'
 import { DEFAULT_POPUP_SETTINGS, type PopupSettings } from '../../../shared/playerSettings'
 import { useGameOcrTranslation } from '../state/useGameOcrTranslation'
-import { useWordPopup } from '../state/useWordPopup'
+import { useWordPopup, type WordPopupBridge } from '../state/useWordPopup'
 import GameOcrBoxes, { type GameOcrBoxRegion } from './GameOcrBoxes'
 import TranslationPopup from './TranslationPopup'
 import WordPopup from './WordPopup'
+
+// No video is loaded here (`videoLoaded: false`), so the popup never captures a
+// frame; the Game OCR preload exposes no player bridge.
+const NO_FRAME_CAPTURE: WordPopupBridge['player'] = { captureFrame: async () => null }
 
 export interface GameOcrInteractionProps {
   regions: readonly GameOcrBoxRegion[]
   /** The capture/session identity used to invalidate old popup requests. */
   captureKey?: string | number
-  bridge: Pick<KizunaApi, 'dict' | 'anki' | 'knowledge' | 'player'> &
-    Partial<Pick<KizunaApi, 'translate'>>
+  bridge: Pick<KizunaGameOcrApi, 'dict' | 'anki' | 'knowledge'> &
+    Partial<Pick<KizunaGameOcrApi, 'translate'>>
   popupSettings?: PopupSettings
   translationEnabled?: boolean
   createTranslationRequestId?: () => string
@@ -34,7 +38,7 @@ export default function GameOcrInteraction({
   const surfaceKey =
     captureKey ?? regions.map((region) => `${region.id}\u0000${region.text}`).join('\u0001')
   const popup = useWordPopup({
-    bridge,
+    bridge: { ...bridge, player: NO_FRAME_CAPTURE },
     popupSettings,
     activeTokens: [],
     activeCue: undefined,

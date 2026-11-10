@@ -7,6 +7,7 @@ import { useAppearance } from './state/useAppearance'
 import { useGameOcrPreferences } from './state/useGameOcrPreferences'
 import { useGameOcrCapture } from './state/useGameOcrCapture'
 import { useGameOcrSession } from './state/useGameOcrSession'
+import type { KizunaGameOcrApi } from '../../shared/preloadApi'
 import './theme.css'
 import './gameOcr.css'
 
@@ -30,7 +31,8 @@ function useViewportSize(): GameOcrLayoutSize {
 }
 
 function GameOcrApp(): React.JSX.Element {
-  const kizuna = window.kizuna
+  // Loaded with `src/preload/gameOcr.ts`, which exposes only this subset.
+  const kizuna = window.kizuna as unknown as KizunaGameOcrApi
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const viewportSize = useViewportSize()
   const { popup, translationEnabled, appearance, levelColors } = useGameOcrPreferences(kizuna)

@@ -355,3 +355,33 @@ export interface KizunaApi {
     pathForFile(file: File): string
   }
 }
+
+/**
+ * The bridge the Game OCR frozen-frame window gets (`src/preload/gameOcr.ts`):
+ * only what `gameOcr.tsx` reads. The window renders text recognised from
+ * arbitrary screenshots, so it never sees settings writers, file readers,
+ * dictionary management, or playback control. Anki keeps the word popup's
+ * mining calls.
+ */
+export interface KizunaGameOcrApi {
+  gameOcr: Pick<
+    KizunaApi['gameOcr'],
+    | 'onFreeze'
+    | 'frozen'
+    | 'captureBytes'
+    | 'onDiscard'
+    | 'onRecognitionState'
+    | 'onRegions'
+    | 'regionsRendered'
+    | 'onCopySelection'
+    | 'rendererReady'
+    | 'close'
+  >
+  mecab: Pick<KizunaApi['mecab'], 'tokenizeBatch'>
+  clipboard: KizunaApi['clipboard']
+  translate: Pick<KizunaApi['translate'], 'translate' | 'cancel'>
+  dict: Pick<KizunaApi['dict'], 'lookup'>
+  knowledge: Pick<KizunaApi['knowledge'], 'levelsFor' | 'detailsFor'>
+  anki: Pick<KizunaApi['anki'], 'getSettings' | 'findExisting' | 'addNote' | 'openCard'>
+  playerSettings: Pick<KizunaApi['playerSettings'], 'getSettings'>
+}

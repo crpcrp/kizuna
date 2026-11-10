@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // Bare-minimum config: three build targets (main / preload / renderer).
 // electron-vite finds the entries by convention:
 //   main    -> src/main/index.ts
-//   preload -> src/preload/index.ts
+//   preload -> src/preload/index.ts (+ gameOcr.ts, listed below)
 //   renderer-> src/renderer/index.html
 // main's rollupOptions.input is overridden below to add the dictionary-import
 // worker thread and packaged smoke check. Once rollupOptions.input is set,
@@ -22,7 +22,20 @@ export default defineConfig({
       }
     }
   },
-  preload: {},
+  // Two preloads: the player's full bridge and the Game OCR window's subset.
+  // Both windows are sandboxed, so each preload must be one standalone file —
+  // isolatedEntries keeps rollup from splitting shared code into a chunk.
+  preload: {
+    build: {
+      isolatedEntries: true,
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          gameOcr: resolve(__dirname, 'src/preload/gameOcr.ts')
+        }
+      }
+    }
+  },
   renderer: {
     build: {
       rollupOptions: {

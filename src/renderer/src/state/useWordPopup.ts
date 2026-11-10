@@ -42,9 +42,17 @@ export interface WordPopupSettings {
   sortOrder: PopupSortOrder
 }
 
+/** The bridge calls the popup makes; the Game OCR window's preload exposes no more. */
+export interface WordPopupBridge {
+  dict: Pick<KizunaApi['dict'], 'lookup'>
+  anki: Pick<KizunaApi['anki'], 'getSettings' | 'findExisting' | 'addNote' | 'openCard'>
+  knowledge: Pick<KizunaApi['knowledge'], 'detailsFor'>
+  player: Pick<KizunaApi['player'], 'captureFrame'>
+}
+
 export interface UseWordPopupInput {
   /** Dictionary lookup, Anki mining, knowledge details, and mpv frame capture. */
-  bridge: Pick<KizunaApi, 'dict' | 'anki' | 'knowledge' | 'player'>
+  bridge: WordPopupBridge
   popupSettings: WordPopupSettings
   /** The active cue's tokens, passed to the lookup as sentence context. */
   activeTokens: Token[]
