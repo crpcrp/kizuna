@@ -18,7 +18,7 @@ find the owner of a change; use code search for the exact function or test.
 | `docs/` | Architecture, binaries, licensing, release, and Game OCR documentation |
 
 The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
-`src/preload/index.ts`. IPC channel names live in
+`src/preload/index.ts`; the Game OCR window's subset is `src/preload/gameOcr.ts`. IPC channel names live in
 `src/shared/ipcChannels.ts`.
 
 ## Feature ownership
@@ -141,6 +141,14 @@ separate entry point (`src/renderer/gameOcr.html` →
 `src/renderer/src/gameOcr.tsx`) that main loads into its own window, so a change
 to the player's React tree does not reach it. Anything renderer-facing has to be
 declared in `electron.vite.config.ts`'s renderer inputs to be built.
+
+The frozen-frame window also has its own preload, `src/preload/gameOcr.ts`,
+exposing only `KizunaGameOcrApi` (`src/shared/preloadApi.ts`): the calls
+`gameOcr.tsx` makes, with no settings writers, file readers, dictionary
+management, or playback control. A new bridge call the window needs goes in
+that type and that preload; `test/preload/gameOcr.test.ts` pins its shape
+against `fakeGameOcrApi()`. Both preloads are sandboxed single files
+(`isolatedEntries` in the preload build config).
 
 `services/gameOcr/controller.ts` is the lifecycle facade: arming, stopping, and
 the published status. It composes three owners, and a change usually belongs to

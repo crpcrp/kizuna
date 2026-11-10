@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GameOcrPresentation } from '../../../shared/gameOcr'
 import type { OcrImageSize, OcrResult } from '../../../shared/ocr'
 import type { PopupSettings } from '../../../shared/playerSettings'
-import type { KizunaApi } from '../../../shared/preloadApi'
+import type { KizunaGameOcrApi } from '../../../shared/preloadApi'
 import type { GameOcrBoxRegion } from '../components/GameOcrBoxes'
 import { buildGameOcrBoxRegions } from './gameOcrBoxRegions'
 import { groupGameOcrTextBlocks } from './gameOcrTextBlocks'
@@ -18,11 +18,11 @@ import { useLatestCallback } from './useLatestRef'
 
 /** The renderer-side services one frozen frame needs, all main-process backed. */
 export interface GameOcrSessionBridge {
-  gameOcr: KizunaApi['gameOcr']
-  mecab: Pick<KizunaApi['mecab'], 'tokenizeBatch'>
-  dict: Pick<KizunaApi['dict'], 'lookup'>
-  knowledge: Pick<KizunaApi['knowledge'], 'levelsFor' | 'detailsFor'>
-  clipboard: Pick<KizunaApi['clipboard'], 'writeText'>
+  gameOcr: KizunaGameOcrApi['gameOcr']
+  mecab: KizunaGameOcrApi['mecab']
+  dict: KizunaGameOcrApi['dict']
+  knowledge: KizunaGameOcrApi['knowledge']
+  clipboard: KizunaGameOcrApi['clipboard']
 }
 
 export interface UseGameOcrSessionInput {

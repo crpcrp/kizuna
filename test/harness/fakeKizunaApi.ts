@@ -1,6 +1,6 @@
 import { vi, type MockedObject } from 'vitest'
 import { defaultAnkiSettings } from '@src/shared/anki'
-import type { KizunaApi } from '@src/shared/preloadApi'
+import type { KizunaApi, KizunaGameOcrApi } from '@src/shared/preloadApi'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import type { SyncStatus } from '@src/shared/knowledge'
 import type { JlptCoverageReportResult } from '@src/shared/jlptCoverage'
@@ -356,4 +356,38 @@ export function installFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fa
     dispatchEvent: vi.fn(() => false)
   }))
   return api
+}
+
+export type FakeGameOcrApi = {
+  [Domain in keyof KizunaGameOcrApi]: MockedObject<KizunaGameOcrApi[Domain]>
+}
+
+function pick<T extends object, K extends keyof T>(source: T, keys: readonly K[]): Pick<T, K> {
+  return Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>
+}
+
+/** The Game OCR window's bridge (`src/preload/gameOcr.ts`), backed by the same fakes. */
+export function fakeGameOcrApi(): FakeGameOcrApi {
+  const api = createFakeKizunaApi()
+  return {
+    gameOcr: pick(api.gameOcr, [
+      'onFreeze',
+      'frozen',
+      'captureBytes',
+      'onDiscard',
+      'onRecognitionState',
+      'onRegions',
+      'regionsRendered',
+      'onCopySelection',
+      'rendererReady',
+      'close'
+    ]),
+    mecab: pick(api.mecab, ['tokenizeBatch']),
+    dict: pick(api.dict, ['lookup']),
+    knowledge: pick(api.knowledge, ['levelsFor', 'detailsFor']),
+    anki: pick(api.anki, ['getSettings', 'findExisting', 'addNote', 'openCard']),
+    playerSettings: pick(api.playerSettings, ['getSettings']),
+    clipboard: pick(api.clipboard, ['writeText']),
+    translate: pick(api.translate, ['translate', 'cancel'])
+  }
 }

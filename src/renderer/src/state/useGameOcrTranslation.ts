@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { KizunaApi } from '../../../shared/preloadApi'
+import type { KizunaGameOcrApi } from '../../../shared/preloadApi'
 import {
   createTranslationController,
   placeTranslationPopup,
@@ -13,7 +13,7 @@ import { useGameOcrFrameClose } from '../components/GameOcrFrame'
 export interface UseGameOcrTranslationInput {
   enabled?: boolean
   captureKey?: string | number
-  translate?: KizunaApi['translate']
+  translate?: KizunaGameOcrApi['translate']
   createRequestId?: () => string
 }
 

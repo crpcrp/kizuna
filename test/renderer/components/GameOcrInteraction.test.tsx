@@ -56,7 +56,6 @@ function bridge(
       levelsFor: vi.fn().mockResolvedValue({}),
       detailsFor: vi.fn().mockResolvedValue({})
     },
-    player: { captureFrame: vi.fn().mockResolvedValue(null) },
     ...overrides
   } as unknown as GameOcrInteractionProps['bridge']
 }
