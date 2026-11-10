@@ -50,15 +50,9 @@ export default defineConfig({
     // same failure mode as above, one more source of it. Pre-transforming
     // the entry chain here closes that gap.
     server: {
-      // Fixed port (not Vite's default "pick another if busy" behavior):
-      // the renderer's localStorage (keybindings, subtitle style, popup
-      // settings — see uiHelpers.ts persistedSettings) is scoped to the page
-      // origin, which includes this port. A drifting port silently starts
-      // every `npm run dev` session on a fresh, empty localStorage bucket,
-      // which reads as "my settings didn't persist" even though the write
-      // itself worked fine. strictPort fails loudly instead of drifting, so
-      // a stale dev-server process holding the port is caught immediately
-      // rather than masked as a data-loss bug.
+      // Fixed port (not Vite's default "pick another if busy" behavior), so a
+      // stale dev-server process holding the port fails loudly instead of
+      // silently starting the renderer on a different origin.
       port: 5173,
       strictPort: true,
       warmup: {

@@ -5,7 +5,6 @@ import {
   displayTextProjection,
   mapAnalysisRangeToDisplayRanges,
   mapDisplayOffsetToAnalysisOffset,
-  mapDisplayRangeToAnalysisRange,
   type TextOffsetRange
 } from '@src/shared/textProjection'
 
@@ -59,17 +58,18 @@ describe('text projection', () => {
     expect(mapAnalysisRangeToDisplayRanges(projection, input)).toEqual(expected)
   })
 
-  it('maps display selections across lines back to a continuous analysis range', () => {
+  it('maps display offsets across lines back to analysis offsets', () => {
     const projection = createTextProjection(['描か', 'れている'])
-    const selection = range(1, 6)
 
-    expect(mapDisplayRangeToAnalysisRange(projection, selection)).toEqual(range(1, 5))
+    expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
+    expect(mapDisplayOffsetToAnalysisOffset(projection, 6)).toBe(5)
   })
 
-  it('maps a selection containing only an inserted newline to an empty analysis range', () => {
+  it('maps an inserted newline to the analysis offset after it', () => {
     const projection = createTextProjection(['前', '後'])
 
-    expect(mapDisplayRangeToAnalysisRange(projection, range(1, 2))).toEqual(range(1, 1))
+    expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
+    expect(mapDisplayOffsetToAnalysisOffset(projection, 2)).toBe(1)
   })
 
   it('keeps offset boundaries stable around a newline', () => {
@@ -91,7 +91,6 @@ describe('text projection', () => {
 
     expect(() => mapDisplayOffsetToAnalysisOffset(projection, 4)).toThrow(RangeError)
     expect(() => mapAnalysisRangeToDisplayRanges(projection, range(2, 1))).toThrow(RangeError)
-    expect(() => mapDisplayRangeToAnalysisRange(projection, range(0, 4))).toThrow(RangeError)
   })
 
   it('rejects source lines containing embedded newlines', () => {

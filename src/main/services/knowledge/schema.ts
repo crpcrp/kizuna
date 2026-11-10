@@ -10,9 +10,6 @@ export interface DbLike {
   prepare(sql: string): { all(): unknown[] }
 }
 
-/** Bump when the on-disk schema shape changes. */
-export const CURRENT_KNOWLEDGE_SCHEMA_VERSION = 2
-
 export const CREATE_KNOWN_WORDS_TABLE = `
 CREATE TABLE IF NOT EXISTS known_words (
   source     TEXT NOT NULL,

@@ -56,8 +56,8 @@ export function useSettingsLifecycle({
   // Load persisted keybindings/skip amount once on mount, then keep
   // settings.json in sync with any later change (e.g. from the Options
   // menu). Persisted via the main-process settings store (not the
-  // renderer's localStorage), which is scoped to the page origin and was
-  // silently reset by dev-server port drift — see bugs.json.
+  // renderer's localStorage, which is scoped to the page origin and was
+  // silently reset by dev-server port drift).
   const [settingsReady, setSettingsReady] = useState(false)
   // This guard is intentionally separate from settingsReady: a failed read
   // must unblock offset restoration without allowing the default render state

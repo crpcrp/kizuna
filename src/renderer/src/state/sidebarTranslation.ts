@@ -63,8 +63,6 @@ export interface SidebarTranslationController {
   close(): void
 }
 
-export type TranslationController = SidebarTranslationController
-
 /** Owns the popup's cue-local cache and latest-request-wins guard. */
 export function createSidebarTranslationController(
   setPopup: (popup: SidebarTranslationPopup | null) => void,

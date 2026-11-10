@@ -10,19 +10,6 @@ import { isFiniteNumber } from '../../../shared/guards'
 /** Maximum number of physical pixels one display capture may cover. */
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
 
-/**
- * Encoding the frozen frame produces for the OCR worker.
- *
- * PNG, and not by preference: the vendored OpenCV inside `ppocr.exe` is built
- * `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only zlib and libpng, so
- * `cv::imdecode` accepts PNG and nothing else. Confirmed against the staged
- * worker — the same frame returns regions as PNG and `request failed:
- * unsupported image format` as JPEG — and the failure is a nasty one, because
- * the screenshot appears first and only recognition fails. Changing this means
- * rebuilding and republishing the vendor payload with the matching codec.
- */
-export const DISPLAY_CAPTURE_MEDIA_TYPE = 'image/png'
-
 /** Minimal screen surface needed to pick the display under the pointer. */
 export interface DisplayCaptureScreen {
   getCursorScreenPoint(): DisplayCapturePoint
