@@ -129,7 +129,8 @@ function fakeHistory(): PlayerHistoryObserver {
     abortLoad: vi.fn(),
     observePath: vi.fn(),
     observePosition: vi.fn(),
-    observeDuration: vi.fn()
+    observeDuration: vi.fn(),
+    flush: vi.fn()
   }
 }
 
@@ -567,6 +568,21 @@ describe('registerPlayerBridge', () => {
     send.mockClear()
     firePause('not-boolean')
     expect(send).not.toHaveBeenCalled()
+  })
+
+  it('saves history when mpv pauses or reaches the end of the file', () => {
+    const { ipc } = fakeIpc()
+    const { controller, firePause, fireEof } = fakeController()
+    const history = fakeHistory()
+    registerPlayerBridge(ipc, controller, vi.fn(), history)
+
+    firePause(false)
+    fireEof(false)
+    expect(history.flush).not.toHaveBeenCalled()
+
+    firePause(true)
+    fireEof(true)
+    expect(history.flush).toHaveBeenCalledTimes(2)
   })
 
   it('forwards eof-reached values to the renderer', () => {

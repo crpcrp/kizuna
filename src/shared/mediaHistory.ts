@@ -7,7 +7,8 @@ export const MAX_PLAYBACK_ENTRIES = 500
 export const MAX_SUBTITLE_VERSION_OFFSETS = 20
 export const MIN_RESUME_SECONDS = 10
 export const END_RESTART_WINDOW_SECONDS = 30
-export const HISTORY_FLUSH_DELAY_MS = 2_000
+/** Safety-net save interval while playing; pause, EOF, file switches and quit save immediately. */
+export const HISTORY_FLUSH_DELAY_MS = 30_000
 
 export type PathPlatform = 'win32' | 'posix'
 

@@ -100,6 +100,12 @@ import { createJimakuService, type JimakuService } from './services/jimaku/servi
 import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
 import { registerJimakuBridge } from './jimakuBridge'
 import { createMediaHistoryService, type MediaHistoryService } from './services/mediaHistory'
+import {
+  createMediaHistoryFile,
+  createMediaHistoryStore,
+  legacyMediaHistory,
+  type MediaHistoryStore
+} from './services/mediaHistoryStore'
 import { registerMediaHistoryBridge } from './mediaHistoryBridge'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
 import { applyAppIdentity, screenshotsDir } from './appIdentity'
@@ -486,8 +492,24 @@ function sweepThumbnails(): void {
  * parsing settings.json independently.
  */
 function createAppSettingsStore(): SettingsStore {
-  const settingsPath = join(app.getPath('userData'), 'settings.json')
-  return createSettingsStore(createSettingsFile(settingsPath, fs))
+  return createSettingsStore(createSettingsFile(appSettingsPath(), fs))
+}
+
+function appSettingsPath(): string {
+  return join(app.getPath('userData'), 'settings.json')
+}
+
+/**
+ * Playback history lives in its own file. On first run it is seeded from the
+ * `mediaHistory` key that older versions kept in settings.json; the settings
+ * store drops that key on its next write.
+ */
+function createAppMediaHistoryStore(): MediaHistoryStore {
+  const settingsFile = createSettingsFile(appSettingsPath(), fs)
+  return createMediaHistoryStore(
+    createMediaHistoryFile(join(app.getPath('userData'), 'playback-history.json'), fs),
+    { legacy: () => legacyMediaHistory(settingsFile.read()) }
+  )
 }
 
 /**
@@ -879,9 +901,9 @@ if (!gotSingleInstanceLock) {
       else await gameOcr?.stop()
     },
     flushHistory: () => {
-      mediaHistory?.flush()
       // Retry a settings write that failed earlier (e.g. a locked settings.json).
       appSettings?.flush()
+      return mediaHistory?.flush()
     },
     releasePowerSave: () => playerRuntime?.releasePowerSave(),
     disposeSystemMedia: () => playerRuntime?.disposeSystemMedia(),
@@ -920,7 +942,7 @@ if (!gotSingleInstanceLock) {
         return appWindows?.controlsFor(senderWindow) ?? null
       },
       screen,
-      () => mediaHistory?.flush()
+      () => void mediaHistory?.flush()
     )
 
     const binaryPaths = resolveBinaryPaths({
@@ -934,6 +956,8 @@ if (!gotSingleInstanceLock) {
       shell
     })
     migrateLegacyUnidicFromResources(binaryPaths, userUnidic)
+    // Read history before any settings write can drop the legacy key.
+    const historyStore = createAppMediaHistoryStore()
     const settings = createAppSettingsStore()
     appSettings = settings
     const secrets = createSafeStorageCodec(safeStorage)
@@ -953,7 +977,7 @@ if (!gotSingleInstanceLock) {
     })
     const jimakuCacheRoot = join(app.getPath('userData'), 'jimaku')
     mediaHistory = createMediaHistoryService({
-      settings,
+      store: historyStore,
       isKnownManagedSubtitle: (path, provenance) =>
         isJimakuManagedSubtitlePath(path, provenance, jimakuCacheRoot)
     })

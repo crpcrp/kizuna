@@ -47,7 +47,9 @@ function makeFixture(appQuit?: () => void) {
   const { handleBeforeQuit: handler } = createAppLifecycleCoordinator({
     defaultSession: session,
     controller,
-    flushHistory: vi.fn(() => calls.push('history')),
+    flushHistory: vi.fn(() => {
+      calls.push('history')
+    }),
     releasePowerSave: vi.fn(() => calls.push('power')),
     disposeSystemMedia: vi.fn(() => calls.push('systemMedia')),
     appQuit: vi.fn(appQuit),
@@ -87,6 +89,25 @@ describe('handleBeforeQuit', () => {
 
     fixture.handler(event)
     fixture.controllerQuit.resolve()
+    await flushMicrotasks()
+    expect(appQuit).toHaveBeenCalledOnce()
+  })
+
+  it('waits for the asynchronous history save before calling app.quit', async () => {
+    const appQuit = vi.fn()
+    const historySave = deferred<void>()
+    const fixture = createAppLifecycleCoordinator({
+      defaultSession: { flushStorageData: vi.fn() },
+      controller: { quit: vi.fn(async () => undefined), dispose: vi.fn() },
+      flushHistory: () => historySave.promise,
+      appQuit
+    })
+
+    fixture.handleBeforeQuit(quitEvent())
+    await flushMicrotasks()
+    expect(appQuit).not.toHaveBeenCalled()
+
+    historySave.resolve()
     await flushMicrotasks()
     expect(appQuit).toHaveBeenCalledOnce()
   })
@@ -200,7 +221,9 @@ describe('createAppLifecycleCoordinator', () => {
         },
         dispose: vi.fn()
       },
-      flushHistory: () => calls.push('history'),
+      flushHistory: () => {
+        calls.push('history')
+      },
       appQuit: vi.fn()
     })
 

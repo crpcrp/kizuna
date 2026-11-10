@@ -5,47 +5,35 @@ import {
   normalizeMediaHistory,
   type MediaHistory
 } from '@src/shared/mediaHistory'
-import type { Settings, SettingsStore } from '@src/main/services/settings'
+import type { MediaHistoryStore } from '@src/main/services/mediaHistoryStore'
 
 const paths = { platform: 'posix' as const, cwd: '/media' }
 
-function fakeSettings(
-  initial?: MediaHistory,
-  failWrites = false
-): {
-  store: SettingsStore
+function fakeSettings(initial?: MediaHistory): {
+  store: MediaHistoryStore
   writes: () => number
   saved: () => MediaHistory
-  setFailWrites(value: boolean): void
+  flushes: () => number
 } {
-  // Mirrors createSettingsStore: memory always updates, a failed write stays pending.
+  // Counts set() calls: each one is a queued write in the real store.
   let mediaHistory = normalizeMediaHistory(initial, paths)
-  let saved = mediaHistory
-  let pending = false
   let writeCount = 0
-  const write = (): boolean => {
-    writeCount += 1
-    pending = failWrites
-    if (!pending) saved = mediaHistory
-    return !pending
-  }
-  const store: SettingsStore = {
-    get: () => ({ mediaHistory }) as Settings,
-    set: (patch) => {
-      mediaHistory = patch.mediaHistory ?? mediaHistory
-      write()
-      return { mediaHistory } as Settings
+  let flushCount = 0
+  const store: MediaHistoryStore = {
+    get: () => mediaHistory,
+    set: (next) => {
+      mediaHistory = next
+      writeCount += 1
     },
-    flush: () => (pending ? write() : true),
-    hasPendingWrite: () => pending
+    flush: async () => {
+      flushCount += 1
+    }
   }
   return {
     store,
     writes: () => writeCount,
-    saved: () => saved,
-    setFailWrites: (value) => {
-      failWrites = value
-    }
+    saved: () => mediaHistory,
+    flushes: () => flushCount
   }
 }
 
@@ -81,8 +69,8 @@ function fakeTimers(): {
   }
 }
 
-function service(initial?: MediaHistory, failWrites = false) {
-  const settings = fakeSettings(initial, failWrites)
+function service(initial?: MediaHistory) {
+  const settings = fakeSettings(initial)
   const clock = vi
     .fn()
     .mockReturnValueOnce(10)
@@ -92,7 +80,7 @@ function service(initial?: MediaHistory, failWrites = false) {
   const timer = fakeTimers()
   return {
     history: createMediaHistoryService({
-      settings: settings.store,
+      store: settings.store,
       now: clock,
       timers: timer.timers,
       pathOptions: paths
@@ -162,7 +150,7 @@ describe('createMediaHistoryService', () => {
     const settings = fakeSettings()
     const stat = vi.fn<(_path: string) => Promise<{ isFile(): boolean }>>()
     const history = createMediaHistoryService({
-      settings: settings.store,
+      store: settings.store,
       pathOptions: paths,
       stat
     })
@@ -194,7 +182,7 @@ describe('createMediaHistoryService', () => {
     history.observePosition(42)
 
     expect(history.getRecentFiles()).toEqual([])
-    history.flush()
+    void history.flush()
     expect(history.getPlaybackHistory(url)).toBeUndefined()
     expect(settings.writes()).toBe(0)
   })
@@ -284,7 +272,7 @@ describe('createMediaHistoryService', () => {
     const contentB = 'b'.repeat(64)
     const knownPaths = new Set(['/cache/a.srt', '/cache/a-renamed.srt', '/cache/b.srt'])
     const history = createMediaHistoryService({
-      settings: settings.store,
+      store: settings.store,
       pathOptions: paths,
       isKnownManagedSubtitle: (path) => knownPaths.has(path)
     })
@@ -489,20 +477,27 @@ describe('createMediaHistoryService', () => {
     expect(history.getPlaybackHistory('/media/a.mkv')).toMatchObject({ positionSeconds: 45 })
   })
 
-  it('keeps a position dirty and retries on the timer when the settings write fails', () => {
-    const { history, settings, timer } = service(undefined, true)
+  it('saves progress only on the slow safety timer while playing, not on every observation', () => {
+    const { history, settings, timer } = service()
+    history.recordOpened('/media/a.mkv')
+    const before = settings.writes()
+    for (let second = 1; second <= 30; second += 1) history.observePosition(second)
+
+    expect(settings.writes()).toBe(before)
+    expect(timer.timers.setTimer).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
+    timer.runNext()
+    expect(settings.writes()).toBe(before + 1)
+    expect(settings.saved().playbackByPath['/media/a.mkv']?.positionSeconds).toBe(30)
+  })
+
+  it('flush commits the buffered position immediately and waits for the store', async () => {
+    const { history, settings, timer } = service()
     history.recordOpened('/media/a.mkv')
     history.observePosition(20)
-    const before = settings.writes()
 
-    expect(() => timer.runNext()).not.toThrow()
-    expect(settings.writes()).toBe(before + 1)
-    expect(timer.pending()).toBe(1)
-
-    settings.setFailWrites(false)
-    timer.runNext()
-    expect(settings.writes()).toBe(before + 2)
+    await history.flush()
     expect(settings.saved().playbackByPath['/media/a.mkv']?.positionSeconds).toBe(20)
+    expect(settings.flushes()).toBe(1)
     expect(timer.pending()).toBe(0)
   })
 

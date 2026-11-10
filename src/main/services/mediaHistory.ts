@@ -19,7 +19,7 @@ import {
 import type { FileAvailability } from '../../shared/preloadApi'
 import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 import { stat as statFile } from 'node:fs/promises'
-import type { SettingsStore } from './settings'
+import type { MediaHistoryStore } from './mediaHistoryStore'
 import type { JimakuPreparedSubtitle } from './jimaku/downloadStore'
 import { isFiniteNumber } from '../../shared/guards'
 
@@ -33,7 +33,7 @@ export interface MediaHistoryFileInfo {
 }
 
 export interface MediaHistoryServiceDependencies {
-  settings: SettingsStore
+  store: MediaHistoryStore
   now?: () => number
   timers?: MediaHistoryTimers
   pathOptions?: PathNormalizationOptions
@@ -69,7 +69,8 @@ export interface MediaHistoryService {
   getProtectedJimakuPaths(): string[]
   removeRecentFile(path: string): RecentMediaFile[]
   clearRecentFiles(): void
-  flush(): void
+  /** Commits the buffered position; resolves once it reached disk (or failed and will retry). */
+  flush(): Promise<void>
   dispose(): void
 }
 
@@ -86,7 +87,7 @@ export function createMediaHistoryService(
   dependencies: MediaHistoryServiceDependencies
 ): MediaHistoryService {
   const {
-    settings,
+    store,
     now = Date.now,
     timers = systemTimers,
     pathOptions,
@@ -107,14 +108,12 @@ export function createMediaHistoryService(
   let observedKey: string | undefined
   let pathObservationEnabled = false
 
-  /** Returns false when the write failed; the store keeps it in memory and retries. */
-  function persist(history: MediaHistory): boolean {
-    settings.set({ mediaHistory: history })
-    return !settings.hasPendingWrite()
+  function persist(history: MediaHistory): void {
+    store.set(history)
   }
 
   function history(): MediaHistory {
-    return cloneHistory(settings.get().mediaHistory)
+    return cloneHistory(store.get())
   }
 
   function pruneHistory(next: MediaHistory, mutatedKey?: string): void {
@@ -212,14 +211,13 @@ export function createMediaHistoryService(
     const scheduledTimer: unknown = timers.setTimer(() => {
       if (scheduledGeneration !== generation || timer !== scheduledTimer) return
       timer = undefined
-      flush()
-      // A failed write leaves the position dirty; keep retrying on the timer.
-      if (dirty) scheduleFlush()
+      commit()
     }, HISTORY_FLUSH_DELAY_MS)
     timer = scheduledTimer
   }
 
-  function flush(): void {
+  /** Moves the buffered position into the store, which writes it asynchronously. */
+  function commit(): void {
     cancelTimer()
     if (!dirty || !activeKey) return
 
@@ -233,7 +231,8 @@ export function createMediaHistoryService(
     entry.updatedAt = now()
     next.playbackByPath[activeKey] = entry
     pruneHistory(next)
-    dirty = !persist(next)
+    persist(next)
+    dirty = false
   }
 
   return {
@@ -243,7 +242,7 @@ export function createMediaHistoryService(
 
     getPlaybackHistory(path: string): MediaPlaybackHistory | undefined {
       const key = mediaPathKey(path, pathOptions)
-      return key ? clonePlayback(settings.get().mediaHistory.playbackByPath[key]) : undefined
+      return key ? clonePlayback(store.get().playbackByPath[key]) : undefined
     },
 
     isCurrentMedia(path: string, loadGeneration: number): boolean {
@@ -265,7 +264,7 @@ export function createMediaHistoryService(
     },
 
     getLastOpenFolder(): string | undefined {
-      return settings.get().mediaHistory.lastOpenFolder
+      return store.get().lastOpenFolder
     },
 
     setLastOpenFolder(folder: string): void {
@@ -282,16 +281,14 @@ export function createMediaHistoryService(
       if (!normalized || !key) {
         return
       }
-      flush()
+      commit()
 
       generation += 1
       activeKey = key
       suspended = false
-      const existing = settings.get().mediaHistory.playbackByPath[key]
+      const existing = store.get().playbackByPath[key]
       pendingPosition = undefined
       pendingDuration = existing?.durationSeconds
-      // The outgoing file's position is already in the store's memory even if
-      // its write failed; the store retries it, so don't re-attribute it here.
       dirty = false
 
       const next = history()
@@ -305,7 +302,7 @@ export function createMediaHistoryService(
     beginLoad(): void {
       // Lock in the outgoing file's last observed position before the new
       // load can produce any spurious early events.
-      flush()
+      commit()
       suspended = true
     },
 
@@ -419,11 +416,14 @@ export function createMediaHistoryService(
       persist(next)
     },
 
-    flush,
+    flush(): Promise<void> {
+      commit()
+      return store.flush()
+    },
 
     dispose(): void {
       try {
-        flush()
+        commit()
       } finally {
         cancelTimer()
       }

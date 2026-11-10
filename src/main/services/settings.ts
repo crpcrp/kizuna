@@ -21,10 +21,8 @@ import {
 } from '../../shared/playerSettings'
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
 import {
-  normalizeMediaHistory,
   mediaPathKey,
   normalizeMediaPath,
-  type MediaHistory,
   type PathNormalizationOptions
 } from '../../shared/mediaHistory'
 import {
@@ -66,7 +64,6 @@ export interface Settings {
   gameOcr: GameOcrSettings
   translation: TranslationSettings
   jimaku: JimakuSettings
-  mediaHistory: MediaHistory
 }
 
 export const defaultKnowledgeSettings: KnowledgeSettings = {
@@ -97,8 +94,7 @@ export const defaultSettings: Settings = {
   player: DEFAULT_PLAYER_SETTINGS,
   gameOcr: DEFAULT_GAME_OCR_SETTINGS,
   translation: defaultTranslationSettings,
-  jimaku: defaultJimakuSettings,
-  mediaHistory: normalizeMediaHistory(undefined)
+  jimaku: defaultJimakuSettings
 }
 
 /**
@@ -106,8 +102,9 @@ export const defaultSettings: Settings = {
  * version or corrupted file) into a valid `Settings`, falling back to
  * `defaultSettings` fields for anything missing or malformed. Never throws.
  *
- * `options` forwards path-normalization rules (platform, cwd) to media history
- * and Jimaku folder hints. It defaults to the runtime platform, which is what
+ * `options` forwards path-normalization rules (platform, cwd) to Jimaku folder
+ * hints. Playback history lives in its own store (see mediaHistoryStore.ts);
+ * a legacy `mediaHistory` key is dropped here. It defaults to the runtime platform, which is what
  * production wants; tests pass a platform explicitly so both variants are
  * covered on either host.
  */
@@ -133,8 +130,7 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
     player: mergePlayerSettings(obj.player),
     gameOcr: mergeGameOcrSettings(obj.gameOcr),
     translation: mergeTranslationSettings(obj.translation),
-    jimaku: mergeJimakuSettings(obj.jimaku, options),
-    mediaHistory: normalizeMediaHistory(obj.mediaHistory, options)
+    jimaku: mergeJimakuSettings(obj.jimaku, options)
   }
 }
 
