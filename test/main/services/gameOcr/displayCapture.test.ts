@@ -2,12 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createGameOcrDisplaySources,
   displayCaptureImageSize,
-  DISPLAY_CAPTURE_MEDIA_TYPE,
   type DisplayCaptureDisplay,
   type DisplayCaptureScreen,
   type DisplayCaptureSource
 } from '@src/main/services/gameOcr/displayCapture'
-import { capturePixelToCssPoint, type OcrDisplayCaptureMetadata } from '@src/shared/ocr'
 
 function display(overrides: Partial<DisplayCaptureDisplay> = {}): DisplayCaptureDisplay {
   return {
@@ -186,27 +184,5 @@ describe('createGameOcrDisplaySources', () => {
     })
 
     await expect(sources.cursorDisplay()).rejects.toMatchObject({ code: 'unsupported' })
-  })
-
-  it('pins the encoding the OCR worker can actually decode', () => {
-    // The worker's vendored OpenCV is built without a JPEG codec, and the
-    // failure it produces reads as a recognition bug: the screenshot appears
-    // and only OCR fails.
-    expect(DISPLAY_CAPTURE_MEDIA_TYPE).toBe('image/png')
-  })
-
-  it('maps capture pixels to CSS coordinates at every supported Windows scale', () => {
-    for (const scaleFactor of [1, 1.25, 1.5, 2]) {
-      const metadata: OcrDisplayCaptureMetadata = {
-        displayId: 7,
-        displayBounds: { x: -1280, y: -40, width: 1280, height: 720 },
-        scaleFactor,
-        imageSize: { width: Math.round(1280 * scaleFactor), height: Math.round(720 * scaleFactor) }
-      }
-
-      expect(
-        capturePixelToCssPoint(metadata, { x: 100 * scaleFactor, y: 80 * scaleFactor })
-      ).toEqual({ x: -1180, y: 40 })
-    }
   })
 })

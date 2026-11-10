@@ -191,6 +191,18 @@ const launchPathBuffer = createLaunchPathBuffer(
   }
 )
 
+/** First-party assets (icons) ship next to the vendored binaries. */
+function resourcesBaseDir(): string {
+  return app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
+}
+
+/** Read-then-delete adapters for the short-lived files under `app.getPath('temp')`. */
+const tempFileFs = {
+  readBase64: async (path: string): Promise<string> =>
+    (await fs.promises.readFile(path)).toString('base64'),
+  remove: (path: string): Promise<void> => fs.promises.rm(path, { force: true })
+}
+
 function createWindow(
   mpvPath: string,
   history: MediaHistoryService,
@@ -342,8 +354,7 @@ function createSystemMediaForWindow(
   videoHost: BrowserWindow,
   uiOverlay: BrowserWindow
 ): ReturnType<typeof createSystemMediaController> {
-  const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
-  const iconsDir = join(resourcesBase, 'icons')
+  const iconsDir = join(resourcesBaseDir(), 'icons')
   const icon = (name: string): Electron.NativeImage =>
     nativeImage.createFromPath(join(iconsDir, `${name}.png`))
   const isWindows = process.platform === 'win32'
@@ -401,8 +412,7 @@ function createPlayerRuntimeForWindow(
       createFrameCaptureService({
         takeScreenshot: (path) => controller.screenshotToFile(path),
         tempDir: () => app.getPath('temp'),
-        readBase64: async (path) => (await fs.promises.readFile(path)).toString('base64'),
-        remove: (path) => fs.promises.rm(path, { force: true })
+        ...tempFileFs
       }),
     registerBridge: ({ powerSave, systemMedia, screenshots, frames }) => {
       registerPlayerBridge(
@@ -569,10 +579,7 @@ function startAnki(settings: SettingsStore, ffmpegPath: string): void {
       exec: execFfmpeg,
       ffmpegPath,
       tmpDir: () => app.getPath('temp'),
-      fs: {
-        readBase64: async (path) => (await fs.promises.readFile(path)).toString('base64'),
-        remove: (path) => fs.promises.rm(path, { force: true })
-      }
+      fs: tempFileFs
     })
   })
   registerAnkiBridge(ipcMain, ankiService, (channel, value) =>
@@ -692,7 +699,6 @@ function probeResourceKind(path: string): 'file' | 'directory' | 'missing' {
 function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
   if (process.platform !== 'win32') return
 
-  const resourcesBase = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
   const ocrPaths = resolveGameOcrPaths({
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
@@ -767,7 +773,7 @@ function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
       showPlayer: async () => (await appShell?.showPlayer()) === 'player'
     },
     tray: createElectronGameOcrTrayFactory(
-      nativeImage.createFromPath(join(resourcesBase, 'icons', 'play.png'))
+      nativeImage.createFromPath(join(resourcesBaseDir(), 'icons', 'play.png'))
     ),
     stopPlayer: () => controller.stopPlayback(),
     quit: () => app.quit()

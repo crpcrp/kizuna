@@ -19,9 +19,6 @@
 import { posix, win32 } from 'node:path'
 import type { PathPlatform } from '../shared/mediaHistory'
 
-/** The desktop targets Kizuna supports. */
-export type SupportedPlatform = 'win32' | 'linux'
-
 /**
  * The `node:path` implementation for `platform`: `win32` for Windows,
  * `posix` for everything else. Non-Windows platforms other than Linux (macOS,

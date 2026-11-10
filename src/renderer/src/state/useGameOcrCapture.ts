@@ -11,7 +11,17 @@ import {
   type GameOcrCaptureSurface
 } from './gameOcrCaptureStream'
 
-/** Encoding handed to the OCR worker. PNG because its OpenCV has no JPEG codec. */
+/**
+ * Encoding handed to the OCR worker.
+ *
+ * PNG, and not by preference: the vendored OpenCV inside `ppocr.exe` is built
+ * `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only zlib and libpng, so
+ * `cv::imdecode` accepts PNG and nothing else. The same frame returns regions
+ * as PNG and `request failed: unsupported image format` as JPEG, and the
+ * failure is a nasty one because the screenshot appears first and only
+ * recognition fails. Changing this means rebuilding and republishing the
+ * vendor payload with the matching codec.
+ */
 export const CAPTURE_MEDIA_TYPE = 'image/png'
 
 export interface GameOcrCaptureBridge {

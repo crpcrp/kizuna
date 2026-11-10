@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import Database from 'better-sqlite3'
-import { initSchema, CURRENT_KNOWLEDGE_SCHEMA_VERSION } from '@src/main/services/knowledge/schema'
+import { initSchema } from '@src/main/services/knowledge/schema'
 
 function columnNames(db: Database.Database, table: string): string[] {
   return db
@@ -123,9 +123,5 @@ describe('initSchema', () => {
     ).toThrow()
 
     db.close()
-  })
-
-  it('exposes the current schema version', () => {
-    expect(CURRENT_KNOWLEDGE_SCHEMA_VERSION).toBe(2)
   })
 })

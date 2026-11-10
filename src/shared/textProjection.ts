@@ -129,18 +129,6 @@ export function clipAnalysisRangeToDisplayRanges(
   return mapAnalysisRangeToDisplayRanges(projection, { startOffset, endOffset })
 }
 
-/** Maps a display selection to its continuous analysis range. */
-export function mapDisplayRangeToAnalysisRange(
-  projection: TextProjection,
-  range: TextOffsetRange
-): TextOffsetRange {
-  assertRange(range, projection.displayText.length, 'display range')
-  return {
-    startOffset: mapDisplayOffsetToAnalysisOffset(projection, range.startOffset),
-    endOffset: mapDisplayOffsetToAnalysisOffset(projection, range.endOffset)
-  }
-}
-
 function clamp(value: number, minimum: number, maximum: number): number {
   if (!Number.isInteger(value)) return minimum
   return Math.min(Math.max(value, minimum), maximum)

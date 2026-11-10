@@ -1,6 +1,7 @@
 // mpv and filesystem operations are injected so screenshot tests do not need a
 // live player or real disk.
 
+import { randomBytes } from 'node:crypto'
 import { pathApiFor } from '../platformPath'
 
 /** Characters Windows forbids in a filename (`<>:"/\|?*`), plus ASCII control
@@ -108,7 +109,7 @@ export function createFrameCaptureService(deps: {
   /** Path semantics for the temp file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): FrameCaptureService {
-  const suffix = deps.uniqueSuffix ?? (() => Math.random().toString(36).slice(2, 10))
+  const suffix = deps.uniqueSuffix ?? (() => randomBytes(6).toString('hex'))
   const { join } = pathApiFor(deps.platform)
   return {
     async captureFrameData(): Promise<string> {
