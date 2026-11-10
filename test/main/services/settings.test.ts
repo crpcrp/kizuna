@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   defaultSettings,
   defaultKnowledgeSettings,
@@ -962,17 +962,55 @@ describe('createSettingsStore', () => {
     expect(store.get()).toEqual(defaultSettings)
   })
 
-  it('keeps the current value when persistence fails', () => {
-    const failure = new Error('disk full')
-    const store = createSettingsStore({
-      read: () => undefined,
-      write: () => {
-        throw failure
-      }
-    })
+  it('keeps a failed write in memory, reports it once, and retries', () => {
+    const failure = new Error('EPERM')
+    let fail = true
+    const written: string[] = []
+    const onWriteError = vi.fn()
+    const store = createSettingsStore(
+      {
+        read: () => undefined,
+        write: (text) => {
+          if (fail) throw failure
+          written.push(text)
+        }
+      },
+      { onWriteError }
+    )
 
-    expect(() => store.set({ mecabDictId: 'unidic' })).toThrow(failure)
-    expect(store.get()).toEqual(defaultSettings)
+    expect(store.set({ mecabDictId: 'unidic' }).mecabDictId).toBe('unidic')
+    expect(store.get().mecabDictId).toBe('unidic')
+    expect(store.hasPendingWrite()).toBe(true)
+    store.set({ dictOrder: [2] })
+    expect(store.flush()).toBe(false)
+    expect(onWriteError).toHaveBeenCalledExactlyOnceWith(failure)
+
+    fail = false
+    store.set({ dictOrder: [3] })
+    expect(store.hasPendingWrite()).toBe(false)
+    expect(JSON.parse(written[0])).toMatchObject({ mecabDictId: 'unidic', dictOrder: [3] })
+    expect(store.flush()).toBe(true)
+    expect(written).toHaveLength(1)
+  })
+
+  it('flush retries a pending write without a new set', () => {
+    let fail = true
+    const written: string[] = []
+    const store = createSettingsStore(
+      {
+        read: () => undefined,
+        write: (text) => {
+          if (fail) throw new Error('EBUSY')
+          written.push(text)
+        }
+      },
+      { onWriteError: () => {} }
+    )
+    store.set({ mecabDictId: 'unidic' })
+    fail = false
+
+    expect(store.flush()).toBe(true)
+    expect(JSON.parse(written[0]).mecabDictId).toBe('unidic')
   })
 })
 

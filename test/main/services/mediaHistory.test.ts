@@ -12,19 +12,41 @@ const paths = { platform: 'posix' as const, cwd: '/media' }
 function fakeSettings(
   initial?: MediaHistory,
   failWrites = false
-): { store: SettingsStore; writes: () => number } {
+): {
+  store: SettingsStore
+  writes: () => number
+  saved: () => MediaHistory
+  setFailWrites(value: boolean): void
+} {
+  // Mirrors createSettingsStore: memory always updates, a failed write stays pending.
   let mediaHistory = normalizeMediaHistory(initial, paths)
+  let saved = mediaHistory
+  let pending = false
   let writeCount = 0
+  const write = (): boolean => {
+    writeCount += 1
+    pending = failWrites
+    if (!pending) saved = mediaHistory
+    return !pending
+  }
   const store: SettingsStore = {
     get: () => ({ mediaHistory }) as Settings,
     set: (patch) => {
-      writeCount += 1
-      if (failWrites) throw new Error('disk unavailable')
       mediaHistory = patch.mediaHistory ?? mediaHistory
+      write()
       return { mediaHistory } as Settings
+    },
+    flush: () => (pending ? write() : true),
+    hasPendingWrite: () => pending
+  }
+  return {
+    store,
+    writes: () => writeCount,
+    saved: () => saved,
+    setFailWrites: (value) => {
+      failWrites = value
     }
   }
-  return { store, writes: () => writeCount }
 }
 
 function fakeTimers(): {
@@ -467,10 +489,24 @@ describe('createMediaHistoryService', () => {
     expect(history.getPlaybackHistory('/media/a.mkv')).toMatchObject({ positionSeconds: 45 })
   })
 
-  it('propagates settings write failures and dispose cancels its timer', () => {
-    const { history } = service(undefined, true)
-    expect(() => history.recordOpened('/media/a.mkv')).toThrow('disk unavailable')
+  it('keeps a position dirty and retries on the timer when the settings write fails', () => {
+    const { history, settings, timer } = service(undefined, true)
+    history.recordOpened('/media/a.mkv')
+    history.observePosition(20)
+    const before = settings.writes()
 
+    expect(() => timer.runNext()).not.toThrow()
+    expect(settings.writes()).toBe(before + 1)
+    expect(timer.pending()).toBe(1)
+
+    settings.setFailWrites(false)
+    timer.runNext()
+    expect(settings.writes()).toBe(before + 2)
+    expect(settings.saved().playbackByPath['/media/a.mkv']?.positionSeconds).toBe(20)
+    expect(timer.pending()).toBe(0)
+  })
+
+  it('dispose cancels its timer', () => {
     const working = service()
     working.history.recordOpened('/media/a.mkv')
     working.history.observePosition(20)

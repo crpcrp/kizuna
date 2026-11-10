@@ -98,7 +98,12 @@ export function registerPlayerBridge<E>(
       fileLoaded = true
       syncPowerSave()
       syncSystemMedia()
-      history?.recordOpened(path)
+      try {
+        history?.recordOpened(path)
+      } catch (err) {
+        // The file is already playing; a history failure must not report a load error.
+        console.warn('[kizuna] failed to record opened media', err)
+      }
       return result
     } catch (err) {
       // Only clear the flag when mpv actually dropped to idle: an MpvLoadError
