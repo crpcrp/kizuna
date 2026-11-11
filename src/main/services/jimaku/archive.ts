@@ -14,6 +14,7 @@ import type {
   JimakuPreparedSubtitle
 } from './downloadStore'
 import { JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES } from './downloadStore'
+import { fail, ok } from './result'
 
 export const JIMAKU_ARCHIVE_MAX_COMPRESSED_BYTES = JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
 export const JIMAKU_ARCHIVE_MAX_EXPANDED_BYTES = 100 * 1024 * 1024
@@ -110,7 +111,7 @@ export function createJimakuArchiveService(
     movie: boolean,
     signal?: AbortSignal
   ): Promise<JimakuArchiveResult<JimakuArchiveInspection>> {
-    if (signal?.aborted) return failure('cancelled')
+    if (signal?.aborted) return fail({ code: 'cancelled' })
 
     const prepared = await deps.downloads.preparePackage(entryId, file, signal)
     if (!prepared.ok) return fromDownload(prepared)
@@ -118,15 +119,15 @@ export function createJimakuArchiveService(
     const bytes = await deps.downloads.readPrepared(prepared.value.handle)
     if (bytes === undefined) {
       deps.downloads.releasePrepared(prepared.value.handle)
-      return failure('storage')
+      return fail({ code: 'storage' })
     }
     if (signal?.aborted) {
       deps.downloads.releasePrepared(prepared.value.handle)
-      return failure('cancelled')
+      return fail({ code: 'cancelled' })
     }
     if (bytes.byteLength > maxCompressedBytes) {
       deps.downloads.releasePrepared(prepared.value.handle)
-      return failure('tooLarge')
+      return fail({ code: 'tooLarge' })
     }
 
     let extracted: Array<{ name: string; bytes: Uint8Array }>
@@ -134,7 +135,7 @@ export function createJimakuArchiveService(
       extracted = extractSubtitles(bytes, maxMemberBytes, maxExpandedBytes)
     } catch (error) {
       deps.downloads.releasePrepared(prepared.value.handle)
-      return failure(mapArchiveError(error))
+      return fail({ code: mapArchiveError(error) })
     }
 
     const packageHandle = makePackageHandle()
@@ -167,7 +168,7 @@ export function createJimakuArchiveService(
 
     if (members.size === 0) {
       deps.downloads.releasePrepared(prepared.value.handle)
-      return failure('unsupportedArchive')
+      return fail({ code: 'unsupportedArchive' })
     }
 
     activePackages.set(packageHandle, {
@@ -175,7 +176,7 @@ export function createJimakuArchiveService(
       sourceFile: file,
       members
     })
-    return success({
+    return ok({
       packageHandle,
       entryId,
       sourceFileName: file.name,
@@ -189,10 +190,10 @@ export function createJimakuArchiveService(
     signal?: AbortSignal
   ): Promise<JimakuArchiveResult<JimakuPreparedSubtitle>> {
     const active = activePackages.get(packageHandle)
-    if (active === undefined) return failure('invalidMember')
+    if (active === undefined) return fail({ code: 'invalidMember' })
     const member = active.members.get(memberId)
-    if (member === undefined) return failure('invalidMember')
-    if (signal?.aborted) return failure('cancelled')
+    if (member === undefined) return fail({ code: 'invalidMember' })
+    if (signal?.aborted) return fail({ code: 'cancelled' })
     const prepared = await deps.downloads.prepareExtracted(
       active.prepared.provenance.entryId,
       active.sourceFile,
@@ -200,7 +201,7 @@ export function createJimakuArchiveService(
       member.bytes,
       signal
     )
-    return prepared.ok ? success(prepared.value) : fromDownload(prepared)
+    return prepared.ok ? ok(prepared.value) : fromDownload(prepared)
   }
 
   function releasePackage(packageHandle: string): void {
@@ -267,7 +268,7 @@ function fromDownload<T>(
     | { ok: true; value: T }
     | { ok: false; error: { code: JimakuDownloadErrorCode; recoveryUrl?: string } }
 ): JimakuArchiveResult<T> {
-  return result.ok ? success(result.value) : failure(result.error.code, result.error.recoveryUrl)
+  return result.ok ? ok(result.value) : fail({ ...result.error })
 }
 
 function defaultPackageHandle(): string {
@@ -276,17 +277,6 @@ function defaultPackageHandle(): string {
 
 function defaultMemberId(packageHandle: string, entryIndex: number): string {
   return `${packageHandle}-member-${entryIndex}`
-}
-
-function success<T>(value: T): JimakuArchiveResult<T> {
-  return { ok: true, value }
-}
-
-function failure<T>(code: JimakuArchiveErrorCode, recoveryUrl?: string): JimakuArchiveResult<T> {
-  return {
-    ok: false,
-    error: recoveryUrl === undefined ? { code } : { code, recoveryUrl }
-  }
 }
 
 class UnsupportedArchiveError extends Error {
