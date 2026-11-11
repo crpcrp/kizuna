@@ -3,11 +3,9 @@
 
 /** The subset of Electron's ipcMain we need, generic over the event type. */
 export interface IpcMainHandleLike<E> {
-  // `any[]` mirrors Electron's own `ipcMain.handle` signature: each channel
-  // below passes a differently-typed argument list, which `unknown[]` would
-  // reject contravariantly.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handle(channel: string, listener: (event: E, ...args: any[]) => unknown): unknown
+  // `unknown[]`: renderer arguments are untrusted, so a handler must narrow
+  // each one (see `ipcValidation.ts`) before delegating.
+  handle(channel: string, listener: (event: E, ...args: unknown[]) => unknown): unknown
 }
 
 /** The subset of Electron's ipcMain we need for a fire-and-forget (send) channel. */

@@ -6,9 +6,18 @@ import { PLAYER_CHANNELS } from '../shared/ipcChannels'
 import { isRemoteUrl } from '../shared/mediaFileTypes'
 import {
   VIDEO_EQ_PROPERTIES,
-  type VideoAdjustments,
+  normalizeVideoAdjustments,
   type VideoEqProperty
 } from '../shared/playerSettings'
+import {
+  isBoolean,
+  isFiniteNumber,
+  isNonEmptyString,
+  isNonNegativeSafeInteger,
+  isRecord,
+  isString
+} from '../shared/guards'
+import { expect, nullable, optional } from './ipcValidation'
 import type { AudioDevice } from '../shared/audioDevice'
 import { MpvLoadError } from './mpv/controller'
 import type { PowerSaveController } from './services/powerSave'
@@ -89,7 +98,13 @@ export function registerPlayerBridge<E>(
   // owns its own throttling, so calling it on every observer tick is fine.
   const syncSystemMedia = (): void => systemMedia?.update({ fileLoaded, paused, timePos, duration })
 
-  ipc.handle(PLAYER_CHANNELS.load, async (_e, path) => {
+  const str = (channel: string) => expect(isNonEmptyString, channel)
+  const num = (channel: string) => expect(isFiniteNumber, channel)
+  const bool = (channel: string) => expect(isBoolean, channel)
+  const loadPath = str(PLAYER_CHANNELS.load)
+
+  ipc.handle(PLAYER_CHANNELS.load, async (_e, rawPath) => {
+    const path = loadPath(rawPath)
     if (isRemoteUrl(path)) throw new Error(REMOTE_PLAYBACK_MESSAGE)
     // Lock in the outgoing file's last position and suspend attribution
     // before the new load can produce any early position/duration events —
@@ -124,38 +139,71 @@ export function registerPlayerBridge<E>(
       throw err
     }
   })
-  ipc.handle(PLAYER_CHANNELS.setPause, (_e, paused) => controller.setPause(paused))
-  ipc.handle(PLAYER_CHANNELS.seek, (_e, seconds, absolute) => controller.seek(seconds, absolute))
-  ipc.handle(PLAYER_CHANNELS.setVolume, (_e, volume) => controller.setVolume(volume))
-  ipc.handle(PLAYER_CHANNELS.setSpeed, (_e, speed) => controller.setSpeed(speed))
-  ipc.handle(PLAYER_CHANNELS.setMuted, (_e, muted) => controller.setMuted(muted))
-  ipc.handle(PLAYER_CHANNELS.setAudioDelay, (_e, delayMs) => controller.setAudioDelay(delayMs))
-  ipc.handle(PLAYER_CHANNELS.setAudioTrack, (_e, aid) => controller.setAudioTrack(aid))
-  ipc.handle(PLAYER_CHANNELS.getAudioDevices, () => controller.getAudioDevices())
-  ipc.handle(PLAYER_CHANNELS.setAudioDevice, (_e, name) => controller.setAudioDevice(name))
-  ipc.handle(PLAYER_CHANNELS.setLoudnessNorm, (_e, on) => controller.setLoudnessNormalization(on))
-  ipc.handle(PLAYER_CHANNELS.setAbLoop, (_e, a, b) => controller.setAbLoop(a, b))
-  ipc.handle(PLAYER_CHANNELS.setVideoMargins, (_e, top, bottom, right, left) =>
-    controller.setVideoMargins(top, bottom, right, left)
+  const pauseArg = bool(PLAYER_CHANNELS.setPause)
+  ipc.handle(PLAYER_CHANNELS.setPause, (_e, paused) => controller.setPause(pauseArg(paused)))
+  const seekSeconds = num(PLAYER_CHANNELS.seek)
+  const seekAbsolute = expect(optional(isBoolean), PLAYER_CHANNELS.seek)
+  ipc.handle(PLAYER_CHANNELS.seek, (_e, seconds, absolute) =>
+    controller.seek(seekSeconds(seconds), seekAbsolute(absolute))
   )
-  ipc.handle(PLAYER_CHANNELS.setVideoAdjustments, (_e, adjustments: VideoAdjustments) =>
+  const volumeArg = num(PLAYER_CHANNELS.setVolume)
+  ipc.handle(PLAYER_CHANNELS.setVolume, (_e, volume) => controller.setVolume(volumeArg(volume)))
+  const speedArg = num(PLAYER_CHANNELS.setSpeed)
+  ipc.handle(PLAYER_CHANNELS.setSpeed, (_e, speed) => controller.setSpeed(speedArg(speed)))
+  const mutedArg = bool(PLAYER_CHANNELS.setMuted)
+  ipc.handle(PLAYER_CHANNELS.setMuted, (_e, muted) => controller.setMuted(mutedArg(muted)))
+  const delayArg = num(PLAYER_CHANNELS.setAudioDelay)
+  ipc.handle(PLAYER_CHANNELS.setAudioDelay, (_e, delayMs) =>
+    controller.setAudioDelay(delayArg(delayMs))
+  )
+  const aidArg = expect(isNonNegativeSafeInteger, PLAYER_CHANNELS.setAudioTrack)
+  ipc.handle(PLAYER_CHANNELS.setAudioTrack, (_e, aid) => controller.setAudioTrack(aidArg(aid)))
+  ipc.handle(PLAYER_CHANNELS.getAudioDevices, () => controller.getAudioDevices())
+  const deviceArg = str(PLAYER_CHANNELS.setAudioDevice)
+  ipc.handle(PLAYER_CHANNELS.setAudioDevice, (_e, name) =>
+    controller.setAudioDevice(deviceArg(name))
+  )
+  const loudnessArg = bool(PLAYER_CHANNELS.setLoudnessNorm)
+  ipc.handle(PLAYER_CHANNELS.setLoudnessNorm, (_e, on) =>
+    controller.setLoudnessNormalization(loudnessArg(on))
+  )
+  const loopArg = expect(nullable(isFiniteNumber), PLAYER_CHANNELS.setAbLoop)
+  ipc.handle(PLAYER_CHANNELS.setAbLoop, (_e, a, b) => controller.setAbLoop(loopArg(a), loopArg(b)))
+  const marginArg = num(PLAYER_CHANNELS.setVideoMargins)
+  const sideMarginArg = expect(optional(isFiniteNumber), PLAYER_CHANNELS.setVideoMargins)
+  ipc.handle(PLAYER_CHANNELS.setVideoMargins, (_e, top, bottom, right, left) =>
+    controller.setVideoMargins(
+      marginArg(top),
+      marginArg(bottom),
+      sideMarginArg(right),
+      sideMarginArg(left)
+    )
+  )
+  const adjustmentsArg = expect(isRecord, PLAYER_CHANNELS.setVideoAdjustments)
+  ipc.handle(PLAYER_CHANNELS.setVideoAdjustments, (_e, raw) => {
+    // Clamp/default each field exactly as a stored value would be.
+    const adjustments = normalizeVideoAdjustments(adjustmentsArg(raw))
     // One renderer call, fanned out to the individual mpv properties: the five
     // equalizer values plus rotate and deinterlace. Awaiting all keeps the
     // invoke pending until every property was accepted (or one rejects).
-    Promise.all([
+    return Promise.all([
       ...VIDEO_EQ_PROPERTIES.map((name: VideoEqProperty) =>
         controller.setVideoAdjustment(name, adjustments[name])
       ),
       controller.setVideoRotate(adjustments.rotate),
       controller.setDeinterlace(adjustments.deinterlace)
     ])
-  )
+  })
   ipc.handle(PLAYER_CHANNELS.frameStep, () => controller.frameStep())
   ipc.handle(PLAYER_CHANNELS.frameBackStep, () => controller.frameBackStep())
   if (screenshots) {
+    const shotPath = expect(isString, PLAYER_CHANNELS.screenshot)
+    const shotTime = num(PLAYER_CHANNELS.screenshot)
     ipc.handle(PLAYER_CHANNELS.screenshot, async (_e, mediaPath, timePos) => {
+      const path = shotPath(mediaPath)
+      const time = shotTime(timePos)
       try {
-        return await screenshots.capture(mediaPath, timePos)
+        return await screenshots.capture(path, time)
       } catch (err) {
         if (err instanceof ScreenshotFolderError) throw err
         // Don't leak raw mpv/filesystem errors (which embed the target path)

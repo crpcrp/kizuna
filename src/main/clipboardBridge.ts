@@ -1,5 +1,7 @@
 import { CLIPBOARD_CHANNELS } from '../shared/ipcChannels'
+import { isString } from '../shared/guards'
 import type { IpcMainHandleLike } from './ipc'
+import { expect } from './ipcValidation'
 
 /** The narrow Electron clipboard surface used by the renderer bridge. */
 export interface ClipboardWriter {
@@ -11,5 +13,6 @@ export function registerClipboardBridge<E>(
   ipc: IpcMainHandleLike<E>,
   clipboard: ClipboardWriter
 ): void {
-  ipc.handle(CLIPBOARD_CHANNELS.writeText, (_event, text: string) => clipboard.writeText(text))
+  const textArg = expect(isString, CLIPBOARD_CHANNELS.writeText)
+  ipc.handle(CLIPBOARD_CHANNELS.writeText, (_event, text) => clipboard.writeText(textArg(text)))
 }

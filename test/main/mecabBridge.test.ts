@@ -3,7 +3,12 @@ import { registerMecabBridge, type MecabServiceLike } from '@src/main/mecabBridg
 import { MECAB_CHANNELS } from '@src/shared/ipcChannels'
 import type { Token } from '@src/shared/token'
 import type { McDict } from '@src/shared/mecab'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 import { makeToken } from '@test/harness/tokenFixtures'
 
 const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
@@ -127,5 +132,23 @@ describe('registerMecabBridge', () => {
 
     await expect(handlers.get(MECAB_CHANNELS.openUserUnidicDir)!(event)).resolves.toBe('open-error')
     expect(openUserUnidicDir).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('registerMecabBridge malformed requests', () => {
+  it.each([
+    [MECAB_CHANNELS.tokenize, [undefined]],
+    [MECAB_CHANNELS.tokenizeBatch, [['a', 1]]],
+    [MECAB_CHANNELS.tokenizeBatch, [new Array(50_001).fill('x')]],
+    [MECAB_CHANNELS.selectDict, ['jumandic']]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerMecabBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

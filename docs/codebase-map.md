@@ -70,9 +70,12 @@ Runtime type guards (`isRecord`, `isFiniteNumber`, …) live in
 
 1. Declare the channel in `src/shared/ipcChannels.ts`.
 2. Add request and response types or validation under `src/shared/`.
-3. Register the main-process handler in the owning bridge.
+3. Register the main-process handler in the owning bridge. Handler arguments
+   are `unknown`; narrow each with `expect(guard, channel)` from
+   `src/main/ipcValidation.ts` before delegating.
 4. Expose the smallest required method from `src/preload/index.ts`.
-5. Add bridge and service tests.
+5. Add bridge and service tests, including a malformed-input case
+   (`invokeRejection` and `expectUntouched` in `test/harness/fakeIpcMain.ts`).
 
 ### Add an external boundary
 

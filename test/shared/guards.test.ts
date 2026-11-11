@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isNumberArray,
+  isStringArray,
+  isUint8Array,
   isFiniteNumber,
   isNonNegativeSafeInteger,
   isPositiveSafeInteger,
@@ -47,5 +50,21 @@ describe('isNonNegativeSafeInteger', () => {
     expect(isNonNegativeSafeInteger(1.5)).toBe(false)
     expect(isNonNegativeSafeInteger(Number.MAX_SAFE_INTEGER + 1)).toBe(false)
     expect(isNonNegativeSafeInteger(Number.NaN)).toBe(false)
+  })
+})
+
+describe('array guards', () => {
+  it('check every element and the optional length cap', () => {
+    expect(isStringArray(['a', ''])).toBe(true)
+    expect(isStringArray(['a', 1])).toBe(false)
+    expect(isStringArray(['a', 'b'], 1)).toBe(false)
+    expect(isNumberArray([0, -1.5])).toBe(true)
+    expect(isNumberArray([1, Number.NaN])).toBe(false)
+    expect(isNumberArray('12')).toBe(false)
+  })
+
+  it('isUint8Array rejects plain number arrays', () => {
+    expect(isUint8Array(new Uint8Array(2))).toBe(true)
+    expect(isUint8Array([80, 75])).toBe(false)
   })
 })

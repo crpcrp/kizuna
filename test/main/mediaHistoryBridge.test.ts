@@ -6,7 +6,12 @@ import {
 import { MEDIA_HISTORY_CHANNELS } from '@src/shared/ipcChannels'
 import type { FileAvailability } from '@src/shared/preloadApi'
 import type { RecentMediaFile } from '@src/shared/mediaHistory'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 
 function fakeService(availability: FileAvailability = { status: 'available' }) {
   const recents: RecentMediaFile[] = [{ path: 'C:\\Media\\episode.mkv', openedAt: 1 }]
@@ -80,5 +85,26 @@ describe('registerMediaHistoryBridge', () => {
     expect(service.setAudioTrack).toHaveBeenCalledWith(path, audio)
     expect(service.setSubtitleTrack).toHaveBeenCalledWith(path, subtitle)
     expect(service.setSubtitleVersionOffset).toHaveBeenCalledWith(path, 'a'.repeat(64), 250)
+  })
+})
+
+describe('registerMediaHistoryBridge malformed requests', () => {
+  it.each([
+    [MEDIA_HISTORY_CHANNELS.getPlaybackHistory, [undefined]],
+    [MEDIA_HISTORY_CHANNELS.removeRecentFile, [42]],
+    [MEDIA_HISTORY_CHANNELS.checkFileAvailability, ['']],
+    [MEDIA_HISTORY_CHANNELS.setAudioTrack, ['/v.mkv', { id: -1 }]],
+    [MEDIA_HISTORY_CHANNELS.setSubtitleTrack, ['/v.mkv', { mode: 'bogus' }]],
+    [MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset, ['/v.mkv', 'not-a-hash', 100]],
+    [MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset, ['/v.mkv', 'a'.repeat(64), Number.NaN]]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerMediaHistoryBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

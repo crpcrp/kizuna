@@ -7,10 +7,7 @@ import type { IpcMainHandleLike, IpcMainOnLike } from '@src/main/ipc'
 /** Stand-in invoke event. Bridges that only read the sender's identity need no more. */
 export type FakeEvent = { senderId: number }
 
-// `any[]` mirrors `IpcMainHandleLike`, whose per-channel argument lists
-// `unknown[]` would reject contravariantly.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type FakeHandleFn<E> = (event: E, ...args: any[]) => unknown
+export type FakeHandleFn<E> = (event: E, ...args: unknown[]) => unknown
 
 export type FakeOnFn<E> = (event: E, ...args: unknown[]) => void
 
@@ -45,5 +42,32 @@ export function fakeIpc<E = FakeEvent>(event: E = { senderId: 1 } as E): FakeIpc
     listeners,
     invoke: (channel, ...args) => handlers.get(channel)!(event, ...args),
     send: (channel, ...args) => listeners.get(channel)?.(event, ...args)
+  }
+}
+
+/**
+ * Invokes `channel` and resolves the rejection it produced. A synchronous throw
+ * counts, as Electron turns one into the invoke's rejection. Fails if the
+ * handler succeeds.
+ */
+export async function invokeRejection<E>(
+  fake: Pick<FakeIpc<E>, 'invoke'>,
+  channel: string,
+  ...args: unknown[]
+): Promise<unknown> {
+  try {
+    await fake.invoke(channel, ...args)
+  } catch (err) {
+    return err
+  }
+  throw new Error(`${channel} did not reject`)
+}
+
+/** Asserts that no method of a vi.fn-backed fake service was called. */
+export function expectUntouched(service: object): void {
+  for (const [name, fn] of Object.entries(service)) {
+    if (typeof fn === 'function' && 'mock' in fn && fn.mock.calls.length > 0) {
+      throw new Error(`${name} was called with a malformed request`)
+    }
   }
 }

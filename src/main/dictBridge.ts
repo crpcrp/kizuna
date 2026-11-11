@@ -3,6 +3,8 @@
 
 import { DICT_CHANNELS } from '../shared/ipcChannels'
 import type { IpcMainHandleLike } from './ipc'
+import { expect, isNumberList, isStringList, nullable, oneOf, optional } from './ipcValidation'
+import { isBoolean, isPositiveSafeInteger, isString, isUint8Array } from '../shared/guards'
 import { pathApiFor } from './platformPath'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './services/dict/schema'
 import { lookup as runLookup } from './services/dict/lookup'
@@ -65,23 +67,52 @@ export function registerDictBridge<E>(
   service: DictServiceLike,
   send: DictEventSender = noopSend
 ): void {
-  ipc.handle(DICT_CHANNELS.importDict, (_e, zipBytes) =>
-    service.importDict(zipBytes, (done, total) =>
-      send(DICT_CHANNELS.importProgress, { done, total })
-    )
+  const C = DICT_CHANNELS
+  const zipArg = expect(isUint8Array, C.importDict)
+  ipc.handle(C.importDict, (_e, zipBytes) =>
+    service.importDict(zipArg(zipBytes), (done, total) => send(C.importProgress, { done, total }))
   )
+  const lemmaArg = expect(isString, C.lookup)
+  const optionalStringArg = expect(optional(isString), C.lookup)
+  const freqDictArg = expect(optional(nullable(isPositiveSafeInteger)), C.lookup)
+  const sortModeArg = expect(optional(oneOf(FREQUENCY_MODES)), C.lookup)
+  const candidatesArg = expect(optional(isStringList), C.lookup)
   ipc.handle(
-    DICT_CHANNELS.lookup,
+    C.lookup,
     (_e, lemma, reading, freqDictId, sortMode, longestMatchCandidates, surface) =>
-      service.lookup(lemma, reading, freqDictId, sortMode, longestMatchCandidates, surface)
+      service.lookup(
+        lemmaArg(lemma),
+        optionalStringArg(reading),
+        freqDictArg(freqDictId),
+        sortModeArg(sortMode),
+        candidatesArg(longestMatchCandidates),
+        optionalStringArg(surface)
+      )
   )
-  ipc.handle(DICT_CHANNELS.listDicts, () => service.listDicts())
-  ipc.handle(DICT_CHANNELS.setEnabled, (_e, id, enabled) => service.setEnabled(id, enabled))
-  ipc.handle(DICT_CHANNELS.setFallbackOnly, (_e, id, fallbackOnly) =>
-    service.setFallbackOnly(id, fallbackOnly)
+  ipc.handle(C.listDicts, () => service.listDicts())
+  const enabledId = expect(isPositiveSafeInteger, C.setEnabled)
+  const enabledArg = expect(isBoolean, C.setEnabled)
+  ipc.handle(C.setEnabled, (_e, id, enabled) =>
+    service.setEnabled(enabledId(id), enabledArg(enabled))
   )
-  ipc.handle(DICT_CHANNELS.reorder, (_e, orderedIds) => service.reorder(orderedIds))
-  ipc.handle(DICT_CHANNELS.remove, (_e, id) => service.removeDict(id))
+  const fallbackId = expect(isPositiveSafeInteger, C.setFallbackOnly)
+  const fallbackArg = expect(isBoolean, C.setFallbackOnly)
+  ipc.handle(C.setFallbackOnly, (_e, id, fallbackOnly) =>
+    service.setFallbackOnly(fallbackId(id), fallbackArg(fallbackOnly))
+  )
+  const orderArg = expect(isDictIdList, C.reorder)
+  ipc.handle(C.reorder, (_e, orderedIds) => service.reorder(orderArg(orderedIds)))
+  const removeId = expect(isPositiveSafeInteger, C.remove)
+  ipc.handle(C.remove, (_e, id) => service.removeDict(removeId(id)))
+}
+
+const FREQUENCY_MODES = [
+  'rank-based',
+  'occurrence-based'
+] as const satisfies readonly FrequencyMode[]
+
+function isDictIdList(value: unknown): value is number[] {
+  return isNumberList(value) && value.every(isPositiveSafeInteger)
 }
 
 /**

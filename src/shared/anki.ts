@@ -1,7 +1,14 @@
 // Shared AnkiConnect DTOs, crossing main/preload/renderer. Pure data + a
 // validating merge (mirrors shared/playerSettings.ts's normalize functions).
 
-import type { Token } from './token'
+import { isToken, type Token } from './token'
+import {
+  isFiniteNumber,
+  isNonNegativeSafeInteger,
+  isPositiveSafeInteger,
+  isRecord,
+  isString
+} from './guards'
 import type { LookupResult } from './dictionary'
 import type { JlptLevel } from './jlpt'
 
@@ -259,4 +266,57 @@ export interface MineRequest {
   /** Present only when sentence audio can be clipped for this mine; the
    * service turns a successful extraction into an extra `audio` attachment. */
   media?: MineMediaContext
+}
+
+/** Shape check for a renderer-supplied backfill apply request. */
+export function isAnkiJlptBackfillApplyRequest(
+  value: unknown
+): value is AnkiJlptBackfillApplyRequest {
+  return (
+    isRecord(value) &&
+    typeof value.operationToken === 'string' &&
+    Array.isArray(value.candidates) &&
+    value.candidates.every(
+      (candidate) =>
+        isRecord(candidate) &&
+        isPositiveSafeInteger(candidate.noteId) &&
+        candidate.expectedTargetValue === ''
+    )
+  )
+}
+
+function isMineScreenshot(value: unknown): value is MineScreenshot {
+  return isRecord(value) && typeof value.dataBase64 === 'string'
+}
+
+function isMineMediaContext(value: unknown): value is MineMediaContext {
+  return (
+    isRecord(value) &&
+    typeof value.path === 'string' &&
+    isNonNegativeSafeInteger(value.audioStreamIndex) &&
+    isFiniteNumber(value.startSec) &&
+    isFiniteNumber(value.endSec) &&
+    value.startSec >= 0 &&
+    value.endSec > value.startSec
+  )
+}
+
+/**
+ * Shape check for a renderer-supplied mine request. The lookup result is
+ * checked only for the fields every note is built from; its optional display
+ * fields only feed note text.
+ */
+export function isMineRequest(value: unknown): value is MineRequest {
+  if (!isRecord(value) || !isToken(value.token) || !isString(value.sentence)) return false
+  const result = value.result
+  if (
+    !isRecord(result) ||
+    !isString(result.expression) ||
+    !isString(result.reading) ||
+    !isString(result.glossary)
+  ) {
+    return false
+  }
+  if (value.screenshot !== undefined && !isMineScreenshot(value.screenshot)) return false
+  return value.media === undefined || isMineMediaContext(value.media)
 }
