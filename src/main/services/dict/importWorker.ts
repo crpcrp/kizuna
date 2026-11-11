@@ -4,12 +4,12 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import Database from 'better-sqlite3'
 import { importDictionary, type ImportDb } from './yomitanImport'
+import { readDictZip } from './importer'
 import type { ImportResult } from '../../../shared/dictionary'
 
-export interface ImportWorkerInput {
-  dbPath: string
-  zipBytes: Uint8Array
-}
+/** `zipPath` is read inside the worker so the archive never sits in main-process memory. */
+export type ImportWorkerInput =
+  { dbPath: string; zipBytes: Uint8Array } | { dbPath: string; zipPath: string }
 
 /** Structural subset of better-sqlite3's Database the worker needs, beyond ImportDb. */
 export interface WorkerDb extends ImportDb {
@@ -94,7 +94,8 @@ export function runImportInWorker(
     // Must precede the import: neither VACUUM nor a checkpoint can run inside
     // the import's transaction.
     migrateAutoVacuum(db)
-    const result = importDictionary(input.zipBytes, db, onProgress)
+    const zip = readDictZip('zipPath' in input ? input.zipPath : input.zipBytes)
+    const result = importDictionary(zip, db, onProgress)
     reclaimAfterImport(db)
     return result
   } finally {

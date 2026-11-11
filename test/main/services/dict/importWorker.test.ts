@@ -58,6 +58,17 @@ describe('runImportInWorker', () => {
     expect(closed).toBe(true)
   })
 
+  it('reads the zip from zipPath inside the worker', () => {
+    const db = new Database(':memory:')
+
+    const result = runImportInWorker(
+      { dbPath: ':memory:', zipPath: fixture('yomitan-sample.zip') },
+      () => db as unknown as WorkerDb
+    )
+
+    expect(result.termCount).toBe(6)
+  })
+
   it('still closes the connection when the import throws', () => {
     let closed = false
     const openDb = (): WorkerDb => {

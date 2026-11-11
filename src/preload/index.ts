@@ -291,12 +291,12 @@ const api = {
     currentDict: (): Promise<'ipadic' | 'unidic'> => ipcRenderer.invoke(MECAB_CHANNELS.currentDict),
     openUserUnidicDir: (): Promise<string> => ipcRenderer.invoke(MECAB_CHANNELS.openUserUnidicDir)
   },
-  // Yomitan dictionary bridge: import a dictionary zip (already read into
-  // bytes by the renderer's file picker), look up a term, and manage the
+  // Yomitan dictionary bridge: import a dictionary zip by its on-disk path
+  // (main reads the file, so the archive never crosses IPC), look up a term, and manage the
   // installed dictionaries (list/enable/reorder/remove).
   dict: {
-    importDict: (zipBytes: Uint8Array): Promise<ImportResult> =>
-      ipcRenderer.invoke(DICT_CHANNELS.importDict, zipBytes),
+    importDictFile: (zipPath: string): Promise<ImportResult> =>
+      ipcRenderer.invoke(DICT_CHANNELS.importDictFile, zipPath),
     lookup: (
       lemma: string,
       reading?: string,

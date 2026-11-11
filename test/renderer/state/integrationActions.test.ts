@@ -105,12 +105,11 @@ describe('selectMecabDict', () => {
 describe('yomitan dictionary actions', () => {
   it('importYomitanDict imports then force-refreshes dictionaries', async () => {
     const optionsData = fakeOptionsData()
-    const dict = { importDict: vi.fn().mockResolvedValue({ dictId: 1 }) }
-    const bytes = new Uint8Array([1, 2, 3])
+    const dict = { importDictFile: vi.fn().mockResolvedValue({ dictId: 1 }) }
 
-    await importYomitanDict(dict, optionsData, bytes)
+    await importYomitanDict(dict, optionsData, '/dicts/jitendex.zip')
 
-    expect(dict.importDict).toHaveBeenCalledWith(bytes)
+    expect(dict.importDictFile).toHaveBeenCalledWith('/dicts/jitendex.zip')
     expect(optionsData.load).toHaveBeenCalledWith('dictionaries', { force: true })
   })
 

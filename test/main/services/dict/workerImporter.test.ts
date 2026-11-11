@@ -47,6 +47,26 @@ describe('createWorkerImporter', () => {
     expect(workers[0].terminated).toBe(true)
   })
 
+  it('passes a path source to the worker as zipPath instead of bytes', async () => {
+    const { factory, calls, workers } = fakeWorkerFactory()
+    const importer = createWorkerImporter({
+      dbPath: '/data/dict.db',
+      workerPath: '/worker.js',
+      createWorker: factory
+    })
+
+    const pending = importer.import('/dicts/jitendex.zip')
+    expect(calls).toEqual([
+      {
+        workerPath: '/worker.js',
+        workerData: { dbPath: '/data/dict.db', zipPath: '/dicts/jitendex.zip' }
+      }
+    ])
+
+    workers[0].emitMessage({ type: 'result', result: RESULT })
+    await expect(pending).resolves.toEqual(RESULT)
+  })
+
   it('rejects on a failure message', async () => {
     const { factory, workers } = fakeWorkerFactory()
     const importer = createWorkerImporter({

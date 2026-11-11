@@ -79,16 +79,16 @@ export async function selectMecabDict(args: SelectMecabDictArgs): Promise<void> 
 }
 
 export interface DictImportBridge {
-  importDict(zipBytes: Uint8Array): Promise<ImportResult>
+  importDictFile(zipPath: string): Promise<ImportResult>
 }
 
-/** Imports a Yomitan dictionary zip, then refreshes the cached list. */
+/** Imports the Yomitan dictionary zip at `zipPath`, then refreshes the cached list. */
 export async function importYomitanDict(
   dict: DictImportBridge,
   optionsData: OptionsDataController,
-  bytes: Uint8Array
+  zipPath: string
 ): Promise<void> {
-  await dict.importDict(bytes)
+  await dict.importDictFile(zipPath)
   await optionsData.load('dictionaries', { force: true })
 }
 

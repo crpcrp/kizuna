@@ -1,6 +1,10 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { mkdtempSync, rmSync, truncateSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
+  MAX_DICT_ZIP_BYTES,
   registerDictBridge,
   resolveImportWorkerPath,
   type DictServiceLike
@@ -28,8 +32,8 @@ function fakeService(onProgressToEmit?: Array<[number, number]>) {
   const calls: Record<string, unknown[]> = {}
   const service: DictServiceLike = {
     importDict: vi.fn(
-      async (zipBytes: Uint8Array, onProgress?: (done: number, total: number) => void) => {
-        calls.importDict = [zipBytes]
+      async (zip: Uint8Array | string, onProgress?: (done: number, total: number) => void) => {
+        calls.importDict = [zip]
         for (const [done, total] of onProgressToEmit ?? []) onProgress?.(done, total)
         return sampleImportResult
       }
@@ -82,6 +86,19 @@ describe.each(PATH_PLATFORMS)(
 
 describe('registerDictBridge', () => {
   const event: FakeEvent = { senderId: 1 }
+  let tempDir: string
+  let zipPath: string
+  const writeTemp = (name: string): string => {
+    const path = join(tempDir, name)
+    writeFileSync(path, 'PK')
+    return path
+  }
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'kizuna-dict-bridge-'))
+    zipPath = writeTemp('dict.zip')
+  })
+  afterEach(() => rmSync(tempDir, { recursive: true, force: true }))
 
   it('registers every command channel', () => {
     const { ipc, handlers } = fakeIpc()
@@ -90,7 +107,7 @@ describe('registerDictBridge', () => {
 
     expect([...handlers.keys()].sort()).toEqual(
       [
-        DICT_CHANNELS.importDict,
+        DICT_CHANNELS.importDictFile,
         DICT_CHANNELS.lookup,
         DICT_CHANNELS.listDicts,
         DICT_CHANNELS.setEnabled,
@@ -101,17 +118,62 @@ describe('registerDictBridge', () => {
     )
   })
 
-  it('forwards importDict to service.importDict and returns its result', async () => {
+  it('forwards a valid importDictFile path to service.importDict and returns its result', async () => {
     const { ipc, handlers } = fakeIpc()
     const { service, calls } = fakeService()
     registerDictBridge(ipc, service)
 
-    const zipBytes = new Uint8Array([1, 2, 3])
-    const result = await handlers.get(DICT_CHANNELS.importDict)!(event, zipBytes)
+    const result = await handlers.get(DICT_CHANNELS.importDictFile)!(event, zipPath)
 
-    expect(service.importDict).toHaveBeenCalledWith(zipBytes, expect.any(Function))
-    expect(calls.importDict).toEqual([zipBytes])
+    expect(service.importDict).toHaveBeenCalledWith(zipPath, expect.any(Function))
+    expect(calls.importDict).toEqual([zipPath])
     expect(result).toEqual(sampleImportResult)
+  })
+
+  it('accepts an upper-case .ZIP extension', async () => {
+    const { ipc, handlers } = fakeIpc()
+    const { service } = fakeService()
+    registerDictBridge(ipc, service)
+    const upper = join(tempDir, 'DICT.ZIP')
+    writeFileSync(upper, 'PK')
+
+    await handlers.get(DICT_CHANNELS.importDictFile)!(event, upper)
+
+    expect(service.importDict).toHaveBeenCalledWith(upper, expect.any(Function))
+  })
+
+  it.each([
+    ['an empty path', () => '', 'local file path'],
+    ['a remote URL', () => 'https://example.com/dict.zip', 'local file path'],
+    ['a non-zip file', () => writeTemp('dict.json'), '.zip file'],
+    ['a missing file', () => join(tempDir, 'missing.zip'), 'not found'],
+    [
+      'a directory',
+      () => {
+        const dir = join(tempDir, 'folder.zip')
+        mkdirSync(dir)
+        return dir
+      },
+      'not found'
+    ],
+    [
+      'a file over the size cap',
+      () => {
+        const big = writeTemp('big.zip')
+        truncateSync(big, MAX_DICT_ZIP_BYTES + 1)
+        return big
+      },
+      'too large'
+    ]
+  ])('rejects %s without calling the service', async (_label, makePath, message) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerDictBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, DICT_CHANNELS.importDictFile, makePath())
+
+    expect(String(err)).toContain(message)
+    expectUntouched(service)
   })
 
   it('pushes importDict progress to the renderer over dict:importProgress via send', async () => {
@@ -123,7 +185,7 @@ describe('registerDictBridge', () => {
     const sent: Array<[string, unknown]> = []
     registerDictBridge(ipc, service, (channel, value) => sent.push([channel, value]))
 
-    await handlers.get(DICT_CHANNELS.importDict)!(event, new Uint8Array([1, 2, 3]))
+    await handlers.get(DICT_CHANNELS.importDictFile)!(event, zipPath)
 
     expect(sent).toEqual([
       [DICT_CHANNELS.importProgress, { done: 500, total: 2000 }],
@@ -136,7 +198,7 @@ describe('registerDictBridge', () => {
     const { service } = fakeService([[1, 1]])
     registerDictBridge(ipc, service)
 
-    await expect(handlers.get(DICT_CHANNELS.importDict)!(event, new Uint8Array())).resolves.toEqual(
+    await expect(handlers.get(DICT_CHANNELS.importDictFile)!(event, zipPath)).resolves.toEqual(
       sampleImportResult
     )
   })
@@ -272,8 +334,8 @@ describe('registerDictBridge', () => {
 
 describe('registerDictBridge malformed requests', () => {
   it.each([
-    [DICT_CHANNELS.importDict, [[80, 75]]],
-    [DICT_CHANNELS.importDict, [undefined]],
+    [DICT_CHANNELS.importDictFile, [new Uint8Array([80, 75])]],
+    [DICT_CHANNELS.importDictFile, [undefined]],
     [DICT_CHANNELS.lookup, [undefined]],
     [DICT_CHANNELS.lookup, ['猫', undefined, 'freq']],
     [DICT_CHANNELS.lookup, ['猫', undefined, null, 'by-vibes']],

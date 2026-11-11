@@ -1,14 +1,21 @@
 // Database and importer boundaries are injected so bridge and service tests can
 // use in-memory databases.
 
+import { statSync } from 'node:fs'
 import { DICT_CHANNELS } from '../shared/ipcChannels'
+import { isRemoteUrl } from '../shared/mediaFileTypes'
 import type { IpcMainHandleLike } from './ipc'
 import { expect, isNumberList, isStringList, nullable, oneOf, optional } from './ipcValidation'
-import { isBoolean, isPositiveSafeInteger, isString, isUint8Array } from '../shared/guards'
+import { isBoolean, isPositiveSafeInteger, isString } from '../shared/guards'
 import { pathApiFor } from './platformPath'
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './services/dict/schema'
 import { lookup as runLookup } from './services/dict/lookup'
-import { createDbImporter, type DictionaryImporter } from './services/dict/importer'
+import {
+  createDbImporter,
+  type DictionaryImporter,
+  type DictZipSource
+} from './services/dict/importer'
+import { MAX_UNZIP_TOTAL_BYTES } from './services/dict/yomitanArchive'
 import { defaultJlptClassifier, type JlptClassifier } from './services/jlpt/classifier'
 import type { DictInfo, ImportResult, FrequencyMode, LookupResult } from '../shared/dictionary'
 
@@ -27,10 +34,36 @@ export function resolveImportWorkerPath(
   return pathApiFor(platform).join(dirname, 'importWorker.js')
 }
 
+/**
+ * Largest dictionary zip accepted for import. A zip's compressed size cannot
+ * usefully exceed the uncompressed total the unzip step already caps, so the
+ * same bound rejects an oversized file before it is read into memory.
+ */
+export const MAX_DICT_ZIP_BYTES = MAX_UNZIP_TOTAL_BYTES
+
+/**
+ * Validates a renderer-supplied dictionary path before main or the worker
+ * reads it: a non-empty local path (not a URL) to a regular `.zip` file no
+ * larger than `MAX_DICT_ZIP_BYTES`. Returns the path or throws.
+ */
+export function validateDictZipPath(value: string): string {
+  if (value.trim() === '' || isRemoteUrl(value)) {
+    throw new Error('Dictionary import needs a local file path')
+  }
+  if (!value.toLowerCase().endsWith('.zip')) {
+    throw new Error('Dictionary import needs a .zip file')
+  }
+  const stat = statSync(value, { throwIfNoEntry: false })
+  if (!stat?.isFile()) throw new Error('Dictionary file not found')
+  if (stat.size > MAX_DICT_ZIP_BYTES) throw new Error('Dictionary file is too large to import')
+  return value
+}
+
 /** The slice of the dict service this bridge needs (fakeable in tests). */
 export interface DictServiceLike {
+  /** Bytes are for in-process callers and tests; the IPC bridge passes a validated path. */
   importDict(
-    zipBytes: Uint8Array,
+    zip: DictZipSource,
     onProgress?: (done: number, total: number) => void
   ): Promise<ImportResult>
   lookup(
@@ -54,7 +87,7 @@ export type DictEventSender = (channel: string, value: unknown) => void
 const noopSend: DictEventSender = () => {}
 
 /**
- * Registers the dict command channels ('dict:importDict', 'dict:lookup',
+ * Registers the dict command channels ('dict:importDictFile', 'dict:lookup',
  * 'dict:listDicts', 'dict:setEnabled', 'dict:setFallbackOnly', 'dict:reorder') against the
  * ipcMain-like object, forwarding each call to `service`. While an import is
  * in flight, its advisory `{ done, total }` progress is pushed to the
@@ -68,9 +101,11 @@ export function registerDictBridge<E>(
   send: DictEventSender = noopSend
 ): void {
   const C = DICT_CHANNELS
-  const zipArg = expect(isUint8Array, C.importDict)
-  ipc.handle(C.importDict, (_e, zipBytes) =>
-    service.importDict(zipArg(zipBytes), (done, total) => send(C.importProgress, { done, total }))
+  const zipPathArg = expect(isString, C.importDictFile)
+  ipc.handle(C.importDictFile, (_e, zipPath) =>
+    service.importDict(validateDictZipPath(zipPathArg(zipPath)), (done, total) =>
+      send(C.importProgress, { done, total })
+    )
   )
   const lemmaArg = expect(isString, C.lookup)
   const optionalStringArg = expect(optional(isString), C.lookup)
@@ -214,11 +249,11 @@ export function createDictService(deps: CreateDictServiceDeps): DictServiceLike 
 
   return {
     async importDict(
-      zipBytes: Uint8Array,
+      zip: DictZipSource,
       onProgress?: (done: number, total: number) => void
     ): Promise<ImportResult> {
       initSchema(db)
-      return importer.import(zipBytes, onProgress)
+      return importer.import(zip, onProgress)
     },
 
     async lookup(

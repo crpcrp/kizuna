@@ -5,7 +5,7 @@
 // test/harness/fakeWorker.ts.
 
 import type { ImportResult } from '../../../shared/dictionary'
-import type { DictionaryImporter } from './importer'
+import type { DictionaryImporter, DictZipSource } from './importer'
 import type { ImportWorkerInput } from './importWorker'
 
 export type WorkerImportMessage =
@@ -56,7 +56,7 @@ const systemTimers: WorkerImportTimers = {
 }
 
 function runOne(
-  zipBytes: Uint8Array,
+  zip: DictZipSource,
   dbPath: string,
   workerPath: string,
   createWorker: WorkerFactory,
@@ -67,7 +67,10 @@ function runOne(
   return new Promise<ImportResult>((resolve, reject) => {
     let settled = false
     const timer = { handle: undefined as unknown }
-    const worker = createWorker(workerPath, { dbPath, zipBytes })
+    const worker = createWorker(
+      workerPath,
+      typeof zip === 'string' ? { dbPath, zipPath: zip } : { dbPath, zipBytes: zip }
+    )
 
     const finish = (): void => {
       if (timer.handle !== undefined) timers.clearTimer(timer.handle)
@@ -138,11 +141,11 @@ export function createWorkerImporter(deps: CreateWorkerImporterDeps): Dictionary
   let busy = false
 
   function start(
-    zipBytes: Uint8Array,
+    zip: DictZipSource,
     onProgress?: (done: number, total: number) => void
   ): Promise<ImportResult> {
     busy = true
-    const result = runOne(zipBytes, dbPath, workerPath, createWorker, timeoutMs, timers, onProgress)
+    const result = runOne(zip, dbPath, workerPath, createWorker, timeoutMs, timers, onProgress)
     const clearBusy = (): void => {
       busy = false
     }
@@ -152,12 +155,10 @@ export function createWorkerImporter(deps: CreateWorkerImporterDeps): Dictionary
 
   return {
     import(
-      zipBytes: Uint8Array,
+      zip: DictZipSource,
       onProgress?: (done: number, total: number) => void
     ): Promise<ImportResult> {
-      const result = busy
-        ? queue.then(() => start(zipBytes, onProgress))
-        : start(zipBytes, onProgress)
+      const result = busy ? queue.then(() => start(zip, onProgress)) : start(zip, onProgress)
       // Keep the queue alive even if this import rejects, so a later import
       // still runs instead of getting stuck behind a rejected promise.
       queue = result.catch(() => undefined)

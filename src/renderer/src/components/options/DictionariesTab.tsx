@@ -60,7 +60,9 @@ export interface DictionariesTabProps {
   loadError?: string
   onSelectMecabDict: (id: 'ipadic' | 'unidic') => void
   onOpenUserUnidicDir: () => void
-  onImportYomitanDict: (bytes: Uint8Array) => Promise<void>
+  /** Imports a picked zip; the caller resolves its on-disk path, so the
+   * archive is never read into renderer memory. */
+  onImportYomitanDict: (file: File) => Promise<void>
   /** Subscribes to advisory term-row progress for the in-flight import;
    * returns an unsubscribe function. Optional — omitting it just leaves the
    * file-count overlay without a terms line (e.g. in tests). */
@@ -142,7 +144,7 @@ export default function DictionariesTab({
 
   // Imports one or more selected files in sequence, updating the "please
   // wait" overlay's progress between each so a large batch doesn't look
-  // frozen. Sequential (not Promise.all) because importDict writes to the
+  // frozen. Sequential (not Promise.all) because importDictFile writes to the
   // same SQLite file — concurrent writes would just serialize anyway.
   const handleImportFiles = async (files: File[]): Promise<void> => {
     if (files.length === 0) return
@@ -154,8 +156,7 @@ export default function DictionariesTab({
         setImportStatus((status) => (status ? { ...status, terms } : status))
       )
       try {
-        const bytes = new Uint8Array(await file.arrayBuffer())
-        await onImportYomitanDict(bytes)
+        await onImportYomitanDict(file)
       } finally {
         unsubscribe?.()
       }
