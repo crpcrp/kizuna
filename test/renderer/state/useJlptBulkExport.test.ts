@@ -28,7 +28,7 @@ function bridge(
   return {
     dict: {
       lookup: vi.fn(async (lemma) => [makeLookupResult({ expression: lemma })]),
-      importDict: vi.fn(),
+      importDictFile: vi.fn(),
       listDicts: vi.fn(),
       setEnabled: vi.fn(),
       setFallbackOnly: vi.fn(),

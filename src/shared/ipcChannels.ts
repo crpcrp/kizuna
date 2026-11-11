@@ -222,14 +222,14 @@ export const MECAB_CHANNELS = {
  * removing one, or marking one as a fallback-only dictionary.
  */
 export const DICT_CHANNELS = {
-  importDict: 'dict:importDict',
+  importDictFile: 'dict:importDictFile',
   lookup: 'dict:lookup',
   listDicts: 'dict:listDicts',
   setEnabled: 'dict:setEnabled',
   setFallbackOnly: 'dict:setFallbackOnly',
   reorder: 'dict:reorder',
   remove: 'dict:remove',
-  /** main→renderer push: periodic { done, total } while importDict runs. */
+  /** main→renderer push: periodic { done, total } while importDictFile runs. */
   importProgress: 'dict:importProgress'
 } as const
 

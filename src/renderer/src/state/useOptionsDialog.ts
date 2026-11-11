@@ -48,7 +48,7 @@ import { errorMessage } from '../util/errorMessage'
  * state/optionsData.ts), which reaches `window.kizuna` lazily. */
 export type OptionsDialogBridge = Pick<
   KizunaApi,
-  'anki' | 'appInfo' | 'dict' | 'jimaku' | 'mecab' | 'playerSettings' | 'translate'
+  'anki' | 'appInfo' | 'dict' | 'files' | 'jimaku' | 'mecab' | 'playerSettings' | 'translate'
 >
 
 export interface UseOptionsDialogInput {
@@ -84,7 +84,7 @@ export interface OptionsDialogData {
  * they changed. The knowledge/MeCab rows are not here: they invalidate the
  * vocabulary feature's caches, so `useVocabularyMining` owns them. */
 export interface OptionsDialogActions {
-  onImportYomitanDict(bytes: Uint8Array): Promise<void>
+  onImportYomitanDict(file: File): Promise<void>
   subscribeImportProgress(cb: (progress: ImportProgress) => void): () => void
   onSetYomitanEnabled(id: number, enabled: boolean): Promise<void>
   onSetYomitanFallbackOnly(id: number, fallbackOnly: boolean): Promise<void>
@@ -218,7 +218,8 @@ export function useOptionsDialog({
 
   const actions = useMemo<OptionsDialogActions>(
     () => ({
-      onImportYomitanDict: (bytes) => importYomitanDict(bridge.dict, controller, bytes),
+      onImportYomitanDict: (file) =>
+        importYomitanDict(bridge.dict, controller, bridge.files.pathForFile(file)),
       subscribeImportProgress: (cb) => bridge.dict.onImportProgress(cb),
       onSetYomitanEnabled: (id, enabled) => setYomitanEnabled(bridge.dict, controller, id, enabled),
       onSetYomitanFallbackOnly: (id, fallbackOnly) =>

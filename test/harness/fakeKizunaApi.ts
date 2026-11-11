@@ -158,7 +158,7 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       openUserUnidicDir: vi.fn(async () => '')
     },
     dict: {
-      importDict: vi.fn(async () => ({ dictId: 1, termCount: 0, metaCount: 0 })),
+      importDictFile: vi.fn(async () => ({ dictId: 1, termCount: 0, metaCount: 0 })),
       lookup: vi.fn(async () => []),
       listDicts: vi.fn(async () => []),
       setEnabled: vi.fn(async () => undefined),

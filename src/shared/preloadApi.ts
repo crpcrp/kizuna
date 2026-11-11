@@ -229,7 +229,8 @@ export interface KizunaApi {
     openUserUnidicDir(): Promise<string>
   }
   dict: {
-    importDict(zipBytes: Uint8Array): Promise<ImportResult>
+    /** Imports the Yomitan zip at `zipPath` (from `files.pathForFile`); main reads it from disk. */
+    importDictFile(zipPath: string): Promise<ImportResult>
     lookup(
       lemma: string,
       reading?: string,
@@ -243,7 +244,7 @@ export interface KizunaApi {
     setFallbackOnly(id: number, fallbackOnly: boolean): Promise<void>
     reorder(orderedIds: number[]): Promise<void>
     removeDict(id: number): Promise<void>
-    /** Advisory progress push while an importDict call is in flight. */
+    /** Advisory progress push while an importDictFile call is in flight. */
     onImportProgress(cb: (value: ImportProgress) => void): () => void
   }
   anki: {

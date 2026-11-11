@@ -550,7 +550,7 @@ function migrateLegacyUnidicFromResources(
 }
 
 /**
- * Registers the dict IPC bridge (importDict/lookup/listDicts/setEnabled/
+ * Registers the dict IPC bridge (importDictFile/lookup/listDicts/setEnabled/
  * reorder), backed by a dict.db SQLite file in the user's app-data
  * directory. Imports run in a worker thread via
  * `createWorkerImporter`, which opens its own connection to the same file;
