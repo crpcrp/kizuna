@@ -2,10 +2,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
-  globalShortcut,
   ipcMain,
-  nativeImage,
-  powerSaveBlocker,
   safeStorage,
   screen,
   session,
@@ -13,135 +10,36 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
-import { join } from 'node:path'
 import * as fs from 'node:fs'
-import { Worker } from 'node:worker_threads'
-import Database from 'better-sqlite3'
-import { autoUpdater } from 'electron-updater'
-import packageMetadata from '../../package.json'
-import {
-  applyNavigationGuards,
-  applyReloadGuard,
-  registerWindowControls,
-  sendToWindow
-} from './windowOptions'
-import {
-  APP_SHELL_CHANNELS,
-  LAUNCH_CHANNELS,
-  UPDATE_CHANNELS,
-  WINDOW_CONTROL_CHANNELS
-} from '../shared/ipcChannels'
-import { COPYRIGHT } from '../shared/appIdentity'
+import { registerWindowControls, sendToWindow } from './windowOptions'
+import { LAUNCH_CHANNELS } from '../shared/ipcChannels'
 import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
-import { registerPlayerBridge } from './playerBridge'
-import { createPowerSaveController } from './services/powerSave'
-import { createSystemMediaController } from './services/systemMedia'
-import { createFrameCaptureService, createScreenshotService } from './services/screenshots'
-import { scheduleStartupThumbnailSweep } from './media/thumbnailPreview'
-import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
-import { registerMediaBridge } from './mediaBridge'
-import { createMediaService } from './mediaService'
-import { showSaveFileDialog } from './media/mediaPicker'
-import {
-  missingResourceMessage,
-  requiredGameOcrResources,
-  resolveBinaryPaths,
-  resolveGameOcrPaths,
-  resolveThirdPartyNoticesPath,
-  type BinaryPaths
-} from './resourcePaths'
-import { createAppInfoService, registerAppInfoBridge } from './appInfoBridge'
-import { registerMecabBridge, createMecabService } from './mecabBridge'
-import { isValidMecabDictionaryDir } from './services/mecab/dictionaryValidation'
-import {
-  createUserUnidicManager,
-  migrateLegacyUnidic,
-  type UserUnidicManager
-} from './services/mecab/unidic'
-import {
-  registerDictBridge,
-  createDictService,
-  configureDictConnection,
-  resolveImportWorkerPath
-} from './dictBridge'
-import { createWorkerImporter } from './services/dict/workerImporter'
-import { registerAnkiBridge } from './ankiBridge'
-import { createAnkiService } from './services/anki/service'
-import { createSentenceAudioService } from './services/anki/sentenceAudio'
-import { execFfmpeg } from './media/ffmpeg'
-import { registerKnowledgeBridge } from './knowledgeBridge'
-import { createKnowledgeService } from './services/knowledge/service'
-import { initSchema } from './services/knowledge/schema'
-import type { KnowledgeDb } from './services/knowledge/store'
-import { registerPlayerSettingsBridge, createPlayerSettingsService } from './playerSettingsBridge'
-import { registerIntegrationBridge, createIntegrationService } from './integrationBridge'
-import { createMpvConfigManager, type MpvConfigManager } from './services/mpvConfig'
-import { startMpvWithConfig } from './mpvStartup'
+import { resolveBinaryPaths } from './resourcePaths'
 import { registerClipboardBridge } from './clipboardBridge'
-import { httpFetch } from './services/http'
-import { registerTranslateBridge } from './translateBridge'
-import { registerTranslationSettingsBridge } from './translationSettingsBridge'
-import { createAzureTranslator } from './services/translate/azureTranslate'
-import { createTranslationSettingsService } from './services/translate/translationSettings'
 import { createSafeStorageCodec } from './services/secrets'
 import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
-import { createJimakuClient } from './services/jimaku/client'
-import { createJimakuSettingsService, type JimakuSettingsService } from './services/jimaku/settings'
-import {
-  createJimakuDownloadStore,
-  isJimakuManagedSubtitlePath
-} from './services/jimaku/downloadStore'
-import { nodeJimakuExportFs } from './services/jimaku/export'
-import { createJimakuArchiveService } from './services/jimaku/archive'
-import { createJimakuService, type JimakuService } from './services/jimaku/service'
-import { registerJimakuSettingsBridge } from './jimakuSettingsBridge'
-import { registerJimakuBridge } from './jimakuBridge'
-import { createMediaHistoryService, type MediaHistoryService } from './services/mediaHistory'
-import {
-  createMediaHistoryFile,
-  createMediaHistoryStore,
-  legacyMediaHistory,
-  type MediaHistoryStore
-} from './services/mediaHistoryStore'
-import { registerMediaHistoryBridge } from './mediaHistoryBridge'
+import type { JimakuService } from './services/jimaku/service'
+import type { MediaHistoryService } from './services/mediaHistory'
+import type { MpvConfigManager } from './services/mpvConfig'
 import { createLaunchPathBuffer, videoPathFromArgv } from './launchArgs'
-import { applyAppIdentity, screenshotsDir } from './appIdentity'
+import { applyAppIdentity } from './appIdentity'
 import { createStartupProbe, STARTUP_PROBE_ENV } from './startupProbe'
-import { createPlayerRuntime, type PlayerRuntime } from './playerRuntime'
-import { registerAppShellBridge } from './appShellBridge'
-import { createAppShellCoordinator, type AppShellCoordinator } from './services/appShell'
-import { resolveStartupDecision, type StartupDecision } from './startupDecision'
-import {
-  createAppWindowSet,
-  loadRendererWindow,
-  preparePlayerAppWindowSet,
-  presentAppWindowSet,
-  presentOverlayAppWindowSet,
-  showOverlayAppWindowSet,
-  type AppWindowSet
-} from './windowPair'
-import { createSurfacePresentation } from './surfacePresentation'
-import { isUpdateOffer } from '../shared/update'
-import { createElectronUpdaterAdapter } from './electronUpdaterAdapter'
-import { registerUpdateBridge } from './updateBridge'
-import { createUpdateService, type UpdateService } from './updateService'
-import { detectUpdateSupport } from './updateSupport'
-import { createGameOcrController, writeGameOcrTotalTime } from './services/gameOcr/controller'
-import { createProductionDisplaySources } from './services/gameOcr/displayCapture'
-import { createGameOcrCaptureTargets } from './services/gameOcr/captureTarget'
-import { createProductionForegroundWindowSource } from './services/gameOcr/foregroundWindow'
-import { createGameOcrWindow } from './services/gameOcr/frozenFrameElectron'
-import { createPpOcrWorkerService } from './services/ocr/ppOcrWorker'
-import { resolveDetectionSideLength } from './services/ocr/ppOcrProtocol'
-import { createGameOcrRuntimeService, type GameOcrRuntimeService } from './services/gameOcr/runtime'
-import {
-  createGameOcrBackgroundLifecycle,
-  type GameOcrBackgroundLifecycle
-} from './services/gameOcr/backgroundLifecycle'
-import { createElectronGameOcrTrayFactory } from './services/gameOcr/tray'
-import { registerGameOcrBridge } from './gameOcrBridge'
+import { resolveStartupDecision } from './startupDecision'
+import type { UpdateService } from './updateService'
+import type { BootstrapDeps, MainWindowRef, SendToMain } from './bootstrap/deps'
+import { resolveAppPaths } from './bootstrap/paths'
+import { createAppMediaHistoryStore, startMedia, startMediaHistory } from './bootstrap/media'
+import { prepareUserUnidic, startDict, startMecab } from './bootstrap/dict'
+import { startAnki } from './bootstrap/anki'
+import { startKnowledge } from './bootstrap/knowledge'
+import { startTranslation } from './bootstrap/translation'
+import { startJimaku } from './bootstrap/jimaku'
+import { startPlayerSettings } from './bootstrap/player'
+import { startAppInfo } from './bootstrap/appInfo'
+import { startUpdates } from './bootstrap/updates'
+import { createWindow, type WindowRuntime } from './bootstrap/window'
 
 // Must run before `ready` and before the first `app.getPath('userData')`:
 // Electron resolves that path once, from the app name, and caches it.
@@ -158,10 +56,6 @@ if (process.platform === 'linux') app.commandLine.appendSwitch('ozone-platform',
 // display the transparent Electron surface, so leave it enabled.
 if (process.platform === 'win32') app.disableHardwareAcceleration()
 
-// Off unless `KIZUNA_STARTUP_PROBE=1`, which the packaged Linux smoke test
-// sets. When on, the app reports its startup milestones on stdout and quits
-// itself as soon as all three land — so the smoke test asserts on a real
-// launch rather than on a timer.
 // Log instead of Electron's modal "JavaScript error in the main process" dialog;
 // a stray failure (e.g. a transient disk error) must not take the player down.
 process.on('uncaughtException', (error) => {
@@ -171,6 +65,10 @@ process.on('unhandledRejection', (reason) => {
   console.error('[kizuna] unhandled rejection in main process', reason)
 })
 
+// Off unless `KIZUNA_STARTUP_PROBE=1`, which the packaged Linux smoke test
+// sets. When on, the app reports its startup milestones on stdout and quits
+// itself as soon as all three land — so the smoke test asserts on a real
+// launch rather than on a timer.
 const startupProbe = createStartupProbe({
   enabled: process.env[STARTUP_PROBE_ENV] === '1',
   log: (line) => console.log(line),
@@ -180,688 +78,101 @@ const startupProbe = createStartupProbe({
   }
 })
 
+/** Everything `bootstrap()` creates, in creation order. */
+interface AppRuntime {
+  settings: SettingsStore
+  updates: UpdateService
+  mediaHistory: MediaHistoryService
+  jimaku: JimakuService
+  mpvConfig: MpvConfigManager
+  window: WindowRuntime
+}
+
 // One controller for the app's lifetime; started/stopped alongside the
 // (currently single) main window.
 const controller = new MpvController()
-let mediaHistory: MediaHistoryService | undefined
-let appSettings: SettingsStore | undefined
-let playerRuntime: PlayerRuntime | undefined
-let mpvConfig: MpvConfigManager | undefined
-let updates: UpdateService | undefined
-let gameOcr: GameOcrRuntimeService | undefined
-let gameOcrLifecycle: GameOcrBackgroundLifecycle | undefined
-let jimakuService: JimakuService | undefined
-let appShell: AppShellCoordinator | undefined
-// The renderer-owning window. On Linux this is the transparent child overlay;
-// the opaque video host is kept separate and is passed only to mpv.
-let mainWindow: BrowserWindow | undefined
-let appWindows: AppWindowSet | undefined
+const mainWindow: MainWindowRef = { current: undefined }
+const sendToMain: SendToMain = (channel, value) => sendToWindow(mainWindow.current, channel, value)
+// Set once by `bootstrap()` inside `whenReady`; Electron lifecycle handlers
+// registered earlier read it optionally.
+let runtime: AppRuntime | undefined
+
 const gotSingleInstanceLock = app.requestSingleInstanceLock()
 const launchPathBuffer = createLaunchPathBuffer(
-  (path) => {
-    sendToWindow(mainWindow, LAUNCH_CHANNELS.openPath, path)
-  },
-  (message) => {
-    sendToWindow(mainWindow, LAUNCH_CHANNELS.error, message)
-  }
+  (path) => sendToMain(LAUNCH_CHANNELS.openPath, path),
+  (message) => sendToMain(LAUNCH_CHANNELS.error, message)
 )
 
-/** First-party assets (icons) ship next to the vendored binaries. */
-function resourcesBaseDir(): string {
-  return app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources')
-}
-
-/** Read-then-delete adapters for the short-lived files under `app.getPath('temp')`. */
-const tempFileFs = {
-  readBase64: async (path: string): Promise<string> =>
-    (await fs.promises.readFile(path)).toString('base64'),
-  remove: (path: string): Promise<void> => fs.promises.rm(path, { force: true })
-}
-
-function createWindow(
-  mpvPath: string,
-  history: MediaHistoryService,
-  settings: SettingsStore,
-  decision: StartupDecision
-): void {
-  const windows = createAppWindowSet({
-    preloadPath: join(__dirname, '../preload/index.js'),
-    closeGuard: (event) => gameOcrLifecycle?.handleWindowClose(event) ?? true
-  })
-  const surfacePresentation = createSurfacePresentation(windows, screen)
-  const { videoHost, uiOverlay } = windows
-  appWindows = windows
-  mainWindow = uiOverlay
-  // Keep the renderer pinned to its bundled origin: deny off-page navigation and
-  // refuse child-window creation (Electron security checklist #12/#13).
-  applyNavigationGuards(uiOverlay.webContents)
-  // Ctrl/Cmd+R is Chromium's built-in reload shortcut; it would otherwise
-  // wipe the current session with no warning (see applyReloadGuard's doc).
-  applyReloadGuard(uiOverlay.webContents)
-  uiOverlay.on('closed', () => {
-    if (mainWindow === uiOverlay) mainWindow = undefined
-    gameOcrLifecycle?.handleWindowLost()
-  })
-  uiOverlay.webContents.on('render-process-gone', () => gameOcrLifecycle?.handleWindowLost())
-
-  // In `dev`, electron-vite serves the renderer over HTTP (with HMR).
-  // In a packaged/built app, load the compiled HTML from disk.
-  const devUrl = process.env['ELECTRON_RENDERER_URL']
-  // The coordinator listens to the canonical native window (the Linux host,
-  // or the single Windows window), restores paired bounds after the native
-  // transition, and deduplicates the renderer-facing notification.
-  windows.onFullscreenChanged((fullscreen) => {
-    sendToWindow(uiOverlay, WINDOW_CONTROL_CHANNELS.fullscreenChanged, fullscreen)
-  })
-
-  startGameOcr(settings, windows)
-
-  let rendererLoaded = false
-  let initialPlayerPresentation = true
-
-  // Do not let renderer effects invoke player channels before their handlers
-  // exist. A failed mpv start is caught inside ensureStarted and still loads a
-  // usable UI over the opaque host.
-  const runtime =
-    playerRuntime ??
-    (playerRuntime = createPlayerRuntimeForWindow(videoHost, uiOverlay, mpvPath, history, settings))
-  const presentOverlay = (): void => {
-    if (rendererLoaded) showOverlayAppWindowSet(windows)
-    else presentOverlayAppWindowSet(windows)
-  }
-
-  const shell = createAppShellCoordinator({
-    initialSurface: decision.initialSurface,
-    presentInitialSurface: decision.presentInitialSurface,
-    ensurePlayerStarted: () => {
-      // Restore the normal player rectangle before mapping the mpv host. This
-      // prevents a splash-sized host from ever being shown as the player.
-      surfacePresentation.restorePlayerBounds()
-      // mpv's X11 --wid target must already be mapped while it initializes.
-      if (runtime.getState() === 'not-started') preparePlayerAppWindowSet(windows)
-      return runtime.ensureStarted()
-    },
-    presentSplash: () => surfacePresentation.presentSplash(presentOverlay),
-    presentPlayer: () => {
-      if (initialPlayerPresentation) {
-        initialPlayerPresentation = false
-        if (rendererLoaded) windows.activate()
-        else presentAppWindowSet(windows)
-      } else {
-        windows.activate()
-      }
-    },
-    presentOptions: () => surfacePresentation.presentOptions(presentOverlay),
-    dismissGameOcrOptions: () => gameOcrLifecycle?.dismissOptions() ?? false,
-    sendSurfaceChanged: (surface) =>
-      sendToWindow(uiOverlay, APP_SHELL_CHANNELS.surfaceChanged, surface),
-    // The coordinator owns the renderer-facing idempotence guard; this
-    // callback must enter Electron's quit lifecycle directly or it would call
-    // back into the coordinator and stop at that guard.
-    quit: () => app.quit()
-  })
-  appShell = shell
-  registerAppShellBridge(ipcMain, shell, (sender) => sender === uiOverlay.webContents)
-
-  const loadRenderer = (): void => {
-    if (rendererLoaded || uiOverlay.isDestroyed()) return
-    rendererLoaded = true
-    startupProbe.mark('window')
-    loadRendererWindow(uiOverlay, {
-      devUrl,
-      packagedHtmlPath: join(__dirname, '../renderer/index.html')
-    })
-  }
-
-  const start = async (): Promise<void> => {
-    if (decision.startGameOcr) {
-      try {
-        const status = await gameOcr?.start()
-        if (status?.game.error || status?.game.state === 'error') await shell.showOptions()
-      } catch {
-        await shell.showOptions()
-      }
-    } else if (decision.initialSurface === 'player') {
-      await shell.showPlayer()
-    }
-
-    if (uiOverlay.isDestroyed() || videoHost.isDestroyed()) return
-    loadRenderer()
-  }
-  void start()
-}
-
 /**
- * Wires the singleton `controller`/`mpvConfig` and this window into the
- * testable `startMpvWithConfig` orchestrator (see `mpvStartup.ts`), which owns
- * the config-enabled → no-config-retry → banner decision.
+ * Builds the main-process runtime in dependency order: shared paths and
+ * stores, the updater (before the window, which it later reveals), the
+ * per-feature IPC bridges, and finally the window with its player and Game OCR.
  */
-function startMpvForWindow(
-  uiOverlay: BrowserWindow,
-  mpvPath: string,
-  windowId: bigint | string,
-  settings: SettingsStore
-): Promise<void> {
-  const { mpvUserConfig, mpvExtraArgs } = settings.get().player
-  return startMpvWithConfig({
-    mpvPath,
-    windowId,
-    settings: { mpvUserConfig, mpvExtraArgs },
-    configDir: mpvConfig?.configDir ?? '',
-    ensureConfigDir: () => mpvConfig?.ensureDir(),
-    start: (opts) => controller.start(opts),
-    reportConfigError: (message) => {
-      sendToWindow(uiOverlay, LAUNCH_CHANNELS.error, message)
-    },
-    warn: (err) =>
-      console.warn('[kizuna] mpv failed to start with user config; retrying without it:', err)
-  })
-}
-
-/**
- * Builds the system-media controller with the real Electron surfaces: the
- * video host owns taskbar progress/thumbnail buttons, while media-key and
- * thumbnail activations are pushed to the renderer-owning overlay. On Windows
- * both roles are the same window. Icons are first-party PNGs under
- * `resources/icons/`.
- */
-function createSystemMediaForWindow(
-  videoHost: BrowserWindow,
-  uiOverlay: BrowserWindow
-): ReturnType<typeof createSystemMediaController> {
-  const iconsDir = join(resourcesBaseDir(), 'icons')
-  const icon = (name: string): Electron.NativeImage =>
-    nativeImage.createFromPath(join(iconsDir, `${name}.png`))
-  const isWindows = process.platform === 'win32'
-  return createSystemMediaController({
-    globalShortcut,
-    setProgressBar: (progress, options) => {
-      if (videoHost.isDestroyed()) return
-      if (options) videoHost.setProgressBar(progress, options)
-      else videoHost.setProgressBar(progress)
-    },
-    setThumbarButtons: isWindows
-      ? (buttons) => {
-          if (videoHost.isDestroyed()) return
-          videoHost.setThumbarButtons(
-            buttons.map((b) => ({
-              icon: b.icon as Electron.NativeImage,
-              tooltip: b.tooltip,
-              click: b.click
-            }))
-          )
-        }
-      : () => {},
-    send: (channel, value) => {
-      sendToWindow(uiOverlay, channel, value)
-    },
-    icons: { prev: icon('prev'), play: icon('play'), pause: icon('pause'), next: icon('next') }
-  })
-}
-
-function createPlayerRuntimeForWindow(
-  videoHost: BrowserWindow,
-  uiOverlay: BrowserWindow,
-  mpvPath: string,
-  history: MediaHistoryService,
-  settings: SettingsStore
-): PlayerRuntime {
-  return createPlayerRuntime({
-    startMpv: () => {
-      const windowId = windowIdFromHandleBuffer(videoHost.getNativeWindowHandle())
-      return startMpvForWindow(uiOverlay, mpvPath, windowId, settings)
-    },
-    createPowerSave: () => createPowerSaveController(powerSaveBlocker),
-    createSystemMedia: () => createSystemMediaForWindow(videoHost, uiOverlay),
-    createScreenshots: () =>
-      createScreenshotService({
-        takeScreenshot: (path) => controller.screenshotToFile(path),
-        folder: () =>
-          settings.get().player.screenshotFolder ?? screenshotsDir(app.getPath('pictures')),
-        exists: (path) => fs.existsSync(path),
-        mkdir: (path) => {
-          fs.mkdirSync(path, { recursive: true })
-        }
-      }),
-    createFrames: () =>
-      createFrameCaptureService({
-        takeScreenshot: (path) => controller.screenshotToFile(path),
-        tempDir: () => app.getPath('temp'),
-        ...tempFileFs
-      }),
-    registerBridge: ({ powerSave, systemMedia, screenshots, frames }) => {
-      registerPlayerBridge(
-        ipcMain,
-        controller,
-        (channel, value) => {
-          sendToWindow(uiOverlay, channel, value)
-        },
-        history,
-        powerSave,
-        screenshots,
-        systemMedia,
-        frames
-      )
-    },
-    launchPathBuffer,
-    startupProbe,
-    warn: (err) => console.warn('[kizuna] mpv not started:', err)
-  })
-}
-
-/**
- * Registers the media IPC bridge (open-file dialog, ffprobe track
- * enumeration, ffmpeg subtitle extraction).
- */
-function startMedia(ffprobePath: string, ffmpegPath: string, history: MediaHistoryService): void {
-  const mediaService = createMediaService({
-    ffprobePath,
-    ffmpegPath,
-    tmpDir: app.getPath('temp'),
-    mediaHistory: history,
-    thumbnailCacheDir: join(app.getPath('userData'), 'thumbnails')
-  })
-  registerMediaBridge(ipcMain, mediaService)
-}
-
-/**
- * Constructs the settings store backed by a settings.json file in the user's
- * app-data directory. Hoisted out of `startMecab` so `startAnki` and
- * `startKnowledge` share the same store instance instead of each reading/
- * parsing settings.json independently.
- */
-function createAppSettingsStore(): SettingsStore {
-  return createSettingsStore(createSettingsFile(appSettingsPath(), fs))
-}
-
-function appSettingsPath(): string {
-  return join(app.getPath('userData'), 'settings.json')
-}
-
-/**
- * Playback history lives in its own file. On first run it is seeded from the
- * `mediaHistory` key that older versions kept in settings.json; the settings
- * store drops that key on its next write.
- */
-function createAppMediaHistoryStore(): MediaHistoryStore {
-  const settingsFile = createSettingsFile(appSettingsPath(), fs)
-  return createMediaHistoryStore(
-    createMediaHistoryFile(join(app.getPath('userData'), 'playback-history.json'), fs),
-    { legacy: () => legacyMediaHistory(settingsFile.read()) }
-  )
-}
-
-/**
- * Registers the mecab IPC bridge (tokenize/listDicts/selectDict).
- */
-function startMecab(
-  binaryPaths: BinaryPaths,
-  settings: SettingsStore,
-  userUnidic: UserUnidicManager
-): void {
-  const mecabService = createMecabService({
-    mecabPath: binaryPaths.mecabPath,
-    dictPaths: {
-      ipadicDir: binaryPaths.ipadicDir,
-      unidicDir: binaryPaths.unidicDir,
-      userUnidicDir: userUnidic.dir
-    },
-    exists: fs.existsSync,
-    isValid: (directory) => isValidMecabDictionaryDir(directory, fs, process.platform),
-    settings
-  })
-  registerMecabBridge(ipcMain, mecabService, {
-    openUserUnidicDir: () => userUnidic.open()
-  })
-}
-
-/**
- * Preserves UniDic installed under the old package-managed resource path.
- * Windows NSIS runs an equivalent pre-uninstall copy before this code starts;
- * the startup path covers development and Linux package/AppImage transitions.
- * Migration failures are actionable diagnostics only: IPADIC remains usable.
- */
-function migrateLegacyUnidicFromResources(
-  binaryPaths: BinaryPaths,
-  userUnidic: UserUnidicManager
-): void {
-  // Unpackaged Linux resolves the distro's shared UniDic path, not a legacy
-  // Kizuna resource folder; never copy a system dictionary into app data.
-  if (!app.isPackaged && process.platform === 'linux') return
-  // Same guard the NSIS hook applies: only a compiled dictionary is worth
-  // migrating. Copying an empty leftover folder would claim the persistent
-  // target and block a later migration of a real one.
-  if (!isValidMecabDictionaryDir(binaryPaths.unidicDir, fs, process.platform)) return
-
-  const result = migrateLegacyUnidic({
-    legacyDir: binaryPaths.unidicDir,
-    targetDir: userUnidic.dir,
-    fs,
-    platform: process.platform
-  })
-  if (result.status === 'migrated') {
-    console.log(`[kizuna] migrated legacy UniDic to ${result.target}`)
-  } else if (result.status === 'failed') {
-    console.warn(
-      `[kizuna] could not migrate legacy UniDic from ${result.source} to ${result.target}: ${result.error}. ` +
-        'Open Options > Parser & Dictionaries > Open UniDic folder to install it manually; IPADIC remains available.'
-    )
-  }
-}
-
-/**
- * Registers the dict IPC bridge (importDictFile/lookup/listDicts/setEnabled/
- * reorder), backed by a dict.db SQLite file in the user's app-data
- * directory. Imports run in a worker thread via
- * `createWorkerImporter`, which opens its own connection to the same file;
- * `configureDictConnection` sets this connection's pragmas (incremental
- * auto-vacuum, then WAL + a busy timeout so its reads don't block on — or get
- * blocked by — the worker's writes) and owns their order. Import progress is
- * pushed to the renderer-owning window; the Linux video host has no renderer.
- */
-function startDict(): void {
-  const dbPath = join(app.getPath('userData'), 'dict.db')
-  const db = new Database(dbPath)
-  configureDictConnection(db)
-  const importer = createWorkerImporter({
-    dbPath,
-    workerPath: resolveImportWorkerPath(__dirname),
-    createWorker: (workerPath, workerData) => new Worker(workerPath, { workerData })
-  })
-  const dictService = createDictService({ db, importer })
-  registerDictBridge(ipcMain, dictService, (channel, value) => {
-    sendToWindow(mainWindow, channel, value)
-  })
-}
-
-/**
- * Registers the anki IPC bridge (ping/deckNames/modelNames/modelFieldNames/
- * JLPT setup/backfill/addNote/getSettings/setSettings), backed by the shared settings store, the
- * global `fetch` boundary, and the bundled ffmpeg used to clip
- * sentence audio out of the loaded media file.
- */
-function startAnki(settings: SettingsStore, ffmpegPath: string): void {
-  const ankiService = createAnkiService({
-    settings,
-    fetch: httpFetch,
-    // Sentence audio is clipped from the loaded file with the same bundled
-    // ffmpeg and executor the media bridge uses.
-    sentenceAudio: createSentenceAudioService({
-      exec: execFfmpeg,
-      ffmpegPath,
-      tmpDir: () => app.getPath('temp'),
-      fs: tempFileFs
-    })
-  })
-  registerAnkiBridge(ipcMain, ankiService, (channel, value) =>
-    sendToWindow(mainWindow, channel, value)
-  )
-}
-
-/**
- * Registers the knowledge IPC bridge (levelsFor/detailsFor/jlptCoverageReport/
- * jlptUnknownItems/sync/syncStatus/settings),
- * backed by a separate `knowledge.db` (kept apart from `dict.db` since they
- * have unrelated lifecycles) and the shared settings store. The WaniKani
- * token is encrypted via Electron's `safeStorage` (Windows DPAPI).
- * `syncIfStale()` runs once, fire-and-forget, so a stale cache colors
- * subtitles from a fresh sync without the user having to click "Sync now".
- */
-function startKnowledge(
-  settings: SettingsStore,
-  secrets: ReturnType<typeof createSafeStorageCodec>
-): void {
-  const db = new Database(join(app.getPath('userData'), 'knowledge.db'))
-  initSchema(db)
-  const knowledgeService = createKnowledgeService({
-    db: db as unknown as KnowledgeDb,
-    settings,
-    secrets,
-    fetch: httpFetch
-  })
-  registerKnowledgeBridge(ipcMain, knowledgeService)
-  void knowledgeService
-    .syncIfStale()
-    .catch((e) => console.error('[knowledge] startup sync failed', e))
-}
-
-function startTranslation(
-  settings: SettingsStore,
-  secrets: ReturnType<typeof createSafeStorageCodec>
-): void {
-  const translationSettings = createTranslationSettingsService({
-    settings,
-    secrets
-  })
-  registerTranslationSettingsBridge(ipcMain, translationSettings)
-  registerTranslateBridge(
-    ipcMain,
-    createAzureTranslator({
-      fetch: httpFetch,
-      getSubscriptionKey: () => translationSettings.getAzureSubscriptionKey(),
-      getSubscriptionRegion: () => translationSettings.getAzureRegion()
-    })
-  )
-}
-
-function startJimaku(
-  settings: SettingsStore,
-  secrets: ReturnType<typeof createSafeStorageCodec>,
-  history: MediaHistoryService
-): void {
-  const cacheRoot = join(app.getPath('userData'), 'jimaku')
-  const client = createJimakuClient({
-    getApiKey: () => jimakuSettings.getApiKey(),
-    fetch: httpFetch
-  })
-  const jimakuSettings: JimakuSettingsService = createJimakuSettingsService({
-    settings,
-    secrets,
-    client
-  })
-  const downloads = createJimakuDownloadStore({
-    fetch: httpFetch,
-    cacheRoot
-  })
-  const archive = createJimakuArchiveService({ downloads })
-  const service = createJimakuService({
-    client,
-    settings: jimakuSettings,
-    downloads,
-    archive,
-    mediaHistory: history,
-    subtitleExport: { showSaveDialog: showSaveFileDialog, fs: nodeJimakuExportFs },
-    openExternal: (url) => shell.openExternal(url)
-  })
-  jimakuService = service
-  registerJimakuSettingsBridge(ipcMain, jimakuSettings)
-  registerJimakuBridge(ipcMain, service)
-  void downloads.cleanup(history.getProtectedJimakuPaths())
-}
-
-/**
- * Registers the player-settings IPC bridge (getSettings/setSettings for the
- * Options menu's contents: keybindings, skip amount, popup/subtitle display),
- * backed by the shared settings store's `player` block.
- */
-function startPlayerSettings(settings: SettingsStore, mpv: MpvConfigManager): void {
-  const playerSettingsService = createPlayerSettingsService({
-    settings,
-    openMpvConfigDir: () => mpv.open()
-  })
-  registerPlayerSettingsBridge(ipcMain, playerSettingsService)
-}
-
-/** Reports what is on disk at a path without throwing on a missing entry. */
-function probeResourceKind(path: string): 'file' | 'directory' | 'missing' {
-  try {
-    return fs.statSync(path).isDirectory() ? 'directory' : 'file'
-  } catch {
-    return 'missing'
-  }
-}
-
-/**
- * Wires the Windows-only Game OCR runtime to the main-window bridge. The
- * PP-OCR ONNX payload is bundled by `win.extraResources`, so the paths resolve
- * against the same resources root as mpv and MeCab, and the runtime checks
- * them before each arm rather than trusting the installer.
- */
-function startGameOcr(settings: SettingsStore, windows: AppWindowSet): void {
-  if (process.platform !== 'win32') return
-
-  const ocrPaths = resolveGameOcrPaths({
+function bootstrap(lifecycle: AppLifecycleCoordinator, hasLaunchPath: boolean): AppRuntime {
+  const paths = resolveAppPaths({
+    userData: app.getPath('userData'),
+    temp: app.getPath('temp'),
+    pictures: app.getPath('pictures'),
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     appRoot: app.getAppPath(),
-    platform: 'win32'
+    mainDir: __dirname
   })
-  const worker = createPpOcrWorkerService({
-    executablePath: ocrPaths.workerPath,
-    // `--det-side-len` sets the detection tensor rather than capping it, so a
-    // value larger than any capture upscales every one of them. The largest
-    // display bounds what a capture can be, which leaves a fullscreen game
-    // unscaled and stops a small window being blown up past one.
-    detectionSideLength: resolveDetectionSideLength(
-      screen
-        .getAllDisplays()
-        .flatMap((display) => [
-          display.bounds.width * display.scaleFactor,
-          display.bounds.height * display.scaleFactor
-        ])
-    ),
-    modelPaths: {
-      detection: ocrPaths.detectionModelPath,
-      recognition: ocrPaths.recognitionModelPath,
-      keys: ocrPaths.keysPath
-    },
-    onStateChange: (status) => gameOcr?.updateWorkerStatus(status)
+  const binaryPaths = resolveBinaryPaths({
+    isPackaged: paths.isPackaged,
+    resourcesPath: paths.resourcesPath,
+    appRoot: paths.appRoot
   })
-  const targets = createGameOcrCaptureTargets({
-    foreground: createProductionForegroundWindowSource(process.platform),
-    displays: createProductionDisplaySources(process.platform),
-    screen
-  })
-  const gameOcrController = createGameOcrController({
-    shortcut: globalShortcut,
-    accelerator: settings.get().gameOcr.captureShortcut,
-    targets,
-    createPresentation: (bounds) =>
-      createGameOcrWindow({
-        platform: process.platform,
-        preloadPath: join(__dirname, '../preload/gameOcr.js'),
-        displayBounds: bounds,
-        devUrl: process.env['ELECTRON_RENDERER_URL'],
-        packagedHtmlPath: join(__dirname, '../renderer/gameOcr.html'),
-        ipcMain,
-        displayEvents: screen,
-        traceInput: Boolean(process.env['KIZUNA_GAME_OCR_TIMING'])
-      }),
-    ocr: worker,
-    onError: (message) => gameOcr?.reportError(message),
-    // The renderer acknowledges a browser paint after React commits the word
-    // boxes, so this is the complete delay the person at the shortcut feels.
-    ...(!app.isPackaged
-      ? {
-          onTimings: writeGameOcrTotalTime,
-          onDiagnostic: (message: string) => console.log(message)
-        }
-      : {})
-  })
-  const runtime = createGameOcrRuntimeService({
+  const userUnidic = prepareUserUnidic({ paths, binaryPaths, shell })
+  // Read history before any settings write can drop the legacy key.
+  const historyStore = createAppMediaHistoryStore(paths)
+  const settings = createSettingsStore(createSettingsFile(paths.settingsFile, fs))
+  const deps: BootstrapDeps = {
+    ipcMain,
     settings,
-    controller: gameOcrController,
-    worker,
-    preflight: () => missingResourceMessage(requiredGameOcrResources(ocrPaths), probeResourceKind)
+    secrets: createSafeStorageCodec(safeStorage),
+    paths,
+    sendToMain
+  }
+  const decision = resolveStartupDecision({
+    startupBehavior: settings.get().player.startupBehavior,
+    hasLaunchPath,
+    supportsGameOcr: process.platform === 'win32',
+    probe: process.env[STARTUP_PROBE_ENV] === '1'
   })
-  gameOcr = runtime
-  gameOcrLifecycle = createGameOcrBackgroundLifecycle({
-    runtime,
-    window: {
-      hide: () => windows.uiOverlay.hide(),
-      activate: () => windows.activate(),
-      showOptions: async (origin) => (await appShell?.showOptions(origin)) === 'options',
-      showPlayer: async () => (await appShell?.showPlayer()) === 'player'
-    },
-    tray: createElectronGameOcrTrayFactory(
-      nativeImage.createFromPath(join(resourcesBaseDir(), 'icons', 'play.png'))
-    ),
-    stopPlayer: () => controller.stopPlayback(),
+  const getVersion = (): string => app.getVersion()
+
+  const updates = startUpdates({
+    ...deps,
+    mainWindow,
+    lifecycle,
+    getVersion,
+    revealForUpdate: () => void runtime?.window.gameOcr?.lifecycle.revealForUpdate()
+  })
+  const mediaHistory = startMediaHistory({ ipcMain, paths, store: historyStore })
+  startMedia({ ipcMain, paths, binaryPaths, mediaHistory })
+  startMecab({ ...deps, binaryPaths, userUnidic })
+  startDict(deps)
+  startAnki({ ...deps, ffmpegPath: binaryPaths.ffmpegPath })
+  startKnowledge(deps)
+  startTranslation(deps)
+  const jimaku = startJimaku({ ...deps, mediaHistory, shell })
+  const mpvConfig = startPlayerSettings({ ...deps, shell })
+  startAppInfo({ ipcMain, paths, binaryPaths, shell, getVersion })
+  registerClipboardBridge(ipcMain, clipboard)
+  const window = createWindow({
+    ...deps,
+    mainWindow,
+    controller,
+    mpvConfig,
+    mpvPath: binaryPaths.mpvPath,
+    mediaHistory,
+    decision,
+    launchPathBuffer,
+    startupProbe,
     quit: () => app.quit()
   })
-  registerGameOcrBridge(
-    ipcMain,
-    runtime,
-    (channel, value) => sendToWindow(mainWindow, channel, value),
-    (sender) => sender === mainWindow?.webContents
-  )
-}
-
-/**
- * Registers the integration-status IPC bridge: the read-only
- * "which optional bundled binaries are on disk" query behind the Options
- * dialog's "Setup & integrations" tab.
- */
-function startIntegrationStatus(paths: BinaryPaths): void {
-  registerIntegrationBridge(
-    ipcMain,
-    createIntegrationService({ paths, exists: (p) => fs.existsSync(p) })
-  )
-}
-
-/** Registers the About-dialog bridge with runtime version and packaged notices. */
-function startAppInfo(): void {
-  const noticesPath = resolveThirdPartyNoticesPath({
-    isPackaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    appRoot: app.getAppPath()
-  })
-  registerAppInfoBridge(
-    ipcMain,
-    createAppInfoService({
-      getVersion: () => app.getVersion(),
-      metadata: {
-        description: packageMetadata.description,
-        license: packageMetadata.license,
-        copyright: COPYRIGHT
-      },
-      noticesPath,
-      exists: (path) => fs.existsSync(path),
-      openExternal: (url) => shell.openExternal(url),
-      openPath: (path) => shell.openPath(path)
-    })
-  )
-}
-
-/** Starts the single main-process updater and its renderer-owning IPC bridge. */
-function startUpdates(lifecycle: AppLifecycleCoordinator, settings: SettingsStore): UpdateService {
-  let packageType: string | undefined
-  try {
-    packageType = fs.readFileSync(join(process.resourcesPath, 'package-type'), 'utf8').trim()
-  } catch {
-    // AppImage and unpackaged builds do not have electron-builder's package marker.
-  }
-  const service = createUpdateService({
-    support: detectUpdateSupport({
-      isPackaged: app.isPackaged,
-      platform: process.platform,
-      appImagePath: process.env['APPIMAGE'],
-      packageType,
-      hasUpdateConfiguration: fs.existsSync(join(process.resourcesPath, 'app-update.yml'))
-    }),
-    currentVersion: app.getVersion(),
-    updater: createElectronUpdaterAdapter(autoUpdater),
-    prepareInstall: (install) => lifecycle.prepareForInstall(install),
-    allowAutomaticChecks: process.env[STARTUP_PROBE_ENV] !== '1'
-  })
-  registerUpdateBridge(ipcMain, service, settings, (sender) => sender === mainWindow?.webContents)
-  service.subscribe((state) => {
-    sendToWindow(mainWindow, UPDATE_CHANNELS.stateChanged, state)
-    // Game OCR runs with the window hidden behind the tray, where the renderer
-    // still holds the prompt but nobody can see it.
-    if (isUpdateOffer(state)) void gameOcrLifecycle?.revealForUpdate()
-  })
-  return service
+  return { settings, updates, mediaHistory, jimaku, mpvConfig, window }
 }
 
 if (!gotSingleInstanceLock) {
@@ -876,21 +187,20 @@ if (!gotSingleInstanceLock) {
     },
     controller,
     stopGameOcr: async () => {
-      if (gameOcrLifecycle) await gameOcrLifecycle.stop(false)
-      else await gameOcr?.stop()
+      await runtime?.window.gameOcr?.lifecycle.stop(false)
     },
     flushHistory: () => {
       // Retry a settings write that failed earlier (e.g. a locked settings.json).
-      appSettings?.flush()
-      return mediaHistory?.flush()
+      runtime?.settings.flush()
+      return runtime?.mediaHistory.flush()
     },
-    releasePowerSave: () => playerRuntime?.releasePowerSave(),
-    disposeSystemMedia: () => playerRuntime?.disposeSystemMedia(),
+    releasePowerSave: () => runtime?.window.player.releasePowerSave(),
+    disposeSystemMedia: () => runtime?.window.player.disposeSystemMedia(),
     onShutdownStart: () => {
-      updates?.beginShutdown()
+      runtime?.updates.beginShutdown()
     },
     appQuit: () => {
-      appWindows?.close()
+      runtime?.window.windows.close()
       app.quit()
     }
   })
@@ -899,9 +209,10 @@ if (!gotSingleInstanceLock) {
   if (initialLaunchPath) launchPathBuffer.setPath(initialLaunchPath)
 
   app.on('second-instance', (_event, argv, cwd) => {
+    const gameOcrLifecycle = runtime?.window.gameOcr?.lifecycle
     const launchPath = videoPathFromArgv(argv, cwd)
     if (launchPath) {
-      void (gameOcrLifecycle?.showFromSecondInstance(true) ?? appShell?.showPlayer())
+      void (gameOcrLifecycle?.showFromSecondInstance(true) ?? runtime?.window.appShell.showPlayer())
       launchPathBuffer.setPath(launchPath)
     } else {
       void (gameOcrLifecycle?.showFromSecondInstance() ?? Promise.resolve())
@@ -918,73 +229,19 @@ if (!gotSingleInstanceLock) {
       ipcMain,
       (event) => {
         const senderWindow = BrowserWindow.fromWebContents(event.sender)
-        return appWindows?.controlsFor(senderWindow) ?? null
+        return runtime?.window.windows.controlsFor(senderWindow) ?? null
       },
       screen,
-      () => void mediaHistory?.flush()
+      () => void runtime?.mediaHistory.flush()
     )
-
-    const binaryPaths = resolveBinaryPaths({
-      isPackaged: app.isPackaged,
-      resourcesPath: process.resourcesPath,
-      appRoot: app.getAppPath()
-    })
-    const userUnidic = createUserUnidicManager({
-      userDataDir: app.getPath('userData'),
-      fs,
-      shell
-    })
-    migrateLegacyUnidicFromResources(binaryPaths, userUnidic)
-    // Read history before any settings write can drop the legacy key.
-    const historyStore = createAppMediaHistoryStore()
-    const settings = createAppSettingsStore()
-    appSettings = settings
-    const secrets = createSafeStorageCodec(safeStorage)
-    const decision = resolveStartupDecision({
-      startupBehavior: settings.get().player.startupBehavior,
-      hasLaunchPath: initialLaunchPath !== undefined,
-      supportsGameOcr: process.platform === 'win32',
-      probe: process.env[STARTUP_PROBE_ENV] === '1'
-    })
-    // Register once for the application lifetime. The overlay renderer starts
-    // the optional startup check only after it has subscribed to state pushes.
-    updates = startUpdates(lifecycle, settings)
-    mpvConfig = createMpvConfigManager({
-      userDataDir: app.getPath('userData'),
-      fs,
-      shell
-    })
-    const jimakuCacheRoot = join(app.getPath('userData'), 'jimaku')
-    mediaHistory = createMediaHistoryService({
-      store: historyStore,
-      isKnownManagedSubtitle: (path, provenance) =>
-        isJimakuManagedSubtitlePath(path, provenance, jimakuCacheRoot)
-    })
-    registerMediaHistoryBridge(ipcMain, mediaHistory)
-
-    scheduleStartupThumbnailSweep({
-      onceRendererReady: (listener) => ipcMain.once(LAUNCH_CHANNELS.rendererReady, listener),
-      cacheDir: join(app.getPath('userData'), 'thumbnails')
-    })
-    startMedia(binaryPaths.ffprobePath, binaryPaths.ffmpegPath, mediaHistory)
-    startMecab(binaryPaths, settings, userUnidic)
-    startDict()
-    startAnki(settings, binaryPaths.ffmpegPath)
-    startKnowledge(settings, secrets)
-    startTranslation(settings, secrets)
-    startJimaku(settings, secrets, mediaHistory)
-    startPlayerSettings(settings, mpvConfig)
-    startIntegrationStatus(binaryPaths)
-    startAppInfo()
-    registerClipboardBridge(ipcMain, clipboard)
-    createWindow(binaryPaths.mpvPath, mediaHistory, settings, decision)
+    runtime = bootstrap(lifecycle, initialLaunchPath !== undefined)
   })
 
   app.on('before-quit', lifecycle.handleBeforeQuit)
   app.on('will-quit', () => {
-    gameOcrLifecycle?.dispose()
-    updates?.dispose()
-    jimakuService?.dispose()
+    runtime?.window.gameOcr?.lifecycle.dispose()
+    runtime?.updates.dispose()
+    runtime?.jimaku.dispose()
   })
 
   app.on('window-all-closed', () => {
