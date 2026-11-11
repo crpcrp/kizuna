@@ -100,7 +100,6 @@ function setup(overrides: Partial<UseVocabularyPipelineInput> = {}) {
     allCuesLevelsTokenRef: { current: { current: 0 } },
     wholeTrackVocabularyRef: { current: createWholeTrackVocabularyCoordinator() },
     vocabularySpanEpochRef: { current: 0 },
-    vocabularySpansByCue: {},
     setVocabularySpansByCue: vi.fn(),
     reportController: createSubtitleReportController(),
     ...overrides

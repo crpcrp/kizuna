@@ -65,7 +65,6 @@ export interface UseVocabularyPipelineInput {
   allCuesLevelsTokenRef: RefObject<SubtitleRequestToken>
   wholeTrackVocabularyRef: RefObject<WholeTrackVocabularyCoordinator>
   vocabularySpanEpochRef: RefObject<number>
-  vocabularySpansByCue: Record<string, VocabularySpan[]>
   setVocabularySpansByCue: ReactDispatch<SetStateAction<Record<string, VocabularySpan[]>>>
   reportController: SubtitleReportController
 }
@@ -74,8 +73,6 @@ export interface UseVocabularyPipelineResult {
   /** Prepares (or reuses) the current whole-track vocabulary snapshot — shared by
    * bulk mining, the subtitle report, and their retry actions. */
   prepareWholeTrackVocabulary: () => Promise<WholeTrackVocabularyResult>
-  /** Every accepted vocabulary span across all cues, flattened for the sidebar. */
-  vocabularySpans: VocabularySpan[]
 }
 
 /**
@@ -108,7 +105,6 @@ export function useVocabularyPipeline({
   allCuesLevelsTokenRef,
   wholeTrackVocabularyRef,
   vocabularySpanEpochRef,
-  vocabularySpansByCue,
   setVocabularySpansByCue,
   reportController
 }: UseVocabularyPipelineInput): UseVocabularyPipelineResult {
@@ -317,10 +313,5 @@ export function useVocabularyPipeline({
     })
   }, [reportOpen, prepareWholeTrackVocabulary, bridges.knowledge, reportController])
 
-  const vocabularySpans = useMemo(
-    () => Object.values(vocabularySpansByCue).flat(),
-    [vocabularySpansByCue]
-  )
-
-  return { prepareWholeTrackVocabulary, vocabularySpans }
+  return { prepareWholeTrackVocabulary }
 }

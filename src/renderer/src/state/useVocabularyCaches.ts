@@ -67,9 +67,7 @@ export interface UseVocabularyCachesResult {
   /** Prepares (or reuses) the current whole-track vocabulary snapshot — shared
    * by the subtitle report and bulk mining. */
   prepareWholeTrackVocabulary: () => Promise<WholeTrackVocabularyResult>
-  /** Every accepted vocabulary span across all cues, flattened for the sidebar. */
-  vocabularySpans: VocabularySpan[]
-  /** The spans of one cue, for the overlay. */
+  /** The spans of one cue, for the overlay and each sidebar row. */
   spansForCue(cueKey: string | undefined): VocabularySpan[] | undefined
   refs: VocabularyCacheRefs
   /** Drops the whole-track snapshot and every computed span, for an Options
@@ -129,7 +127,7 @@ export function useVocabularyCaches({
 
   // Active-cue tokenization, tokenize-all (sidebar), whole-track vocabulary,
   // and subtitle-report recomputation — see state/useVocabularyPipeline.ts.
-  const { prepareWholeTrackVocabulary, vocabularySpans } = useVocabularyPipeline({
+  const { prepareWholeTrackVocabulary } = useVocabularyPipeline({
     dispatch,
     bridges: {
       mecab: bridge.mecab,
@@ -158,7 +156,6 @@ export function useVocabularyCaches({
     allCuesLevelsTokenRef: allCuesLevelsToken,
     wholeTrackVocabularyRef,
     vocabularySpanEpochRef: vocabularySpanEpoch,
-    vocabularySpansByCue,
     setVocabularySpansByCue,
     reportController
   })
@@ -177,7 +174,6 @@ export function useVocabularyCaches({
 
   return {
     prepareWholeTrackVocabulary,
-    vocabularySpans,
     spansForCue,
     refs: {
       tokenCache,

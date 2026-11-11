@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import SubtitleSidebar, {
   scrollRowIntoView,
-  SidebarRow,
+  SidebarRowView,
   CueRowContent,
   matchCounterText,
   searchKeyAction
@@ -18,7 +18,7 @@ import { makeToken } from '@test/harness/tokenFixtures'
 // exercised via renderToStaticMarkup's initial render — never called as a
 // bare function (that would throw "invalid hook call" outside React's
 // dispatcher). Click/context-menu behavior on a row is tested through the
-// hook-free SidebarRow. The search bar's client-only effects (focus
+// hook-free SidebarRowView. The search bar's client-only effects (focus
 // on open, scroll on explicit navigation) are not exercised here, same as
 // MenuBar's outside-click listener and OptionsMenu's rebind-capture
 // listener — they need a live DOM this test environment doesn't provide.
@@ -187,7 +187,7 @@ interface ListItemProps {
 describe('SubtitleSidebar click-to-seek', () => {
   it("fires onSelectCue with the clicked row's cue", () => {
     const onSelectCue = vi.fn()
-    const element = SidebarRow({
+    const element = SidebarRowView({
       cue: cueB,
       isActive: false,
       rowTokens: [],
@@ -204,7 +204,7 @@ describe('SubtitleSidebar click-to-seek', () => {
     const onSelectCue = vi.fn()
     const onCopyCue = vi.fn()
     const preventDefault = vi.fn()
-    const element = SidebarRow({
+    const element = SidebarRowView({
       cue: cueB,
       isActive: false,
       rowTokens: [],
