@@ -1,6 +1,5 @@
 import type {
   JimakuEntry,
-  JimakuErrorCode,
   JimakuFile,
   JimakuResult,
   JimakuSearchRequest
@@ -13,6 +12,7 @@ import {
   type HttpResponse
 } from '../http'
 import { isRecord, isPositiveSafeInteger, isNonNegativeSafeInteger } from '../../../shared/guards'
+import { fail, ok } from './result'
 
 export const JIMAKU_API_ORIGIN = 'https://jimaku.cc'
 export const JIMAKU_API_BASE = `${JIMAKU_API_ORIGIN}/api`
@@ -58,12 +58,12 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
     signal?: AbortSignal
   ): Promise<JimakuResult<T>> {
     const apiKey = deps.getApiKey()?.trim() || undefined
-    if (apiKey === undefined) return failure('notConfigured')
+    if (apiKey === undefined) return fail({ code: 'notConfigured' })
 
     if (cooldownUntilMs !== undefined && now() < cooldownUntilMs) {
-      return failure('rateLimited', toIsoTimestamp(cooldownUntilMs))
+      return fail({ code: 'rateLimited', retryAt: toIsoTimestamp(cooldownUntilMs) })
     }
-    if (signal?.aborted) return failure('cancelled')
+    if (signal?.aborted) return fail({ code: 'cancelled' })
 
     try {
       const response = await deps.fetch(url, {
@@ -72,39 +72,41 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
         signal,
         timeoutMs: requestTimeoutMs
       })
-      if (response.status === 401 || response.status === 403) return failure('unauthorized')
-      if (response.status === 404) return failure('notFound')
-      if (response.status === 429) return failure('rateLimited', recordRateLimit(response, now()))
-      if (response.status >= 500 && response.status <= 599) return failure('serviceUnavailable')
-      if (response.status < 200 || response.status >= 300) return failure('invalidResponse')
+      if (response.status === 401 || response.status === 403) return fail({ code: 'unauthorized' })
+      if (response.status === 404) return fail({ code: 'notFound' })
+      if (response.status === 429)
+        return fail({ code: 'rateLimited', retryAt: recordRateLimit(response, now()) })
+      if (response.status >= 500 && response.status <= 599)
+        return fail({ code: 'serviceUnavailable' })
+      if (response.status < 200 || response.status >= 300) return fail({ code: 'invalidResponse' })
 
       const contentLength = parseNonNegativeNumber(response.headers.get('content-length'))
       if (contentLength !== undefined && contentLength > JIMAKU_MAX_RESPONSE_BYTES) {
-        return failure('invalidResponse')
+        return fail({ code: 'invalidResponse' })
       }
 
       const bytes = await readBody(response, JIMAKU_MAX_RESPONSE_BYTES)
       const value = parse(JSON.parse(new TextDecoder().decode(bytes)))
-      return value === undefined ? failure('invalidResponse') : success(value)
+      return value === undefined ? fail({ code: 'invalidResponse' }) : ok(value)
     } catch (error) {
-      if (signal?.aborted) return failure('cancelled')
-      if (isTimeoutError(error)) return failure('timeout')
+      if (signal?.aborted) return fail({ code: 'cancelled' })
+      if (isTimeoutError(error)) return fail({ code: 'timeout' })
       if (error instanceof HttpBodyTooLargeError || error instanceof SyntaxError) {
-        return failure('invalidResponse')
+        return fail({ code: 'invalidResponse' })
       }
-      return failure('network')
+      return fail({ code: 'network' })
     }
   }
 
   return {
     searchEntries(input, signal) {
       if (!isRecord(input) || typeof input.query !== 'string' || typeof input.anime !== 'boolean') {
-        return Promise.resolve(failure('invalidRequest'))
+        return Promise.resolve(fail({ code: 'invalidRequest' }))
       }
 
       const query = input.query.trim()
       if (query === '' || [...query].length > JIMAKU_MAX_QUERY_LENGTH) {
-        return Promise.resolve(failure('invalidRequest'))
+        return Promise.resolve(fail({ code: 'invalidRequest' }))
       }
 
       const params = new URLSearchParams({ query, anime: String(input.anime) })
@@ -112,12 +114,12 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
     },
 
     getEntry(id, signal) {
-      if (!isPositiveSafeInteger(id)) return Promise.resolve(failure('invalidRequest'))
+      if (!isPositiveSafeInteger(id)) return Promise.resolve(fail({ code: 'invalidRequest' }))
       return request(`${JIMAKU_API_BASE}/entries/${id}`, parseEntry, signal)
     },
 
     listFiles(entryId, signal) {
-      if (!isPositiveSafeInteger(entryId)) return Promise.resolve(failure('invalidRequest'))
+      if (!isPositiveSafeInteger(entryId)) return Promise.resolve(fail({ code: 'invalidRequest' }))
       return request(`${JIMAKU_API_BASE}/entries/${entryId}/files`, parseFiles, signal)
     }
   }
@@ -259,15 +261,4 @@ function parseNonNegativeNumber(value: string | null): number | undefined {
 
 function toIsoTimestamp(epochMs: number): string {
   return new Date(epochMs).toISOString()
-}
-
-function success<T>(value: T): JimakuResult<T> {
-  return { ok: true, value }
-}
-
-function failure<T>(code: JimakuErrorCode, retryAt?: string): JimakuResult<T> {
-  return {
-    ok: false,
-    error: retryAt === undefined ? { code } : { code, retryAt }
-  }
 }

@@ -8,6 +8,7 @@ import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
 import { HttpBodyTooLargeError, isTimeoutError, readBody, type HttpFetch } from '../http'
 import { JIMAKU_API_ORIGIN, type JimakuFileRecord } from './client'
 import { isRecord, isPositiveSafeInteger } from '../../../shared/guards'
+import { fail, ok } from './result'
 
 export const JIMAKU_DOWNLOAD_ORIGIN = JIMAKU_API_ORIGIN
 export const JIMAKU_DOWNLOAD_MAX_BYTES = 10 * 1024 * 1024
@@ -436,10 +437,10 @@ export function createJimakuDownloadStore(
     } catch {
       if (previous === undefined) delete currentIndex.entries[key]
       else currentIndex.entries[key] = previous
-      return failure('storage')
+      return fail({ code: 'storage' })
     }
 
-    return success(makePrepared(entry))
+    return ok(makePrepared(entry))
   }
 
   function validateSubtitleBytes(
@@ -448,13 +449,13 @@ export function createJimakuDownloadStore(
   ): JimakuDownloadResult<true> {
     try {
       const text = decodeSubtitleBytes(bytes, 'auto')
-      if (looksLikeHtmlOrLogin(text)) return failure('invalidSubtitle')
+      if (looksLikeHtmlOrLogin(text)) return fail({ code: 'invalidSubtitle' })
       const cues = parseSubtitle(text, format)
-      if (!Array.isArray(cues) || cues.length === 0) return failure('invalidSubtitle')
+      if (!Array.isArray(cues) || cues.length === 0) return fail({ code: 'invalidSubtitle' })
     } catch {
-      return failure('invalidSubtitle')
+      return fail({ code: 'invalidSubtitle' })
     }
-    return success(true)
+    return ok(true)
   }
 
   async function prepareRemote(
@@ -464,13 +465,13 @@ export function createJimakuDownloadStore(
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<JimakuPreparedDownload>> {
     const format = subtitleFormat(file.name)
-    if (!isKind(format, kind)) return failure('invalidSubtitle')
+    if (!isKind(format, kind)) return fail({ code: 'invalidSubtitle' })
     const limit = kind === 'zip' ? maxPackageBytes : maxBytes
-    if (kind === 'zip' && file.size > limit) return failure('tooLarge')
+    if (kind === 'zip' && file.size > limit) return fail({ code: 'tooLarge' })
 
     const allowedUrl = allowedDownloadUrl(file.url, entryId)
     if (allowedUrl === undefined) {
-      return failure('unsupportedDownload', recoveryUrl(entryId))
+      return fail({ code: 'unsupportedDownload', recoveryUrl: recoveryUrl(entryId) })
     }
 
     try {
@@ -478,7 +479,7 @@ export function createJimakuDownloadStore(
         const cached = await findCached(entryId, file, true)
         if (cached !== undefined && isKind(cached.format, kind)) {
           await touchCache(cached)
-          return success(makePrepared(cached))
+          return ok(makePrepared(cached))
         }
 
         const downloaded = await downloadContent(allowedUrl, entryId, format, limit, signal)
@@ -486,7 +487,7 @@ export function createJimakuDownloadStore(
         return await storeDownloaded(entryId, file, downloaded.value)
       })
     } catch {
-      return failure('storage')
+      return fail({ code: 'storage' })
     }
   }
 
@@ -498,19 +499,19 @@ export function createJimakuDownloadStore(
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<JimakuPreparedSubtitle>> {
     const format = subtitleFormat(memberName)
-    if (!isSubtitleFormat(format)) return failure('invalidSubtitle')
-    if (signal?.aborted) return failure('cancelled')
-    if (bytes.byteLength > maxBytes) return failure('tooLarge')
+    if (!isSubtitleFormat(format)) return fail({ code: 'invalidSubtitle' })
+    if (signal?.aborted) return fail({ code: 'cancelled' })
+    if (bytes.byteLength > maxBytes) return fail({ code: 'tooLarge' })
     const valid = validateSubtitleBytes(bytes, format)
     if (!valid.ok) return valid
 
     try {
       return await exclusive(async () => {
-        if (signal?.aborted) return failure('cancelled')
+        if (signal?.aborted) return fail({ code: 'cancelled' })
         const cached = await findCached(entryId, sourceFile, true, memberName)
         if (cached !== undefined && isSubtitleFormat(cached.format)) {
           await touchCache(cached)
-          return success(makePrepared(cached) as JimakuPreparedSubtitle)
+          return ok(makePrepared(cached) as JimakuPreparedSubtitle)
         }
         const stored = await storeDownloaded(
           entryId,
@@ -524,10 +525,10 @@ export function createJimakuDownloadStore(
           memberName
         )
         if (!stored.ok) return stored
-        return success(stored.value as JimakuPreparedSubtitle)
+        return ok(stored.value as JimakuPreparedSubtitle)
       })
     } catch {
-      return failure('storage')
+      return fail({ code: 'storage' })
     }
   }
 
@@ -667,7 +668,7 @@ export function createJimakuDownloadStore(
     requestMaxBytes: number,
     signal?: AbortSignal
   ): Promise<JimakuDownloadResult<DownloadedContent>> {
-    if (signal?.aborted) return failure('cancelled')
+    if (signal?.aborted) return fail({ code: 'cancelled' })
 
     let bytes: Uint8Array
     try {
@@ -682,45 +683,47 @@ export function createJimakuDownloadStore(
         })
 
         if (isRedirect(response.status)) {
-          if (redirectCount >= maxRedirects) return failure('invalidResponse')
+          if (redirectCount >= maxRedirects) return fail({ code: 'invalidResponse' })
           const location = response.headers.get('location')
-          if (location === null) return failure('invalidResponse')
+          if (location === null) return fail({ code: 'invalidResponse' })
           let next: URL
           try {
             next = new URL(location, url)
           } catch {
-            return failure('unsupportedDownload', recoveryUrl(entryId))
+            return fail({ code: 'unsupportedDownload', recoveryUrl: recoveryUrl(entryId) })
           }
           const allowed = allowedDownloadUrl(next.toString(), entryId)
-          if (allowed === undefined) return failure('unsupportedDownload', recoveryUrl(entryId))
+          if (allowed === undefined)
+            return fail({ code: 'unsupportedDownload', recoveryUrl: recoveryUrl(entryId) })
           url = allowed
           redirectCount += 1
           continue
         }
 
-        if (response.status === 401 || response.status === 403) return failure('unauthorized')
-        if (response.status === 404) return failure('notFound')
-        if (response.status === 429) return failure('rateLimited')
+        if (response.status === 401 || response.status === 403)
+          return fail({ code: 'unauthorized' })
+        if (response.status === 404) return fail({ code: 'notFound' })
+        if (response.status === 429) return fail({ code: 'rateLimited' })
         if (response.status >= 500 && response.status <= 599) {
-          return failure('serviceUnavailable')
+          return fail({ code: 'serviceUnavailable' })
         }
         if (response.status < 200 || response.status >= 300) {
-          return failure('invalidResponse')
+          return fail({ code: 'invalidResponse' })
         }
 
         const advertisedSize = parseContentLength(response.headers.get('content-length'))
         if (advertisedSize !== undefined && advertisedSize > requestMaxBytes) {
-          return failure('tooLarge')
+          return fail({ code: 'tooLarge' })
         }
 
         bytes = await readBody(response, requestMaxBytes)
         break
       }
     } catch (error) {
-      if (signal?.aborted) return failure('cancelled')
-      if (isTimeoutError(error)) return failure('timeout')
-      if (error instanceof HttpBodyTooLargeError) return failure('tooLarge')
-      return failure('network')
+      if (signal?.aborted) return fail({ code: 'cancelled' })
+      if (isTimeoutError(error)) return fail({ code: 'timeout' })
+      if (error instanceof HttpBodyTooLargeError) return fail({ code: 'tooLarge' })
+      return fail({ code: 'network' })
     }
 
     if (isSubtitleFormat(format)) {
@@ -728,7 +731,7 @@ export function createJimakuDownloadStore(
       if (!valid.ok) return valid
     }
 
-    return success({ bytes, format, contentVersion: sha256(bytes) })
+    return ok({ bytes, format, contentVersion: sha256(bytes) })
   }
 
   return {
@@ -915,18 +918,4 @@ function isKind(
   kind: PreparedKind
 ): format is JimakuManagedFormat {
   return kind === 'zip' ? format === 'zip' : isSubtitleFormat(format)
-}
-
-function success<T>(value: T): JimakuDownloadResult<T> {
-  return { ok: true, value }
-}
-
-function failure<T>(
-  code: JimakuDownloadErrorCode,
-  recoveryUrlValue?: string
-): JimakuDownloadResult<T> {
-  return {
-    ok: false,
-    error: recoveryUrlValue === undefined ? { code } : { code, recoveryUrl: recoveryUrlValue }
-  }
 }
