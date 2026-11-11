@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createThumbnailPreview } from '@src/main/media/thumbnailPreview'
+import {
+  createThumbnailPreview,
+  scheduleStartupThumbnailSweep
+} from '@src/main/media/thumbnailPreview'
 
 const fakeThumbnailService = (path: string | null) => ({
   getThumbnail: vi.fn(async (_p: string, _t: number, _d: number) => path)
@@ -32,5 +35,44 @@ describe('createThumbnailPreview', () => {
 
     await expect(preview.getThumbnail('/video/ep.mkv', 42, 1200)).resolves.toBeNull()
     expect(readBase64).not.toHaveBeenCalled()
+  })
+})
+
+describe('scheduleStartupThumbnailSweep', () => {
+  function setup(sweep: (cacheDir: string) => Promise<string[]>) {
+    let rendererReady: (() => void) | undefined
+    const logger = { log: vi.fn(), warn: vi.fn() }
+    const sweepFn = vi.fn(sweep)
+    scheduleStartupThumbnailSweep({
+      onceRendererReady: (listener) => {
+        rendererReady = listener
+      },
+      cacheDir: '/cache',
+      sweep: sweepFn,
+      logger
+    })
+    return { sweep: sweepFn, logger, fireRendererReady: () => rendererReady?.() }
+  }
+
+  it('does not sweep until the renderer reports ready', async () => {
+    const { sweep, logger, fireRendererReady } = setup(async () => ['/cache/old'])
+    expect(sweep).not.toHaveBeenCalled()
+
+    fireRendererReady()
+    await vi.waitFor(() => expect(logger.log).toHaveBeenCalled())
+    expect(sweep).toHaveBeenCalledWith('/cache')
+    expect(logger.log).toHaveBeenCalledWith('[kizuna] thumbnail cache: evicted 1 dir(s)')
+  })
+
+  it('logs a sweep failure instead of throwing', async () => {
+    const error = new Error('EACCES')
+    const { logger, fireRendererReady } = setup(async () => {
+      throw error
+    })
+
+    expect(() => fireRendererReady()).not.toThrow()
+    await vi.waitFor(() =>
+      expect(logger.warn).toHaveBeenCalledWith('[kizuna] thumbnail cache sweep failed:', error)
+    )
   })
 })

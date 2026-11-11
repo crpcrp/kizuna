@@ -38,8 +38,7 @@ import { registerPlayerBridge } from './playerBridge'
 import { createPowerSaveController } from './services/powerSave'
 import { createSystemMediaController } from './services/systemMedia'
 import { createFrameCaptureService, createScreenshotService } from './services/screenshots'
-import { sweepThumbnailCache, THUMBNAIL_CACHE_MAX_BYTES } from './services/thumbnails/cache'
-import { nodeThumbnailDirFs } from './services/thumbnails/nodeFs'
+import { scheduleStartupThumbnailSweep } from './media/thumbnailPreview'
 import { windowIdFromHandleBuffer } from './mpv/nativeWindowHandle'
 import { registerMediaBridge } from './mediaBridge'
 import { createMediaService } from './mediaService'
@@ -463,26 +462,6 @@ function startMedia(ffprobePath: string, ffmpegPath: string, history: MediaHisto
     thumbnailCacheDir: join(app.getPath('userData'), 'thumbnails')
   })
   registerMediaBridge(ipcMain, mediaService)
-}
-
-/**
- * LRU-caps the seekbar-thumbnail cache at startup. The eviction policy lives in
- * services/thumbnails/cache.ts and the node:fs walk in
- * services/thumbnails/nodeFs.ts (which tolerates an absent cache dir on first
- * run); here we only name the directory and log the outcome.
- */
-function sweepThumbnails(): void {
-  const cacheDir = join(app.getPath('userData'), 'thumbnails')
-  try {
-    const removed = sweepThumbnailCache({
-      cacheDir,
-      maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
-      fs: nodeThumbnailDirFs
-    })
-    if (removed.length) console.log(`[kizuna] thumbnail cache: evicted ${removed.length} dir(s)`)
-  } catch (err) {
-    console.warn('[kizuna] thumbnail cache sweep failed:', err)
-  }
 }
 
 /**
@@ -983,7 +962,10 @@ if (!gotSingleInstanceLock) {
     })
     registerMediaHistoryBridge(ipcMain, mediaHistory)
 
-    sweepThumbnails()
+    scheduleStartupThumbnailSweep({
+      onceRendererReady: (listener) => ipcMain.once(LAUNCH_CHANNELS.rendererReady, listener),
+      cacheDir: join(app.getPath('userData'), 'thumbnails')
+    })
     startMedia(binaryPaths.ffprobePath, binaryPaths.ffmpegPath, mediaHistory)
     startMecab(binaryPaths, settings, userUnidic)
     startDict()
