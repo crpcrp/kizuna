@@ -4,7 +4,12 @@ import { KNOWLEDGE_CHANNELS } from '@src/shared/ipcChannels'
 import type { KnowledgeDetails, PublicKnowledgeSettings, SyncStatus } from '@src/shared/knowledge'
 import type { JlptCoverageReportResult } from '@src/shared/jlptCoverage'
 import type { JlptExportResult } from '@src/shared/jlptExport'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 
 const EMPTY_STATUS: SyncStatus = {
@@ -171,5 +176,24 @@ describe('registerKnowledgeBridge', () => {
 
     expect(service.setSettings).toHaveBeenCalledWith(patch)
     expect(result).toMatchObject({ hasWanikaniToken: true })
+  })
+})
+
+describe('registerKnowledgeBridge malformed requests', () => {
+  it.each([
+    [KNOWLEDGE_CHANNELS.levelsFor, [undefined]],
+    [KNOWLEDGE_CHANNELS.detailsFor, [new Array(50_001).fill('x')]],
+    [KNOWLEDGE_CHANNELS.sync, ['jpdb']],
+    [KNOWLEDGE_CHANNELS.sync, [undefined, { force: 'yes' }]],
+    [KNOWLEDGE_CHANNELS.setSettings, [{ wanikaniToken: 42 }]]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerKnowledgeBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

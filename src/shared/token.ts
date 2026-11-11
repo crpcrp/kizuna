@@ -1,3 +1,5 @@
+import { isNonNegativeSafeInteger, isRecord } from './guards'
+
 /** Which MeCab dictionary produced a token, since the feature-CSV layout differs. */
 export type DictFlavor = 'ipadic' | 'unidic'
 
@@ -13,6 +15,18 @@ export interface Token {
   pos: string
   /** Index of `surface` within the cue string, for span rendering. */
   startOffset: number
+}
+
+/** Shape check for a renderer-supplied token. */
+export function isToken(value: unknown): value is Token {
+  return (
+    isRecord(value) &&
+    typeof value.surface === 'string' &&
+    typeof value.reading === 'string' &&
+    typeof value.lemma === 'string' &&
+    typeof value.pos === 'string' &&
+    isNonNegativeSafeInteger(value.startOffset)
+  )
 }
 
 /**

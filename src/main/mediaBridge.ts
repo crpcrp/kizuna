@@ -7,12 +7,20 @@ import type { Chapter } from '../shared/chapter'
 import type { Cue } from '../shared/cue'
 import { isSubtitleEncoding, type SubtitleEncoding } from '../shared/subtitleEncoding'
 import { isRemoteUrl } from '../shared/mediaFileTypes'
+import { isFiniteNumber, isNonEmptyString, isNonNegativeSafeInteger } from '../shared/guards'
 import type { IpcMainHandleLike } from './ipc'
+import { expect, isStringList } from './ipcValidation'
 
 const LOCAL_MEDIA_ONLY_MESSAGE = 'URL playback is not supported.'
 
-function assertLocalPath(path: string): void {
-  if (isRemoteUrl(path)) throw new Error(LOCAL_MEDIA_ONLY_MESSAGE)
+/** Narrows a renderer-supplied path and rejects remote URLs. */
+function localPath(channel: string): (value: unknown) => string {
+  const check = expect(isNonEmptyString, channel)
+  return (value) => {
+    const path = check(value)
+    if (isRemoteUrl(path)) throw new Error(LOCAL_MEDIA_ONLY_MESSAGE)
+    return path
+  }
 }
 
 /** The slice of the media service this bridge needs (fakeable in tests). */
@@ -63,40 +71,41 @@ export function registerMediaBridge<E>(ipc: IpcMainHandleLike<E>, service: Media
   ipc.handle(MEDIA_CHANNELS.openFile, () => service.openFile())
   ipc.handle(MEDIA_CHANNELS.openFiles, () => service.openFiles())
   ipc.handle(MEDIA_CHANNELS.openFolder, () => service.openFolder())
-  ipc.handle(MEDIA_CHANNELS.readPlaylist, (_e, filePath) => {
-    assertLocalPath(filePath)
-    return service.readPlaylist(filePath)
-  })
-  ipc.handle(MEDIA_CHANNELS.savePlaylist, (_e, paths) => service.savePlaylist(paths))
-  ipc.handle(MEDIA_CHANNELS.openSubtitleFile, () => service.openSubtitleFile())
-  ipc.handle(MEDIA_CHANNELS.enumerateTracks, (_e, filePath) => {
-    assertLocalPath(filePath)
-    return service.enumerateTracks(filePath)
-  })
-  ipc.handle(MEDIA_CHANNELS.loadSubtitle, (_e, filePath, streamIndex) => {
-    assertLocalPath(filePath)
-    return service.loadSubtitle(filePath, streamIndex)
-  })
-  ipc.handle(MEDIA_CHANNELS.loadExternalSubtitle, (_e, subtitlePath, suppliedEncoding: unknown) => {
-    assertLocalPath(subtitlePath)
+  const C = MEDIA_CHANNELS
+  const playlistPath = localPath(C.readPlaylist)
+  ipc.handle(C.readPlaylist, (_e, filePath) => service.readPlaylist(playlistPath(filePath)))
+  const playlistPaths = expect(isStringList, C.savePlaylist)
+  ipc.handle(C.savePlaylist, (_e, paths) => service.savePlaylist(playlistPaths(paths)))
+  ipc.handle(C.openSubtitleFile, () => service.openSubtitleFile())
+  const tracksPath = localPath(C.enumerateTracks)
+  ipc.handle(C.enumerateTracks, (_e, filePath) => service.enumerateTracks(tracksPath(filePath)))
+  const subtitlePath = localPath(C.loadSubtitle)
+  const streamIndexArg = expect(isNonNegativeSafeInteger, C.loadSubtitle)
+  ipc.handle(C.loadSubtitle, (_e, filePath, streamIndex) =>
+    service.loadSubtitle(subtitlePath(filePath), streamIndexArg(streamIndex))
+  )
+  const externalPath = localPath(C.loadExternalSubtitle)
+  ipc.handle(C.loadExternalSubtitle, (_e, rawPath, suppliedEncoding) => {
+    const path = externalPath(rawPath)
     const encoding = suppliedEncoding === undefined ? 'auto' : suppliedEncoding
     if (!isSubtitleEncoding(encoding)) throw new Error('Unsupported subtitle encoding.')
-    return service.loadExternalSubtitle(subtitlePath, encoding)
+    return service.loadExternalSubtitle(path, encoding)
   })
-  ipc.handle(MEDIA_CHANNELS.getVideoDimensions, (_e, filePath) => {
-    assertLocalPath(filePath)
-    return service.getVideoDimensions(filePath)
-  })
-  ipc.handle(MEDIA_CHANNELS.getChapters, (_e, filePath) => {
-    assertLocalPath(filePath)
-    return service.getChapters(filePath)
-  })
-  ipc.handle(MEDIA_CHANNELS.folderNeighbors, (_e, filePath) => {
-    assertLocalPath(filePath)
-    return service.folderNeighbors(filePath)
-  })
-  ipc.handle(MEDIA_CHANNELS.thumbnail, (_e, filePath, timeSec, durationSec) => {
-    assertLocalPath(filePath)
-    return service.getThumbnail(filePath, timeSec, durationSec)
-  })
+  const dimensionsPath = localPath(C.getVideoDimensions)
+  ipc.handle(C.getVideoDimensions, (_e, filePath) =>
+    service.getVideoDimensions(dimensionsPath(filePath))
+  )
+  const chaptersPath = localPath(C.getChapters)
+  ipc.handle(C.getChapters, (_e, filePath) => service.getChapters(chaptersPath(filePath)))
+  const neighborsPath = localPath(C.folderNeighbors)
+  ipc.handle(C.folderNeighbors, (_e, filePath) => service.folderNeighbors(neighborsPath(filePath)))
+  const thumbnailPath = localPath(C.thumbnail)
+  const thumbnailTime = expect(isFiniteNumber, C.thumbnail)
+  ipc.handle(C.thumbnail, (_e, filePath, timeSec, durationSec) =>
+    service.getThumbnail(
+      thumbnailPath(filePath),
+      thumbnailTime(timeSec),
+      thumbnailTime(durationSec)
+    )
+  )
 }

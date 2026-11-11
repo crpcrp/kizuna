@@ -5,7 +5,12 @@ import {
 } from '@src/main/playerSettingsBridge'
 import { PLAYER_SETTINGS_CHANNELS } from '@src/shared/ipcChannels'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 
 function fakeService() {
   let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS
@@ -69,5 +74,21 @@ describe('registerPlayerSettingsBridge', () => {
 
     expect(service.openMpvConfigDir).toHaveBeenCalled()
     expect(result).toBe('')
+  })
+})
+
+describe('registerPlayerSettingsBridge malformed requests', () => {
+  it.each([
+    [PLAYER_SETTINGS_CHANNELS.setSettings, [undefined]],
+    [PLAYER_SETTINGS_CHANNELS.setSettings, ['volume=200']]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerPlayerSettingsBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

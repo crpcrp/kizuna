@@ -4,7 +4,12 @@ import { MEDIA_CHANNELS } from '@src/shared/ipcChannels'
 import type { Track, VideoDimensions } from '@src/shared/track'
 import type { Cue } from '@src/shared/cue'
 import type { SubtitleEncoding } from '@src/shared/subtitleEncoding'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 
 /** Fake media service: records calls and returns canned values. */
 function fakeService(tracks: Track[], cues: Cue[], dims: VideoDimensions | undefined = undefined) {
@@ -250,5 +255,25 @@ describe('registerMediaBridge', () => {
 
     expect(service.getVideoDimensions).toHaveBeenCalledWith('/tmp/video.mp4')
     expect(result).toEqual({ width: 1920, height: 1080 })
+  })
+})
+
+describe('registerMediaBridge malformed requests', () => {
+  it.each([
+    [MEDIA_CHANNELS.readPlaylist, [undefined]],
+    [MEDIA_CHANNELS.savePlaylist, [new Array(50_001).fill('x')]],
+    [MEDIA_CHANNELS.enumerateTracks, [42]],
+    [MEDIA_CHANNELS.loadSubtitle, ['/v.mkv', -1]],
+    [MEDIA_CHANNELS.getChapters, ['']],
+    [MEDIA_CHANNELS.thumbnail, ['/v.mkv', 1, 'long']]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService([], [])
+    registerMediaBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

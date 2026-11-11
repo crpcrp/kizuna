@@ -7,7 +7,12 @@ import {
 import { MpvLoadError } from '@src/main/mpv/controller'
 import { ScreenshotFolderError } from '@src/main/services/screenshots'
 import { PLAYER_CHANNELS } from '@src/shared/ipcChannels'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 
 /** Fake mpv controller: records calls and captures observe callbacks. */
 function fakeController() {
@@ -795,5 +800,38 @@ describe('registerPlayerBridge', () => {
 
       expect(systemMedia.update).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('registerPlayerBridge malformed requests', () => {
+  it.each([
+    [PLAYER_CHANNELS.load, [undefined]],
+    [PLAYER_CHANNELS.setPause, ['yes']],
+    [PLAYER_CHANNELS.seek, [Number.NaN]],
+    [PLAYER_CHANNELS.seek, [5, 'absolute']],
+    [PLAYER_CHANNELS.setVolume, ['50']],
+    [PLAYER_CHANNELS.setMuted, [1]],
+    [PLAYER_CHANNELS.setAudioDelay, [Infinity]],
+    [PLAYER_CHANNELS.setAudioTrack, [1.5]],
+    [PLAYER_CHANNELS.setAudioDevice, [{}]],
+    [PLAYER_CHANNELS.setAbLoop, [1, 'no']],
+    [PLAYER_CHANNELS.setVideoMargins, [0, undefined]],
+    [PLAYER_CHANNELS.setVideoAdjustments, [null]],
+    [PLAYER_CHANNELS.screenshot, ['/v.mkv', undefined]]
+  ])('rejects %s %j without reaching mpv', async (channel, args) => {
+    const fake = fakeIpc()
+    const { controller } = fakeController()
+    const screenshots = { capture: vi.fn(async () => '') }
+    registerPlayerBridge(fake.ipc, controller, vi.fn(), undefined, undefined, screenshots)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    // Registration subscribes the observe* callbacks; every command must stay untouched.
+    const commands = Object.fromEntries(
+      Object.entries(controller).filter(([name]) => !name.startsWith('observe'))
+    )
+    expectUntouched(commands)
+    expect(screenshots.capture).not.toHaveBeenCalled()
   })
 })

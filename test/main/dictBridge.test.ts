@@ -7,7 +7,12 @@ import {
 } from '@src/main/dictBridge'
 import { DICT_CHANNELS } from '@src/shared/ipcChannels'
 import type { DictInfo, ImportResult, LookupResult } from '@src/shared/dictionary'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 import { makeDictInfo, makeLookupResult } from '@test/harness/dictFixtures'
 
 const sampleImportResult: ImportResult = { dictId: 1, termCount: 6, metaCount: 0 }
@@ -262,5 +267,29 @@ describe('registerDictBridge', () => {
 
     expect(service.removeDict).toHaveBeenCalledWith(1)
     expect(calls.removeDict).toEqual([1])
+  })
+})
+
+describe('registerDictBridge malformed requests', () => {
+  it.each([
+    [DICT_CHANNELS.importDict, [[80, 75]]],
+    [DICT_CHANNELS.importDict, [undefined]],
+    [DICT_CHANNELS.lookup, [undefined]],
+    [DICT_CHANNELS.lookup, ['猫', undefined, 'freq']],
+    [DICT_CHANNELS.lookup, ['猫', undefined, null, 'by-vibes']],
+    [DICT_CHANNELS.lookup, ['猫', undefined, null, undefined, new Array(50_001).fill('x')]],
+    [DICT_CHANNELS.setEnabled, [1, 'true']],
+    [DICT_CHANNELS.setFallbackOnly, [0, true]],
+    [DICT_CHANNELS.reorder, [[1, 2.5]]],
+    [DICT_CHANNELS.remove, ['1']]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerDictBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

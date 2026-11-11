@@ -2,6 +2,8 @@
 // require MeCab or a real settings file.
 
 import type { IpcMainHandleLike } from './ipc'
+import { expect, isStringList, oneOf } from './ipcValidation'
+import { isString } from '../shared/guards'
 import { MECAB_CHANNELS } from '../shared/ipcChannels'
 import type { Token } from '../shared/token'
 import type { McDict } from '../shared/mecab'
@@ -91,10 +93,13 @@ export function registerMecabBridge<E>(
   service: MecabServiceLike,
   options: MecabBridgeOptions = {}
 ): void {
-  ipc.handle(MECAB_CHANNELS.tokenize, (_e, text) => service.tokenize(text))
-  ipc.handle(MECAB_CHANNELS.tokenizeBatch, (_e, texts) => service.tokenizeBatch(texts))
+  const textArg = expect(isString, MECAB_CHANNELS.tokenize)
+  ipc.handle(MECAB_CHANNELS.tokenize, (_e, text) => service.tokenize(textArg(text)))
+  const textsArg = expect(isStringList, MECAB_CHANNELS.tokenizeBatch)
+  ipc.handle(MECAB_CHANNELS.tokenizeBatch, (_e, texts) => service.tokenizeBatch(textsArg(texts)))
   ipc.handle(MECAB_CHANNELS.listDicts, () => service.listDicts())
-  ipc.handle(MECAB_CHANNELS.selectDict, (_e, id) => service.selectDict(id))
+  const dictIdArg = expect(oneOf(['ipadic', 'unidic'] as const), MECAB_CHANNELS.selectDict)
+  ipc.handle(MECAB_CHANNELS.selectDict, (_e, id) => service.selectDict(dictIdArg(id)))
   ipc.handle(MECAB_CHANNELS.currentDict, () => service.currentDict())
   ipc.handle(MECAB_CHANNELS.openUserUnidicDir, () => options.openUserUnidicDir?.() ?? '')
 }

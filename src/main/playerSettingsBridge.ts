@@ -4,6 +4,8 @@
 import { PLAYER_SETTINGS_CHANNELS } from '../shared/ipcChannels'
 import type { PlayerSettings } from '../shared/playerSettings'
 import type { IpcMainHandleLike } from './ipc'
+import { expect } from './ipcValidation'
+import { isRecord } from '../shared/guards'
 import type { SettingsStore } from './services/settings'
 
 /** The slice of the player-settings service this bridge needs (fakeable in tests). */
@@ -24,7 +26,11 @@ export function registerPlayerSettingsBridge<E>(
   service: PlayerSettingsServiceLike
 ): void {
   ipc.handle(PLAYER_SETTINGS_CHANNELS.getSettings, () => service.getSettings())
-  ipc.handle(PLAYER_SETTINGS_CHANNELS.setSettings, (_e, patch) => service.setSettings(patch))
+  // The settings store re-normalizes the merged result, so a record is enough here.
+  const patchArg = expect(isRecord, PLAYER_SETTINGS_CHANNELS.setSettings)
+  ipc.handle(PLAYER_SETTINGS_CHANNELS.setSettings, (_e, patch) =>
+    service.setSettings(patchArg(patch) as Partial<PlayerSettings>)
+  )
   ipc.handle(PLAYER_SETTINGS_CHANNELS.openMpvConfigDir, () => service.openMpvConfigDir())
 }
 

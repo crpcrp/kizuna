@@ -14,7 +14,12 @@ import type {
 } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import {
+  expectUntouched,
+  fakeIpc,
+  invokeRejection,
+  type FakeEvent
+} from '@test/harness/fakeIpcMain'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 import { makeAnkiSettings } from '@test/harness/ankiFixtures'
@@ -310,5 +315,35 @@ describe('registerAnkiBridge', () => {
     expect(service.setSettings).toHaveBeenCalledWith(patch)
     expect(calls.setSettings).toEqual([patch])
     expect(result).toEqual({ ...sampleSettings, deckName: 'New Deck' })
+  })
+})
+
+describe('registerAnkiBridge malformed requests', () => {
+  it.each([
+    [ANKI_CHANNELS.addNote, [undefined]],
+    [ANKI_CHANNELS.addNote, [{ ...sampleMineRequest, token: { surface: '猫' } }]],
+    [
+      ANKI_CHANNELS.addNote,
+      [
+        {
+          ...sampleMineRequest,
+          media: { path: '/v.mkv', audioStreamIndex: 1, startSec: 2, endSec: 1 }
+        }
+      ]
+    ],
+    [ANKI_CHANNELS.applyJlptBackfill, [{ operationToken: 't', candidates: [{ noteId: 1 }] }]],
+    [ANKI_CHANNELS.findExisting, [sampleToken, 42]],
+    [ANKI_CHANNELS.findTargetDeckMembership, [new Array(50_001).fill('x')]],
+    [ANKI_CHANNELS.openCard, ['1 OR deck:*']],
+    [ANKI_CHANNELS.setSettings, [[]]]
+  ])('rejects %s %j without calling the service', async (channel, args) => {
+    const fake = fakeIpc()
+    const { service } = fakeService()
+    registerAnkiBridge(fake.ipc, service)
+
+    const err = await invokeRejection(fake, channel, ...args)
+
+    expect(err).toEqual(new Error(`Invalid ${channel} request.`))
+    expectUntouched(service)
   })
 })

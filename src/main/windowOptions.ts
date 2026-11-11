@@ -6,6 +6,7 @@ import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import type { IpcMainLike } from './ipc'
 import { PRODUCT_NAME } from '../shared/appIdentity'
 import { WINDOW_CONTROL_CHANNELS } from '../shared/ipcChannels'
+import { isFiniteNumber } from '../shared/guards'
 import {
   isWindowBounds,
   miniPlayerBounds,
@@ -302,7 +303,7 @@ export function registerWindowControls<E, I>(
   ipc.on(WINDOW_CONTROL_CHANNELS.setSize, (event, width, height) => {
     const win = windowFromEvent(event)
     if (!win) return
-    if (typeof width !== 'number' || typeof height !== 'number') return
+    if (!isPositiveFiniteNumber(width) || !isPositiveFiniteNumber(height)) return
     win.setBounds({ ...win.getBounds(), width: Math.round(width), height: Math.round(height) })
   })
   ipc.on(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, (event, flag) => {
@@ -328,4 +329,8 @@ export function registerWindowControls<E, I>(
     win.focus()
     return bounds
   })
+}
+
+function isPositiveFiniteNumber(value: unknown): value is number {
+  return isFiniteNumber(value) && value > 0
 }
