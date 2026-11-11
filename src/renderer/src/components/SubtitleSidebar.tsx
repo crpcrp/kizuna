@@ -1,5 +1,5 @@
 import './SubtitleSidebar.css'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
 import type { KnowledgeLevel } from '../../../shared/knowledge'
@@ -16,6 +16,7 @@ import { SubtitleSearchDebounce } from '../state/subtitleSearchDebounce'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import { useSidebarTranslation } from '../state/useSidebarTranslation'
 import SubtitleTranslationPopup from './SubtitleTranslationPopup'
+import { useLatestCallback, useLatestRef } from '../state/useLatestRef'
 
 // Presentational side panel: lists every cue of the current subtitle track,
 // highlights whichever one is active, and jumps playback to a clicked row.
@@ -25,6 +26,10 @@ import SubtitleTranslationPopup from './SubtitleTranslationPopup'
 
 /** How long the "Copied to clipboard" toast stays up after a right-click copy. */
 const COPY_TOAST_MS = 1200
+
+/** Shared by every row without a search match, so memoized rows see a stable prop. */
+const NO_MATCHES: SearchMatch[] = []
+const NO_TOKENS: Token[] = []
 
 export interface SubtitleSidebarProps {
   cues: Cue[]
@@ -36,8 +41,10 @@ export interface SubtitleSidebarProps {
   /** Same shape/semantics as SubtitleOverlay's `levels` prop: undefined disables
    * coloring, an object (even `{}`) enables it with 'unknown' as the default. */
   levels?: Record<string, KnowledgeLevel>
-  /** Compound projections for all cues, keyed internally by each span's cue key. */
-  vocabularySpans?: VocabularySpan[]
+  /** One cue's compound projections (see `useVocabularyCaches.spansForCue`).
+   * Each row receives only its own slice, so a span change elsewhere in the
+   * track does not re-render it. */
+  spansForCue?: (cueKey: string) => VocabularySpan[] | undefined
   onSelectCue: (cue: Cue) => void
   onCopyCue?: (cue: Cue) => void
   /** Translates the full cue text after it has been copied. When absent,
@@ -180,8 +187,9 @@ export function CueRowContent({
 
 /** Presentational, hook-free row: one cue's clickable button. Kept separate
  * from `SubtitleSidebar` (which owns the search state and calls hooks) so it
- * can be invoked directly in tests. */
-export function SidebarRow({
+ * can be invoked directly in tests; the list renders the memoized
+ * `SidebarRow`. */
+export function SidebarRowView({
   cue,
   isActive,
   rowTokens,
@@ -202,12 +210,12 @@ export function SidebarRow({
   currentMatch?: SearchMatch
   onSelectCue: (cue: Cue) => void
   onCopyCue?: (cue: Cue) => void
-  /** Ref for the enclosing `<li>`, used only by the current-match row's
-   * scroll-into-view effect (see SubtitleSidebar). */
-  liRef?: (el: HTMLLIElement | null) => void
+  /** Stable ref for the enclosing `<li>`; it reads the row's key from
+   * `data-cue-key` (see SubtitleSidebar's `rowElsRef`). */
+  liRef?: (el: HTMLLIElement | null) => void | (() => void)
 }): React.JSX.Element {
   return (
-    <li ref={liRef}>
+    <li ref={liRef} data-cue-key={cueKey(cue)}>
       <button
         type="button"
         className="subtitle-sidebar-row"
@@ -232,12 +240,16 @@ export function SidebarRow({
   )
 }
 
+/** Memoized row: with stable props, an active-cue change re-renders only the
+ * previously and newly active rows, not the whole track. */
+export const SidebarRow = memo(SidebarRowView)
+
 export default function SubtitleSidebar({
   cues,
   activeCueKey,
   tokens,
   levels,
-  vocabularySpans,
+  spansForCue,
   onSelectCue,
   onCopyCue,
   onTranslateCue,
@@ -250,7 +262,6 @@ export default function SubtitleSidebar({
   const [currentIndex, setCurrentIndex] = useState(0)
   const [navNonce, setNavNonce] = useState(0)
 
-  const currentMatchRowRef = useRef<HTMLElement | null>(null)
   const isFirstNavRef = useRef(true)
   const debounceRef = useRef<SubtitleSearchDebounce | null>(null)
   const [copyToastAnchor, setCopyToastAnchor] = useState<{ top: number; left: number } | null>(null)
@@ -277,6 +288,15 @@ export default function SubtitleSidebar({
   if (debounceRef.current === null) debounceRef.current = new SubtitleSearchDebounce(commitSearch)
 
   const matches = useMemo(() => findMatches(cues, searchedQuery), [cues, searchedQuery])
+  const matchesByCue = useMemo(() => {
+    const byCue = new Map<string, SearchMatch[]>()
+    for (const match of matches) {
+      const list = byCue.get(match.cueKey)
+      if (list) list.push(match)
+      else byCue.set(match.cueKey, [match])
+    }
+    return byCue
+  }, [matches])
   const searchActive = searchedQuery.trim().length > 0
 
   // A new match list (submitted-query edit or track change) always starts back
@@ -301,16 +321,18 @@ export default function SubtitleSidebar({
   // Scrolls the current-match row into view, but only for explicit
   // next/previous navigation (navNonce bumps), never merely because the
   // match list changed underneath — and never on the very first render.
+  const displayIndex = matches.length > 0 ? Math.min(currentIndex, matches.length - 1) : 0
+  const currentMatch = matches.length > 0 ? matches[displayIndex] : undefined
+  const currentMatchKeyRef = useLatestRef(currentMatch?.cueKey)
+
   useEffect(() => {
     if (isFirstNavRef.current) {
       isFirstNavRef.current = false
       return
     }
-    scrollRowIntoView(currentMatchRowRef.current)
-  }, [navNonce])
-
-  const displayIndex = matches.length > 0 ? Math.min(currentIndex, matches.length - 1) : 0
-  const currentMatch = matches.length > 0 ? matches[displayIndex] : undefined
+    const key = currentMatchKeyRef.current
+    scrollRowIntoView(key === undefined ? null : (rowElsRef.current!.get(key) ?? null))
+  }, [navNonce, currentMatchKeyRef, rowElsRef])
 
   function navigate(dir: 1 | -1): void {
     setCurrentIndex((i) => stepMatch(i, matches.length, dir))
@@ -348,6 +370,24 @@ export default function SubtitleSidebar({
       if (copyToastTimerRef.current !== null) clearTimeout(copyToastTimerRef.current)
     }
   }, [])
+
+  // Stable identities for the memoized rows: the caller's handlers are
+  // usually recreated on every App render (i.e. every active-cue change).
+  const selectCue = useLatestCallback(onSelectCue)
+  const copyCue = useLatestCallback(handleCopyCue)
+  const rowCopyHandler = onCopyCue || onTranslateCue ? copyCue : undefined
+  const rowRef = useCallback(
+    (el: HTMLLIElement | null) => {
+      const key = el?.dataset.cueKey
+      if (!el || key === undefined) return
+      const rows = rowElsRef.current!
+      rows.set(key, el)
+      return () => {
+        if (rows.get(key) === el) rows.delete(key)
+      }
+    },
+    [rowElsRef]
+  )
 
   return (
     <aside id="subtitle-sidebar" aria-label="All subtitles" ref={containerRef}>
@@ -437,24 +477,19 @@ export default function SubtitleSidebar({
         <ul>
           {cues.map((cue) => {
             const key = cueKey(cue)
-            const isCurrentMatchRow = currentMatch !== undefined && currentMatch.cueKey === key
             return (
               <SidebarRow
                 key={key}
                 cue={cue}
                 isActive={key === activeCueKey}
-                rowTokens={tokens[key] ?? []}
+                rowTokens={tokens[key] ?? NO_TOKENS}
                 levels={levels}
-                vocabularySpans={vocabularySpans}
-                matches={matches.filter((m) => m.cueKey === key)}
-                currentMatch={isCurrentMatchRow ? currentMatch : undefined}
-                onSelectCue={onSelectCue}
-                onCopyCue={onCopyCue || onTranslateCue ? handleCopyCue : undefined}
-                liRef={(el) => {
-                  if (el) rowElsRef.current!.set(key, el)
-                  else rowElsRef.current!.delete(key)
-                  if (isCurrentMatchRow) currentMatchRowRef.current = el
-                }}
+                vocabularySpans={spansForCue?.(key)}
+                matches={matchesByCue.get(key) ?? NO_MATCHES}
+                currentMatch={currentMatch?.cueKey === key ? currentMatch : undefined}
+                onSelectCue={selectCue}
+                onCopyCue={rowCopyHandler}
+                liRef={rowRef}
               />
             )
           })}

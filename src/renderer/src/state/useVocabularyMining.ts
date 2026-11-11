@@ -78,7 +78,7 @@ export interface UseVocabularyMiningResult {
     | 'onCancelTranslation'
     | 'onCopyCue'
     | 'onTranslateCue'
-    | 'vocabularySpans'
+    | 'spansForCue'
   >
   wordPopup: Omit<WordPopupProps, 'maxEntries' | 'maxMeanings'>
   cardImageDialog: CardImageDialogViewModel
@@ -206,7 +206,7 @@ export function useVocabularyMining({
       ...popup.handlers
     },
     subtitleSidebar: {
-      vocabularySpans: caches.vocabularySpans,
+      spansForCue: caches.spansForCue,
       onCopyCue: (cue) => void copySidebarCue(bridge.clipboard.writeText, cue),
       onTranslateCue: translationEnabled
         ? (cue, requestId) => bridge.translate.translate(cue.text, requestId)
