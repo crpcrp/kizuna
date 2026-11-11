@@ -4,11 +4,10 @@
 // The cache grows one file-dir per opened media file (see `thumbnailCachePath`),
 // and a replaced/re-encoded file leaves its old dir orphaned. To bound disk
 // use, a sweep deletes the least-recently-used file-dirs until the cache is
-// back under a byte cap. Both the selection (`selectEvictions`) and the
-// per-dir summary (`summarizeCacheDir`) are pure and shared by the synchronous
-// startup sweep and the asynchronous runtime sweep, so the two differ only in
-// how they walk and delete — never in policy. The walk and deletes go through
-// an injected fs so both are testable without real disk.
+// back under a byte cap. The same async sweep runs once after the renderer is
+// ready at startup and, debounced, after thumbnail writes. The selection
+// (`selectEvictions`) and per-dir summary (`summarizeCacheDir`) are pure; the
+// walk and deletes go through an injected fs so they are testable without disk.
 
 import { pathApiFor } from '../../platformPath'
 import type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
@@ -102,8 +101,7 @@ export function selectEvictions(entries: ThumbnailCacheEntry[], maxBytes: number
 
 /**
  * Pure. Summarizes one file-dir from its files' stats: total bytes, and the
- * newest mtime as the recency proxy. Shared by both walks so "how a file-dir is
- * measured" is stated once.
+ * newest mtime as the recency proxy.
  */
 export function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): ThumbnailCacheEntry {
   return {
@@ -113,17 +111,7 @@ export function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): Thumbnai
   }
 }
 
-/** Injected directory walk for the synchronous startup sweep. */
-export interface ThumbnailDirFs {
-  /** Immediate subdirectory names of `dir` (the sha1 file-dirs); `[]` if absent. */
-  readSubdirs(dir: string): string[]
-  /** File names directly under `dir`. */
-  readFiles(dir: string): string[]
-  /** size + mtimeMs of one file. */
-  stat(path: string): ThumbnailStat
-}
-
-/** Async directory-walk boundary for runtime eviction, kept off the main thread. */
+/** Async directory-walk boundary for cache eviction, kept off the main thread. */
 export interface ThumbnailAsyncDirFs {
   readSubdirs(dir: string): Promise<string[]>
   readFiles(dir: string): Promise<string[]>
@@ -135,22 +123,6 @@ export interface ThumbnailAsyncDirFs {
  * Walks `cacheDir` into one {@link ThumbnailCacheEntry} per file-dir, summing
  * bytes and taking the newest mtime as the recency proxy.
  */
-export function collectCacheEntries(
-  cacheDir: string,
-  fs: ThumbnailDirFs,
-  platform: NodeJS.Platform = process.platform
-): ThumbnailCacheEntry[] {
-  const { join } = pathApiFor(platform)
-  return fs.readSubdirs(cacheDir).map((name) => {
-    const dir = join(cacheDir, name)
-    return summarizeCacheDir(
-      dir,
-      fs.readFiles(dir).map((file) => fs.stat(join(dir, file)))
-    )
-  })
-}
-
-/** Async counterpart used only for post-write runtime eviction. */
 export async function collectCacheEntriesAsync(
   cacheDir: string,
   fs: Omit<ThumbnailAsyncDirFs, 'remove'>,
@@ -171,25 +143,9 @@ export async function collectCacheEntriesAsync(
 }
 
 /**
- * Startup sweep: collects the cache's file-dirs, picks LRU evictions to get
- * under `maxBytes`, and removes them. Returns the removed paths (for logging).
+ * Collects the cache's file-dirs, picks LRU evictions to get under `maxBytes`,
+ * and removes them. Returns the removed paths (for logging).
  */
-export function sweepThumbnailCache(deps: {
-  cacheDir: string
-  maxBytes: number
-  fs: ThumbnailDirFs & { remove(path: string): void }
-  /** Path semantics for the cache walk; defaults to the host platform. */
-  platform?: NodeJS.Platform
-}): string[] {
-  const evicted = selectEvictions(
-    collectCacheEntries(deps.cacheDir, deps.fs, deps.platform),
-    deps.maxBytes
-  )
-  for (const path of evicted) deps.fs.remove(path)
-  return evicted
-}
-
-/** Runtime sweep: async traversal and removal, with the same LRU policy as startup. */
 export async function sweepThumbnailCacheAsync(deps: {
   cacheDir: string
   maxBytes: number

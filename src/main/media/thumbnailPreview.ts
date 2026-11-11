@@ -61,6 +61,38 @@ export function createCachedThumbnailService(deps: {
 }
 
 /**
+ * Registers the startup LRU sweep of `cacheDir` to run once, after the player
+ * renderer reports ready, so the (async) cache walk never competes with window
+ * creation or mpv startup. Failures are logged, never thrown.
+ */
+export function scheduleStartupThumbnailSweep(deps: {
+  /** Fires `listener` once the renderer reports ready (e.g. `ipcMain.once`). */
+  onceRendererReady(listener: () => void): void
+  cacheDir: string
+  /** Defaults to the real async node:fs sweep under {@link THUMBNAIL_CACHE_MAX_BYTES}. */
+  sweep?: (cacheDir: string) => Promise<string[]>
+  logger?: Pick<Console, 'log' | 'warn'>
+}): void {
+  const sweep =
+    deps.sweep ??
+    ((cacheDir: string) =>
+      sweepThumbnailCacheAsync({
+        cacheDir,
+        maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
+        fs: nodeThumbnailAsyncDirFs
+      }))
+  const logger = deps.logger ?? console
+  deps.onceRendererReady(() => {
+    sweep(deps.cacheDir).then(
+      (removed) => {
+        if (removed.length) logger.log(`[kizuna] thumbnail cache: evicted ${removed.length} dir(s)`)
+      },
+      (error: unknown) => logger.warn('[kizuna] thumbnail cache sweep failed:', error)
+    )
+  })
+}
+
+/**
  * Resolves the cached frame to a base64 data URL — the renderer can't read
  * arbitrary file:// paths, so the encoded image crosses IPC inline. The service
  * memoizes the cache-key stat per path and caches misses/failures, so a cache
