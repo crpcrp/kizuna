@@ -1,8 +1,10 @@
 # Releasing
 
 Kizuna's Windows and Linux x64 pre-releases are built unsigned by GitHub
-Actions. Separate platform jobs run the full test suite and packaged smoke
-tests before one draft release is created with checksums and build provenance.
+Actions from a `main` commit, which CI has already checked. Separate platform
+jobs build and smoke-test the packages before one draft release is created with
+checksums and build provenance. The release workflow does not rerun
+typecheck, lint, formatting, or tests.
 
 Windows may show an unknown-publisher or Microsoft Defender SmartScreen
 warning. The Linux AppImage and deb are also unsigned. Signing is planned only
@@ -104,9 +106,9 @@ for asset in kizuna-1.2.3-*; do
 done
 ```
 
-Also verify the tag targets the intended `main` commit, the draft identifies
-Windows 10+ and Ubuntu 24.04 x64, the release remains a pre-release, and every
-asset is unsigned as stated. The packages are not bit-for-bit reproducible;
+Also verify CI passed for the tagged commit, the tag targets the intended
+`main` commit, the draft identifies Windows 10+ and Ubuntu 24.04 x64, the
+release remains a pre-release, and every asset is unsigned as stated. The packages are not bit-for-bit reproducible;
 the workflow instead pins inputs and records checksums and provenance.
 
 Inspect `latest.yml` and `latest-linux.yml` before publishing. Each `files.url`
