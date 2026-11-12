@@ -1,5 +1,5 @@
 /* Non-modal picture-adjustments panel. Colors come only from theme.css
-   semantic variables (test/renderer/themeCss.test.ts enforces this). */
+   semantic variables (test/repoInvariants.test.ts enforces this). */
 
 .video-adjustments {
   position: absolute;

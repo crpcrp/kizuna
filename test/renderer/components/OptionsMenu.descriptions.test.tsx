@@ -51,7 +51,7 @@ describe('OptionsMenu setting descriptions', () => {
       '<span class="options-row-description">Used by the arrow keys and the transport skip buttons.</span>'
     )
     // The class carries the theme variable; a description must never bring its
-    // own color (themeCss.test.ts enforces the same rule for the stylesheets).
+    // own color (repoInvariants.test.ts enforces the same rule for the stylesheets).
     expect(html).not.toMatch(/class="options-row-description"[^>]*style=/)
   })
 })

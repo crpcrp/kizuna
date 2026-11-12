@@ -73,9 +73,8 @@ deb and `npm run smoke:linux` verifies that:
   local media, reaching the window, mpv IPC, and renderer milestones offline.
 
 Failures upload one log per failed Linux check as `linux-packaging-logs`.
-Packaging stays out of per-commit CI; `test/linuxPackagingConfig.test.ts` and
-`test/releaseWorkflow.test.ts` catch static configuration drift there. Either
-release platform failing or being cancelled prevents the tag and draft.
+Packaging stays out of per-commit CI. Either release platform failing or being
+cancelled prevents the tag and draft.
 
 To run the Linux package checks locally on Ubuntu 24.04:
 

@@ -14,7 +14,7 @@ import {
 // (main's `player.captureFrame`, base64 PNG) because the video lives in mpv's
 // child window and is not readable from the renderer's canvas. The user drags a
 // region over the still, then picks one of four outcomes. Colors come only from
-// theme.css semantic variables (test/renderer/themeCss.test.ts enforces this).
+// theme.css semantic variables (test/repoInvariants.test.ts enforces this).
 
 /** Encodes a region of the captured still to raw base64 JPEG. */
 export type CardImageRenderer = (image: HTMLImageElement, rect: Rect) => string | null

@@ -1,7 +1,7 @@
 /* Semantic color tokens for both themes, plus the shared shape/type tokens at
    the bottom of the file. This is the ONLY renderer stylesheet
    allowed to contain raw color literals (enforced by
-   test/renderer/themeCss.test.ts) — every component stylesheet styles with
+   test/repoInvariants.test.ts) — every component stylesheet styles with
    var(--…) so a theme switch is a pure variable swap.
 
    `:root` carries the dark values, so the first paint (before the theme
