@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createPpOcrWorkerService,
+  PP_OCR_MAX_STDERR_BYTES,
+  PP_OCR_MAX_STDOUT_BYTES,
   type PpOcrSpawn,
   type PpOcrWorkerProcess
 } from '@src/main/services/ocr/ppOcrWorker'
@@ -253,15 +255,15 @@ describe('createPpOcrWorkerService', () => {
 
   it('bounds stdout and stderr before accepting untrusted worker output', async () => {
     const stdoutProcess = new FakePpOcrProcess()
-    const stdoutService = createService(stdoutProcess, { maxStdoutBytes: 8 }).service
+    const stdoutService = createService(stdoutProcess).service
     const stdoutRequest = stdoutService.recognize(request())
-    stdoutProcess.stdout.emit('data', '123456789')
+    stdoutProcess.stdout.emit('data', 'x'.repeat(PP_OCR_MAX_STDOUT_BYTES + 1))
     await expect(stdoutRequest).rejects.toMatchObject({ code: 'output-limit' })
 
     const stderrProcess = new FakePpOcrProcess()
-    const stderrService = createService(stderrProcess, { maxStderrBytes: 8 }).service
+    const stderrService = createService(stderrProcess).service
     const stderrRequest = stderrService.recognize(request())
-    stderrProcess.stderr.emit('data', '123456789')
+    stderrProcess.stderr.emit('data', 'x'.repeat(PP_OCR_MAX_STDERR_BYTES + 1))
     await expect(stderrRequest).rejects.toMatchObject({ code: 'output-limit' })
   })
 

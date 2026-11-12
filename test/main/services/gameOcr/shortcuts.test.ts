@@ -79,7 +79,6 @@ describe('createGameOcrShortcutOwner', () => {
       fake.advance(1_000)
       press()
       expect(onCapture).toHaveBeenCalledTimes(2)
-      expect(onCapture).toHaveBeenLastCalledWith(12_000)
     })
   })
 

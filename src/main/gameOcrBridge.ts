@@ -2,7 +2,7 @@ import { GAME_OCR_CHANNELS } from '../shared/ipcChannels'
 import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
 import type { GameOcrSettings } from '../shared/gameOcrSettings'
 import type { IpcMainHandleLike } from './ipc'
-import type { GameOcrRuntimeService } from './services/gameOcr/runtime'
+import type { GameOcrRuntimeService } from './services/gameOcr/controller'
 
 export interface GameOcrBridgeEvent {
   sender: unknown

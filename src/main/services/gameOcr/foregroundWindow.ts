@@ -60,7 +60,6 @@ export interface ForegroundWindowNative {
 
 /** Why a foreground window was not usable. Each maps to display fallback. */
 export type ForegroundWindowRejection =
-  | 'unsupported'
   | 'query-failed'
   | 'no-foreground'
   | 'own-process'
@@ -74,7 +73,7 @@ export interface ForegroundWindow {
   hwnd: string
   pid: number
   executablePath?: string
-  /** Basename only, so ordinary diagnostics never carry a full path. */
+  /** Basename only, so the development log never carries a full path. */
   executableName?: string
   physicalBounds: PhysicalRect
 }
@@ -100,7 +99,6 @@ export interface ForegroundWindowSourceOptions {
   native: ForegroundWindowNative
   /** Kizuna's own PID. Its windows are never a capture target. */
   ownProcessId: number
-  platform?: NodeJS.Platform
 }
 
 /**
@@ -114,13 +112,6 @@ export interface ForegroundWindowSourceOptions {
 export function createForegroundWindowSource(
   options: ForegroundWindowSourceOptions
 ): ForegroundWindowSource {
-  if ((options.platform ?? process.platform) !== 'win32') {
-    return {
-      current: () => ({ ok: false, reason: 'unsupported' }),
-      dispose: () => {}
-    }
-  }
-
   return {
     current(): ForegroundWindowReading {
       let raw: RawForegroundWindow | undefined
@@ -382,13 +373,7 @@ export function createWin32ForegroundWindowNative(
  * is reported as a rejection, never thrown: Game OCR keeps working through
  * display capture on a machine where this cannot run.
  */
-export function createProductionForegroundWindowSource(
-  platform: NodeJS.Platform = process.platform,
-  ownProcessId: number = process.pid
-): ForegroundWindowSource {
-  if (platform !== 'win32') {
-    return { current: () => ({ ok: false, reason: 'unsupported' }), dispose: () => {} }
-  }
+export function createProductionForegroundWindowSource(): ForegroundWindowSource {
   let native: ForegroundWindowNative
   try {
     native = createWin32ForegroundWindowNative()
@@ -399,5 +384,5 @@ export function createProductionForegroundWindowSource(
       dispose: () => {}
     }
   }
-  return createForegroundWindowSource({ native, ownProcessId, platform })
+  return createForegroundWindowSource({ native, ownProcessId: process.pid })
 }

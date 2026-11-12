@@ -12,11 +12,7 @@
 // display target.
 
 import type { OcrDisplayBounds, OcrImageSize } from '../../../shared/ocr'
-import type {
-  GameOcrDisplayDiagnostics,
-  GameOcrDisplaySources,
-  GameOcrDisplayTarget
-} from './displayCapture'
+import type { GameOcrDisplaySources, GameOcrDisplayTarget } from './displayCapture'
 import type { ForegroundWindowRejection, ForegroundWindowSource } from './foregroundWindow'
 import {
   formatWindowSourceId,
@@ -26,15 +22,14 @@ import {
 
 /**
  * Why a capture is reading a whole display instead of the focused window.
- * The first eight mirror the native boundary's rejections; the last two are
+ * The first seven mirror the native boundary's rejections; the last two are
  * this module's and the renderer's.
  */
 export type GameOcrFallbackReason =
   ForegroundWindowRejection | 'no-display-match' | 'window-capture-failed'
 
-/** Human-readable fallback reasons for the development diagnostic. */
+/** Human-readable fallback reasons for the development log. */
 const FALLBACK_REASON_TEXT: Record<GameOcrFallbackReason, string> = {
-  unsupported: 'focused-window selection is Windows only',
   'query-failed': 'the foreground-window query failed',
   'no-foreground': 'no window holds the foreground',
   'own-process': 'Kizuna itself holds the foreground',
@@ -50,11 +45,6 @@ export function describeFallbackReason(reason: GameOcrFallbackReason): string {
   return FALLBACK_REASON_TEXT[reason]
 }
 
-export interface GameOcrTargetDiagnostics extends GameOcrDisplayDiagnostics {
-  /** Cost of the native foreground-window query, in milliseconds. */
-  foregroundMs: number
-}
-
 interface CaptureTargetBase {
   /** The Electron desktop-capture source the renderer opens a stream on. */
   sourceId: string
@@ -66,7 +56,6 @@ interface CaptureTargetBase {
    * is the size the canvas is prepared for.
    */
   expectedImageSize: OcrImageSize
-  diagnostics?: GameOcrTargetDiagnostics
 }
 
 export interface GameOcrWindowCaptureTarget extends CaptureTargetBase {
@@ -74,7 +63,7 @@ export interface GameOcrWindowCaptureTarget extends CaptureTargetBase {
   /** Lossless decimal HWND. Identity for the target, and never a number. */
   hwnd: string
   pid: number
-  /** Basename only. Full paths stay out of ordinary diagnostics. */
+  /** Basename only. Full paths stay out of the log. */
   executableName?: string
 }
 
@@ -125,42 +114,35 @@ export interface CaptureTargetsDependencies {
   foreground: ForegroundWindowSource
   displays: GameOcrDisplaySources
   screen: WindowCaptureScreen
-  now?: () => number
 }
 
 export function createGameOcrCaptureTargets(
   deps: CaptureTargetsDependencies
 ): GameOcrCaptureTargets {
-  const now = deps.now ?? (() => Date.now())
-
   const displayTarget = (
     target: GameOcrDisplayTarget,
-    fallbackReason: GameOcrFallbackReason | undefined,
-    foregroundMs: number
+    fallbackReason: GameOcrFallbackReason | undefined
   ): GameOcrDisplayCaptureTarget => ({
     kind: 'display',
     sourceId: target.sourceId,
     bounds: target.metadata.displayBounds,
     expectedImageSize: target.metadata.imageSize,
-    ...(fallbackReason ? { fallbackReason } : {}),
-    ...(target.diagnostics ? { diagnostics: { ...target.diagnostics, foregroundMs } } : {})
+    ...(fallbackReason ? { fallbackReason } : {})
   })
 
   const fallToDisplay = (
-    reason: GameOcrFallbackReason | undefined,
-    foregroundMs: number
+    reason: GameOcrFallbackReason | undefined
   ): GameOcrCaptureTarget | Promise<GameOcrCaptureTarget> => {
     const resolved = deps.displays.cursorDisplay()
     return isPromiseLike(resolved)
-      ? resolved.then((target) => displayTarget(target, reason, foregroundMs))
-      : displayTarget(resolved, reason, foregroundMs)
+      ? resolved.then((target) => displayTarget(target, reason))
+      : displayTarget(resolved, reason)
   }
 
   return {
     resolve(options): GameOcrCaptureTarget | Promise<GameOcrCaptureTarget> {
-      if (options?.excludeWindow) return fallToDisplay(options.excludeWindow, 0)
+      if (options?.excludeWindow) return fallToDisplay(options.excludeWindow)
 
-      const startedAt = now()
       // Never throws by contract, but a faulty injected source must not be
       // able to turn focused-window selection into a lost capture either.
       let reading: ReturnType<ForegroundWindowSource['current']>
@@ -169,12 +151,10 @@ export function createGameOcrCaptureTargets(
       } catch {
         reading = { ok: false, reason: 'query-failed' }
       }
-      const foregroundMs = now() - startedAt
-
-      if (!reading.ok) return fallToDisplay(reading.reason, foregroundMs)
+      if (!reading.ok) return fallToDisplay(reading.reason)
 
       const geometry = resolveWindowCaptureGeometry(reading.window.physicalBounds, deps.screen)
-      if (!geometry) return fallToDisplay('no-display-match', foregroundMs)
+      if (!geometry) return fallToDisplay('no-display-match')
 
       return {
         kind: 'window',
@@ -183,15 +163,7 @@ export function createGameOcrCaptureTargets(
         expectedImageSize: geometry.expectedImageSize,
         hwnd: reading.window.hwnd,
         pid: reading.window.pid,
-        ...(reading.window.executableName ? { executableName: reading.window.executableName } : {}),
-        diagnostics: {
-          cursorMs: 0,
-          displayMs: 0,
-          sourceMs: 0,
-          targetCacheHit: false,
-          sourceCacheHit: false,
-          foregroundMs
-        }
+        ...(reading.window.executableName ? { executableName: reading.window.executableName } : {})
       }
     },
 
@@ -205,7 +177,7 @@ export function createGameOcrCaptureTargets(
   }
 }
 
-/** Writes the one development diagnostic describing what was captured. */
+/** The one development log line describing what was captured. */
 export function describeCaptureTarget(target: GameOcrCaptureTarget): string {
   const size = `${target.expectedImageSize.width}x${target.expectedImageSize.height}`
   if (target.kind === 'window') {

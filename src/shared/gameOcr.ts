@@ -1,4 +1,4 @@
-import type { OcrCaptureIdentity, OcrImageSize } from './ocr'
+import type { OcrImageSize } from './ocr'
 
 export type GameOcrWorkerState = 'not-started' | 'starting' | 'ready' | 'error'
 
@@ -69,9 +69,6 @@ export interface GameOcrCaptureBytes {
   imageSize: OcrImageSize
   error?: string
 }
-
-/** Renderer→main acknowledgement sent after the accepted word boxes paint. */
-export type GameOcrRegionsRendered = OcrCaptureIdentity
 
 /** What the frozen frame is currently showing. Owned by the renderer. */
 export interface GameOcrPresentation {

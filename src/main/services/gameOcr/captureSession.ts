@@ -8,14 +8,8 @@ import {
 import {
   describeCaptureTarget,
   type GameOcrCaptureTarget,
-  type GameOcrCaptureTargets,
-  type GameOcrTargetDiagnostics
+  type GameOcrCaptureTargets
 } from './captureTarget'
-import {
-  createGameOcrCaptureTimingRecorder,
-  type GameOcrCaptureTimingRecorder,
-  type GameOcrCaptureTimings
-} from './captureTimings'
 import type { GameOcrWindow } from './frozenFrameController'
 import type { GameOcrFrameShortcutHandlers } from './shortcuts'
 
@@ -37,16 +31,6 @@ const MAX_FAILURE_DETAIL_LENGTH = 200
 /** Shared zero-length replacement used to release captured image references. */
 const EMPTY_IMAGE_BYTES = new Uint8Array()
 
-/** Diagnostics for a target that reported none, so timings stay complete. */
-const NO_DIAGNOSTICS: GameOcrTargetDiagnostics = Object.freeze({
-  cursorMs: 0,
-  displayMs: 0,
-  sourceMs: 0,
-  foregroundMs: 0,
-  targetCacheHit: false,
-  sourceCacheHit: false
-})
-
 /**
  * Joins a stage label to whatever the failing boundary said, so the Options
  * surface reports a cause rather than only the stage that hit it.
@@ -63,7 +47,6 @@ export function describeFailure(stage: string, error: unknown): string {
 
 interface Session extends OcrCaptureIdentity {
   valid: boolean
-  timings: GameOcrCaptureTimingRecorder
 }
 
 /** States the coordinator itself can move the controller into. */
@@ -80,7 +63,6 @@ export interface GameOcrCaptureCoordinatorOptions {
    */
   createPresentation: (bounds: OcrDisplayBounds) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
-  now: () => number
   /** False once Game OCR is stopping or off; ends any session in flight. */
   isRunning: () => boolean
   onStateChange: (state: GameOcrCaptureState, sessionId: number) => void
@@ -89,17 +71,14 @@ export interface GameOcrCaptureCoordinatorOptions {
   onFrameEnded: () => void
   /** Advances the lifecycle counter that decides arm/stop races. */
   onSessionInvalidated: () => void
-  /** Clears renderer-side token, lookup, popup, and translation work. */
-  invalidateResults: () => void
   /** Drops cached display sources after a display change. */
   invalidateDisplayCache: () => void
   /** Claims Escape and Ctrl+C for as long as the frame handed here is up. */
   holdFrameShortcuts: (handlers: GameOcrFrameShortcutHandlers) => void
   releaseFrameShortcuts: () => void
   reportError: (message: string, error: unknown) => void
-  reportDiagnostic: (message: string) => void
-  reportTimings: (timings: GameOcrCaptureTimings) => void
-  onResult?: (result: OcrResult) => void
+  /** One development log line per resolved target or window fallback. */
+  log: (message: string) => void
 }
 
 /**
@@ -108,12 +87,11 @@ export interface GameOcrCaptureCoordinatorOptions {
  * One frozen-frame window serves every capture in an armed run. New captures
  * start immediately and supersede older sessions; per-capture identities keep
  * overlapping presentation and OCR replies from being accepted out of order.
- * Shortcut ownership, status bookkeeping, and latency formatting live with
- * their own owners and reach this module as callbacks.
+ * Shortcut ownership and status bookkeeping live with their own owners and
+ * reach this module as callbacks.
  */
 export interface GameOcrCaptureCoordinator {
-  /** Runs one capture. `startedAt` is when the shortcut was pressed. */
-  capture(startedAt: number): Promise<void>
+  capture(): Promise<void>
   /** Drops the current session. The retained frame stays available. */
   invalidate(): void
   /** Destroys the retained frozen-frame window. */
@@ -123,7 +101,6 @@ export interface GameOcrCaptureCoordinator {
 export function createGameOcrCaptureCoordinator(
   options: GameOcrCaptureCoordinatorOptions
 ): GameOcrCaptureCoordinator {
-  const { now } = options
   let activeSession: Session | undefined
   let presentation: GameOcrWindow | undefined
   let presentedTarget: GameOcrCaptureTarget | undefined
@@ -171,7 +148,6 @@ export function createGameOcrCaptureCoordinator(
     if (destroyed) {
       presentation = undefined
     }
-    options.invalidateResults()
     dropSession()
     options.onFrameEnded()
   }
@@ -196,19 +172,6 @@ export function createGameOcrCaptureCoordinator(
       if (options.isRunning()) options.invalidateDisplayCache()
       handleFrameEnded(created, true)
     })
-    created.onRegionsRendered((identity) => {
-      const session = activeSession
-      if (
-        !session ||
-        !isCurrent(session) ||
-        identity.sessionId !== session.sessionId ||
-        identity.captureId !== session.captureId
-      ) {
-        return
-      }
-      const timings = session.timings.complete(now())
-      if (timings) options.reportTimings(timings)
-    })
     return created
   }
 
@@ -224,16 +187,14 @@ export function createGameOcrCaptureCoordinator(
     }
   }
 
-  const beginSession = (startedAt: number): Session => {
+  const beginSession = (): Session => {
     nextSessionId = allocateIdentifier(nextSessionId)
     nextCaptureId = allocateIdentifier(nextCaptureId)
     dropSession()
-    options.invalidateResults()
     const session: Session = {
       sessionId: nextSessionId,
       captureId: nextCaptureId,
-      valid: true,
-      timings: createGameOcrCaptureTimingRecorder(startedAt)
+      valid: true
     }
     activeSession = session
     options.onStateChange('capturing', session.sessionId)
@@ -276,15 +237,8 @@ export function createGameOcrCaptureCoordinator(
       }
       // Boxes and indicator swap together: the sign is only meaningful while
       // OCR runs, and the regions belong to the screenshot already presented.
-      session.timings.regionsSent(now())
       frame.setRegions(result)
       frame.setRecognizing(false)
-      try {
-        options.onResult?.(result)
-      } catch (error) {
-        fail(session, 'Game OCR result handling failed.', error)
-        return
-      }
       options.onStateChange('inspecting', session.sessionId)
     } catch (error) {
       if (!isCurrent(session)) return
@@ -306,9 +260,7 @@ export function createGameOcrCaptureCoordinator(
    */
   const attemptCapture = async (
     session: Session,
-    target: GameOcrCaptureTarget,
-    dequeuedAt: number,
-    capturedAt: number
+    target: GameOcrCaptureTarget
   ): Promise<'presented' | 'superseded' | 'window-capture-failed'> => {
     const frame = ensurePresentation(target.bounds)
     // Register the waiter before asking the renderer to draw. A very fast
@@ -325,7 +277,7 @@ export function createGameOcrCaptureCoordinator(
       })
     } catch (error) {
       if (target.kind === 'display' || !isCurrent(session)) throw error
-      options.reportDiagnostic(
+      options.log(
         `[game-ocr] window capture failed, falling back to display capture: ` +
           describeFailure('reason', error)
       )
@@ -343,16 +295,6 @@ export function createGameOcrCaptureCoordinator(
       dismiss: () => dismissFrame(frame),
       copySelection: () => frame.copySelection()
     })
-    session.timings.present({
-      sessionId: session.sessionId,
-      captureId: session.captureId,
-      dequeuedAt,
-      capturedAt,
-      presentedAt: now(),
-      targetKind: target.kind,
-      diagnostics: target.diagnostics ?? NO_DIAGNOSTICS
-    })
-
     void recognize(session, imageSize, frame, imageBytesPromise)
     return 'presented'
   }
@@ -360,7 +302,6 @@ export function createGameOcrCaptureCoordinator(
   const runCapture = async (session: Session): Promise<void> => {
     try {
       if (!isCurrent(session)) return
-      const dequeuedAt = now()
 
       // Geometry only. The pixels come from the stream the frame already
       // holds, so nothing here reads the screen.
@@ -381,9 +322,9 @@ export function createGameOcrCaptureCoordinator(
       ) {
         target = presentedTarget
       }
-      options.reportDiagnostic(describeCaptureTarget(target))
+      options.log(describeCaptureTarget(target))
 
-      const outcome = await attemptCapture(session, target, dequeuedAt, now())
+      const outcome = await attemptCapture(session, target)
       if (outcome !== 'window-capture-failed') return
 
       // The window would not capture. Retry against the display under the
@@ -396,8 +337,8 @@ export function createGameOcrCaptureCoordinator(
       })
       target = isPromiseLike(retryOrPromise) ? await retryOrPromise : retryOrPromise
       if (!isCurrent(session)) return
-      options.reportDiagnostic(describeCaptureTarget(target))
-      await attemptCapture(session, target, dequeuedAt, now())
+      options.log(describeCaptureTarget(target))
+      await attemptCapture(session, target)
     } catch (error) {
       if (!isCurrent(session)) return
       await discardPresentation().catch((discardError) => {
@@ -408,17 +349,14 @@ export function createGameOcrCaptureCoordinator(
   }
 
   return {
-    capture(startedAt) {
+    capture() {
       // Capture exclusion makes recapture safe while the retained overlay is
       // visible. Do not serialize behind an obsolete freeze: session identity
       // already makes this latest-request-wins, and the screenshot must begin
       // in the shortcut callback rather than on the tail of a promise queue.
-      return runCapture(beginSession(startedAt))
+      return runCapture(beginSession())
     },
-    invalidate() {
-      dropSession()
-      options.invalidateResults()
-    },
+    invalidate: dropSession,
     close() {
       const target = presentation
       if (!target) return Promise.resolve()

@@ -1,5 +1,5 @@
 // A fake of the native BrowserWindow surface the frozen-frame owners bind to.
-// Shared by the controller, Electron-construction, and IPC suites.
+// Shared by the controller and Electron-construction suites.
 
 import { vi } from 'vitest'
 import type { GameOcrConstructedWindow } from '@src/main/services/gameOcr/frozenFrameElectron'
@@ -56,8 +56,7 @@ export function fakeNativeWindow(): FakeNativeWindow {
       send: vi.fn(),
       on: vi.fn((event: string, listener: Listener) => on(rendererListeners, event, listener)),
       getURL: () => 'file:///gameOcr.html',
-      setWindowOpenHandler: vi.fn(),
-      openDevTools: vi.fn()
+      setWindowOpenHandler: vi.fn()
     }
   } as unknown as GameOcrConstructedWindow
 

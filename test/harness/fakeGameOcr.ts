@@ -70,7 +70,6 @@ export type FakeWindow = Omit<GameOcrWindow, 'freeze' | 'captureBytes'> & {
   captureBytes: ReturnType<typeof vi.fn>
   triggerDismissed(): void
   triggerClosed(): void
-  triggerRegionsRendered(value: { sessionId: number; captureId: number }): void
   visible(): boolean
   boundsHistory: OcrDisplayBounds[]
 }
@@ -87,9 +86,6 @@ function makeWindow(id: number, events: string[], options: FakeWindowOptions = {
   let visible = false
   const closedListeners = new Set<() => void>()
   const dismissedListeners = new Set<() => void>()
-  const regionsRenderedListeners = new Set<
-    (value: { sessionId: number; captureId: number }) => void
-  >()
   const boundsHistory: OcrDisplayBounds[] = []
   const triggerClosed = (): void => {
     visible = false
@@ -126,7 +122,6 @@ function makeWindow(id: number, events: string[], options: FakeWindowOptions = {
     }),
     reportFrozen: vi.fn(),
     reportCaptureBytes: vi.fn(),
-    reportRegionsRendered: vi.fn(),
     setRecognizing: vi.fn(),
     setRegions: vi.fn(),
     rendererReady: vi.fn(),
@@ -154,18 +149,11 @@ function makeWindow(id: number, events: string[], options: FakeWindowOptions = {
       closedListeners.add(listener)
       return () => closedListeners.delete(listener)
     },
-    onRegionsRendered: (listener) => {
-      regionsRenderedListeners.add(listener)
-      return () => regionsRenderedListeners.delete(listener)
-    },
     triggerDismissed: () => {
       visible = false
       dismissedListeners.forEach((listener) => listener())
     },
     triggerClosed,
-    triggerRegionsRendered: (value) => {
-      regionsRenderedListeners.forEach((listener) => listener(value))
-    },
     visible: () => visible,
     boundsHistory
   }
@@ -232,8 +220,6 @@ export function setupGameOcr(
       return window
     }),
     ocr,
-    invalidateResults: vi.fn(),
-    onResult: vi.fn(),
     onError: vi.fn()
   }
   const controller = createGameOcrController({
@@ -254,8 +240,6 @@ export function setupGameOcr(
     createPresentation: base.createPresentation,
     ocr,
     recognitionRequests,
-    invalidateResults: base.invalidateResults,
-    onResult: base.onResult,
     onError: base.onError
   }
 }

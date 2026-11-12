@@ -1,11 +1,17 @@
-import type { OcrDisplayBounds, OcrResult } from '../../../shared/ocr'
+import type {
+  GameOcrRuntimeStatus,
+  GameOcrUiState,
+  GameOcrWorkerState
+} from '../../../shared/gameOcr'
+import { normalizeGameOcrShortcut, type GameOcrSettings } from '../../../shared/gameOcrSettings'
+import type { OcrDisplayBounds } from '../../../shared/ocr'
+import type { PpOcrWorkerService, PpOcrWorkerStatus } from '../ocr/ppOcrWorker'
+import type { SettingsStore } from '../settings'
 import type { GameOcrCaptureTargets } from './captureTarget'
 import { createGameOcrCaptureCoordinator, type GameOcrRecognitionAdapter } from './captureSession'
-import type { GameOcrCaptureTimings } from './captureTimings'
 import type { GameOcrWindow } from './frozenFrameController'
 import { createGameOcrShortcutOwner, type GameOcrShortcut } from './shortcuts'
 
-export { writeGameOcrTotalTime, type GameOcrCaptureTimings } from './captureTimings'
 export type { GameOcrRecognitionAdapter } from './captureSession'
 export type { GameOcrShortcut } from './shortcuts'
 
@@ -26,20 +32,14 @@ export interface GameOcrControllerOptions {
   /** Builds the frozen-frame window over the given logical desktop rectangle. */
   createPresentation: (bounds: OcrDisplayBounds) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
-  /** Clears renderer-side token, lookup, popup, and translation work. */
-  invalidateResults?: () => void
-  onResult?: (result: OcrResult) => void
-  onStateChange?: (status: GameOcrStatus) => void
   onError?: (message: string, error: unknown) => void
-  /** Per-capture stage costs, for the development latency log. */
-  onTimings?: (timings: GameOcrCaptureTimings) => void
   /**
    * One line per capture describing what was targeted and, when the focused
    * window was not usable, why. Development only; it carries the executable
    * basename and PID, never a full path.
    */
-  onDiagnostic?: (message: string) => void
-  /** Injected so timing assertions do not depend on a real clock. */
+  log?: (message: string) => void
+  /** Injected so the key-repeat guard does not depend on a real clock. */
   now?: () => number
 }
 
@@ -66,12 +66,10 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   let lifecycle = 0
   let armPromise: Promise<boolean> | undefined
   let stopping = false
-  const now = options.now ?? (() => Date.now())
 
   const notify = (next: GameOcrStatus): void => {
     status = next
     const snapshot = { ...next }
-    options.onStateChange?.(snapshot)
     for (const listener of listeners) listener(snapshot)
   }
 
@@ -83,27 +81,11 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     }
   }
 
-  const reportDiagnostic = (message: string): void => {
+  const log = (message: string): void => {
     try {
-      options.onDiagnostic?.(message)
+      options.log?.(message)
     } catch {
-      // Diagnostics must never affect the capture they describe.
-    }
-  }
-
-  const reportTimings = (timings: GameOcrCaptureTimings): void => {
-    try {
-      options.onTimings?.(timings)
-    } catch {
-      // Measurement must never affect the pipeline it measures.
-    }
-  }
-
-  const invalidateResults = (): void => {
-    try {
-      options.invalidateResults?.()
-    } catch (error) {
-      reportError('Game OCR result invalidation failed.', error)
+      // Logging must never affect the capture it describes.
     }
   }
 
@@ -127,16 +109,15 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
   const shortcuts = createGameOcrShortcutOwner({
     shortcut: options.shortcut,
     accelerator: options.accelerator,
-    onCapture: (pressedAt) => requestCapture(pressedAt),
+    onCapture: () => requestCapture(),
     onError: reportError,
-    now
+    now: options.now ?? (() => Date.now())
   })
 
   const coordinator = createGameOcrCaptureCoordinator({
     targets: options.targets,
     createPresentation: options.createPresentation,
     ocr: options.ocr,
-    now,
     isRunning,
     onStateChange: (state, sessionId) => notify({ state, sessionId }),
     onFailure: fail,
@@ -151,21 +132,18 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     onSessionInvalidated: () => {
       lifecycle++
     },
-    invalidateResults,
     invalidateDisplayCache,
     holdFrameShortcuts: (handlers) => shortcuts.holdFrame(handlers),
     releaseFrameShortcuts: () => shortcuts.releaseFrame(),
     reportError,
-    reportDiagnostic,
-    reportTimings,
-    onResult: options.onResult
+    log
   })
 
-  const requestCapture = (startedAt: number = now()): Promise<void> => {
+  const requestCapture = (): Promise<void> => {
     if (status.state === 'off' || status.state === 'starting' || status.state === 'error') {
       return Promise.resolve()
     }
-    return coordinator.capture(startedAt)
+    return coordinator.capture()
   }
 
   const arm = (): Promise<boolean> => {
@@ -247,8 +225,146 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     },
     arm,
     setAccelerator: (next) => Promise.resolve(shortcuts.setAccelerator(next)),
-    capture: () => requestCapture(),
+    capture: requestCapture,
     stop,
     shutdown
+  }
+}
+
+export interface GameOcrRuntimeService {
+  getSettings(): GameOcrSettings
+  setSettings(patch: Partial<GameOcrSettings>): Promise<GameOcrSettings>
+  getStatus(): GameOcrRuntimeStatus
+  subscribe(listener: (status: GameOcrRuntimeStatus) => void): () => void
+  start(): Promise<GameOcrRuntimeStatus>
+  stop(): Promise<GameOcrRuntimeStatus>
+  retry(): Promise<GameOcrRuntimeStatus>
+  /** Records a worker transition so the Options surface can show progress. */
+  updateWorkerStatus(status: PpOcrWorkerStatus): void
+  /** Records a non-fatal command/configuration error without disarming. */
+  reportError(message: string): void
+}
+
+export interface GameOcrRuntimeOptions {
+  settings: SettingsStore
+  controller: GameOcrController
+  worker: Pick<PpOcrWorkerService, 'getStatus'>
+  /**
+   * Checked before every arm attempt. Returning a message keeps the runtime
+   * stopped and reports that message instead of spawning a worker that would
+   * fail on a missing or damaged bundled resource. Re-run by `retry`, so
+   * restoring the files recovers without a restart.
+   */
+  preflight?: () => string | undefined
+}
+
+const DEFAULT_WORKER_STATUS: PpOcrWorkerStatus = { state: 'stopped' }
+
+/**
+ * Joins the persisted shortcut, PP-OCR worker, and coordinator into the
+ * small serializable state consumed by the main-window Options surface.
+ */
+export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): GameOcrRuntimeService {
+  const listeners = new Set<(status: GameOcrRuntimeStatus) => void>()
+  let workerStatus = options.worker.getStatus() ?? DEFAULT_WORKER_STATUS
+  let nonFatalError: string | undefined
+
+  const currentSettings = (): GameOcrSettings => options.settings.get().gameOcr
+
+  const workerState = (status: PpOcrWorkerStatus): GameOcrWorkerState => {
+    if (status.state === 'stopped') return 'not-started'
+    return status.state === 'recognizing' ? 'ready' : status.state
+  }
+
+  const gameState = (status: GameOcrStatus): GameOcrUiState => {
+    if (status.state === 'off') return 'stopped'
+    return status.state
+  }
+
+  const buildStatus = (): GameOcrRuntimeStatus => {
+    const controller = options.controller.getStatus()
+    const worker = workerStatus
+    return {
+      shortcut: currentSettings().captureShortcut,
+      ocr: {
+        state: workerState(worker),
+        ...(worker.error ? { error: worker.error } : {})
+      },
+      game: {
+        state: gameState(controller),
+        ...(controller.error || nonFatalError ? { error: controller.error ?? nonFatalError } : {})
+      }
+    }
+  }
+
+  const notify = (): void => {
+    const status = buildStatus()
+    for (const listener of listeners) listener(status)
+  }
+
+  options.controller.subscribe(() => notify())
+
+  const start = async (): Promise<GameOcrRuntimeStatus> => {
+    nonFatalError = undefined
+    const problem = options.preflight?.()
+    if (problem) {
+      nonFatalError = problem
+      notify()
+      return buildStatus()
+    }
+    await options.controller.arm()
+    notify()
+    return buildStatus()
+  }
+
+  const stop = async (): Promise<GameOcrRuntimeStatus> => {
+    nonFatalError = undefined
+    await options.controller.stop()
+    notify()
+    return buildStatus()
+  }
+
+  return {
+    getSettings: currentSettings,
+
+    async setSettings(patch): Promise<GameOcrSettings> {
+      const current = currentSettings()
+      const nextShortcut = normalizeGameOcrShortcut(
+        patch.captureShortcut ?? current.captureShortcut
+      )
+      const changed = nextShortcut !== current.captureShortcut
+      if (changed && !(await options.controller.setAccelerator(nextShortcut))) {
+        nonFatalError = `The Game OCR shortcut is already in use: ${nextShortcut}`
+        notify()
+        return current
+      }
+      nonFatalError = undefined
+      const updated = options.settings.set({
+        gameOcr: { ...current, captureShortcut: nextShortcut }
+      }).gameOcr
+      notify()
+      return updated
+    },
+
+    getStatus: buildStatus,
+
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+
+    start,
+    stop,
+    retry: start,
+
+    updateWorkerStatus(status) {
+      workerStatus = { ...status }
+      notify()
+    },
+
+    reportError(message) {
+      nonFatalError = message
+      notify()
+    }
   }
 }

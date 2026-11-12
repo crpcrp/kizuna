@@ -25,13 +25,11 @@ function raw(overrides: Partial<RawForegroundWindow> = {}): RawForegroundWindow 
 }
 
 function sourceFor(
-  native: Partial<ForegroundWindowNative>,
-  platform: NodeJS.Platform = 'win32'
+  native: Partial<ForegroundWindowNative>
 ): ReturnType<typeof createForegroundWindowSource> {
   return createForegroundWindowSource({
     native: { read: () => raw(), ...native },
-    ownProcessId: OWN_PID,
-    platform
+    ownProcessId: OWN_PID
   })
 }
 
@@ -261,14 +259,6 @@ describe('createForegroundWindowSource', () => {
       reason: 'query-failed',
       detail: 'user32.dll could not be loaded'
     })
-  })
-
-  it('refuses on any platform but Windows without touching the native boundary', () => {
-    const read = vi.fn(() => raw())
-    const source = sourceFor({ read }, 'linux')
-
-    expect(source.current()).toEqual({ ok: false, reason: 'unsupported' })
-    expect(read).not.toHaveBeenCalled()
   })
 
   it('releases the native boundary once, and survives a failing release', () => {

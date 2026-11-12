@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import {
   MAX_OCR_IMAGE_DIMENSION,
   type OcrDisplayBounds,
@@ -48,15 +47,6 @@ export interface DisplayCaptureSource {
 export interface GameOcrDisplayTarget {
   metadata: OcrDisplayCaptureMetadata
   sourceId: string
-  diagnostics?: GameOcrDisplayDiagnostics
-}
-
-export interface GameOcrDisplayDiagnostics {
-  cursorMs: number
-  displayMs: number
-  sourceMs: number
-  targetCacheHit: boolean
-  sourceCacheHit: boolean
 }
 
 export interface GameOcrDisplaySources {
@@ -76,7 +66,6 @@ export interface GameOcrDisplaySources {
 }
 
 export type DisplayCaptureErrorCode =
-  | 'unsupported'
   | 'display-unavailable'
   | 'invalid-display'
   | 'source-not-found'
@@ -84,7 +73,6 @@ export type DisplayCaptureErrorCode =
   | 'image-too-large'
 
 const DISPLAY_CAPTURE_ERROR_MESSAGES: Record<DisplayCaptureErrorCode, string> = {
-  unsupported: 'Windows display capture is not supported on this platform.',
   'display-unavailable': 'The display under the mouse pointer could not be resolved.',
   'invalid-display': 'The selected display has invalid bounds or scaling metadata.',
   'source-not-found': 'Windows did not return a capture source for the selected display.',
@@ -103,12 +91,8 @@ export class DisplayCaptureError extends Error {
 }
 
 export interface DisplaySourcesDependencies {
-  platform?: NodeJS.Platform
   screen: DisplayCaptureScreen
   desktopCapturer: DisplayCapturer
-  maxImageDimension?: number
-  maxImagePixels?: number
-  now?: () => number
 }
 
 /** Returns the physical pixel dimensions of one Electron display. */
@@ -121,19 +105,10 @@ export function displayCaptureImageSize(
   }
 }
 
-/**
- * Creates the injected Windows adapter. Electron APIs are accessed only from
- * this main-process boundary; tests provide screen and source fakes instead of
- * enumerating the developer's desktop.
- */
+/** Tests provide screen and source fakes instead of enumerating the desktop. */
 export function createGameOcrDisplaySources(
   deps: DisplaySourcesDependencies
 ): GameOcrDisplaySources {
-  if ((deps.platform ?? process.platform) !== 'win32') return unsupportedSources()
-
-  const maxImageDimension = positiveLimit(deps.maxImageDimension, MAX_OCR_IMAGE_DIMENSION)
-  const maxImagePixels = positiveLimit(deps.maxImagePixels, MAX_DISPLAY_CAPTURE_PIXELS)
-  const now = deps.now ?? (() => Date.now())
   // display_id -> source id. One enumeration serves every later capture, and
   // the smallest legal thumbnail is requested because the pixels are unused.
   let sources: Map<string, string> | undefined
@@ -179,9 +154,6 @@ export function createGameOcrDisplaySources(
 
   const resolveEnumeratedTarget = async (
     display: DisplayCaptureDisplay,
-    cursorMs: number,
-    displayMs: number,
-    sourceStartedAt: number,
     retryOnMiss: boolean
   ): Promise<GameOcrDisplayTarget> => {
     let known = await enumerate()
@@ -200,74 +172,36 @@ export function createGameOcrDisplaySources(
       )
     }
 
-    return withDiagnostics(cacheTarget(display, sourceId), {
-      cursorMs,
-      displayMs,
-      sourceMs: now() - sourceStartedAt,
-      targetCacheHit: false,
-      sourceCacheHit: false
-    })
+    return cacheTarget(display, sourceId)
   }
 
   return {
     cursorDisplay(): GameOcrDisplayTarget | Promise<GameOcrDisplayTarget> {
       try {
-        const startedAt = now()
         const point = resolveCursorPoint(deps.screen)
-        const cursorAt = now()
         if (lastTarget && pointInBounds(point, lastTarget.metadata.displayBounds)) {
-          return withDiagnostics(lastTarget, {
-            cursorMs: cursorAt - startedAt,
-            displayMs: 0,
-            sourceMs: 0,
-            targetCacheHit: true,
-            sourceCacheHit: true
-          })
+          return lastTarget
         }
 
         const display = resolveDisplayNearestPoint(deps.screen, point)
-        validateDisplay(display, maxImageDimension, maxImagePixels)
-        const displayAt = now()
+        validateDisplay(display)
 
         const cachedTarget = targets.get(String(display.id))
         if (cachedTarget && targetMatchesDisplay(cachedTarget, display)) {
           lastTarget = cachedTarget
-          return withDiagnostics(cachedTarget, {
-            cursorMs: cursorAt - startedAt,
-            displayMs: displayAt - cursorAt,
-            sourceMs: 0,
-            targetCacheHit: true,
-            sourceCacheHit: true
-          })
+          return cachedTarget
         }
 
-        const sourceStartedAt = now()
         const known = sources
         const sourceId = known?.get(String(display.id))
-        if (sourceId) {
-          return withDiagnostics(cacheTarget(display, sourceId), {
-            cursorMs: cursorAt - startedAt,
-            displayMs: displayAt - cursorAt,
-            sourceMs: now() - sourceStartedAt,
-            targetCacheHit: false,
-            sourceCacheHit: true
-          })
-        }
+        if (sourceId) return cacheTarget(display, sourceId)
 
         // No cached id means actual Electron source enumeration is required.
         // This is the only path that yields out of the shortcut callback.
-        const retryOnMiss = known === undefined
         sources = undefined
-        return resolveEnumeratedTarget(
-          display,
-          cursorAt - startedAt,
-          displayAt - cursorAt,
-          sourceStartedAt,
-          retryOnMiss
-        )
+        return resolveEnumeratedTarget(display, known === undefined)
       } catch (error) {
-        // Preserve the adapter's Promise rejection contract for failures while
-        // allowing successful cache hits to remain synchronous.
+        // Failures reject; successful cache hits stay synchronous.
         return Promise.reject(error)
       }
     },
@@ -278,23 +212,6 @@ export function createGameOcrDisplaySources(
       lastTarget = undefined
     }
   }
-}
-
-/** Production factory. Non-Windows callers receive a clear unsupported error. */
-export function createProductionDisplaySources(
-  platform: NodeJS.Platform = process.platform
-): GameOcrDisplaySources {
-  if (platform !== 'win32') return unsupportedSources()
-  const electron = createRequire(import.meta.url)('electron') as {
-    screen?: DisplayCaptureScreen
-    desktopCapturer?: DisplayCapturer
-  }
-  if (!electron.screen || !electron.desktopCapturer) return deniedSources()
-  return createGameOcrDisplaySources({
-    platform,
-    screen: electron.screen,
-    desktopCapturer: electron.desktopCapturer
-  })
 }
 
 function resolveCursorPoint(screenApi: DisplayCaptureScreen): DisplayCapturePoint {
@@ -340,18 +257,7 @@ function targetMatchesDisplay(
   )
 }
 
-function withDiagnostics(
-  target: GameOcrDisplayTarget,
-  diagnostics: GameOcrDisplayDiagnostics
-): GameOcrDisplayTarget {
-  return { sourceId: target.sourceId, metadata: target.metadata, diagnostics }
-}
-
-function validateDisplay(
-  display: DisplayCaptureDisplay,
-  maxImageDimension: number,
-  maxImagePixels: number
-): void {
+function validateDisplay(display: DisplayCaptureDisplay): void {
   if (
     !display ||
     typeof display !== 'object' ||
@@ -371,16 +277,12 @@ function validateDisplay(
   if (
     !isPositiveInteger(imageSize.width) ||
     !isPositiveInteger(imageSize.height) ||
-    imageSize.width > maxImageDimension ||
-    imageSize.height > maxImageDimension ||
-    imageSize.width * imageSize.height > maxImagePixels
+    imageSize.width > MAX_OCR_IMAGE_DIMENSION ||
+    imageSize.height > MAX_OCR_IMAGE_DIMENSION ||
+    imageSize.width * imageSize.height > MAX_DISPLAY_CAPTURE_PIXELS
   ) {
     throw new DisplayCaptureError('image-too-large')
   }
-}
-
-function positiveLimit(value: number | undefined, fallback: number): number {
-  return value !== undefined && Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
 }
 
 function freezeMetadata(metadata: OcrDisplayCaptureMetadata): OcrDisplayCaptureMetadata {
@@ -389,24 +291,6 @@ function freezeMetadata(metadata: OcrDisplayCaptureMetadata): OcrDisplayCaptureM
     displayBounds: Object.freeze({ ...metadata.displayBounds }),
     imageSize: Object.freeze({ ...metadata.imageSize })
   })
-}
-
-function unsupportedSources(): GameOcrDisplaySources {
-  return {
-    cursorDisplay: async () => {
-      throw new DisplayCaptureError('unsupported')
-    },
-    invalidate: () => {}
-  }
-}
-
-function deniedSources(): GameOcrDisplaySources {
-  return {
-    cursorDisplay: async () => {
-      throw new DisplayCaptureError('capture-denied')
-    },
-    invalidate: () => {}
-  }
 }
 
 function isPositiveFiniteNumber(value: unknown): value is number {
