@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   INACTIVE_MINI_PLAYER,
-  MINI_PLAYER_SUBTITLE_SCALE,
   enterMiniPlayer,
   exitMiniPlayer,
   miniPlayerForFullscreen,
@@ -115,7 +114,7 @@ describe('miniPlayerSubtitleStyle', () => {
   it('multiplies the font scale down while active without mutating the input', () => {
     const style = { ...DEFAULT_SUBTITLE_STYLE, fontScale: 1.5 }
     const scaled = miniPlayerSubtitleStyle(style, true)
-    expect(scaled.fontScale).toBeCloseTo(1.5 * MINI_PLAYER_SUBTITLE_SCALE)
+    expect(scaled.fontScale).toBeCloseTo(1.5 * 0.6)
     expect(scaled.xPct).toBe(style.xPct)
     expect(scaled.yPct).toBe(style.yPct)
     expect(style.fontScale).toBe(1.5) // untouched

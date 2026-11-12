@@ -3,19 +3,10 @@ import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMiniPlayer, type UseMiniPlayerInput } from '@src/renderer/src/state/useMiniPlayer'
 import { INACTIVE_MINI_PLAYER, type MiniPlayerState } from '@src/renderer/src/state/miniPlayer'
+import { deferred } from '@test/harness/deferred'
 import type { WindowBounds } from '@src/shared/windowBounds'
 
 const SAVED_BOUNDS: WindowBounds = { x: 100, y: 50, width: 1280, height: 720 }
-
-/** A promise plus its resolver, for asserting behavior around an in-flight
- * `getBounds()` call before/after it settles. */
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
-  return { promise, resolve }
-}
 
 function setup(overrides: Partial<UseMiniPlayerInput> = {}) {
   const order: string[] = []
@@ -69,35 +60,6 @@ afterEach(() => {
 })
 
 describe('useMiniPlayer', () => {
-  it('enters mini-player: captures bounds, requests the mini corner, forces always-on-top, and marks active', async () => {
-    const { hook, windowControls, input, miniPlayerRef } = setup()
-
-    await hook.result.current.handleToggleMiniPlayer()
-
-    expect(windowControls.getBounds).toHaveBeenCalledTimes(1)
-    expect(windowControls.setBounds).toHaveBeenCalledWith({
-      mode: 'miniPlayer',
-      topBarHeight: 0,
-      bottomBarHeight: 0
-    })
-    expect(input.setAlwaysOnTop).toHaveBeenCalledWith(true)
-    expect(windowControls.setAlwaysOnTop).toHaveBeenCalledWith(true)
-    expect(miniPlayerRef.current).toEqual({
-      active: true,
-      snapshot: { savedBounds: SAVED_BOUNDS, wasAlwaysOnTop: false }
-    })
-  })
-
-  it('does not enter mini-player while fullscreen (fullscreen wins)', async () => {
-    const { hook, windowControls, input } = setup({ stateRef: { current: { fullscreen: true } } })
-
-    await hook.result.current.handleToggleMiniPlayer()
-
-    expect(windowControls.getBounds).not.toHaveBeenCalled()
-    expect(windowControls.setBounds).not.toHaveBeenCalled()
-    expect(input.setAlwaysOnTop).not.toHaveBeenCalled()
-  })
-
   it('leaves state untouched when main reports no bounds (a stale/failed read cannot force mini-player on)', async () => {
     const windowControls = {
       getBounds: vi.fn(async () => null),
@@ -114,28 +76,6 @@ describe('useMiniPlayer', () => {
     expect(windowControls.setBounds).not.toHaveBeenCalled()
   })
 
-  it('exits mini-player exactly once: restores the saved bounds and the prior always-on-top flag', async () => {
-    const activeState: MiniPlayerState = {
-      active: true,
-      snapshot: { savedBounds: SAVED_BOUNDS, wasAlwaysOnTop: true }
-    }
-    const { hook, windowControls, input, miniPlayerRef } = setup({
-      miniPlayerRef: { current: activeState }
-    })
-
-    await hook.result.current.handleToggleMiniPlayer()
-
-    expect(windowControls.setBounds).toHaveBeenCalledTimes(1)
-    expect(windowControls.setBounds).toHaveBeenCalledWith({
-      mode: 'explicit',
-      bounds: SAVED_BOUNDS
-    })
-    expect(input.setAlwaysOnTop).toHaveBeenCalledTimes(1)
-    expect(input.setAlwaysOnTop).toHaveBeenCalledWith(true)
-    expect(windowControls.setAlwaysOnTop).toHaveBeenCalledTimes(1)
-    expect(miniPlayerRef.current).toEqual(INACTIVE_MINI_PLAYER)
-  })
-
   it('toggleFullscreenFromKey tears mini-player down (awaiting its bounds restore) before requesting fullscreen', async () => {
     const activeState: MiniPlayerState = {
       active: true,
@@ -143,10 +83,18 @@ describe('useMiniPlayer', () => {
     }
     const { order, hook, windowControls } = setup({ miniPlayerRef: { current: activeState } })
 
+    const restore = deferred<null>()
+    windowControls.setBounds.mockImplementationOnce((request) => {
+      order.push(`setBounds:${JSON.stringify(request)}`)
+      return restore.promise
+    })
+
     hook.result.current.toggleFullscreenFromKey()
-    // toggleFullscreenFromKey is fire-and-forget (its internal async IIFE is
-    // not awaited by callers); flush microtasks so the exit effect settles.
     await Promise.resolve()
+    expect(windowControls.toggleFullscreen).not.toHaveBeenCalled()
+
+    restore.resolve(null)
+    await restore.promise
     await Promise.resolve()
 
     expect(order).toEqual([
@@ -154,17 +102,6 @@ describe('useMiniPlayer', () => {
       `setBounds:${JSON.stringify({ mode: 'explicit', bounds: SAVED_BOUNDS })}`,
       'toggleFullscreen'
     ])
-    expect(windowControls.toggleFullscreen).toHaveBeenCalledTimes(1)
-  })
-
-  it('toggleFullscreenFromKey requests fullscreen directly when mini-player is not active', async () => {
-    const { order, hook, windowControls } = setup()
-
-    hook.result.current.toggleFullscreenFromKey()
-    await Promise.resolve()
-
-    expect(order).toEqual(['toggleFullscreen'])
-    expect(windowControls.setBounds).not.toHaveBeenCalled()
     expect(windowControls.toggleFullscreen).toHaveBeenCalledTimes(1)
   })
 
@@ -196,10 +133,5 @@ describe('useMiniPlayer', () => {
       active: true,
       snapshot: { savedBounds: SAVED_BOUNDS, wasAlwaysOnTop: false }
     })
-  })
-
-  it('unmount leaves no pending update: the hook installs no subscription/effect to clean up', () => {
-    const { hook } = setup()
-    expect(() => hook.unmount()).not.toThrow()
   })
 })

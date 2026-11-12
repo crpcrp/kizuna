@@ -5,7 +5,6 @@ import {
   provenanceTotal,
   reportLemmas,
   understandingPct,
-  TOP_UNKNOWN_CAP,
   type LevelCounts
 } from '@src/renderer/src/state/subtitleReport'
 import type { Token } from '@src/shared/token'
@@ -414,7 +413,7 @@ describe('buildSubtitleReport', () => {
     ])
   })
 
-  it('sorts topUnknown by count desc, tie-breaks by first occurrence, caps at TOP_UNKNOWN_CAP', () => {
+  it('sorts topUnknown by count desc, tie-breaks by first occurrence, caps at 15', () => {
     const tokens: Token[] = []
     // 16 distinct unknown lemmas in first-occurrence order, lemma00 having the
     // highest count so it's guaranteed to survive the cap despite being first.
@@ -427,14 +426,11 @@ describe('buildSubtitleReport', () => {
     }
     const report = buildSubtitleReport(tokens, {})
     expectProvenanceInvariant(report)
-    expect(report.topUnknown).toHaveLength(TOP_UNKNOWN_CAP)
+    expect(report.topUnknown).toHaveLength(15)
     expect(report.topUnknown[0]).toEqual({ lemma: 'lemma00', surface: 'lemma00', count: 5 })
     // remaining entries are the count-1 lemmas in first-occurrence order
     expect(report.topUnknown.slice(1).map((r) => r.lemma)).toEqual(
-      Array.from(
-        { length: TOP_UNKNOWN_CAP - 1 },
-        (_, i) => `lemma${String(i + 1).padStart(2, '0')}`
-      )
+      Array.from({ length: 14 }, (_, i) => `lemma${String(i + 1).padStart(2, '0')}`)
     )
   })
 

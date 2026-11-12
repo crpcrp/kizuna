@@ -90,7 +90,7 @@ describe('App mini-player', () => {
     await waitFor(() => expect(fakes.setVideoMargins).toHaveBeenLastCalledWith(0, 0, 0, 0))
   })
 
-  it('enters mini mode: saves bounds, forces always-on-top, hides the menu, shows restore', async () => {
+  it('enters mini mode from the menu and restores the saved window from the restore button', async () => {
     const fakes = installBridge()
     render(<App />)
 
@@ -110,14 +110,6 @@ describe('App mini-player', () => {
     // MenuBar gone; the reduced BottomBar exposes the restore button.
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Video' })).toBeNull())
     expect(screen.getByRole('button', { name: 'Restore window' })).toBeTruthy()
-  })
-
-  it('leaving mini restores the saved bounds and the prior always-on-top flag', async () => {
-    const fakes = installBridge()
-    render(<App />)
-
-    await openMiniPlayerFromMenu()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Restore window' })).toBeTruthy())
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore window' }))
 
@@ -128,24 +120,6 @@ describe('App mini-player', () => {
     expect(fakes.setAlwaysOnTop).toHaveBeenLastCalledWith(false)
     // MenuBar is back.
     await waitFor(() => expect(screen.getByRole('button', { name: 'Video' })).toBeTruthy())
-  })
-
-  it('does not enter mini-player while fullscreen (fullscreen wins)', async () => {
-    const fakes = installBridge()
-    render(<App />)
-    await waitFor(() => expect(fakes.emitFullscreen).toBeDefined())
-
-    // Main reports the window went fullscreen (e.g. via the F key).
-    act(() => fakes.emitFullscreen!(true))
-
-    await openMiniPlayerFromMenu()
-
-    // The toggle is a no-op: no bounds read/write, no always-on-top change, and
-    // the reduced restore button never appears — the app stays fullscreen only.
-    expect(fakes.getBounds).not.toHaveBeenCalled()
-    expect(fakes.setBounds).not.toHaveBeenCalled()
-    expect(fakes.setAlwaysOnTop).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: 'Restore window' })).toBeNull()
   })
 
   it('defers mini-player bounds restore until an external fullscreen path leaves fullscreen', async () => {

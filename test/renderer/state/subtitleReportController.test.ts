@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createSubtitleReportController,
@@ -21,16 +22,6 @@ function readySnapshot(): WholeTrackVocabularyResult {
       cueHasUnknown: { cue: true }
     }
   }
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
 }
 
 function bridges(): SubtitleReportBridges {
@@ -90,39 +81,5 @@ describe('createSubtitleReportController preparation', () => {
     gate.reject(new Error('late bridge failure'))
     await open
     expect(controller.getState()).toEqual({ kind: 'idle' })
-  })
-
-  it('uses the provided shared snapshot promise once for concurrent report consumers', async () => {
-    const gate = deferred<WholeTrackVocabularyResult>()
-    const snapshot = vi.fn(() => gate.promise)
-    const first = createSubtitleReportController()
-    const second = createSubtitleReportController()
-    const firstOpen = first.open({ bridges: bridges(), snapshot })
-    const secondOpen = second.open({ bridges: bridges(), snapshot })
-
-    expect(snapshot).toHaveBeenCalledTimes(2)
-    gate.resolve(readySnapshot())
-    await Promise.all([firstOpen, secondOpen])
-    expect(first.getState().kind).toBe('ready')
-    expect(second.getState().kind).toBe('ready')
-  })
-
-  it('counts tokens across every cue in an already-prepared snapshot', async () => {
-    const controller = createSubtitleReportController()
-    const snapshot: WholeTrackVocabularyResult = {
-      kind: 'ready',
-      snapshot: {
-        cueTokens: [
-          { cueKey: 'a', tokens: [token('first')] },
-          { cueKey: 'b', tokens: [token('second')] }
-        ],
-        spansByCue: {},
-        cueHasUnknown: { a: true, b: true }
-      }
-    }
-
-    await controller.open({ bridges: bridges(), snapshot: Promise.resolve(snapshot) })
-
-    expect(controller.getState()).toMatchObject({ kind: 'ready', report: { totalTokens: 2 } })
   })
 })

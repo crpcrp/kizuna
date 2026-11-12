@@ -22,7 +22,7 @@ export interface SubtitleReportBridges {
 export type WholeTrackSnapshotSource =
   Promise<WholeTrackVocabularyResult> | (() => Promise<WholeTrackVocabularyResult>)
 
-export interface SubtitleReportOpenInput {
+interface SubtitleReportOpenInput {
   bridges: SubtitleReportBridges
   /** A completed or in-flight whole-track preparation owned by the caller. */
   snapshot: WholeTrackSnapshotSource

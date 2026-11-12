@@ -70,7 +70,7 @@ export function selectLoadedRendererSettings(settings: PlayerSettings): LoadedRe
  * in-memory defaults it happens to match (e.g. both an empty `levelColors`), so
  * a plain `!==` would wrongly treat "just loaded, nothing the user touched" as
  * a change worth re-saving. */
-export function settingsFieldChanged<T>(previous: T, next: T): boolean {
+function settingsFieldChanged<T>(previous: T, next: T): boolean {
   return previous !== next && JSON.stringify(previous) !== JSON.stringify(next)
 }
 

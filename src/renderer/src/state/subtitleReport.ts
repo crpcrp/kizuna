@@ -9,13 +9,13 @@ import {
 
 export type LevelCounts = Record<KnowledgeLevel, number>
 
-export interface DeckBreakdownRow {
+interface DeckBreakdownRow {
   deck: string
   /** Unique known lemmas with at least one Anki source in this deck. */
   lemmaCount: number
 }
 
-export interface UnknownWordRow {
+interface UnknownWordRow {
   lemma: string
   /** Surface of the lemma's first occurrence in cue order. */
   surface: string
@@ -45,9 +45,9 @@ export interface SubtitleReport {
   topUnknown: UnknownWordRow[]
 }
 
-export const TOP_UNKNOWN_CAP = 15
+const TOP_UNKNOWN_CAP = 15
 
-export interface SubtitleReportCueTokens {
+interface SubtitleReportCueTokens {
   cueKey: string
   tokens: Token[]
   acceptedSpans?: VocabularySpan[]

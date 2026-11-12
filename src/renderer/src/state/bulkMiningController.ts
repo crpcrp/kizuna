@@ -61,7 +61,7 @@ export interface BulkMiningOpenInput {
   sortOrder?: 'auto' | FrequencyMode
 }
 
-export interface BulkMiningCandidatesOpenInput {
+interface BulkMiningCandidatesOpenInput {
   bridges: Pick<BulkMiningOpenInput['bridges'], 'dict' | 'anki'>
   /** Candidates already derived by a caller-specific vocabulary source. */
   candidates: MiningCandidate[]
@@ -71,7 +71,7 @@ export interface BulkMiningCandidatesOpenInput {
   checkTargetDeckMembership?: boolean
 }
 
-export interface BulkMiningSnapshotOpenInput {
+interface BulkMiningSnapshotOpenInput {
   bridges: BulkMiningOpenInput['bridges']
   /** A completed or in-flight whole-track preparation owned by the caller. */
   snapshot: Promise<WholeTrackVocabularyResult> | (() => Promise<WholeTrackVocabularyResult>)
@@ -446,7 +446,7 @@ export interface BulkMiningCompletionEvent {
   shouldRefreshKnowledge: boolean
 }
 
-export interface BulkMiningCompletionTracker {
+interface BulkMiningCompletionTracker {
   observe(phase: BulkMiningPhase): BulkMiningCompletionEvent | null
   getCurrent(): BulkMiningCompletionEvent | null
   reset(): void

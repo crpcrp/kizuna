@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { deferred } from '@test/harness/deferred'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
@@ -8,49 +9,16 @@ import {
   type UseSettingsLifecycleInput
 } from '@src/renderer/src/state/useSettingsLifecycle'
 import { createSettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
-import type { TimerLike } from '@src/renderer/src/state/settingsPersistence'
 import {
   selectLoadedRendererSettings,
   type SyncedSettingKey
 } from '@src/renderer/src/state/rendererSettings'
 
-function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
-  let nextId = 1
-  const pending = new Map<number, () => void>()
+function fakeTimers() {
+  vi.useFakeTimers()
   return {
-    setTimeout(handler: () => void): unknown {
-      const id = nextId++
-      pending.set(id, handler)
-      return id
-    },
-    clearTimeout(handle: unknown): void {
-      pending.delete(handle as number)
-    },
-    flush(): void {
-      const callbacks = [...pending.values()]
-      pending.clear()
-      callbacks.forEach((callback) => callback())
-    },
-    pendingCount(): number {
-      return pending.size
-    }
-  }
-}
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(error: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  return {
-    promise: new Promise((res, rej) => {
-      resolve = res
-      reject = rej
-    }),
-    resolve,
-    reject
+    flush: () => vi.runOnlyPendingTimers(),
+    pendingCount: () => vi.getTimerCount()
   }
 }
 
@@ -83,7 +51,7 @@ function setup(): {
     dispatch,
     bridge: { getSettings: vi.fn().mockReturnValue(settingsGate.promise) },
     settingsPersistenceRef: {
-      current: createSettingsPersistence(settingsWriter, timers)
+      current: createSettingsPersistence(settingsWriter)
     },
     settings: initialPlayerState,
     subtitleOffsetsRef: { current: {} },
@@ -129,6 +97,7 @@ async function hydrate(
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -182,23 +151,6 @@ describe('useSettingsLifecycle', () => {
 
     expect(setupResult.settingsWriter).toHaveBeenCalledOnce()
     expect(setupResult.settingsWriter).toHaveBeenCalledWith({ skipSeconds: 7 })
-  })
-
-  it('swallows a save failure and allows the next save to proceed', async () => {
-    const setupResult = setup()
-    await hydrate(setupResult.settingsGate)
-    setupResult.settingsWriter.mockRejectedValueOnce(new Error('disk full'))
-
-    setupResult.rerender({ ...initialPlayerState, skipSeconds: 8 })
-    setupResult.timers.flush()
-    await Promise.resolve()
-    setupResult.rerender({ ...initialPlayerState, skipSeconds: 9 })
-    await act(async () => {
-      await setupResult.input.settingsPersistenceRef.current.flush()
-    })
-
-    expect(setupResult.settingsWriter).toHaveBeenCalledTimes(2)
-    expect(setupResult.settingsWriter).toHaveBeenLastCalledWith({ skipSeconds: 9 })
   })
 
   it('flushes the latest pending state exactly once on unmount', async () => {

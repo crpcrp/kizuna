@@ -8,12 +8,12 @@ import {
 } from './subtitleReportController'
 import { useLatestCallback } from './useLatestRef'
 
-export interface UseSubtitleReportInput {
+interface UseSubtitleReportInput {
   /** Knowledge levels and sync status, the only bridge the report reads. */
   bridge: Pick<KizunaApi, 'knowledge'>
 }
 
-export interface UseSubtitleReportResult {
+interface UseSubtitleReportResult {
   /** The raw "user asked for the report" flag. The composition hook gates it
    * on bulk mining's presentation before handing it to the modal; the
    * vocabulary caches use it unhandled, since it is what gates whole-track

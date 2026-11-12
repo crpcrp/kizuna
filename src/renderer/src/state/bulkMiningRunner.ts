@@ -14,7 +14,7 @@ import { type SubtitleRequestToken } from './mediaSession'
 import { type DictLookupBridge } from './wordLookup'
 import type { MiningCandidate, MiningWordStatus, ResolvedEntry } from './bulkMining'
 
-export interface EntryResolutionOpts {
+interface EntryResolutionOpts {
   frequencyDictId: number | null
   sortOrder?: 'auto' | FrequencyMode
   chunkSize?: number
@@ -74,7 +74,7 @@ export interface BulkMineBridges {
     }
 }
 
-export type BulkMineResult =
+type BulkMineResult =
   | { kind: 'aborted'; message: string }
   | { kind: 'finished'; statuses: Record<string, MiningWordStatus> }
 
