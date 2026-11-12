@@ -53,7 +53,7 @@ export function categoryLabel(category: JimakuSearchCategory): string {
   return CATEGORY_OPTIONS.find((option) => option.value === category)?.label ?? category
 }
 
-export function errorMessage(
+export function jimakuErrorText(
   phase: Extract<JimakuControllerPhase, { kind: 'error' }>,
   retryAt?: string,
   rememberedUnavailable = false

@@ -5,6 +5,7 @@ import type {
   JimakuSettingsStatus
 } from '../shared/jimaku'
 import type { IpcMainHandleLike } from './ipc'
+import { isRecord } from '../shared/guards'
 
 export interface JimakuSettingsServiceLike {
   getStatus(): JimakuSettingsStatus
@@ -40,7 +41,7 @@ function parseSeason(value: unknown): number | undefined {
 }
 
 function parseFolderHint(value: unknown): JimakuFolderHintInput {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error(INVALID_FOLDER_HINT)
   }
   return value as JimakuFolderHintInput

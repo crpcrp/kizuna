@@ -3,20 +3,19 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO_ROOT } from '@test/paths'
 
-import { parsePlatformArg, parseVendorDirArg } from '@scripts/fetch-resources.mjs'
-import { lockProblems, vendorFetchPlan } from '@scripts/vendorResources.mjs'
+import { lockProblems, readFlag, vendorFetchPlan } from '@scripts/vendorResources.mjs'
 
-describe('fetch-resources arguments', () => {
+describe('readFlag', () => {
   it('reads vendor directory and platform overrides in separated and inline forms', () => {
-    expect(parseVendorDirArg(['--vendor-dir', 'D:/kizuna-vendor'])).toBe('D:/kizuna-vendor')
-    expect(parseVendorDirArg(['--vendor-dir=D:/a=b'])).toBe('D:/a=b')
-    expect(parsePlatformArg(['--platform', 'linux-x64'])).toBe('linux-x64')
-    expect(parsePlatformArg(['--platform=win32-x64'])).toBe('win32-x64')
+    expect(readFlag(['--vendor-dir', 'D:/kizuna-vendor'], 'vendor-dir')).toBe('D:/kizuna-vendor')
+    expect(readFlag(['--vendor-dir=D:/a=b'], 'vendor-dir')).toBe('D:/a=b')
+    expect(readFlag(['--platform', 'linux-x64'], 'platform')).toBe('linux-x64')
+    expect(readFlag(['--platform=win32-x64'], 'platform')).toBe('win32-x64')
   })
 
   it('returns undefined when either flag is absent', () => {
-    expect(parseVendorDirArg(['--verbose'])).toBeUndefined()
-    expect(parsePlatformArg(['--verbose'])).toBeUndefined()
+    expect(readFlag(['--verbose'], 'vendor-dir')).toBeUndefined()
+    expect(readFlag(['--verbose', '--platform='], 'platform')).toBeUndefined()
   })
 })
 

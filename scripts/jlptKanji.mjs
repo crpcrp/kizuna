@@ -1,38 +1,19 @@
 /**
  * Pure transformation helpers for the pinned OpenJLPT kanji snapshot.
- * Network access and filesystem writes belong in update-jlpt-kanji.mjs.
+ * Network access and filesystem writes belong in update-jlpt.mjs.
  */
 
-import { JLPT_LEVELS, VOCABULARY_SOURCE } from './jlptVocabulary.mjs'
-
-/** The pinned OpenJLPT source is shared with the vocabulary snapshot. */
-export const KANJI_SOURCE = VOCABULARY_SOURCE
+import {
+  createSnapshot,
+  isRecord,
+  JLPT_LEVELS,
+  normalizeText,
+  parseRecords
+} from './jlptVocabulary.mjs'
 
 /** @typedef {[string, 'N5' | 'N4' | 'N3' | 'N2' | 'N1', number | null]} KanjiEntry */
 
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
-
-/** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
-
-/** @param {string} value @returns {string} */
-const normalizeText = (value) => value.normalize('NFC').trim()
-
-/** @param {string} value @param {string} source @returns {unknown} */
-const parseJson = (value, source) => {
-  try {
-    return JSON.parse(value)
-  } catch (error) {
-    throw new Error(`Invalid JSON in ${source}: ${error.message}`)
-  }
-}
-
-/** @param {string} contents @param {string} source @returns {unknown[]} */
-const parseRecords = (contents, source) => {
-  const value = parseJson(contents, source)
-  if (!Array.isArray(value)) throw new Error(`${source} must contain an array of records`)
-  return value
-}
 
 /** @param {unknown} value @returns {value is number | null} */
 const isFrequency = (value) =>
@@ -116,48 +97,6 @@ export function deduplicateAndSortEntries(entries) {
   })
 }
 
-/**
- * Build the complete deterministic snapshot from one input per JLPT level.
- *
- * @param {{ level: 'N5' | 'N4' | 'N3' | 'N2' | 'N1', contents: string, source?: string }[]} files
- * @returns {{ schemaVersion: 1, source: typeof KANJI_SOURCE, inputRecordCount: number, entries: KanjiEntry[] }}
- */
-export function createKanjiSnapshot(files) {
-  const projected = files.map(({ level, contents, source }) => {
-    const input = parseRecords(contents, source ?? level)
-    return {
-      inputRecordCount: input.length,
-      entries: projectKanjiRecords(input, level, source ?? level)
-    }
-  })
-  const inputRecordCount = projected.reduce((total, file) => total + file.inputRecordCount, 0)
-  return {
-    schemaVersion: 1,
-    source: { ...KANJI_SOURCE },
-    inputRecordCount,
-    entries: deduplicateAndSortEntries(projected.flatMap((file) => file.entries))
-  }
-}
-
-/** @param {ReturnType<typeof createKanjiSnapshot>} snapshot @returns {string} */
-export function serializeKanjiSnapshot(snapshot) {
-  const sourceLines = JSON.stringify(snapshot.source, null, 2).split('\n')
-  const entries = snapshot.entries.map(
-    (entry, index) =>
-      `    [${entry.map((value) => JSON.stringify(value)).join(', ')}]${index === snapshot.entries.length - 1 ? '' : ','}`
-  )
-  return [
-    '{',
-    `  "schemaVersion": ${snapshot.schemaVersion},`,
-    `  "source": ${sourceLines[0]}`,
-    ...sourceLines
-      .slice(1)
-      .map((line, index, lines) => `  ${line}${index === lines.length - 1 ? ',' : ''}`),
-    `  "inputRecordCount": ${snapshot.inputRecordCount},`,
-    '  "entries": [',
-    ...entries,
-    '  ]',
-    '}',
-    ''
-  ].join('\n')
-}
+/** @param {Parameters<typeof createSnapshot>[0]} files */
+export const createKanjiSnapshot = (files) =>
+  createSnapshot(files, projectKanjiRecords, deduplicateAndSortEntries)

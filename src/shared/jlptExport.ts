@@ -1,4 +1,5 @@
 import { JLPT_LEVELS, type JlptLevel } from './jlpt'
+import { isRecord } from './guards'
 
 export const JLPT_EXPORT_MODES = ['kanji', 'vocabulary', 'both'] as const
 export type JlptExportMode = (typeof JLPT_EXPORT_MODES)[number]
@@ -30,7 +31,7 @@ export interface JlptExportError {
 export type JlptExportResult = JlptExportReady | JlptExportError
 
 export function isJlptExportRequest(value: unknown): value is JlptExportRequest {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  if (!isRecord(value)) return false
   const request = value as Record<string, unknown>
   return (
     JLPT_LEVELS.includes(request.throughLevel as JlptLevel) &&

@@ -21,75 +21,8 @@ import {
   UPDATE_CHANNELS,
   WINDOW_CONTROL_CHANNELS
 } from '../shared/ipcChannels'
-import type { Track, VideoDimensions } from '../shared/track'
-import type { Cue } from '../shared/cue'
-import type { SubtitleEncoding } from '../shared/subtitleEncoding'
-import type { Token } from '../shared/token'
-import type { McDict } from '../shared/mecab'
-import type {
-  ImportResult,
-  FrequencyMode,
-  LookupResult,
-  DictInfo,
-  ImportProgress
-} from '../shared/dictionary'
-import type { PlayerSettings, VideoAdjustments } from '../shared/playerSettings'
-import type { BundledBinaryStatus } from '../shared/integrationStatus'
-import type { AppInfo, AppInfoLink, NoticeOpenResult } from '../shared/appInfo'
-import type { AudioDevice } from '../shared/audioDevice'
-import type { MediaKeyCommand } from '../shared/mediaKey'
-import type { SetWindowBoundsRequest, WindowBounds } from '../shared/windowBounds'
-import type { WindowShapeRect } from '../shared/windowShape'
-import type {
-  AnkiJlptBackfillApplyRequest,
-  AnkiJlptBackfillPreview,
-  AnkiJlptBackfillProgress,
-  AnkiJlptBackfillResult,
-  AnkiExistingMatch,
-  AnkiJlptSetupResult,
-  AnkiMembershipMatches,
-  AnkiMineResult,
-  AnkiSettings,
-  AnkiPing,
-  MineRequest
-} from '../shared/anki'
-import type {
-  KnowledgeLevel,
-  KnowledgeDetails,
-  KnowledgeSource,
-  KnowledgeTuning,
-  PublicKnowledgeSettings,
-  SyncStatus
-} from '../shared/knowledge'
-import type { JlptCoverageReportResult } from '../shared/jlptCoverage'
-import type { JlptExportRequest, JlptExportResult } from '../shared/jlptExport'
 import type { KizunaApi } from '../shared/preloadApi'
-import type { StoredSubtitleSelection, StoredTrackSelection } from '../shared/mediaHistory'
-import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/update'
-import type {
-  GameOcrCaptureBytes,
-  GameOcrFreezeRequest,
-  GameOcrFrozenFrame
-} from '../shared/gameOcr'
-import type { GameOcrRuntimeStatus } from '../shared/gameOcr'
-import type { GameOcrSettings } from '../shared/gameOcrSettings'
-import type { OcrResult } from '../shared/ocr'
-import type { AppSurface } from '../shared/appShell'
-import type { PublicTranslationSettings, TranslationSettingsPatch } from '../shared/translation'
-import type {
-  JimakuFileListResult,
-  JimakuPrepareResult,
-  JimakuPreparedSubtitleResult,
-  JimakuSession,
-  JimakuServiceResult,
-  JimakuFolderHint,
-  JimakuFolderHintInput,
-  JimakuSubtitleExportRequest,
-  JimakuSubtitleExportResult,
-  JimakuSettingsStatus,
-  JimakuTitleSearchRequest,
-  JimakuTitleSearchResult
-} from '../shared/jimaku'
+import type { WindowShapeRect } from '../shared/windowShape'
 import { subscribe } from './bridge'
 
 /**
@@ -112,167 +45,118 @@ export function windowShapeApi(
 const api = {
   // The frameless window has no OS buttons; custom chrome calls these.
   windowControls: {
-    minimize: (): void => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.minimize),
-    close: (): void => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.close),
-    setFullscreen: (flag: boolean): void =>
-      ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setFullscreen, flag),
-    toggleFullscreen: (): void => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.toggleFullscreen),
-    onFullscreenChange: (cb: (value: boolean) => void): (() => void) =>
-      subscribe(WINDOW_CONTROL_CHANNELS.fullscreenChanged, cb),
-    setSize: (width: number, height: number): void =>
-      ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
-    setAlwaysOnTop: (flag: boolean): void =>
-      ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, flag),
+    minimize: () => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.minimize),
+    close: () => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.close),
+    setFullscreen: (flag) => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setFullscreen, flag),
+    toggleFullscreen: () => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.toggleFullscreen),
+    onFullscreenChange: (cb) => subscribe(WINDOW_CONTROL_CHANNELS.fullscreenChanged, cb),
+    setSize: (width, height) => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setSize, width, height),
+    setAlwaysOnTop: (flag) => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop, flag),
     ...windowShapeApi((rects) => ipcRenderer.send(WINDOW_CONTROL_CHANNELS.setShape, rects)),
-    getBounds: (): Promise<WindowBounds | null> =>
-      ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.getBounds),
-    setBounds: (request: SetWindowBoundsRequest): Promise<WindowBounds | null> =>
-      ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.setBounds, request)
+    getBounds: () => ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.getBounds),
+    setBounds: (request) => ipcRenderer.invoke(WINDOW_CONTROL_CHANNELS.setBounds, request)
   },
   // mpv playback bridge: commands invoke main's ipcMain.handle channels;
   // subscriptions listen for main's property-observer pushes and return an
   // unsubscribe function so callers can clean up (e.g. on unmount).
   player: {
-    load: (path: string): Promise<unknown> => ipcRenderer.invoke(PLAYER_CHANNELS.load, path),
-    setPause: (paused: boolean): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setPause, paused),
-    seek: (seconds: number, absolute?: boolean): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.seek, seconds, absolute),
-    setVolume: (volume: number): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setVolume, volume),
-    setSpeed: (speed: number): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setSpeed, speed),
-    setMuted: (muted: boolean): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setMuted, muted),
-    setAudioDelay: (delayMs: number): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setAudioDelay, delayMs),
-    setAudioTrack: (aid: number): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setAudioTrack, aid),
-    getAudioDevices: (): Promise<AudioDevice[]> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.getAudioDevices),
-    setAudioDevice: (name: string): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setAudioDevice, name),
-    setLoudnessNorm: (on: boolean): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setLoudnessNorm, on),
-    setAbLoop: (a: number | null, b: number | null): Promise<unknown> =>
-      ipcRenderer.invoke(PLAYER_CHANNELS.setAbLoop, a, b),
-    setVideoMargins: (
-      top: number,
-      bottom: number,
-      right?: number,
-      left?: number
-    ): Promise<unknown> =>
+    load: (path) => ipcRenderer.invoke(PLAYER_CHANNELS.load, path),
+    setPause: (paused) => ipcRenderer.invoke(PLAYER_CHANNELS.setPause, paused),
+    seek: (seconds, absolute) => ipcRenderer.invoke(PLAYER_CHANNELS.seek, seconds, absolute),
+    setVolume: (volume) => ipcRenderer.invoke(PLAYER_CHANNELS.setVolume, volume),
+    setSpeed: (speed) => ipcRenderer.invoke(PLAYER_CHANNELS.setSpeed, speed),
+    setMuted: (muted) => ipcRenderer.invoke(PLAYER_CHANNELS.setMuted, muted),
+    setAudioDelay: (delayMs) => ipcRenderer.invoke(PLAYER_CHANNELS.setAudioDelay, delayMs),
+    setAudioTrack: (aid) => ipcRenderer.invoke(PLAYER_CHANNELS.setAudioTrack, aid),
+    getAudioDevices: () => ipcRenderer.invoke(PLAYER_CHANNELS.getAudioDevices),
+    setAudioDevice: (name) => ipcRenderer.invoke(PLAYER_CHANNELS.setAudioDevice, name),
+    setLoudnessNorm: (on) => ipcRenderer.invoke(PLAYER_CHANNELS.setLoudnessNorm, on),
+    setAbLoop: (a, b) => ipcRenderer.invoke(PLAYER_CHANNELS.setAbLoop, a, b),
+    setVideoMargins: (top, bottom, right, left) =>
       ipcRenderer.invoke(PLAYER_CHANNELS.setVideoMargins, top, bottom, right, left),
-    setVideoAdjustments: (adjustments: VideoAdjustments): Promise<unknown> =>
+    setVideoAdjustments: (adjustments) =>
       ipcRenderer.invoke(PLAYER_CHANNELS.setVideoAdjustments, adjustments),
-    frameStep: (): Promise<unknown> => ipcRenderer.invoke(PLAYER_CHANNELS.frameStep),
-    frameBackStep: (): Promise<unknown> => ipcRenderer.invoke(PLAYER_CHANNELS.frameBackStep),
-    screenshot: (mediaPath: string, timePos: number): Promise<string> =>
+    frameStep: () => ipcRenderer.invoke(PLAYER_CHANNELS.frameStep),
+    frameBackStep: () => ipcRenderer.invoke(PLAYER_CHANNELS.frameBackStep),
+    screenshot: (mediaPath, timePos) =>
       ipcRenderer.invoke(PLAYER_CHANNELS.screenshot, mediaPath, timePos),
-    captureFrame: (): Promise<string | null> => ipcRenderer.invoke(PLAYER_CHANNELS.captureFrame),
-    onTimePos: (cb: (value: number) => void): (() => void) =>
-      subscribe(PLAYER_CHANNELS.timePos, cb),
-    onDuration: (cb: (value: number) => void): (() => void) =>
-      subscribe(PLAYER_CHANNELS.duration, cb),
-    onEofReached: (cb: (value: unknown) => void): (() => void) =>
-      subscribe(PLAYER_CHANNELS.eofReached, cb),
-    onPause: (cb: (value: boolean) => void): (() => void) => subscribe(PLAYER_CHANNELS.pause, cb),
-    onMediaKey: (cb: (value: MediaKeyCommand) => void): (() => void) =>
-      subscribe(PLAYER_CHANNELS.mediaKey, cb)
+    captureFrame: () => ipcRenderer.invoke(PLAYER_CHANNELS.captureFrame),
+    onTimePos: (cb) => subscribe(PLAYER_CHANNELS.timePos, cb),
+    onDuration: (cb) => subscribe(PLAYER_CHANNELS.duration, cb),
+    onEofReached: (cb) => subscribe(PLAYER_CHANNELS.eofReached, cb),
+    onPause: (cb) => subscribe(PLAYER_CHANNELS.pause, cb),
+    onMediaKey: (cb) => subscribe(PLAYER_CHANNELS.mediaKey, cb)
   },
   launch: {
-    onOpenPath: (cb: (path: string) => void): (() => void) =>
-      subscribe(LAUNCH_CHANNELS.openPath, cb),
-    onError: (cb: (message: string) => void): (() => void) => subscribe(LAUNCH_CHANNELS.error, cb),
-    rendererReady: (): void => ipcRenderer.send(LAUNCH_CHANNELS.rendererReady)
+    onOpenPath: (cb) => subscribe(LAUNCH_CHANNELS.openPath, cb),
+    onError: (cb) => subscribe(LAUNCH_CHANNELS.error, cb),
+    rendererReady: () => ipcRenderer.send(LAUNCH_CHANNELS.rendererReady)
   },
 
   appShell: {
-    getSurface: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.getSurface),
-    showSplash: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showSplash),
-    showPlayer: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showPlayer),
-    showOptions: (): Promise<AppSurface> => ipcRenderer.invoke(APP_SHELL_CHANNELS.showOptions),
-    dismissOptions: (): Promise<AppSurface> =>
-      ipcRenderer.invoke(APP_SHELL_CHANNELS.dismissOptions),
-    quit: (): void => ipcRenderer.send(APP_SHELL_CHANNELS.quit),
-    onSurfaceChanged: (cb: (surface: AppSurface) => void): (() => void) =>
-      subscribe(APP_SHELL_CHANNELS.surfaceChanged, cb)
+    getSurface: () => ipcRenderer.invoke(APP_SHELL_CHANNELS.getSurface),
+    showSplash: () => ipcRenderer.invoke(APP_SHELL_CHANNELS.showSplash),
+    showPlayer: () => ipcRenderer.invoke(APP_SHELL_CHANNELS.showPlayer),
+    showOptions: () => ipcRenderer.invoke(APP_SHELL_CHANNELS.showOptions),
+    dismissOptions: () => ipcRenderer.invoke(APP_SHELL_CHANNELS.dismissOptions),
+    quit: () => ipcRenderer.send(APP_SHELL_CHANNELS.quit),
+    onSurfaceChanged: (cb) => subscribe(APP_SHELL_CHANNELS.surfaceChanged, cb)
   },
 
   gameOcr: {
     supported: process.platform === 'win32',
-    getSettings: (): Promise<GameOcrSettings> => ipcRenderer.invoke(GAME_OCR_CHANNELS.getSettings),
-    setSettings: (patch: Partial<GameOcrSettings>): Promise<GameOcrSettings> =>
-      ipcRenderer.invoke(GAME_OCR_CHANNELS.setSettings, patch),
-    getStatus: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.getStatus),
-    start: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.start),
-    stop: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.stop),
-    retry: (): Promise<GameOcrRuntimeStatus> => ipcRenderer.invoke(GAME_OCR_CHANNELS.retry),
-    onStatusChange: (cb: (status: GameOcrRuntimeStatus) => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.statusChanged, cb),
-    onFreeze: (cb: (value: GameOcrFreezeRequest) => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.freeze, cb),
-    frozen: (value: GameOcrFrozenFrame): void => ipcRenderer.send(GAME_OCR_CHANNELS.frozen, value),
-    captureBytes: (value: GameOcrCaptureBytes): void =>
-      ipcRenderer.send(GAME_OCR_CHANNELS.captureBytes, value),
-    onDiscard: (cb: () => void): (() => void) => subscribe(GAME_OCR_CHANNELS.discard, cb),
-    onRecognitionState: (cb: (recognizing: boolean) => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
-    onRegions: (cb: (result: OcrResult) => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.regions, cb),
-    onCopySelection: (cb: () => void): (() => void) =>
-      subscribe(GAME_OCR_CHANNELS.copySelection, cb),
-    rendererReady: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
-    close: (): void => ipcRenderer.send(GAME_OCR_CHANNELS.close)
+    getSettings: () => ipcRenderer.invoke(GAME_OCR_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(GAME_OCR_CHANNELS.setSettings, patch),
+    getStatus: () => ipcRenderer.invoke(GAME_OCR_CHANNELS.getStatus),
+    start: () => ipcRenderer.invoke(GAME_OCR_CHANNELS.start),
+    stop: () => ipcRenderer.invoke(GAME_OCR_CHANNELS.stop),
+    retry: () => ipcRenderer.invoke(GAME_OCR_CHANNELS.retry),
+    onStatusChange: (cb) => subscribe(GAME_OCR_CHANNELS.statusChanged, cb),
+    onFreeze: (cb) => subscribe(GAME_OCR_CHANNELS.freeze, cb),
+    frozen: (value) => ipcRenderer.send(GAME_OCR_CHANNELS.frozen, value),
+    captureBytes: (value) => ipcRenderer.send(GAME_OCR_CHANNELS.captureBytes, value),
+    onDiscard: (cb) => subscribe(GAME_OCR_CHANNELS.discard, cb),
+    onRecognitionState: (cb) => subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
+    onRegions: (cb) => subscribe(GAME_OCR_CHANNELS.regions, cb),
+    onCopySelection: (cb) => subscribe(GAME_OCR_CHANNELS.copySelection, cb),
+    rendererReady: () => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
+    close: () => ipcRenderer.send(GAME_OCR_CHANNELS.close)
   },
 
   // Media bridge: file-selection, ffprobe track enumeration, and ffmpeg
   // subtitle-loading — all renderer→main invoke/handle round-trips.
   media: {
-    openFile: (): Promise<string | undefined> => ipcRenderer.invoke(MEDIA_CHANNELS.openFile),
-    openFiles: (): Promise<string[]> => ipcRenderer.invoke(MEDIA_CHANNELS.openFiles),
-    openFolder: (): Promise<string[]> => ipcRenderer.invoke(MEDIA_CHANNELS.openFolder),
-    readPlaylist: (filePath: string): Promise<string[]> =>
-      ipcRenderer.invoke(MEDIA_CHANNELS.readPlaylist, filePath),
-    savePlaylist: (paths: string[]): Promise<string | undefined> =>
-      ipcRenderer.invoke(MEDIA_CHANNELS.savePlaylist, paths),
-    openSubtitleFile: (): Promise<string | undefined> =>
-      ipcRenderer.invoke(MEDIA_CHANNELS.openSubtitleFile),
-    enumerateTracks: (filePath: string): Promise<Track[]> =>
-      ipcRenderer.invoke(MEDIA_CHANNELS.enumerateTracks, filePath),
-    loadSubtitle: (filePath: string, streamIndex: number): Promise<Cue[]> =>
+    openFile: () => ipcRenderer.invoke(MEDIA_CHANNELS.openFile),
+    openFiles: () => ipcRenderer.invoke(MEDIA_CHANNELS.openFiles),
+    openFolder: () => ipcRenderer.invoke(MEDIA_CHANNELS.openFolder),
+    readPlaylist: (filePath) => ipcRenderer.invoke(MEDIA_CHANNELS.readPlaylist, filePath),
+    savePlaylist: (paths) => ipcRenderer.invoke(MEDIA_CHANNELS.savePlaylist, paths),
+    openSubtitleFile: () => ipcRenderer.invoke(MEDIA_CHANNELS.openSubtitleFile),
+    enumerateTracks: (filePath) => ipcRenderer.invoke(MEDIA_CHANNELS.enumerateTracks, filePath),
+    loadSubtitle: (filePath, streamIndex) =>
       ipcRenderer.invoke(MEDIA_CHANNELS.loadSubtitle, filePath, streamIndex),
-    loadExternalSubtitle: (
-      subtitlePath: string,
-      encoding: SubtitleEncoding = 'auto'
-    ): Promise<Cue[]> =>
+    loadExternalSubtitle: (subtitlePath, encoding = 'auto') =>
       ipcRenderer.invoke(MEDIA_CHANNELS.loadExternalSubtitle, subtitlePath, encoding),
-    getVideoDimensions: (filePath: string): Promise<VideoDimensions | undefined> =>
+    getVideoDimensions: (filePath) =>
       ipcRenderer.invoke(MEDIA_CHANNELS.getVideoDimensions, filePath),
     getChapters: (filePath) => ipcRenderer.invoke(MEDIA_CHANNELS.getChapters, filePath),
-    folderNeighbors: (filePath: string): Promise<{ prev?: string; next?: string }> =>
-      ipcRenderer.invoke(MEDIA_CHANNELS.folderNeighbors, filePath),
-    getThumbnail: (
-      filePath: string,
-      timeSec: number,
-      durationSec: number
-    ): Promise<{ dataUrl: string } | null> =>
+    folderNeighbors: (filePath) => ipcRenderer.invoke(MEDIA_CHANNELS.folderNeighbors, filePath),
+    getThumbnail: (filePath, timeSec, durationSec) =>
       ipcRenderer.invoke(MEDIA_CHANNELS.thumbnail, filePath, timeSec, durationSec)
   },
   mediaHistory: {
     getRecentFiles: () => ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.getRecentFiles),
-    getPlaybackHistory: (path: string) =>
+    getPlaybackHistory: (path) =>
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.getPlaybackHistory, path),
-    removeRecentFile: (path: string) =>
-      ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.removeRecentFile, path),
+    removeRecentFile: (path) => ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.removeRecentFile, path),
     clearRecentFiles: () => ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.clearRecentFiles),
-    checkFileAvailability: (path: string) =>
+    checkFileAvailability: (path) =>
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.checkFileAvailability, path),
-    setAudioTrack: (path: string, track: StoredTrackSelection) =>
+    setAudioTrack: (path, track) =>
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setAudioTrack, path, track),
-    setSubtitleTrack: (path: string, selection: StoredSubtitleSelection) =>
+    setSubtitleTrack: (path, selection) =>
       ipcRenderer.invoke(MEDIA_HISTORY_CHANNELS.setSubtitleTrack, path, selection),
-    setSubtitleVersionOffset: (path: string, contentVersion: string, offsetMs: number) =>
+    setSubtitleVersionOffset: (path, contentVersion, offsetMs) =>
       ipcRenderer.invoke(
         MEDIA_HISTORY_CHANNELS.setSubtitleVersionOffset,
         path,
@@ -281,29 +165,19 @@ const api = {
       )
   },
   mecab: {
-    tokenize: (text: string): Promise<Token[]> => ipcRenderer.invoke(MECAB_CHANNELS.tokenize, text),
-    tokenizeBatch: (texts: string[]): Promise<Token[][]> =>
-      ipcRenderer.invoke(MECAB_CHANNELS.tokenizeBatch, texts),
-    listDicts: (): Promise<McDict[]> => ipcRenderer.invoke(MECAB_CHANNELS.listDicts),
-    selectDict: (id: string): Promise<'ipadic' | 'unidic'> =>
-      ipcRenderer.invoke(MECAB_CHANNELS.selectDict, id),
-    currentDict: (): Promise<'ipadic' | 'unidic'> => ipcRenderer.invoke(MECAB_CHANNELS.currentDict),
-    openUserUnidicDir: (): Promise<string> => ipcRenderer.invoke(MECAB_CHANNELS.openUserUnidicDir)
+    tokenize: (text) => ipcRenderer.invoke(MECAB_CHANNELS.tokenize, text),
+    tokenizeBatch: (texts) => ipcRenderer.invoke(MECAB_CHANNELS.tokenizeBatch, texts),
+    listDicts: () => ipcRenderer.invoke(MECAB_CHANNELS.listDicts),
+    selectDict: (id) => ipcRenderer.invoke(MECAB_CHANNELS.selectDict, id),
+    currentDict: () => ipcRenderer.invoke(MECAB_CHANNELS.currentDict),
+    openUserUnidicDir: () => ipcRenderer.invoke(MECAB_CHANNELS.openUserUnidicDir)
   },
   // Yomitan dictionary bridge: import a dictionary zip by its on-disk path
   // (main reads the file, so the archive never crosses IPC), look up a term, and manage the
   // installed dictionaries (list/enable/reorder/remove).
   dict: {
-    importDictFile: (zipPath: string): Promise<ImportResult> =>
-      ipcRenderer.invoke(DICT_CHANNELS.importDictFile, zipPath),
-    lookup: (
-      lemma: string,
-      reading?: string,
-      freqDictId?: number | null,
-      sortMode?: FrequencyMode,
-      longestMatchCandidates?: string[],
-      surface?: string
-    ): Promise<LookupResult[]> =>
+    importDictFile: (zipPath) => ipcRenderer.invoke(DICT_CHANNELS.importDictFile, zipPath),
+    lookup: (lemma, reading, freqDictId, sortMode, longestMatchCandidates, surface) =>
       ipcRenderer.invoke(
         DICT_CHANNELS.lookup,
         lemma,
@@ -313,178 +187,119 @@ const api = {
         longestMatchCandidates,
         surface
       ),
-    listDicts: (): Promise<DictInfo[]> => ipcRenderer.invoke(DICT_CHANNELS.listDicts),
-    setEnabled: (id: number, enabled: boolean): Promise<void> =>
-      ipcRenderer.invoke(DICT_CHANNELS.setEnabled, id, enabled),
-    setFallbackOnly: (id: number, fallbackOnly: boolean): Promise<void> =>
+    listDicts: () => ipcRenderer.invoke(DICT_CHANNELS.listDicts),
+    setEnabled: (id, enabled) => ipcRenderer.invoke(DICT_CHANNELS.setEnabled, id, enabled),
+    setFallbackOnly: (id, fallbackOnly) =>
       ipcRenderer.invoke(DICT_CHANNELS.setFallbackOnly, id, fallbackOnly),
-    reorder: (orderedIds: number[]): Promise<void> =>
-      ipcRenderer.invoke(DICT_CHANNELS.reorder, orderedIds),
-    removeDict: (id: number): Promise<void> => ipcRenderer.invoke(DICT_CHANNELS.remove, id),
-    onImportProgress: (cb: (value: ImportProgress) => void): (() => void) =>
-      subscribe(DICT_CHANNELS.importProgress, cb)
+    reorder: (orderedIds) => ipcRenderer.invoke(DICT_CHANNELS.reorder, orderedIds),
+    removeDict: (id) => ipcRenderer.invoke(DICT_CHANNELS.remove, id),
+    onImportProgress: (cb) => subscribe(DICT_CHANNELS.importProgress, cb)
   },
   // AnkiConnect bridge: test the connection, populate Options selects from
   // the running Anki (decks/models/fields), add a note from the WordPopup,
   // and read/write the `anki` settings block.
   anki: {
-    ping: (): Promise<AnkiPing> => ipcRenderer.invoke(ANKI_CHANNELS.ping),
-    deckNames: (): Promise<string[]> => ipcRenderer.invoke(ANKI_CHANNELS.deckNames),
-    modelNames: (): Promise<string[]> => ipcRenderer.invoke(ANKI_CHANNELS.modelNames),
-    modelFieldNames: (modelName: string): Promise<string[]> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.modelFieldNames, modelName),
-    setupJlptField: (): Promise<AnkiJlptSetupResult> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.setupJlptField),
-    previewJlptBackfill: (): Promise<AnkiJlptBackfillPreview> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.previewJlptBackfill),
-    applyJlptBackfill: (request: AnkiJlptBackfillApplyRequest): Promise<AnkiJlptBackfillResult> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.applyJlptBackfill, request),
-    onJlptBackfillProgress: (cb: (value: AnkiJlptBackfillProgress) => void): (() => void) =>
-      subscribe(ANKI_CHANNELS.jlptBackfillProgress, cb),
-    addNote: (req: MineRequest): Promise<AnkiMineResult> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.addNote, req),
-    findExisting: (token: Token, word?: string): Promise<AnkiExistingMatch | null> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.findExisting, token, word),
-    findTargetDeckMembership: (expressions: string[]): Promise<AnkiMembershipMatches> =>
+    ping: () => ipcRenderer.invoke(ANKI_CHANNELS.ping),
+    deckNames: () => ipcRenderer.invoke(ANKI_CHANNELS.deckNames),
+    modelNames: () => ipcRenderer.invoke(ANKI_CHANNELS.modelNames),
+    modelFieldNames: (modelName) => ipcRenderer.invoke(ANKI_CHANNELS.modelFieldNames, modelName),
+    setupJlptField: () => ipcRenderer.invoke(ANKI_CHANNELS.setupJlptField),
+    previewJlptBackfill: () => ipcRenderer.invoke(ANKI_CHANNELS.previewJlptBackfill),
+    applyJlptBackfill: (request) => ipcRenderer.invoke(ANKI_CHANNELS.applyJlptBackfill, request),
+    onJlptBackfillProgress: (cb) => subscribe(ANKI_CHANNELS.jlptBackfillProgress, cb),
+    addNote: (req) => ipcRenderer.invoke(ANKI_CHANNELS.addNote, req),
+    findExisting: (token, word) => ipcRenderer.invoke(ANKI_CHANNELS.findExisting, token, word),
+    findTargetDeckMembership: (expressions) =>
       ipcRenderer.invoke(ANKI_CHANNELS.findTargetDeckMembership, expressions),
-    openCard: (cardId: number): Promise<void> => ipcRenderer.invoke(ANKI_CHANNELS.openCard, cardId),
-    getSettings: (): Promise<AnkiSettings> => ipcRenderer.invoke(ANKI_CHANNELS.getSettings),
-    setSettings: (patch: Partial<AnkiSettings>): Promise<AnkiSettings> =>
-      ipcRenderer.invoke(ANKI_CHANNELS.setSettings, patch)
+    openCard: (cardId) => ipcRenderer.invoke(ANKI_CHANNELS.openCard, cardId),
+    getSettings: () => ipcRenderer.invoke(ANKI_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(ANKI_CHANNELS.setSettings, patch)
   },
   // Knowledge bridge: query known-word levels for subtitle coloring, trigger
   // a WaniKani/Anki sync, read sync status, and read/write the `knowledge`
   // settings block (WaniKani token stays encrypted server-side).
   knowledge: {
-    levelsFor: (lemmas: string[]): Promise<Record<string, KnowledgeLevel>> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.levelsFor, lemmas),
-    detailsFor: (lemmas: string[]): Promise<Record<string, KnowledgeDetails>> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.detailsFor, lemmas),
-    jlptCoverageReport: (): Promise<JlptCoverageReportResult> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jlptCoverageReport),
-    jlptUnknownItems: (request: JlptExportRequest): Promise<JlptExportResult> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jlptUnknownItems, request),
-    sync: (source?: KnowledgeSource, opts?: { force?: boolean }): Promise<SyncStatus> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.sync, source, opts),
-    syncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.syncStatus),
-    getSettings: (): Promise<PublicKnowledgeSettings> =>
-      ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
-    setSettings: (
-      patch: Partial<KnowledgeTuning> & {
-        wanikaniToken?: string
-      }
-    ): Promise<PublicKnowledgeSettings> => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.setSettings, patch)
+    levelsFor: (lemmas) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.levelsFor, lemmas),
+    detailsFor: (lemmas) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.detailsFor, lemmas),
+    jlptCoverageReport: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jlptCoverageReport),
+    jlptUnknownItems: (request) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.jlptUnknownItems, request),
+    sync: (source, opts) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.sync, source, opts),
+    syncStatus: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.syncStatus),
+    getSettings: () => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.setSettings, patch)
   },
   // Player-settings bridge: read/write the `player` settings block (the
   // Options menu's contents — keybindings, skip amount, popup/subtitle
   // display), persisted to settings.json instead of localStorage.
   playerSettings: {
-    getSettings: (): Promise<PlayerSettings> =>
-      ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.getSettings),
-    setSettings: (patch: Partial<PlayerSettings>): Promise<PlayerSettings> =>
-      ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.setSettings, patch),
-    openMpvConfigDir: (): Promise<string> =>
-      ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.openMpvConfigDir)
+    getSettings: () => ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.setSettings, patch),
+    openMpvConfigDir: () => ipcRenderer.invoke(PLAYER_SETTINGS_CHANNELS.openMpvConfigDir)
   },
   // Integration-status bridge: read-only "is this bundled binary on disk?"
   // diagnostics for the Options dialog's "Setup & integrations" tab.
   integration: {
-    binaryStatus: (): Promise<BundledBinaryStatus> =>
-      ipcRenderer.invoke(INTEGRATION_CHANNELS.binaryStatus)
+    binaryStatus: () => ipcRenderer.invoke(INTEGRATION_CHANNELS.binaryStatus)
   },
   appInfo: {
-    get: (): Promise<AppInfo> => ipcRenderer.invoke(APP_INFO_CHANNELS.get),
-    openLink: (link: AppInfoLink): Promise<void> =>
-      ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link),
-    openNotices: (): Promise<NoticeOpenResult> => ipcRenderer.invoke(APP_INFO_CHANNELS.openNotices)
+    get: () => ipcRenderer.invoke(APP_INFO_CHANNELS.get),
+    openLink: (link) => ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link),
+    openNotices: () => ipcRenderer.invoke(APP_INFO_CHANNELS.openNotices)
   },
   updates: {
-    getState: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
-    getSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke(UPDATE_CHANNELS.getSettings),
-    setSettings: (patch: Partial<UpdateSettings>): Promise<UpdateSettings> =>
-      ipcRenderer.invoke(UPDATE_CHANNELS.setSettings, patch),
-    check: (origin: UpdateCheckOrigin): Promise<UpdateState> =>
-      ipcRenderer.invoke(UPDATE_CHANNELS.check, origin),
-    download: (): Promise<UpdateState> => ipcRenderer.invoke(UPDATE_CHANNELS.download),
-    install: (): Promise<void> => ipcRenderer.invoke(UPDATE_CHANNELS.install),
-    onStateChange: (cb: (state: UpdateState) => void): (() => void) =>
-      subscribe(UPDATE_CHANNELS.stateChanged, cb)
+    getState: () => ipcRenderer.invoke(UPDATE_CHANNELS.getState),
+    getSettings: () => ipcRenderer.invoke(UPDATE_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(UPDATE_CHANNELS.setSettings, patch),
+    check: (origin) => ipcRenderer.invoke(UPDATE_CHANNELS.check, origin),
+    download: () => ipcRenderer.invoke(UPDATE_CHANNELS.download),
+    install: () => ipcRenderer.invoke(UPDATE_CHANNELS.install),
+    onStateChange: (cb) => subscribe(UPDATE_CHANNELS.stateChanged, cb)
   },
   clipboard: {
-    writeText: (text: string): Promise<void> =>
-      ipcRenderer.invoke(CLIPBOARD_CHANNELS.writeText, text)
+    writeText: (text) => ipcRenderer.invoke(CLIPBOARD_CHANNELS.writeText, text)
   },
   translate: {
-    translate: (text: string, requestId: string): Promise<string> =>
+    translate: (text, requestId) =>
       ipcRenderer.invoke(TRANSLATE_CHANNELS.translate, { text, requestId }),
-    cancel: (requestId: string): void => ipcRenderer.send(TRANSLATE_CHANNELS.cancel, { requestId }),
-    getSettings: (): Promise<PublicTranslationSettings> =>
-      ipcRenderer.invoke(TRANSLATE_CHANNELS.getSettings),
-    setSettings: (patch: TranslationSettingsPatch): Promise<PublicTranslationSettings> =>
-      ipcRenderer.invoke(TRANSLATE_CHANNELS.setSettings, patch)
+    cancel: (requestId) => ipcRenderer.send(TRANSLATE_CHANNELS.cancel, { requestId }),
+    getSettings: () => ipcRenderer.invoke(TRANSLATE_CHANNELS.getSettings),
+    setSettings: (patch) => ipcRenderer.invoke(TRANSLATE_CHANNELS.setSettings, patch)
   },
   jimaku: {
-    getStatus: (): Promise<JimakuSettingsStatus> => ipcRenderer.invoke(JIMAKU_CHANNELS.getStatus),
-    setApiKey: (value: string): Promise<JimakuSettingsStatus> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.setApiKey, value),
-    clearApiKey: (): Promise<JimakuSettingsStatus> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.clearApiKey),
-    testConnection: (): Promise<JimakuSettingsStatus> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection),
-    getFolderHint: (mediaPath: string, season?: number): Promise<JimakuFolderHint | undefined> =>
+    getStatus: () => ipcRenderer.invoke(JIMAKU_CHANNELS.getStatus),
+    setApiKey: (value) => ipcRenderer.invoke(JIMAKU_CHANNELS.setApiKey, value),
+    clearApiKey: () => ipcRenderer.invoke(JIMAKU_CHANNELS.clearApiKey),
+    testConnection: () => ipcRenderer.invoke(JIMAKU_CHANNELS.testConnection),
+    getFolderHint: (mediaPath, season) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.getFolderHint, mediaPath, season),
-    setFolderHint: (mediaPath: string, hint: JimakuFolderHintInput): Promise<JimakuFolderHint> =>
+    setFolderHint: (mediaPath, hint) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.setFolderHint, mediaPath, hint),
-    clearFolderHint: (mediaPath: string, season?: number): Promise<void> =>
+    clearFolderHint: (mediaPath, season) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.clearFolderHint, mediaPath, season),
-    beginSession: (
-      mediaPath: string,
-      mediaGeneration: number
-    ): Promise<JimakuServiceResult<JimakuSession>> =>
+    beginSession: (mediaPath, mediaGeneration) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.beginSession, mediaPath, mediaGeneration),
-    searchTitles: (
-      sessionId: string,
-      request: JimakuTitleSearchRequest
-    ): Promise<JimakuServiceResult<JimakuTitleSearchResult>> =>
+    searchTitles: (sessionId, request) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.searchTitles, sessionId, request),
-    listFiles: (
-      sessionId: string,
-      entryId: number,
-      refresh?: boolean
-    ): Promise<JimakuServiceResult<JimakuFileListResult>> =>
+    listFiles: (sessionId, entryId, refresh) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.listFiles, sessionId, entryId, refresh),
-    prepareFile: (
-      sessionId: string,
-      candidateId: string
-    ): Promise<JimakuServiceResult<JimakuPrepareResult>> =>
+    prepareFile: (sessionId, candidateId) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.prepareFile, sessionId, candidateId),
-    prepareArchiveMember: (
-      sessionId: string,
-      packageId: string,
-      memberId: string
-    ): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>> =>
+    prepareArchiveMember: (sessionId, packageId, memberId) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.prepareArchiveMember, sessionId, packageId, memberId),
-    cancelPending: (sessionId: string): Promise<JimakuServiceResult<void>> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.cancelPending, sessionId),
-    endSession: (sessionId: string): Promise<JimakuServiceResult<void>> =>
-      ipcRenderer.invoke(JIMAKU_CHANNELS.endSession, sessionId),
-    openSourcePage: (sessionId: string, entryId: number): Promise<JimakuServiceResult<void>> =>
+    cancelPending: (sessionId) => ipcRenderer.invoke(JIMAKU_CHANNELS.cancelPending, sessionId),
+    endSession: (sessionId) => ipcRenderer.invoke(JIMAKU_CHANNELS.endSession, sessionId),
+    openSourcePage: (sessionId, entryId) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.openSourcePage, sessionId, entryId),
-    commitPreparedSubtitle: (
-      sessionId: string,
-      handle: string
-    ): Promise<JimakuServiceResult<Extract<StoredSubtitleSelection, { mode: 'external' }>>> =>
+    commitPreparedSubtitle: (sessionId, handle) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.commitPreparedSubtitle, sessionId, handle),
-    exportActiveSubtitle: (
-      request: JimakuSubtitleExportRequest
-    ): Promise<JimakuSubtitleExportResult> =>
+    exportActiveSubtitle: (request) =>
       ipcRenderer.invoke(JIMAKU_CHANNELS.exportActiveSubtitle, request)
   },
   // Drag-and-drop plumbing: Electron >= 32 removed `File.path`, so the real
   // filesystem path of a dropped file can only be recovered here, in the
   // preload world (the File object is proxied across the context bridge).
   files: {
-    pathForFile: (file: File): string => webUtils.getPathForFile(file)
+    pathForFile: (file) => webUtils.getPathForFile(file)
   }
 } satisfies KizunaApi
 

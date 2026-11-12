@@ -883,3 +883,19 @@ export async function acquireResources({
   }
   return report
 }
+
+/**
+ * Read `--<name> <value>` / `--<name>=<value>` out of argv.
+ *
+ * @param {string[]} argv
+ * @param {string} name
+ * @returns {string | undefined}
+ */
+export function readFlag(argv, name) {
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === `--${name}`) return argv[i + 1]
+    const inline = argv[i].startsWith(`--${name}=`) ? argv[i].slice(name.length + 3) : ''
+    if (inline) return inline
+  }
+  return undefined
+}

@@ -8,10 +8,10 @@ import {
   createKanjiSnapshot,
   deduplicateAndSortEntries,
   parseKanjiFile,
-  projectKanjiRecords,
-  serializeKanjiSnapshot
+  projectKanjiRecords
 } from '@scripts/jlptKanji.mjs'
-import { INPUTS, updateKanji } from '@scripts/update-jlpt-kanji.mjs'
+import { serializeSnapshot } from '@scripts/jlptVocabulary.mjs'
+import { inputs, updateJlpt } from '@scripts/update-jlpt.mjs'
 
 type KanjiEntry = import('@scripts/jlptKanji.mjs').KanjiEntry
 
@@ -109,7 +109,7 @@ describe('createKanjiSnapshot', () => {
       inputRecordCount: 1,
       entries: [['日', 'N5', 1]]
     })
-    const serialized = serializeKanjiSnapshot(snapshot)
+    const serialized = serializeSnapshot(snapshot)
     expect(serialized).not.toContain('meanings')
     expect(serialized).not.toContain('strokes')
   })
@@ -123,17 +123,17 @@ describe('createKanjiSnapshot', () => {
   })
 })
 
-describe('updateKanji', () => {
+describe('updateJlpt', () => {
   it('fails on an upstream hash mismatch before writing a snapshot', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kizuna-jlpt-kanji-'))
     try {
       const outputPath = join(root, 'kanji.json')
       await expect(
-        updateKanji({
+        updateJlpt('kanji', {
           outputPath,
           fetchImpl: async () => new Response('[]')
         })
-      ).rejects.toThrow(`hash mismatch for ${INPUTS[0].path}`)
+      ).rejects.toThrow(`hash mismatch for ${inputs('kanji')[0].path}`)
       await expect(readFile(outputPath)).rejects.toThrow()
     } finally {
       await rm(root, { recursive: true, force: true })

@@ -3,12 +3,11 @@ import type { SubtitleEncoding } from '../../../../shared/subtitleEncoding'
 import { SUBTITLE_ENCODING_OPTIONS } from '../../../../shared/subtitleEncoding'
 import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../../shared/track'
 import type { Track } from '../../../../shared/track'
-import { Menu, MenuItem, CommandItem } from './primitives'
+import { Menu, MenuItem, CommandItem, OffsetRow } from './primitives'
 import {
   APPLY_FOLDER_FEEDBACK_MS,
   SUBTITLE_OFFSET_STEP_MS,
   applyFolderLabel,
-  parseOffsetMs,
   subtitleTracks,
   trackLabel
 } from './utils'
@@ -57,9 +56,7 @@ export function SubtitleMenu({
   onToggle: () => void
   run: (action: () => void) => () => void
 }): React.JSX.Element {
-  const [draft, setDraft] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
-  const escaping = useRef(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
     () => () => {
@@ -67,17 +64,6 @@ export function SubtitleMenu({
     },
     []
   )
-  const commit = (): void => {
-    if (escaping.current) {
-      escaping.current = false
-      setDraft(null)
-      return
-    }
-    if (draft === null) return
-    const value = parseOffsetMs(draft)
-    if (value !== null) onChangeSubtitleOffset?.(value)
-    setDraft(null)
-  }
   const apply = (): void => {
     onApplyOffsetToFolder?.()
     setApplied(true)
@@ -150,52 +136,16 @@ export function SubtitleMenu({
         />
       ))}
       <div className="menu-separator" />
-      <div className="menu-offset-row" id="subtitle-offset-row">
-        <span className="menu-offset-label">Offset</span>
-        <button
-          type="button"
-          aria-label="Decrease subtitle offset"
-          title="Show subtitles earlier"
-          onClick={() => onChangeSubtitleOffset?.(subtitleOffsetMs - SUBTITLE_OFFSET_STEP_MS)}
-        >
-          −
-        </button>
-        <span className="menu-offset-value">
-          <input
-            type="number"
-            className="menu-offset-input"
-            id="subtitle-offset-value"
-            aria-label="Subtitle offset in milliseconds"
-            value={draft ?? String(subtitleOffsetMs)}
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={commit}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur()
-              else if (event.key === 'Escape') {
-                escaping.current = true
-                event.currentTarget.blur()
-              }
-            }}
-          />{' '}
-          ms
-        </span>
-        <button
-          type="button"
-          aria-label="Increase subtitle offset"
-          title="Show subtitles later"
-          onClick={() => onChangeSubtitleOffset?.(subtitleOffsetMs + SUBTITLE_OFFSET_STEP_MS)}
-        >
-          +
-        </button>
-        <button
-          type="button"
-          aria-label="Reset subtitle offset"
-          disabled={subtitleOffsetMs === 0}
-          onClick={() => onChangeSubtitleOffset?.(0)}
-        >
-          Reset
-        </button>
-      </div>
+      <OffsetRow
+        id="subtitle-offset"
+        label="Offset"
+        name="subtitle offset"
+        valueMs={subtitleOffsetMs}
+        stepMs={SUBTITLE_OFFSET_STEP_MS}
+        decreaseTitle="Show subtitles earlier"
+        increaseTitle="Show subtitles later"
+        onChange={onChangeSubtitleOffset}
+      />
       {onApplyOffsetToFolder && (
         <div className="menu-offset-row" id="subtitle-offset-folder-row">
           <button

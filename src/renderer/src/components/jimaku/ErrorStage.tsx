@@ -1,5 +1,5 @@
 import type { JimakuControllerErrorCode, JimakuControllerPhase } from '../../state/jimakuController'
-import { errorMessage } from './format'
+import { jimakuErrorText } from './format'
 
 const TITLE_RETRY_ERRORS = new Set<JimakuControllerErrorCode>([
   'timeout',
@@ -61,7 +61,7 @@ export default function ErrorStage({
   return (
     <section className="jimaku-error-stage" aria-label="Jimaku subtitle search error">
       <div className="jimaku-error" role="alert">
-        <p>{errorMessage(phase, retryAt, rememberedUnavailable)}</p>
+        <p>{jimakuErrorText(phase, retryAt, rememberedUnavailable)}</p>
       </div>
       <div className="jimaku-dialog-actions">
         {settings && onOpenSettings && (

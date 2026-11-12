@@ -1,4 +1,5 @@
 import { AUTO_AUDIO_DEVICE } from './audioDevice'
+import { isRecord } from './guards'
 
 /** High-level player action a keyboard shortcut maps to. */
 export type PlayerKeyAction =
@@ -104,7 +105,7 @@ export function normalizeKeyBinding(raw: unknown): KeyBinding | null {
  * falling back to `DEFAULT_KEY_BINDINGS` per action. Unknown keys are dropped.
  */
 export function normalizeKeyBindings(raw: unknown): KeyBindings {
-  const stored = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const stored = isRecord(raw) ? raw : {}
   const bindings = { ...DEFAULT_KEY_BINDINGS }
   for (const action of Object.keys(bindings) as PlayerKeyAction[]) {
     const binding = normalizeKeyBinding(stored[action])
@@ -142,7 +143,7 @@ export type LevelColors = Partial<Record<UnderlineLevel, string>>
 
 /** Validates a stored level→#rrggbb map; invalid entries are dropped. */
 export function normalizeLevelColors(raw: unknown): LevelColors {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  if (!isRecord(raw)) return {}
   const parsed = raw as Record<string, unknown>
   const result: LevelColors = {}
   for (const level of UNDERLINE_LEVELS) {

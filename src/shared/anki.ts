@@ -92,7 +92,7 @@ export const defaultAnkiSettings: AnkiSettings = {
 
 /** Deep-merges `raw` against `defaultAnkiSettings`; never throws. Unknown keys are dropped. */
 export function mergeAnkiSettings(raw: unknown): AnkiSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
   const rawFieldMap =
     obj.fieldMap && typeof obj.fieldMap === 'object'
       ? (obj.fieldMap as Record<string, unknown>)

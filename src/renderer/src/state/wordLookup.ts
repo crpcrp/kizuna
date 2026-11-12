@@ -3,6 +3,7 @@
 // two lookup entry points (a clicked word, and a cross-reference link inside an
 // already-open popup).
 
+import { clamp } from '../../../shared/math'
 import { type FrequencyMode, type LookupResult } from '../../../shared/dictionary'
 import { type Token } from '../../../shared/token'
 
@@ -92,10 +93,6 @@ export function gameOcrWordPopupPosition(
     y,
     placement
   }
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), maximum)
 }
 
 /** Subset of the preload `kizuna.dict` bridge that lookupWordPopup needs. */

@@ -8,16 +8,7 @@ import type { JlptExportResult } from '@src/shared/jlptExport'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
-import type {
-  JimakuFolderHint,
-  JimakuFileListResult,
-  JimakuPrepareResult,
-  JimakuPreparedSubtitleResult,
-  JimakuSession,
-  JimakuServiceResult,
-  JimakuSettingsStatus,
-  JimakuTitleSearchResult
-} from '@src/shared/jimaku'
+import type { JimakuSettingsStatus } from '@src/shared/jimaku'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -40,6 +31,12 @@ const DEFAULT_GAME_OCR_STATUS: GameOcrRuntimeStatus = {
   game: { state: 'stopped' }
 }
 
+const DEFAULT_TRANSLATION_SETTINGS = {
+  hasAzureKey: false,
+  azureRegion: '',
+  encryptionAvailable: false
+}
+
 const DEFAULT_JIMAKU_STATUS: JimakuSettingsStatus = {
   configured: false,
   secretStorageAvailable: false,
@@ -48,60 +45,57 @@ const DEFAULT_JIMAKU_STATUS: JimakuSettingsStatus = {
 
 function listenerCleanup(): void {}
 
+const NOT_API_METHODS = new Set(['then', 'toJSON', 'asymmetricMatch', 'nodeType'])
+
+/**
+ * A domain whose unlisted methods are created on first access: `on*`
+ * subscriptions return a cleanup function, everything else resolves to
+ * `undefined`. List a method explicitly only when it needs another default.
+ */
+function domain<T extends object>(explicit: Partial<MockedObject<T>> = {}): MockedObject<T> {
+  return new Proxy(explicit as Record<string, unknown>, {
+    get(target, key) {
+      if (typeof key === 'string' && !(key in target) && !NOT_API_METHODS.has(key)) {
+        target[key] = /^on[A-Z]/.test(key)
+          ? vi.fn(() => listenerCleanup)
+          : vi.fn(async () => undefined)
+      }
+      return Reflect.get(target, key)
+    }
+  }) as MockedObject<T>
+}
+
+const jimakuInvalidSession = (): Promise<{ ok: false; error: { code: 'invalidSession' } }> =>
+  Promise.resolve({ ok: false, error: { code: 'invalidSession' } })
+
 export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): FakeKizunaApi {
   const api: FakeKizunaApi = {
-    windowControls: {
+    windowControls: domain({
       minimize: vi.fn(),
       close: vi.fn(),
       setFullscreen: vi.fn(),
       toggleFullscreen: vi.fn(),
-      onFullscreenChange: vi.fn(() => listenerCleanup),
       setSize: vi.fn(),
       setAlwaysOnTop: vi.fn(),
       setShape: vi.fn(),
       getBounds: vi.fn(async () => null),
       setBounds: vi.fn(async () => null)
-    },
-    player: {
-      load: vi.fn(async () => undefined),
-      setPause: vi.fn(async () => undefined),
-      seek: vi.fn(async () => undefined),
-      setVolume: vi.fn(async () => undefined),
-      setSpeed: vi.fn(async () => undefined),
-      setMuted: vi.fn(async () => undefined),
-      setAudioDelay: vi.fn(async () => undefined),
-      setAudioTrack: vi.fn(async () => undefined),
+    }),
+    player: domain({
       getAudioDevices: vi.fn(async () => []),
-      setAudioDevice: vi.fn(async () => undefined),
-      setLoudnessNorm: vi.fn(async () => undefined),
-      setAbLoop: vi.fn(async () => undefined),
-      setVideoMargins: vi.fn(async () => undefined),
-      setVideoAdjustments: vi.fn(async () => undefined),
-      frameStep: vi.fn(async () => undefined),
-      frameBackStep: vi.fn(async () => undefined),
       screenshot: vi.fn(async () => ''),
-      captureFrame: vi.fn(async () => null),
-      onTimePos: vi.fn(() => listenerCleanup),
-      onDuration: vi.fn(() => listenerCleanup),
-      onEofReached: vi.fn(() => listenerCleanup),
-      onPause: vi.fn(() => listenerCleanup),
-      onMediaKey: vi.fn(() => listenerCleanup)
-    },
-    launch: {
-      onOpenPath: vi.fn(() => listenerCleanup),
-      onError: vi.fn(() => listenerCleanup),
-      rendererReady: vi.fn()
-    },
-    appShell: {
+      captureFrame: vi.fn(async () => null)
+    }),
+    launch: domain({ rendererReady: vi.fn() }),
+    appShell: domain({
       getSurface: vi.fn(async () => 'player' as const),
       showSplash: vi.fn(async () => 'splash' as const),
       showPlayer: vi.fn(async () => 'player' as const),
       showOptions: vi.fn(async () => 'options' as const),
       dismissOptions: vi.fn(async () => 'splash' as const),
-      quit: vi.fn(),
-      onSurfaceChanged: vi.fn(() => listenerCleanup)
-    },
-    gameOcr: {
+      quit: vi.fn()
+    }),
+    gameOcr: domain({
       supported: false,
       getSettings: vi.fn(async (): Promise<GameOcrSettings> => ({ ...DEFAULT_GAME_OCR_SETTINGS })),
       setSettings: vi.fn(async (patch): Promise<GameOcrSettings> => ({
@@ -112,61 +106,41 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       start: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
       stop: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
       retry: vi.fn(async (): Promise<GameOcrRuntimeStatus> => DEFAULT_GAME_OCR_STATUS),
-      onStatusChange: vi.fn(() => listenerCleanup),
-      onDiscard: vi.fn(() => listenerCleanup),
-      onRecognitionState: vi.fn(() => listenerCleanup),
-      onFreeze: vi.fn(() => listenerCleanup),
       frozen: vi.fn(),
       captureBytes: vi.fn(),
-      onRegions: vi.fn(() => listenerCleanup),
-      onCopySelection: vi.fn(() => listenerCleanup),
       rendererReady: vi.fn(),
       close: vi.fn()
-    },
-    media: {
-      openFile: vi.fn(async () => undefined),
+    }),
+    media: domain({
       openFiles: vi.fn(async () => []),
       openFolder: vi.fn(async () => []),
       readPlaylist: vi.fn(async () => []),
-      savePlaylist: vi.fn(async () => undefined),
-      openSubtitleFile: vi.fn(async () => undefined),
       enumerateTracks: vi.fn(async () => []),
       loadSubtitle: vi.fn(async () => []),
       loadExternalSubtitle: vi.fn(async () => []),
-      getVideoDimensions: vi.fn(async () => undefined),
       getChapters: vi.fn(async () => []),
       folderNeighbors: vi.fn(async () => ({})),
       getThumbnail: vi.fn(async () => null)
-    },
-    mediaHistory: {
+    }),
+    mediaHistory: domain({
       getRecentFiles: vi.fn(async () => []),
-      getPlaybackHistory: vi.fn(async () => undefined),
       removeRecentFile: vi.fn(async () => []),
-      clearRecentFiles: vi.fn(async () => undefined),
-      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const })),
-      setAudioTrack: vi.fn(async () => undefined),
-      setSubtitleTrack: vi.fn(async () => undefined),
-      setSubtitleVersionOffset: vi.fn(async () => undefined)
-    },
-    mecab: {
+      checkFileAvailability: vi.fn(async () => ({ status: 'available' as const }))
+    }),
+    mecab: domain({
       tokenize: vi.fn(async () => []),
       tokenizeBatch: vi.fn(async () => []),
       listDicts: vi.fn(async () => []),
       selectDict: vi.fn(async () => 'ipadic' as const),
       currentDict: vi.fn(async () => 'ipadic' as const),
       openUserUnidicDir: vi.fn(async () => '')
-    },
-    dict: {
+    }),
+    dict: domain({
       importDictFile: vi.fn(async () => ({ dictId: 1, termCount: 0, metaCount: 0 })),
       lookup: vi.fn(async () => []),
-      listDicts: vi.fn(async () => []),
-      setEnabled: vi.fn(async () => undefined),
-      setFallbackOnly: vi.fn(async () => undefined),
-      reorder: vi.fn(async () => undefined),
-      removeDict: vi.fn(async () => undefined),
-      onImportProgress: vi.fn(() => listenerCleanup)
-    },
-    anki: {
+      listDicts: vi.fn(async () => [])
+    }),
+    anki: domain({
       ping: vi.fn(async () => ({ ok: false })),
       deckNames: vi.fn(async () => []),
       modelNames: vi.fn(async () => []),
@@ -181,7 +155,6 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
         message: 'Not configured'
       })),
       applyJlptBackfill: vi.fn(async () => ({ updated: 0, skipped: 0, failed: 0 })),
-      onJlptBackfillProgress: vi.fn(() => listenerCleanup),
       addNote: vi.fn(async () => ({
         noteId: 1,
         operation: 'added' as const,
@@ -189,11 +162,10 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       })),
       findExisting: vi.fn(async () => null),
       findTargetDeckMembership: vi.fn(async () => ({})),
-      openCard: vi.fn(async () => undefined),
       getSettings: vi.fn(async () => defaultAnkiSettings),
       setSettings: vi.fn(async (patch) => ({ ...defaultAnkiSettings, ...patch }))
-    },
-    knowledge: {
+    }),
+    knowledge: domain({
       levelsFor: vi.fn(async () => ({})),
       detailsFor: vi.fn(async () => ({})),
       jlptCoverageReport: vi.fn(async (): Promise<JlptCoverageReportResult> => ({
@@ -208,16 +180,16 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       syncStatus: vi.fn(async () => DEFAULT_SYNC_STATUS),
       getSettings: vi.fn(async () => DEFAULT_KNOWLEDGE_SETTINGS),
       setSettings: vi.fn(async (patch) => ({ ...DEFAULT_KNOWLEDGE_SETTINGS, ...patch }))
-    },
-    playerSettings: {
+    }),
+    playerSettings: domain({
       getSettings: vi.fn(async () => DEFAULT_PLAYER_SETTINGS),
       setSettings: vi.fn(async (patch) => ({ ...DEFAULT_PLAYER_SETTINGS, ...patch })),
       openMpvConfigDir: vi.fn(async () => '')
-    },
-    integration: {
+    }),
+    integration: domain({
       binaryStatus: vi.fn(async () => ({ ffmpeg: false, ffprobe: false }))
-    },
-    appInfo: {
+    }),
+    appInfo: domain({
       get: vi.fn(async () => ({
         name: 'Kizuna',
         version: '0.2.0',
@@ -227,10 +199,9 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
         issuesUrl: 'https://github.com/crpcrp/kizuna/issues',
         copyright: 'Copyright © 2026 Adam Kocsis'
       })),
-      openLink: vi.fn(async () => undefined),
       openNotices: vi.fn(async () => ({ status: 'opened' as const }))
-    },
-    updates: {
+    }),
+    updates: domain({
       getState: vi.fn(async () => ({ status: 'idle' as const })),
       getSettings: vi.fn(async () => ({ checkAutomatically: true })),
       setSettings: vi.fn(async (patch) => ({
@@ -241,103 +212,38 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
         currentVersion: '0.2.0',
         checkedAt: ''
       })),
-      download: vi.fn(async () => ({ status: 'idle' as const })),
-      install: vi.fn(async () => undefined),
-      onStateChange: vi.fn(() => listenerCleanup)
-    },
-    clipboard: {
-      writeText: vi.fn(async () => undefined)
-    },
-    translate: {
+      download: vi.fn(async () => ({ status: 'idle' as const }))
+    }),
+    clipboard: domain(),
+    translate: domain({
       translate: vi.fn(async (text) => text),
       cancel: vi.fn(),
-      getSettings: vi.fn(async () => ({
-        hasAzureKey: false,
-        azureRegion: '',
-        encryptionAvailable: false
-      })),
-      setSettings: vi.fn(async () => ({
-        hasAzureKey: false,
-        azureRegion: '',
-        encryptionAvailable: false
-      }))
-    },
-    jimaku: {
+      getSettings: vi.fn(async () => DEFAULT_TRANSLATION_SETTINGS),
+      setSettings: vi.fn(async () => DEFAULT_TRANSLATION_SETTINGS)
+    }),
+    jimaku: domain({
       getStatus: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       setApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       clearApiKey: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
       testConnection: vi.fn(async () => DEFAULT_JIMAKU_STATUS),
-      getFolderHint: vi.fn(async (): Promise<JimakuFolderHint | undefined> => undefined),
-      setFolderHint: vi.fn(async (_mediaPath, hint): Promise<JimakuFolderHint> => ({
-        ...hint,
-        updatedAt: 0
-      })),
-      clearFolderHint: vi.fn(async () => undefined),
-      beginSession: vi.fn(async (): Promise<JimakuServiceResult<JimakuSession>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      searchTitles: vi.fn(async (): Promise<JimakuServiceResult<JimakuTitleSearchResult>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      listFiles: vi.fn(async (): Promise<JimakuServiceResult<JimakuFileListResult>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      prepareFile: vi.fn(async (): Promise<JimakuServiceResult<JimakuPrepareResult>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      prepareArchiveMember: vi.fn(
-        async (): Promise<JimakuServiceResult<JimakuPreparedSubtitleResult>> => ({
-          ok: false,
-          error: { code: 'invalidSession' }
-        })
-      ),
-      cancelPending: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      endSession: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      openSourcePage: vi.fn(async (): Promise<JimakuServiceResult<void>> => ({
-        ok: false,
-        error: { code: 'invalidSession' }
-      })),
-      commitPreparedSubtitle: vi.fn(async () => ({
-        ok: false as const,
-        error: { code: 'invalidSession' as const }
-      })),
+      setFolderHint: vi.fn(async (_mediaPath, hint) => ({ ...hint, updatedAt: 0 })),
+      beginSession: vi.fn(jimakuInvalidSession),
+      searchTitles: vi.fn(jimakuInvalidSession),
+      listFiles: vi.fn(jimakuInvalidSession),
+      prepareFile: vi.fn(jimakuInvalidSession),
+      prepareArchiveMember: vi.fn(jimakuInvalidSession),
+      cancelPending: vi.fn(jimakuInvalidSession),
+      endSession: vi.fn(jimakuInvalidSession),
+      openSourcePage: vi.fn(jimakuInvalidSession),
+      commitPreparedSubtitle: vi.fn(jimakuInvalidSession),
       exportActiveSubtitle: vi.fn(async () => ({ status: 'cancelled' as const }))
-    },
-    files: {
-      pathForFile: vi.fn(() => '')
-    }
+    }),
+    files: domain({ pathForFile: vi.fn(() => '') })
   }
 
-  Object.assign(api.windowControls, overrides.windowControls)
-  Object.assign(api.player, overrides.player)
-  Object.assign(api.launch, overrides.launch)
-  Object.assign(api.appShell, overrides.appShell)
-  Object.assign(api.gameOcr, overrides.gameOcr)
-  Object.assign(api.media, overrides.media)
-  Object.assign(api.mediaHistory, overrides.mediaHistory)
-  Object.assign(api.mecab, overrides.mecab)
-  Object.assign(api.dict, overrides.dict)
-  Object.assign(api.anki, overrides.anki)
-  Object.assign(api.knowledge, overrides.knowledge)
-  Object.assign(api.playerSettings, overrides.playerSettings)
-  Object.assign(api.integration, overrides.integration)
-  Object.assign(api.appInfo, overrides.appInfo)
-  Object.assign(api.updates, overrides.updates)
-  Object.assign(api.clipboard, overrides.clipboard)
-  Object.assign(api.translate, overrides.translate)
-  Object.assign(api.jimaku, overrides.jimaku)
-  Object.assign(api.files, overrides.files)
-
+  for (const key of Object.keys(overrides) as (keyof KizunaApi)[]) {
+    Object.assign(api[key], overrides[key])
+  }
   return api
 }
 

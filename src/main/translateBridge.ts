@@ -1,20 +1,13 @@
 import { TRANSLATE_CHANNELS } from '../shared/ipcChannels'
+import { isRecord, isString } from '../shared/guards'
+import type { IpcMainLike } from './ipc'
+import { expect } from './ipcValidation'
 import type { Translator } from './services/translate/translator'
 
 export const TRANSLATE_TIMEOUT_MS = 10_000
 
-interface TranslateSender {
-  id: number
-  once(event: 'destroyed', listener: () => void): void
-}
-
 interface TranslateEvent {
-  sender: TranslateSender
-}
-
-interface TranslateIpcMain<E extends TranslateEvent> {
-  handle(channel: string, listener: (event: E, payload: unknown) => unknown): void
-  on(channel: string, listener: (event: E, payload: unknown) => void): void
+  sender: { id: number; once(event: 'destroyed', listener: () => void): void }
 }
 
 interface LiveRequest {
@@ -32,21 +25,14 @@ function failure(): Error {
   return new Error(TRANSLATION_FAILURE)
 }
 
-function requestPayload(value: unknown): { requestId: string; text: string } | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const { requestId, text } = value as Record<string, unknown>
-  return typeof requestId === 'string' && typeof text === 'string' ? { requestId, text } : undefined
-}
+const isTranslateRequest = (value: unknown): value is { requestId: string; text: string } =>
+  isRecord(value) && isString(value.requestId) && isString(value.text)
 
-function cancelPayload(value: unknown): string | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const { requestId } = value as Record<string, unknown>
-  return typeof requestId === 'string' ? requestId : undefined
-}
+const requestPayload = expect(isTranslateRequest, TRANSLATE_CHANNELS.translate)
 
 /** Registers translation requests with per-renderer cancellation and timeouts. */
 export function registerTranslateBridge<E extends TranslateEvent>(
-  ipc: TranslateIpcMain<E>,
+  ipc: IpcMainLike<E, E>,
   translator: Translator,
   options: TranslateBridgeOptions = {}
 ): void {
@@ -62,7 +48,7 @@ export function registerTranslateBridge<E extends TranslateEvent>(
 
   ipc.handle(TRANSLATE_CHANNELS.translate, async (event, payload): Promise<string> => {
     const request = requestPayload(payload)
-    if (request === undefined || request.requestId.trim() === '') throw failure()
+    if (request.requestId.trim() === '') throw failure()
 
     const senderId = event.sender.id
     let requests = requestsBySender.get(senderId)
@@ -114,7 +100,8 @@ export function registerTranslateBridge<E extends TranslateEvent>(
   })
 
   ipc.on(TRANSLATE_CHANNELS.cancel, (event, payload) => {
-    const requestId = cancelPayload(payload)
-    if (requestId !== undefined) terminate(event.sender.id, requestId)
+    if (isRecord(payload) && isString(payload.requestId)) {
+      terminate(event.sender.id, payload.requestId)
+    }
   })
 }
