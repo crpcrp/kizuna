@@ -8,6 +8,31 @@ import { displayTextProjection } from '../../../shared/textProjection'
 import { type Token } from '../../../shared/token'
 import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
 
+export interface VocabularyCaches {
+  tokenCache: Map<string, Token[]>
+  knownLevelsCache: Map<string, KnowledgeLevel>
+  // Active-cue and sidebar requests share caches, but must not cancel each other.
+  tokens: {
+    active: SubtitleRequestToken
+    levels: SubtitleRequestToken
+    allCues: SubtitleRequestToken
+    allCuesLevels: SubtitleRequestToken
+  }
+}
+
+export function createVocabularyCaches(): VocabularyCaches {
+  return {
+    tokenCache: new Map(),
+    knownLevelsCache: new Map(),
+    tokens: {
+      active: { current: 0 },
+      levels: { current: 0 },
+      allCues: { current: 0 },
+      allCuesLevels: { current: 0 }
+    }
+  }
+}
+
 /** Subset of the preload `kizuna.mecab` bridge that tokenizeActiveCue needs. */
 export interface MecabBridge {
   tokenize(text: string): Promise<Token[]>

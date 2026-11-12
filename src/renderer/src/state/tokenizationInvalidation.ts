@@ -1,8 +1,7 @@
 import type { Cue } from '../../../shared/cue'
-import type { KnowledgeLevel } from '../../../shared/knowledge'
-import type { Token } from '../../../shared/token'
-import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
+import { type Dispatch } from './mediaSession'
 import {
+  type VocabularyCaches,
   type KnowledgeBridge,
   type MecabBatchBridge,
   type MecabBridge,
@@ -16,11 +15,7 @@ export interface TokenizationInvalidationArgs {
   activeCue: Cue | undefined
   cues: Cue[]
   sidebarOpen: boolean
-  tokenCache: Map<string, Token[]>
-  knownLevelsCache: Map<string, KnowledgeLevel>
-  activeToken: SubtitleRequestToken
-  allCuesToken: SubtitleRequestToken
-  allCuesLevelsToken: SubtitleRequestToken
+  caches: VocabularyCaches
 }
 
 /** Clears dictionary-dependent tokens and rebuilds the visible tokenization. */
@@ -31,19 +26,15 @@ export async function invalidateTokenizationForDictionaryChange({
   activeCue,
   cues,
   sidebarOpen,
-  tokenCache,
-  knownLevelsCache,
-  activeToken,
-  allCuesToken,
-  allCuesLevelsToken
+  caches: { tokenCache, knownLevelsCache, tokens }
 }: TokenizationInvalidationArgs): Promise<void> {
-  activeToken.current++
-  allCuesToken.current++
-  allCuesLevelsToken.current++
+  tokens.active.current++
+  tokens.allCues.current++
+  tokens.allCuesLevels.current++
   tokenCache.clear()
   dispatch({ type: 'resetTokenization' })
 
-  await tokenizeActiveCue(mecab, dispatch, activeCue, tokenCache, activeToken)
+  await tokenizeActiveCue(mecab, dispatch, activeCue, tokenCache, tokens.active)
   if (!sidebarOpen) return
 
   await tokenizeAllCues(
@@ -53,7 +44,7 @@ export async function invalidateTokenizationForDictionaryChange({
     cues,
     tokenCache,
     knownLevelsCache,
-    allCuesToken,
-    allCuesLevelsToken
+    tokens.allCues,
+    tokens.allCuesLevels
   )
 }

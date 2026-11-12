@@ -20,7 +20,7 @@ export interface UseSubtitleReportResult {
    * work. */
   open: boolean
   phase: SubtitleReportPhase
-  /** Passed to `useVocabularyCaches`: the pipeline writes report
+  /** Passed to `useVocabularyPipeline`: the pipeline writes report
    * recomputation through it while the modal is open. */
   controller: SubtitleReportController
   requestOpen(): void
@@ -36,7 +36,7 @@ export interface UseSubtitleReportResult {
  * Owns the subtitle report's open flag and its controller: when the modal is
  * showing, which phase it is in, and the retry that recomputes it. Holds no
  * cache of its own — the report is derived from the whole-track vocabulary
- * snapshot `useVocabularyCaches` prepares.
+ * snapshot `useVocabularyPipeline` prepares.
  */
 export function useSubtitleReport({ bridge }: UseSubtitleReportInput): UseSubtitleReportResult {
   // Subtitle report orchestration — see state/subtitleReportController.ts.

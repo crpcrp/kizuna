@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
-import { type SubtitleRequestToken } from '@src/renderer/src/state/mediaSession'
-import { cueKey, tokenizeActiveCue } from '@src/renderer/src/state/tokenization'
+import {
+  createVocabularyCaches,
+  cueKey,
+  tokenizeActiveCue
+} from '@src/renderer/src/state/tokenization'
 import { invalidateTokenizationForDictionaryChange } from '@src/renderer/src/state/tokenizationInvalidation'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -33,9 +36,8 @@ describe('invalidateTokenizationForDictionaryChange', () => {
       tokenizeBatch: vi.fn()
     }
     const dispatch = vi.fn()
-    const cache = new Map<string, Token[]>()
-    const activeToken: SubtitleRequestToken = { current: 0 }
-    const stale = tokenizeActiveCue(mecab, dispatch, cue, cache, activeToken)
+    const caches = createVocabularyCaches()
+    const stale = tokenizeActiveCue(mecab, dispatch, cue, caches.tokenCache, caches.tokens.active)
 
     const refreshed = invalidateTokenizationForDictionaryChange({
       mecab,
@@ -44,11 +46,7 @@ describe('invalidateTokenizationForDictionaryChange', () => {
       activeCue: cue,
       cues: [cue],
       sidebarOpen: false,
-      tokenCache: cache,
-      knownLevelsCache: new Map(),
-      activeToken,
-      allCuesToken: { current: 0 },
-      allCuesLevelsToken: { current: 0 }
+      caches
     })
     newResult.resolve(newTokens)
     await refreshed
@@ -56,7 +54,7 @@ describe('invalidateTokenizationForDictionaryChange', () => {
     await stale
 
     expect(dispatch).toHaveBeenCalledWith({ type: 'resetTokenization' })
-    expect(cache.get(cueKey(cue))).toEqual(newTokens)
+    expect(caches.tokenCache.get(cueKey(cue))).toEqual(newTokens)
     expect(dispatch).not.toHaveBeenCalledWith({ type: 'activeTokensLoaded', tokens: oldTokens })
   })
 
@@ -74,11 +72,7 @@ describe('invalidateTokenizationForDictionaryChange', () => {
       activeCue: cue,
       cues: [cue, otherCue],
       sidebarOpen: true,
-      tokenCache: new Map(),
-      knownLevelsCache: new Map(),
-      activeToken: { current: 0 },
-      allCuesToken: { current: 0 },
-      allCuesLevelsToken: { current: 0 }
+      caches: createVocabularyCaches()
     })
 
     expect(mecab.tokenizeBatch).toHaveBeenCalledWith(['犬'])

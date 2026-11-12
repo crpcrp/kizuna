@@ -12,10 +12,11 @@ import {
   shouldResyncAnkiForKnowledgePatch,
   syncKnowledgeAndRefresh
 } from './integrationActions'
+import { createVocabularyCaches } from './tokenization'
 import { refreshKnownLevels } from './knowledgeActions'
 import type { OptionsDataController } from './optionsData'
 import type { PlayerAction } from './playerState'
-import type { UseVocabularyCachesResult } from './useVocabularyCaches'
+import type { UseVocabularyPipelineResult } from './useVocabularyPipeline'
 
 export interface VocabularyKnowledgeOptions {
   onSelectMecabDict: DictionariesTabProps['onSelectMecabDict']
@@ -36,7 +37,7 @@ export interface UseKnowledgeOptionsInput {
   activeTokens: Token[]
   allCueTokens: Record<string, Token[]>
   /** The caches these rows invalidate or re-warm. */
-  caches: Pick<UseVocabularyCachesResult, 'refs' | 'invalidateVocabularySpans'>
+  caches: Pick<UseVocabularyPipelineResult, 'refs' | 'invalidateVocabularySpans'>
 }
 
 export interface UseKnowledgeOptionsResult {
@@ -59,15 +60,8 @@ export function useStandaloneKnowledgeOptions({
   UseKnowledgeOptionsInput,
   'bridge' | 'dispatch' | 'optionsData'
 >): VocabularyKnowledgeOptions {
-  const caches: Pick<UseVocabularyCachesResult, 'refs' | 'invalidateVocabularySpans'> = {
-    refs: {
-      tokenCache: useRef(new Map()),
-      tokenizeToken: useRef({ current: 0 }),
-      knownLevelsCache: useRef(new Map()),
-      knownLevelsToken: useRef({ current: 0 }),
-      allCuesToken: useRef({ current: 0 }),
-      allCuesLevelsToken: useRef({ current: 0 })
-    },
+  const caches: Pick<UseVocabularyPipelineResult, 'refs' | 'invalidateVocabularySpans'> = {
+    refs: useRef(createVocabularyCaches()),
     invalidateVocabularySpans: useCallback(() => undefined, [])
   }
   return useKnowledgeOptions({
@@ -115,11 +109,7 @@ export function useKnowledgeOptions({
       activeCue,
       cues,
       sidebarOpen,
-      tokenCache: refs.tokenCache.current,
-      knownLevelsCache: refs.knownLevelsCache.current,
-      activeToken: refs.tokenizeToken.current,
-      allCuesToken: refs.allCuesToken.current,
-      allCuesLevelsToken: refs.allCuesLevelsToken.current,
+      caches: refs.current,
       optionsData,
       id
     })
@@ -133,9 +123,9 @@ export function useKnowledgeOptions({
       activeTokens,
       allCueTokens,
       sidebarOpen,
-      knownLevelsCache: refs.knownLevelsCache.current,
-      activeLevelsToken: refs.knownLevelsToken.current,
-      allCuesLevelsToken: refs.allCuesLevelsToken.current,
+      knownLevelsCache: refs.current.knownLevelsCache,
+      activeLevelsToken: refs.current.tokens.levels,
+      allCuesLevelsToken: refs.current.tokens.allCuesLevels,
       optionsData,
       source,
       force
@@ -153,9 +143,9 @@ export function useKnowledgeOptions({
         activeTokens,
         allCueTokens,
         sidebarOpen,
-        knownLevelsCache: refs.knownLevelsCache.current,
-        activeLevelsToken: refs.knownLevelsToken.current,
-        allCuesLevelsToken: refs.allCuesLevelsToken.current
+        knownLevelsCache: refs.current.knownLevelsCache,
+        activeLevelsToken: refs.current.tokens.levels,
+        allCuesLevelsToken: refs.current.tokens.allCuesLevels
       })
       return
     }

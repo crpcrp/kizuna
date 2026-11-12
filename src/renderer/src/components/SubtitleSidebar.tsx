@@ -41,7 +41,7 @@ export interface SubtitleSidebarProps {
   /** Same shape/semantics as SubtitleOverlay's `levels` prop: undefined disables
    * coloring, an object (even `{}`) enables it with 'unknown' as the default. */
   levels?: Record<string, KnowledgeLevel>
-  /** One cue's compound projections (see `useVocabularyCaches.spansForCue`).
+  /** One cue's compound projections (see `useVocabularyPipeline.spansForCue`).
    * Each row receives only its own slice, so a span change elsewhere in the
    * track does not re-render it. */
   spansForCue?: (cueKey: string) => VocabularySpan[] | undefined

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
@@ -8,22 +8,11 @@ import {
   type UseVocabularyPipelineInput,
   type VocabularyPipelineBridges
 } from '@src/renderer/src/state/useVocabularyPipeline'
-import {
-  createWholeTrackVocabularyCoordinator,
-  type WholeTrackVocabularyCoordinator,
-  type WholeTrackVocabularyInput,
-  type WholeTrackVocabularyResult
-} from '@src/renderer/src/state/wholeTrackVocabulary'
+import type { WholeTrackVocabularyResult } from '@src/renderer/src/state/wholeTrackVocabulary'
+import { invalidateTokenizationForDictionaryChange } from '@src/renderer/src/state/tokenizationInvalidation'
 import { createSubtitleReportController } from '@src/renderer/src/state/subtitleReportController'
 import { makeToken } from '@test/harness/tokenFixtures'
-
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
-  return { promise, resolve }
-}
+import { deferred } from '@test/harness/deferred'
 
 const cueA: Cue = { start: 0, end: 1, text: 'a' }
 const cueB: Cue = { start: 1, end: 2, text: 'b' }
@@ -58,20 +47,6 @@ function makeBridges(
   }
 }
 
-function fakeCoordinator(): WholeTrackVocabularyCoordinator & {
-  prepare: ReturnType<
-    typeof vi.fn<(input: WholeTrackVocabularyInput) => Promise<WholeTrackVocabularyResult>>
-  >
-  invalidate: ReturnType<typeof vi.fn<() => void>>
-} {
-  return {
-    prepare: vi.fn<(input: WholeTrackVocabularyInput) => Promise<WholeTrackVocabularyResult>>(
-      async () => ({ kind: 'stale' })
-    ),
-    invalidate: vi.fn<() => void>()
-  }
-}
-
 function setup(overrides: Partial<UseVocabularyPipelineInput> = {}) {
   const dispatch = vi.fn()
   const bridges = overrides.bridges ?? makeBridges()
@@ -80,9 +55,10 @@ function setup(overrides: Partial<UseVocabularyPipelineInput> = {}) {
     bridges,
     cues: [cueA],
     activeCue: cueA,
-    activeCueKey: cueAKey,
+    // Span preparation is opt-in so these tests can isolate active/sidebar requests.
+    activeCueKey: 'active-cue',
     allCueTokens: {},
-    activeTokens: [tokenA],
+    activeTokens: [],
     japaneseSubtitleSelected: true,
     sidebarOpen: false,
     reportOpen: false,
@@ -92,15 +68,6 @@ function setup(overrides: Partial<UseVocabularyPipelineInput> = {}) {
     sortOrder: 'auto',
     dictionarySettings: null,
     knowledgeEpoch: 0,
-    tokenCacheRef: { current: new Map() },
-    tokenizeTokenRef: { current: { current: 0 } },
-    knownLevelsCacheRef: { current: new Map() },
-    knownLevelsTokenRef: { current: { current: 0 } },
-    allCuesTokenRef: { current: { current: 0 } },
-    allCuesLevelsTokenRef: { current: { current: 0 } },
-    wholeTrackVocabularyRef: { current: createWholeTrackVocabularyCoordinator() },
-    vocabularySpanEpochRef: { current: 0 },
-    setVocabularySpansByCue: vi.fn(),
     reportController: createSubtitleReportController(),
     ...overrides
   }
@@ -108,6 +75,25 @@ function setup(overrides: Partial<UseVocabularyPipelineInput> = {}) {
     initialProps: { value: input }
   })
   return { input, hook, dispatch, bridges }
+}
+
+function switchDictionary(ctx: ReturnType<typeof setup>, sidebarOpen: boolean): Promise<void> {
+  return invalidateTokenizationForDictionaryChange({
+    mecab: ctx.bridges.mecab,
+    knowledge: ctx.bridges.knowledge,
+    dispatch: ctx.dispatch,
+    activeCue: cueA,
+    cues: [cueA],
+    sidebarOpen,
+    caches: ctx.hook.result.current.refs.current
+  })
+}
+
+function activeTokensDispatched(dispatch: ReturnType<typeof vi.fn>): Token[][] {
+  return dispatch.mock.calls
+    .map(([action]) => action)
+    .filter((action) => action.type === 'activeTokensLoaded' && action.tokens.length > 0)
+    .map((action) => action.tokens)
 }
 
 afterEach(() => {
@@ -159,74 +145,61 @@ describe('useVocabularyPipeline', () => {
     expect(dispatch).not.toHaveBeenCalledWith({ type: 'activeTokensLoaded', tokens: [tokenA] })
   })
 
-  it('keeps the sidebar tokenize-all path and the whole-track prepare path independent', async () => {
-    const tokenizeBatch = vi.fn().mockResolvedValue([[tokenA]])
-    const coordinator = fakeCoordinator()
-    const { input, hook } = setup({
-      sidebarOpen: true,
-      bridges: makeBridges({ tokenizeBatch }),
-      wholeTrackVocabularyRef: { current: coordinator }
-    })
+  it('reuses the whole-track snapshot and publishes spans for the overlay and sidebar', async () => {
+    const { input, hook, bridges } = setup()
+    hook.rerender({ value: { ...input, activeCueKey: cueAKey, activeTokens: [tokenA] } })
+    await waitFor(() => expect(hook.result.current.spansForCue(cueAKey)).toBeDefined())
+    const lookups = vi.mocked(bridges.dict.lookup).mock.calls.length
+    let first!: WholeTrackVocabularyResult
+    let second!: WholeTrackVocabularyResult
     await act(async () => {
-      await Promise.resolve()
+      first = await hook.result.current.prepareWholeTrackVocabulary()
+      second = await hook.result.current.prepareWholeTrackVocabulary()
     })
-
-    expect(tokenizeBatch).toHaveBeenCalledWith(['a'])
-    expect(coordinator.prepare).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cues: input.cues,
-        tokenCache: input.tokenCacheRef.current,
-        knownLevelsCache: input.knownLevelsCacheRef.current,
-        allCuesToken: input.allCuesTokenRef.current,
-        allCuesLevelsToken: input.allCuesLevelsTokenRef.current
-      })
-    )
-    const tokenizeBatchCalls = tokenizeBatch.mock.calls.length
-
-    await act(async () => {
-      await hook.result.current.prepareWholeTrackVocabulary()
-    })
-    expect(tokenizeBatch.mock.calls.length).toBe(tokenizeBatchCalls)
+    expect(first.kind).toBe('ready')
+    expect(second).toEqual(first)
+    expect(bridges.dict.lookup).toHaveBeenCalledTimes(lookups)
+    expect(hook.result.current.spansForCue(undefined)).toBeUndefined()
   })
 
-  it('resets tokenization guards when the subtitle track stops being Japanese', () => {
-    const { input, hook, dispatch } = setup()
-    const before = {
-      tokenize: input.tokenizeTokenRef.current.current,
-      knownLevels: input.knownLevelsTokenRef.current.current,
-      allCues: input.allCuesTokenRef.current.current,
-      allCuesLevels: input.allCuesLevelsTokenRef.current.current
-    }
-    dispatch.mockClear()
-
-    hook.rerender({ value: { ...input, japaneseSubtitleSelected: false } })
-
-    expect(dispatch).toHaveBeenCalledWith({ type: 'resetTokenization' })
-    expect(input.tokenizeTokenRef.current.current).toBe(before.tokenize + 1)
-    expect(input.knownLevelsTokenRef.current.current).toBe(before.knownLevels + 1)
-    expect(input.allCuesTokenRef.current.current).toBe(before.allCues + 1)
-    expect(input.allCuesLevelsTokenRef.current.current).toBe(before.allCuesLevels + 1)
-  })
-
-  it('invalidates the whole-track cache and clears spans when a dependency changes', async () => {
-    const coordinator = fakeCoordinator()
-    const setVocabularySpansByCue = vi.fn()
-    const { input, hook } = setup({
-      wholeTrackVocabularyRef: { current: coordinator },
-      setVocabularySpansByCue
-    })
-    await act(async () => {
-      await Promise.resolve()
-    })
-    coordinator.invalidate.mockClear()
-    setVocabularySpansByCue.mockClear()
-    const epochBefore = input.vocabularySpanEpochRef.current
-
+  it('clears spans and rebuilds the snapshot when a dictionary setting changes', async () => {
+    const { input, hook, bridges } = setup({ activeCueKey: cueAKey, activeTokens: [tokenA] })
+    await waitFor(() => expect(hook.result.current.spansForCue(cueAKey)).toBeDefined())
+    vi.mocked(bridges.dict.lookup).mockClear()
     hook.rerender({ value: { ...input, dictionarySettings: { changed: true } } })
+    expect(hook.result.current.spansForCue(cueAKey)).toBeUndefined()
+    await waitFor(() => expect(hook.result.current.spansForCue(cueAKey)).toBeDefined())
+    expect(bridges.dict.lookup).toHaveBeenCalled()
 
-    expect(coordinator.invalidate).toHaveBeenCalledTimes(1)
-    expect(input.vocabularySpanEpochRef.current).toBe(epochBefore + 1)
-    expect(setVocabularySpansByCue).toHaveBeenCalledWith({})
+    act(() => hook.result.current.invalidateVocabularySpans())
+    expect(hook.result.current.spansForCue(cueAKey)).toBeUndefined()
+    vi.mocked(bridges.dict.lookup).mockClear()
+    await act(() => hook.result.current.prepareWholeTrackVocabulary())
+    expect(bridges.dict.lookup).toHaveBeenCalled()
+  })
+
+  it('drops late tokenization and level results after switching to a non-Japanese track', async () => {
+    const active = deferred<Token[]>()
+    const batch = deferred<Token[][]>()
+    const levels = deferred<Record<string, 'known'>>()
+    const { input, hook, dispatch } = setup({
+      sidebarOpen: true,
+      bridges: makeBridges({
+        tokenize: vi.fn().mockReturnValue(active.promise),
+        tokenizeBatch: vi.fn().mockReturnValue(batch.promise),
+        levelsFor: vi.fn().mockReturnValue(levels.promise)
+      })
+    })
+    await act(async () => {
+      active.resolve([tokenA])
+    })
+    dispatch.mockClear()
+    hook.rerender({ value: { ...input, japaneseSubtitleSelected: false } })
+    await act(async () => {
+      batch.resolve([[tokenA]])
+      levels.resolve({ a: 'known' })
+    })
+    expect(dispatch.mock.calls.map(([action]) => action)).toEqual([{ type: 'resetTokenization' }])
   })
 
   it('opens the subtitle report only while it is open, with the current snapshot', () => {
@@ -247,39 +220,94 @@ describe('useVocabularyPipeline', () => {
 
   it('drops a subtitle-report snapshot that resolves after the report was closed', async () => {
     const reportController = createSubtitleReportController()
-    const first = deferred<WholeTrackVocabularyResult>()
-    const coordinator = { prepare: vi.fn().mockReturnValue(first.promise), invalidate: vi.fn() }
+    const batch = deferred<Token[][]>()
     setup({
       reportOpen: true,
-      wholeTrackVocabularyRef: { current: coordinator },
+      bridges: makeBridges({ tokenizeBatch: vi.fn().mockReturnValue(batch.promise) }),
       reportController
     })
-
     reportController.close()
     await act(async () => {
-      first.resolve({
-        kind: 'ready',
-        snapshot: { cueTokens: [], spansByCue: {}, cueHasUnknown: {} }
-      })
-      await Promise.resolve()
+      batch.resolve([[tokenA]])
     })
-
     expect(reportController.getState()).toEqual({ kind: 'idle' })
   })
 
-  it('drops a whole-track vocabulary snapshot invalidated before it resolves', async () => {
-    const coordinator = createWholeTrackVocabularyCoordinator()
+  it('drops a whole-track snapshot invalidated before it resolves', async () => {
     const batch = deferred<Token[][]>()
-    const bridges = makeBridges({ tokenizeBatch: vi.fn().mockReturnValue(batch.promise) })
     const { input, hook } = setup({
-      wholeTrackVocabularyRef: { current: coordinator },
-      bridges
+      bridges: makeBridges({ tokenizeBatch: vi.fn().mockReturnValue(batch.promise) })
     })
-
     const pending = hook.result.current.prepareWholeTrackVocabulary()
     hook.rerender({ value: { ...input, filePath: '/other.mkv' } })
-    batch.resolve([[tokenA]])
-
+    await act(async () => {
+      batch.resolve([[tokenA]])
+    })
     await expect(pending).resolves.toEqual({ kind: 'stale' })
+    expect(hook.result.current.spansForCue(cueAKey)).toBeUndefined()
+  })
+
+  it('keeps an in-flight active-cue tokenization when the sidebar opens', async () => {
+    const active = deferred<Token[]>()
+    const ctx = setup({
+      bridges: makeBridges({
+        tokenize: vi.fn().mockReturnValueOnce(active.promise),
+        tokenizeBatch: vi.fn().mockResolvedValue([[tokenA]])
+      })
+    })
+    ctx.hook.rerender({ value: { ...ctx.input, sidebarOpen: true } })
+    await waitFor(() => expect(ctx.bridges.mecab.tokenizeBatch).toHaveBeenCalledTimes(1))
+
+    await act(async () => {
+      active.resolve([tokenA])
+      await active.promise
+    })
+    expect(activeTokensDispatched(ctx.dispatch)).toContainEqual([tokenA])
+  })
+
+  it('discards an in-flight active-cue tokenization when the dictionary switches', async () => {
+    const stale = deferred<Token[]>()
+    const ctx = setup({
+      bridges: makeBridges({
+        tokenize: vi.fn().mockReturnValueOnce(stale.promise).mockResolvedValue([tokenB])
+      })
+    })
+    expect(ctx.bridges.mecab.tokenize).toHaveBeenCalledTimes(1)
+    ctx.dispatch.mockClear()
+
+    await act(() => switchDictionary(ctx, false))
+    await act(async () => {
+      stale.resolve([tokenA])
+      await stale.promise
+    })
+
+    expect(activeTokensDispatched(ctx.dispatch)).toEqual([[tokenB]])
+    expect(ctx.hook.result.current.refs.current.tokenCache.get(cueAKey)).toEqual([tokenB])
+    expect(ctx.bridges.mecab.tokenizeBatch).not.toHaveBeenCalled()
+  })
+
+  it("discards the sidebar's in-flight batch when the dictionary switches", async () => {
+    const staleBatch = deferred<Token[][]>()
+    const ctx = setup({
+      bridges: makeBridges({
+        tokenize: vi.fn().mockReturnValue(new Promise(() => undefined)),
+        tokenizeBatch: vi.fn().mockReturnValueOnce(staleBatch.promise)
+      })
+    })
+    ctx.hook.rerender({ value: { ...ctx.input, sidebarOpen: true } })
+    await waitFor(() => expect(ctx.bridges.mecab.tokenizeBatch).toHaveBeenCalledTimes(1))
+    vi.mocked(ctx.bridges.mecab.tokenize).mockResolvedValue([tokenB])
+    ctx.dispatch.mockClear()
+
+    await act(() => switchDictionary(ctx, true))
+    await act(async () => {
+      staleBatch.resolve([[tokenA]])
+      await staleBatch.promise
+    })
+
+    const batches = ctx.dispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action) => action.type === 'allCueTokensLoaded')
+    expect(batches).toEqual([{ type: 'allCueTokensLoaded', tokens: { [cueAKey]: [tokenB] } }])
   })
 })
