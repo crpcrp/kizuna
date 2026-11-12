@@ -2,6 +2,7 @@ import type { AnkiJlptBackfillCounts, AnkiSettings } from '../../../shared/anki'
 import { JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
 import type { AnkiNoteInfo } from './ankiConnect'
 import type { JlptClassifier } from '../jlpt/classifier'
+import { stripTags } from '../../html'
 
 export interface JlptBackfillFields {
   wordField: string
@@ -18,14 +19,7 @@ export type JlptBackfillClassification =
 
 /** Removes markup Anki stores around note-field text and normalizes spaces. */
 export function stripHtml(value: string): string {
-  let stripped = value
-  let previous: string
-  do {
-    previous = stripped
-    stripped = stripped.replace(/<[^>]*>/gu, '')
-  } while (stripped !== previous)
-
-  return stripped.replace(/&nbsp;/giu, ' ')
+  return stripTags(value).replace(/&nbsp;/giu, ' ')
 }
 
 const KANA_ONLY = /^[ぁ-ゖァ-ヺーゝゞヽヾ]+$/u

@@ -7,8 +7,7 @@
 // injected, so tests never spawn ffmpeg — see
 // test/main/services/anki/sentenceAudio.test.ts.
 
-import { randomBytes } from 'node:crypto'
-import { pathApiFor } from '../../platformPath'
+import { pathApiFor, uniqueTempName } from '../../platformPath'
 import type { FfmpegExec } from '../../media/ffmpeg'
 import type { MineMediaContext } from '../../../shared/anki'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
@@ -102,18 +101,15 @@ export function createSentenceAudioService(deps: {
     readBase64(path: string): Promise<string>
     remove(path: string): Promise<void>
   }
-  /** Distinguishes concurrent extractions; defaults to a random suffix. */
-  uniqueSuffix?: () => string
   /** Path semantics for the clip temp file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): SentenceAudioService {
-  const suffix = deps.uniqueSuffix ?? (() => randomBytes(6).toString('hex'))
   const { join } = pathApiFor(deps.platform)
   return {
     async extract(media: MineMediaContext): Promise<string | null> {
       if (!usableWindow(media)) return null
 
-      const output = join(deps.tmpDir(), `kizuna-sentence-${suffix()}.mp3`)
+      const output = join(deps.tmpDir(), uniqueTempName('kizuna-sentence', 'mp3'))
       try {
         await deps.exec(
           deps.ffmpegPath,

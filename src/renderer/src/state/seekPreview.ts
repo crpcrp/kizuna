@@ -7,6 +7,8 @@
 // both injected so the whole thing is unit-testable without a clock, a browser,
 // or the preload bridge.
 
+import { thumbnailBucket } from '../../../shared/thumbnailBucket'
+
 /** Injected timer seam — mirrors `subtitleSearchDebounce`'s `SearchTimer`. */
 export interface PreviewTimer {
   set(callback: () => void, delayMs: number): unknown
@@ -50,19 +52,6 @@ export const HIDDEN_PREVIEW: SeekPreviewState = {
   dataUrl: null,
   timeSec: 0,
   positionRatio: 0
-}
-
-/**
- * The 1-percent bucket a hovered time maps to (`0..99`), or `null` when no
- * preview should be shown (non-finite input, or a duration under 1 s). Mirrors
- * `bucketFor` in `main/services/thumbnails/generation.ts` so the renderer dedupes on the
- * same granularity the cache keys on — kept local because that module pulls in
- * `node:*` and can't cross into the renderer bundle.
- */
-export function previewBucket(timeSec: number, durationSec: number): number | null {
-  if (!Number.isFinite(timeSec) || !Number.isFinite(durationSec)) return null
-  if (durationSec < 1) return null
-  return Math.max(0, Math.min(99, Math.floor((timeSec / durationSec) * 100)))
 }
 
 /**
@@ -141,7 +130,7 @@ export class SeekPreviewController {
     if (!this.enabled || this.path === null) return
     const ratio = Math.max(0, Math.min(1, positionRatio))
     const timeSec = ratio * this.duration
-    const bucket = previewBucket(timeSec, this.duration)
+    const bucket = thumbnailBucket(timeSec, this.duration)
     if (bucket === null) return
 
     // Follow the cursor now. Re-show this bucket's cached frame if we have one

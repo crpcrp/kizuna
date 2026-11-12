@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   HIDDEN_PREVIEW,
   pointerRatio,
-  previewBucket,
   previewLeftOffset,
   SeekPreviewController,
   type PreviewTimer,
@@ -46,21 +45,6 @@ function deferredFetch() {
   }
   return { fetch, calls, resolve: (i: number, v: { dataUrl: string } | null) => resolvers[i](v) }
 }
-
-describe('previewBucket', () => {
-  it('maps a time to its 1-percent bucket, clamped to 0..99', () => {
-    expect(previewBucket(0, 100)).toBe(0)
-    expect(previewBucket(50, 100)).toBe(50)
-    expect(previewBucket(100, 100)).toBe(99)
-    expect(previewBucket(250, 100)).toBe(99)
-  })
-
-  it('returns null for non-finite input or a sub-second duration', () => {
-    expect(previewBucket(NaN, 100)).toBeNull()
-    expect(previewBucket(5, Infinity)).toBeNull()
-    expect(previewBucket(0.1, 0.5)).toBeNull()
-  })
-})
 
 describe('pointerRatio', () => {
   it('returns the clamped 0..1 position of clientX within the rect', () => {

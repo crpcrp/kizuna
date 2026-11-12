@@ -23,7 +23,7 @@ describe('registerTranslationSettingsBridge', () => {
       registerTranslationSettingsBridge(ipc, service)
 
       expect(() => handlers.get(TRANSLATE_CHANNELS.setSettings)!(event, payload)).toThrow(
-        'Invalid translation settings.'
+        'Invalid translate:setSettings request.'
       )
       expect(service.setSettings).not.toHaveBeenCalled()
     }

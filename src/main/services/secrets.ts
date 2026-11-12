@@ -50,8 +50,21 @@ export function createSafeStorageCodec(safeStorage: {
   }
 }
 
-/** `''`/`undefined` blob (not configured) decodes to `''` without invoking the codec. */
+/**
+ * Decodes a stored secret. A missing blob or a throwing codec reads as `''`
+ * (not configured), so a broken keychain never crashes a settings read.
+ */
 export function readSecret(codec: SecretCodec, blob: string | undefined): string {
   if (!blob) return ''
-  return codec.decrypt(blob)
+  try {
+    return codec.decrypt(blob)
+  } catch {
+    return ''
+  }
+}
+
+/** Trims `value` and encrypts it for storage; a blank value clears the secret. */
+export function encodeSecret(codec: SecretCodec, value: string): string {
+  const trimmed = value.trim()
+  return trimmed === '' ? '' : codec.encrypt(trimmed)
 }

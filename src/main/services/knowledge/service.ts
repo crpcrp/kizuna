@@ -3,7 +3,7 @@
 
 import type { KnowledgeSettings, SettingsStore } from '../settings'
 import type { SecretCodec } from '../secrets'
-import { readSecret } from '../secrets'
+import { encodeSecret, readSecret } from '../secrets'
 import type { HttpFetch } from '../http'
 import type {
   KnowledgeSource,
@@ -292,13 +292,10 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps) {
     const current = settings.get().knowledge
     const { wanikaniToken, ...rest } = patch
     const tokenChanged =
-      wanikaniToken !== undefined && readSecret(secrets, current.wanikaniTokenEnc) !== wanikaniToken
+      wanikaniToken !== undefined &&
+      readSecret(secrets, current.wanikaniTokenEnc) !== wanikaniToken.trim()
     const wanikaniTokenEnc =
-      wanikaniToken === undefined
-        ? current.wanikaniTokenEnc
-        : wanikaniToken === ''
-          ? ''
-          : secrets.encrypt(wanikaniToken)
+      wanikaniToken === undefined ? current.wanikaniTokenEnc : encodeSecret(secrets, wanikaniToken)
     settings.set({ knowledge: { ...current, ...rest, wanikaniTokenEnc } })
     if (tokenChanged) {
       wanikaniGeneration++

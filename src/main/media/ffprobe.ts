@@ -1,6 +1,6 @@
 // The process runner is injected so enumeration tests do not spawn ffprobe.
 
-import { execFile } from 'node:child_process'
+import { runBounded } from '../exec'
 import type { Chapter } from '../../shared/chapter'
 import type { Track, VideoDimensions } from '../../shared/track'
 
@@ -165,48 +165,10 @@ export function parseFfprobeVideoDimensions(stdout: string): VideoDimensions | u
 export type FfprobeExec = (ffprobePath: string, args: string[]) => Promise<string>
 
 /** Hard upper bound for a single ffprobe invocation. */
-export const FFPROBE_TIMEOUT_MS = 30_000
+const FFPROBE_TIMEOUT_MS = 30_000
 
-const FFPROBE_MAX_BUFFER_BYTES = 10 * 1024 * 1024
-
-export type FfprobeExecFile = (
-  file: string,
-  args: readonly string[],
-  options: { maxBuffer: number; timeout: number; killSignal: NodeJS.Signals },
-  callback: (error: Error | null, stdout: string) => void
-) => unknown
-
-/**
- * Creates the production ffprobe adapter. Keeping the child-process call
- * injectable lets tests verify its deadline without starting a real binary.
- */
-export function createFfprobeExec(
-  execFileImpl: FfprobeExecFile,
-  timeoutMs = FFPROBE_TIMEOUT_MS
-): FfprobeExec {
-  return (ffprobePath, args) =>
-    new Promise((resolve, reject) => {
-      execFileImpl(
-        ffprobePath,
-        args,
-        {
-          maxBuffer: FFPROBE_MAX_BUFFER_BYTES,
-          timeout: timeoutMs,
-          killSignal: 'SIGTERM'
-        },
-        (err, stdout) => {
-          if (err) return reject(err)
-          resolve(stdout)
-        }
-      )
-    })
-}
-
-/**
- * Real production exec: shells out to ffprobe via `execFile`, buffering
- * stdout. Never exercised by tests — only wired in at runtime.
- */
-export const execFfprobe = createFfprobeExec(execFile)
+export const execFfprobe: FfprobeExec = (ffprobePath, args) =>
+  runBounded(ffprobePath, args, { timeoutMs: FFPROBE_TIMEOUT_MS })
 
 /**
  * Runs ffprobe on `filePath` via the injected `exec` and parses its stdout

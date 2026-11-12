@@ -3,7 +3,7 @@
 // ffprobe.ts/ffmpeg.ts's Exec-injection pattern — see
 // test/harness/fakeMecab.ts.
 
-import { execFile } from 'node:child_process'
+import { runBounded } from '../../exec'
 import type { DictFlavor, Token } from '../../../shared/token'
 import { buildMecabArgs } from './mecabArgs'
 import { parseMecab } from './parseMecab'
@@ -15,24 +15,8 @@ import { parseMecab } from './parseMecab'
  */
 export type MecabExec = (mecabPath: string, args: string[], input: string) => Promise<string>
 
-/**
- * Real production exec: shells out to mecab via `execFile`, writing `input`
- * to stdin and reading stdout, both as UTF-8. Never exercised by tests —
- * only wired in at runtime.
- */
 export const execMecab: MecabExec = (mecabPath, args, input) =>
-  new Promise((resolve, reject) => {
-    const child = execFile(
-      mecabPath,
-      args,
-      { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return reject(err)
-        resolve(stdout)
-      }
-    )
-    child.stdin?.end(input, 'utf-8')
-  })
+  runBounded(mecabPath, args, { input })
 
 export interface MecabConfig {
   mecabPath: string

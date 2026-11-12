@@ -235,7 +235,9 @@ describe('createScreenshotService.capture', () => {
 describe.each(PATH_PLATFORMS)(
   'createFrameCaptureService on $label',
   ({ platform, path: pathApi, tempDir }) => {
-    const framePath = pathApi.join(tempDir, 'kizuna-frame-abc123.png')
+    const framePath = expect.stringMatching(
+      new RegExp(`^${escapeRegExp(pathApi.join(tempDir, 'kizuna-frame-'))}[0-9a-f]{12}\\.png$`)
+    )
 
     function deps(overrides: Partial<Parameters<typeof createFrameCaptureService>[0]> = {}): {
       calls: { written: string[]; read: string[]; removed: string[] }
@@ -254,7 +256,6 @@ describe.each(PATH_PLATFORMS)(
         remove: async (path) => {
           calls.removed.push(path)
         },
-        uniqueSuffix: () => 'abc123',
         platform,
         ...overrides
       })
@@ -294,13 +295,9 @@ describe.each(PATH_PLATFORMS)(
 
       expect(await service.captureFrameData()).toBe('iVBORw0KGgo=')
     })
-
-    it('gives concurrent captures distinct filenames', async () => {
-      let n = 0
-      const { calls, service } = deps({ uniqueSuffix: () => `s${++n}` })
-
-      await Promise.all([service.captureFrameData(), service.captureFrameData()])
-      expect(new Set(calls.written).size).toBe(2)
-    })
   }
 )
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}

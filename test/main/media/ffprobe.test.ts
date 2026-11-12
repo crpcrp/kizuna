@@ -2,13 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
   buildFfprobeArgs,
-  createFfprobeExec,
   parseFfprobeTracks,
   parseFfprobeVideoDimensions,
-  enumerateVideoDimensions,
-  FFPROBE_TIMEOUT_MS
+  enumerateVideoDimensions
 } from '@src/main/media/ffprobe'
-import type { FfprobeExecFile } from '@src/main/media/ffprobe'
 import { fixture } from '@test/paths'
 
 const FIXTURE = readFileSync(fixture('ffprobe-mkv.json'), 'utf-8')
@@ -30,47 +27,6 @@ describe('buildFfprobeArgs', () => {
 
     expect(args.at(-2)).toBe('--')
     expect(args.at(-1)).toBe('-show_format')
-  })
-})
-
-describe('createFfprobeExec', () => {
-  it('sets the output cap and a terminating hard deadline on the child process', async () => {
-    const execFileImpl = ((file, args, options, callback) => {
-      expect(file).toBe('/bin/ffprobe')
-      expect(args).toEqual(['--', '-video.mkv'])
-      expect(options).toEqual({
-        maxBuffer: 10 * 1024 * 1024,
-        timeout: FFPROBE_TIMEOUT_MS,
-        killSignal: 'SIGTERM'
-      })
-      callback(null, '{"streams":[]}')
-      return undefined
-    }) as FfprobeExecFile
-
-    await expect(
-      createFfprobeExec(execFileImpl)('/bin/ffprobe', ['--', '-video.mkv'])
-    ).resolves.toBe('{"streams":[]}')
-  })
-
-  it('rejects a timed-out child exactly once', async () => {
-    const timeoutError = Object.assign(new Error('ffprobe timed out'), {
-      killed: true,
-      signal: 'SIGTERM'
-    })
-    const execFileImpl = ((_file, _args, _options, callback) => {
-      callback(timeoutError, '')
-      callback(timeoutError, '')
-      return undefined
-    }) as FfprobeExecFile
-    const exec = createFfprobeExec(execFileImpl)
-    let rejectionCount = 0
-
-    await exec('/bin/ffprobe', ['--', 'episode.mkv']).catch((error: unknown) => {
-      rejectionCount += 1
-      expect(error).toBe(timeoutError)
-    })
-
-    expect(rejectionCount).toBe(1)
   })
 })
 

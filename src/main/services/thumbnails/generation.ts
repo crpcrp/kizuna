@@ -11,23 +11,10 @@ import { createHash } from 'node:crypto'
 import { pathApiFor } from '../../platformPath'
 import { subtitleOffsetKey } from '../../../shared/playerSettings'
 import type { FfmpegExec } from '../../media/ffmpeg'
+import { thumbnailBucket } from '../../../shared/thumbnailBucket'
 import type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
 
 export type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
-
-/**
- * Which 1-percent bucket of the timeline `timeSec` falls into, `0..99`, or
- * `null` when no preview should be shown. `null` for non-finite inputs and for
- * durations under 1 s (too short — and covers unknown/zero duration), matching
- * the "≤100 thumbs per file, ~1 per percent" cache design. `timeSec` is
- * clamped into range so a scrub past the reported end still maps to bucket 99.
- */
-export function bucketFor(timeSec: number, durationSec: number): number | null {
-  if (!Number.isFinite(timeSec) || !Number.isFinite(durationSec)) return null
-  if (durationSec < 1) return null
-  const raw = Math.floor((timeSec / durationSec) * 100)
-  return Math.max(0, Math.min(99, raw))
-}
 
 /**
  * Deterministic seek time (seconds) for a bucket's representative frame — the
@@ -146,7 +133,7 @@ export function createThumbnailService(deps: {
 
   return {
     async getThumbnail(path, timeSec, durationSec): Promise<string | null> {
-      const bucket = bucketFor(timeSec, durationSec)
+      const bucket = thumbnailBucket(timeSec, durationSec)
       if (bucket === null) return null
 
       // A new path invalidates the memoized stat and the per-file caches; the

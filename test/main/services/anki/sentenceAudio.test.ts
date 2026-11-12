@@ -50,7 +50,9 @@ describe.each(PATH_PLATFORMS)(
   ({ platform, path: pathApi, mediaDir, tempDir }) => {
     const ffmpegPath = platform === 'win32' ? 'C:\\bin\\ffmpeg.exe' : '/usr/bin/ffmpeg'
     const mediaPath = pathApi.join(mediaDir, 'ep1.mkv')
-    const clipPath = pathApi.join(tempDir, 'kizuna-sentence-abc123.mp3')
+    const clipPath = expect.stringMatching(
+      new RegExp(`^${escapeRegExp(pathApi.join(tempDir, 'kizuna-sentence-'))}[0-9a-f]{12}\\.mp3$`)
+    )
     const media = mediaAt(mediaPath)
 
     function deps(overrides: Partial<Parameters<typeof createSentenceAudioService>[0]> = {}): {
@@ -77,7 +79,6 @@ describe.each(PATH_PLATFORMS)(
             calls.removed.push(path)
           }
         },
-        uniqueSuffix: () => 'abc123',
         platform,
         ...overrides
       })
@@ -96,14 +97,6 @@ describe.each(PATH_PLATFORMS)(
       ])
       expect(calls.read).toEqual([clipPath])
       expect(calls.removed).toEqual([clipPath])
-    })
-
-    it('gives concurrent extractions distinct filenames', async () => {
-      let n = 0
-      const { calls, service } = deps({ uniqueSuffix: () => `s${++n}` })
-
-      await Promise.all([service.extract(media), service.extract(media)])
-      expect(new Set(calls.exec.map((call) => call.args.at(-1))).size).toBe(2)
     })
 
     it('resolves null and still deletes the temp file when ffmpeg fails', async () => {
@@ -167,3 +160,7 @@ describe.each(PATH_PLATFORMS)(
     })
   }
 )
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
