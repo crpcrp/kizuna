@@ -141,24 +141,7 @@ export interface JimakuController {
   syncMedia(): void
 }
 
-export interface UseJimakuControllerResult extends JimakuControllerState {
-  controller: JimakuController
-  open(): Promise<void>
-  rememberTitle(remember: boolean): Promise<void>
-  clearRememberedTitle(): Promise<void>
-  changeTitle(): void
-  editIdentity(patch: JimakuIdentityPatch): void
-  editEpisode(value: JimakuEpisodeEdit): void
-  search(): Promise<void>
-  chooseTitle(entry: number | JimakuEntry): Promise<void>
-  showMoreFiles(): void
-  showAllFiles(): void
-  chooseFile(candidateId: string): Promise<void>
-  chooseMember(memberId: string): Promise<void>
-  cancelOperation(): void
-  close(): void
-  tryAnother(): void
-  revert(): Promise<void>
-  refresh(): Promise<void>
-  openSourcePage(entryId?: number): Promise<void>
-}
+export type UseJimakuControllerResult = JimakuControllerState &
+  Omit<JimakuController, 'getState' | 'subscribe' | 'syncMedia'> & {
+    controller: JimakuController
+  }
