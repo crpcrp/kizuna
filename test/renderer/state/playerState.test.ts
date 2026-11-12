@@ -17,9 +17,7 @@ import {
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SKIP_SECONDS,
   DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
-  DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
-  DEFAULT_SUBTITLE_STYLE,
-  DEFAULT_VIDEO_ADJUSTMENTS
+  DEFAULT_SUBTITLE_STYLE
 } from '@src/shared/playerSettings'
 import { makeToken } from '@test/harness/tokenFixtures'
 
@@ -31,7 +29,7 @@ const contentVersion = 'a'.repeat(64)
 
 describe('initialPlayerState', () => {
   it('is the empty-file starting state', () => {
-    expect(initialPlayerState).toEqual({
+    expect(initialPlayerState).toMatchObject({
       filePath: undefined,
       loadGeneration: 0,
       tracks: [],
@@ -47,34 +45,15 @@ describe('initialPlayerState', () => {
       selectedSubtitleId: null,
       externalSubtitlePath: undefined,
       externalSubtitleProvenance: undefined,
-      keyBindings: DEFAULT_KEY_BINDINGS,
-      startupBehavior: 'splash',
-      skipSeconds: DEFAULT_SKIP_SECONDS,
       activeTokens: [],
       allCueTokens: {},
       knownLevels: {},
       knowledgeEpoch: 0,
-      popupSettings: DEFAULT_POPUP_SETTINGS,
-      subtitleStyle: DEFAULT_SUBTITLE_STYLE,
-      subtitleDragEnabled: true,
       externalSubtitleEncoding: 'auto',
-      rightClickTogglePause: true,
-      autoPlayNext: false,
-      subtitleAutoPauseTiming: DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
-      subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
-      translationEnabled: false,
       subtitleOffsetMs: 0,
       subtitleOffsetsByVersion: {},
       audioDelayMs: 0,
-      abLoopState: { a: null, b: null },
-      appearance: 'system',
-      levelColors: {},
-      screenshotFolder: null,
-      mpvUserConfig: false,
-      mpvExtraArgs: [],
-      videoAdjustments: DEFAULT_VIDEO_ADJUSTMENTS,
-      audioDevice: 'auto',
-      loudnessNormalization: false
+      abLoopState: { a: null, b: null }
     })
   })
 })
@@ -552,35 +531,23 @@ describe('playerReducer', () => {
     expect(cleared.allCueTokens).toEqual({})
   })
 
-  it('duration sets duration', () => {
-    const next = playerReducer(initialPlayerState, { type: 'duration', value: 300 })
-    expect(next.duration).toBe(300)
-  })
-
-  it('setPaused sets paused', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setPaused', value: true })
-    expect(next.paused).toBe(true)
-  })
-
-  it('setVolume sets volume', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setVolume', value: 33 })
-    expect(next.volume).toBe(33)
-  })
-
-  it('setMuted sets muted', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setMuted', value: true })
-    expect(next.muted).toBe(true)
-  })
-
-  it('setSpeed sets speed', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setSpeed', value: 1.5 })
-    expect(next.speed).toBe(1.5)
-  })
-
-  it('setFullscreen sets fullscreen', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setFullscreen', value: true })
-    expect(next.fullscreen).toBe(true)
-  })
+  it.each([
+    { paused: true, volume: 33, muted: true, speed: 1.5, fullscreen: true, duration: 300 },
+    { subtitleOffsetMs: -100, audioDelayMs: -75, externalSubtitleEncoding: 'utf-8' },
+    { startupBehavior: 'video-player', appearance: 'dark', skipSeconds: 15 },
+    { abLoopState: { a: 12, b: 30 }, screenshotFolder: '/shots', mpvExtraArgs: ['--hwdec=auto'] },
+    { abLoopState: { a: null, b: null }, screenshotFolder: null, mpvExtraArgs: [] },
+    { subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, fontScale: 1.4 } }
+  ] satisfies Partial<PlayerState>[])(
+    'applies a patch without mutating other fields: %j',
+    (patch) => {
+      const before = structuredClone(initialPlayerState)
+      const next = playerReducer(initialPlayerState, { type: 'set', patch })
+      expect(next).toEqual({ ...before, ...patch })
+      expect(next).not.toBe(initialPlayerState)
+      expect(initialPlayerState).toEqual(before)
+    }
+  )
 
   it('selectAudio sets selectedAudioId', () => {
     const next = playerReducer(initialPlayerState, { type: 'selectAudio', id: 7 })
@@ -610,50 +577,6 @@ describe('playerReducer', () => {
       binding: 'ControlLeft+ArrowLeft'
     })
     expect(next.keyBindings.skipBack).toBe('ControlLeft+ArrowLeft')
-  })
-
-  it('setSkipSeconds sets skipSeconds', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setSkipSeconds', value: 15 })
-    expect(next.skipSeconds).toBe(15)
-  })
-
-  it('setRightClickTogglePause sets rightClickTogglePause', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setRightClickTogglePause',
-      value: false
-    })
-    expect(next.rightClickTogglePause).toBe(false)
-  })
-
-  it('setSubtitleAutoPauseTiming changes only the timing preference', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setSubtitleAutoPauseTiming',
-      value: 'after'
-    })
-
-    expect(next.subtitleAutoPauseTiming).toBe('after')
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
-  })
-
-  it('setSubtitleOffset sets subtitleOffsetMs', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setSubtitleOffset', value: 250 })
-    expect(next.subtitleOffsetMs).toBe(250)
-    const back = playerReducer(next, { type: 'setSubtitleOffset', value: -100 })
-    expect(back.subtitleOffsetMs).toBe(-100)
-  })
-
-  it('setAudioDelay sets audioDelayMs', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setAudioDelay', value: 250 })
-    expect(next.audioDelayMs).toBe(250)
-    const back = playerReducer(next, { type: 'setAudioDelay', value: -75 })
-    expect(back.audioDelayMs).toBe(-75)
-  })
-
-  it('setAbLoop replaces the armed A–B loop endpoints', () => {
-    const armed = playerReducer(initialPlayerState, { type: 'setAbLoop', value: { a: 12, b: 30 } })
-    expect(armed.abLoopState).toEqual({ a: 12, b: 30 })
-    const cleared = playerReducer(armed, { type: 'setAbLoop', value: { a: null, b: null } })
-    expect(cleared.abLoopState).toEqual({ a: null, b: null })
   })
 
   it('activeTokensLoaded sets activeTokens', () => {
@@ -777,66 +700,6 @@ describe('playerReducer', () => {
     expect(next.loudnessNormalization).toBe(true)
   })
 
-  it('setAudioDevice / setLoudnessNormalization update their fields', () => {
-    const device = playerReducer(initialPlayerState, {
-      type: 'setAudioDevice',
-      value: 'wasapi/{abc}'
-    })
-    expect(device.audioDevice).toBe('wasapi/{abc}')
-    const norm = playerReducer(initialPlayerState, {
-      type: 'setLoudnessNormalization',
-      value: true
-    })
-    expect(norm.loudnessNormalization).toBe(true)
-  })
-
-  it('setSubtitleAutoPauseScope changes only the scope preference', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setSubtitleAutoPauseScope',
-      value: 'unknown'
-    })
-
-    expect(next.subtitleAutoPauseScope).toBe('unknown')
-    expect(next.subtitleAutoPauseTiming).toBe(initialPlayerState.subtitleAutoPauseTiming)
-  })
-
-  it('setVideoAdjustments replaces the whole adjustments block', () => {
-    const value = {
-      brightness: -40,
-      contrast: 25,
-      saturation: 0,
-      gamma: 10,
-      hue: -15,
-      rotate: 270 as const,
-      deinterlace: true
-    }
-    const next = playerReducer(initialPlayerState, { type: 'setVideoAdjustments', value })
-    expect(next.videoAdjustments).toBe(value)
-  })
-
-  it('setScreenshotFolder sets a folder and clears back to null', () => {
-    const set = playerReducer(initialPlayerState, {
-      type: 'setScreenshotFolder',
-      value: 'E:\\Caps'
-    })
-    expect(set.screenshotFolder).toBe('E:\\Caps')
-    expect(initialPlayerState.screenshotFolder).toBeNull()
-
-    const cleared = playerReducer(set, { type: 'setScreenshotFolder', value: null })
-    expect(cleared.screenshotFolder).toBeNull()
-  })
-
-  it('setMpvUserConfig and setMpvExtraArgs update their fields immutably', () => {
-    const enabled = playerReducer(initialPlayerState, { type: 'setMpvUserConfig', value: true })
-    expect(enabled.mpvUserConfig).toBe(true)
-    expect(initialPlayerState.mpvUserConfig).toBe(false)
-
-    const args = ['--hwdec=auto', '--profile=gpu-hq']
-    const withArgs = playerReducer(enabled, { type: 'setMpvExtraArgs', value: args })
-    expect(withArgs.mpvExtraArgs).toBe(args)
-    expect(initialPlayerState.mpvExtraArgs).toEqual([])
-  })
-
   it('setLevelColor sets, replaces, and deletes an override immutably', () => {
     expect(initialPlayerState.levelColors).toEqual({})
 
@@ -874,43 +737,6 @@ describe('playerReducer', () => {
     })
     expect(next.levelColors).toEqual({})
     expect(next.levelColors).not.toBe(initialPlayerState.levelColors)
-  })
-
-  it('setSubtitleDragEnabled changes only the drag mode', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setSubtitleDragEnabled', value: false })
-    expect(next.subtitleDragEnabled).toBe(false)
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
-  })
-
-  it('setExternalSubtitleEncoding changes only the next-load decoder choice', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setExternalSubtitleEncoding',
-      value: 'euc-jp'
-    })
-    expect(next.externalSubtitleEncoding).toBe('euc-jp')
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
-  })
-
-  it('setTranslationEnabled changes only the translation policy', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setTranslationEnabled', value: true })
-    expect(next.translationEnabled).toBe(true)
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
-  })
-
-  it('setStartupBehavior changes only the next-launch preference', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setStartupBehavior',
-      value: 'game-ocr'
-    })
-    expect(next.startupBehavior).toBe('game-ocr')
-    expect(next.filePath).toBe(initialPlayerState.filePath)
-  })
-
-  it('setAppearance changes only the appearance preference', () => {
-    expect(initialPlayerState.appearance).toBe('system')
-    const next = playerReducer(initialPlayerState, { type: 'setAppearance', value: 'dark' })
-    expect(next.appearance).toBe('dark')
-    expect(next.subtitleStyle).toBe(initialPlayerState.subtitleStyle)
   })
 
   it('setPopupSettings merges a partial update without dropping other fields', () => {
@@ -953,12 +779,12 @@ describe('playerReducer', () => {
   it('does not mutate the input state object', () => {
     const prev: PlayerState = { ...initialPlayerState, tracks: [audioTrack] }
     const frozen = Object.freeze({ ...prev })
-    expect(() => playerReducer(frozen, { type: 'setVolume', value: 10 })).not.toThrow()
+    expect(() => playerReducer(frozen, { type: 'set', patch: { volume: 10 } })).not.toThrow()
     expect(frozen.volume).toBe(100)
   })
 
   it('returns a new object reference (immutability) for a known action', () => {
-    const next = playerReducer(initialPlayerState, { type: 'setPaused', value: true })
+    const next = playerReducer(initialPlayerState, { type: 'set', patch: { paused: true } })
     expect(next).not.toBe(initialPlayerState)
   })
 

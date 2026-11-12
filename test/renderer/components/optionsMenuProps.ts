@@ -1,10 +1,6 @@
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import type { OptionsMenuProps } from '@src/renderer/src/components/OptionsMenu'
-import {
-  DEFAULT_APPEARANCE,
-  DEFAULT_KEY_BINDINGS,
-  DEFAULT_POPUP_SETTINGS,
-  DEFAULT_SUBTITLE_STYLE
-} from '@src/shared/playerSettings'
+import { DEFAULT_KEY_BINDINGS } from '@src/shared/playerSettings'
 import {
   DEFAULT_KNOWLEDGE_SETTINGS,
   DEFAULT_SYNC_STATUS
@@ -36,44 +32,27 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       keyBindings: DEFAULT_KEY_BINDINGS,
       onChangeKeyBinding: noop
     },
-    startupBehavior: 'splash',
-    onChangeStartupBehavior: noop,
     playback: {
-      skipSeconds: 5,
-      rightClickTogglePause: true,
-      autoPlayNext: false,
-      subtitleAutoPauseTiming: 'off',
-      subtitleAutoPauseScope: 'all',
+      settings: initialPlayerState,
+      onChange: noop,
       audioDevices: [],
       selectedAudioDevice: AUTO_AUDIO_DEVICE,
       onSelectAudioDevice: noop,
       audioDeviceSelectionPending: false,
       loudnessNormalization: false,
       onToggleLoudnessNorm: noop,
-      screenshotFolder: null,
-      mpvUserConfig: false,
-      mpvExtraArgs: [],
-      onChangeSkipSeconds: noop,
-      onChangeRightClickTogglePause: noop,
-      onChangeAutoPlayNext: noop,
-      onChangeSubtitleAutoPauseTiming: noop,
-      onChangeSubtitleAutoPauseScope: noop,
-      onChangeScreenshotFolder: noop,
-      onChangeMpvUserConfig: noop,
-      onChangeMpvExtraArgs: noop,
       onOpenMpvConfigDir: noop,
       onAudioDevicesRequest: noop
     },
     appearance: {
-      appearance: DEFAULT_APPEARANCE,
+      settings: initialPlayerState,
+      onChange: noop,
       levelColors: {},
-      onChangeAppearance: noop,
       onChangeLevelColor: noop
     },
     subtitles: {
-      subtitleStyle: DEFAULT_SUBTITLE_STYLE,
-      subtitleDragEnabled: true,
-      translationEnabled: false,
+      settings: initialPlayerState,
+      onChange: noop,
       translationSettings: { hasAzureKey: false, azureRegion: '' },
       onSaveAzureTranslationKey: async () => true,
       onSaveAzureTranslationRegion: async () => true,
@@ -85,24 +64,21 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       onSaveJimakuApiKey: async () => undefined,
       onTestJimakuConnection: async () => undefined,
       onClearJimakuApiKey: async () => undefined,
-      onOpenJimakuAccount: noop,
-      onChangeSubtitleStyle: noop,
-      onChangeSubtitleDragEnabled: noop,
-      onChangeTranslationEnabled: noop
+      onOpenJimakuAccount: noop
     },
     dictionaries: {
+      settings: initialPlayerState,
+      onChange: noop,
       mecabDicts: [],
       currentMecabDictId: 'ipadic',
       yomitanDicts: [],
-      popupSettings: DEFAULT_POPUP_SETTINGS,
       onSelectMecabDict: noop,
       onOpenUserUnidicDir: noop,
       onImportYomitanDict: asyncNoop,
       onSetYomitanEnabled: noop,
       onSetYomitanFallbackOnly: noop,
       onReorderYomitanDicts: noop,
-      onRemoveYomitanDict: noop,
-      onChangePopupSettings: noop
+      onRemoveYomitanDict: noop
     },
     anki: {
       ankiPing: async () => ({ ok: false }),
@@ -147,6 +123,8 @@ export function baseOptionsMenuProps(): OptionsMenuProps {
       onStart: noop,
       onStop: noop,
       onRetry: noop
-    }
+    },
+    settings: { ...initialPlayerState, startupBehavior: 'splash' },
+    onChange: noop
   }
 }

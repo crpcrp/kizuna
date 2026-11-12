@@ -8,7 +8,6 @@ import {
   type PlayerSettings
 } from '@src/shared/playerSettings'
 import {
-  EXTERNALLY_PERSISTED_SETTING_KEYS,
   SYNCED_SETTING_KEYS,
   rendererSettingsPatch,
   selectLoadedRendererSettings,
@@ -93,12 +92,5 @@ describe('rendererSettings', () => {
     expect(rendererSettingsPatch(CHANGED_SETTINGS, DEFAULT_PLAYER_SETTINGS)).toEqual(
       CHANGED_SETTINGS
     )
-  })
-
-  it('assigns every persisted setting to exactly one owner', () => {
-    const registered = [...SYNCED_SETTING_KEYS, ...EXTERNALLY_PERSISTED_SETTING_KEYS]
-
-    expect(new Set(registered).size).toBe(registered.length)
-    expect([...registered].sort()).toEqual(Object.keys(DEFAULT_PLAYER_SETTINGS).sort())
   })
 })

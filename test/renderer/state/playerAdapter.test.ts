@@ -29,10 +29,10 @@ describe('buildPlayerAdapter', () => {
     await adapter.setSpeed(4)
 
     expect(dispatch.mock.calls).toEqual([
-      [{ type: 'setPaused', value: true }],
-      [{ type: 'setVolume', value: 42 }],
-      [{ type: 'setMuted', value: true }],
-      [{ type: 'setSpeed', value: 3 }]
+      [{ type: 'set', patch: { paused: true } }],
+      [{ type: 'set', patch: { volume: 42 } }],
+      [{ type: 'set', patch: { muted: true } }],
+      [{ type: 'set', patch: { speed: 3 } }]
     ])
     expect(player.setSpeed).toHaveBeenCalledWith(3)
   })

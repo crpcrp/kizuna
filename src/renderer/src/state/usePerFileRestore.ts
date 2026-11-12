@@ -77,14 +77,16 @@ export function usePerFileRestore({
   useEffect(() => {
     if (!filePath || !settingsReady || isRemoteUrl(filePath)) return
     dispatch({
-      type: 'setSubtitleOffset',
-      value: subtitleOffsetForSelection(
-        subtitleOffsetsRef.current,
-        folderSubtitleOffsetsRef.current,
-        subtitleOffsetsByVersion,
-        filePath,
-        externalSubtitleProvenance
-      )
+      type: 'set',
+      patch: {
+        subtitleOffsetMs: subtitleOffsetForSelection(
+          subtitleOffsetsRef.current,
+          folderSubtitleOffsetsRef.current,
+          subtitleOffsetsByVersion,
+          filePath,
+          externalSubtitleProvenance
+        )
+      }
     })
   }, [
     loadGeneration,
@@ -105,7 +107,7 @@ export function usePerFileRestore({
     // mpv retains `audio-delay` across `loadfile`, so the restored value must
     // always be re-applied — even 0, to clear a delay left by the previous file.
     const delay = audioDelayForFile(audioDelaysRef.current, filePath)
-    dispatch({ type: 'setAudioDelay', value: delay })
+    dispatch({ type: 'set', patch: { audioDelayMs: delay } })
     void bridge.player.setAudioDelay(delay)
     // mpv resets its equalizer per process and video-rotate/deinterlace per
     // file, so the stored picture adjustments must be re-applied after every

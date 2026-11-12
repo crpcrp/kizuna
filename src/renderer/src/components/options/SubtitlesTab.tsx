@@ -1,3 +1,4 @@
+import type { SettingsTabProps } from './types'
 import { useRef, useState } from 'react'
 import type { JimakuSettingsStatus, JimakuTestOutcome } from '../../../../shared/jimaku'
 import {
@@ -7,23 +8,16 @@ import {
   SUBTITLE_FONT_SCALE_STEP,
   SUBTITLE_OUTLINE_SIZE_MAX,
   SUBTITLE_OUTLINE_SIZE_MIN,
-  SUBTITLE_OUTLINE_SIZE_STEP,
-  type SubtitleStyleSettings
+  SUBTITLE_OUTLINE_SIZE_STEP
 } from '../../../../shared/playerSettings'
 import type { PublicTranslationSettings } from '../../../../shared/translation'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
-export interface SubtitlesTabProps {
+export interface SubtitlesTabProps extends SettingsTabProps {
   active: boolean
-  subtitleStyle: SubtitleStyleSettings
-  subtitleDragEnabled: boolean
-  translationEnabled: boolean
   translationSettings: PublicTranslationSettings
   translationLoadError?: string
-  onChangeSubtitleStyle: (value: Partial<SubtitleStyleSettings>) => void
-  onChangeSubtitleDragEnabled: (value: boolean) => void
-  onChangeTranslationEnabled: (enabled: boolean) => void
   onSaveAzureTranslationKey: (key: string) => boolean | Promise<boolean>
   onSaveAzureTranslationRegion: (region: string) => boolean | Promise<boolean>
   jimakuSettings?: JimakuSettingsStatus
@@ -188,15 +182,11 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
 
 /** Subtitle placement, appearance, and experimental translation settings. */
 export default function SubtitlesTab({
+  settings,
+  onChange,
   active,
-  subtitleStyle,
-  subtitleDragEnabled,
-  translationEnabled,
   translationSettings,
   translationLoadError,
-  onChangeSubtitleStyle,
-  onChangeSubtitleDragEnabled,
-  onChangeTranslationEnabled,
   onSaveAzureTranslationKey,
   onSaveAzureTranslationRegion,
   jimakuSettings,
@@ -206,6 +196,7 @@ export default function SubtitlesTab({
   onClearJimakuApiKey,
   onOpenJimakuAccount
 }: SubtitlesTabProps): React.JSX.Element {
+  const { subtitleStyle, subtitleDragEnabled, translationEnabled } = settings
   const [fontScaleDraft, setFontScaleDraft] = useState<string | null>(null)
   const [azureKeyDraft, setAzureKeyDraft] = useState('')
   const [azureRegionDraft, setAzureRegionDraft] = useState<string | null>(null)
@@ -294,7 +285,7 @@ export default function SubtitlesTab({
           id="subtitle-background-enabled"
           title="Show subtitle background"
           checked={subtitleStyle.backgroundEnabled}
-          onChange={(backgroundEnabled) => onChangeSubtitleStyle({ backgroundEnabled })}
+          onChange={(backgroundEnabled) => onChange({ subtitleStyle: { backgroundEnabled } })}
         />
         <div className="options-row">
           <label htmlFor="subtitle-font-scale-input" className="options-row-label">
@@ -317,7 +308,7 @@ export default function SubtitlesTab({
             onChange={(e) => {
               setFontScaleDraft(e.target.value)
               const fontScale = parseFontScalePercent(e.target.value)
-              if (fontScale !== null) onChangeSubtitleStyle({ fontScale })
+              if (fontScale !== null) onChange({ subtitleStyle: { fontScale } })
             }}
             onBlur={() => setFontScaleDraft(null)}
           />
@@ -343,7 +334,7 @@ export default function SubtitlesTab({
                 outlineSizePx >= SUBTITLE_OUTLINE_SIZE_MIN &&
                 outlineSizePx <= SUBTITLE_OUTLINE_SIZE_MAX
               ) {
-                onChangeSubtitleStyle({ outlineSizePx })
+                onChange({ subtitleStyle: { outlineSizePx } })
               }
             }}
           />
@@ -363,7 +354,7 @@ export default function SubtitlesTab({
             value={Math.round(subtitleStyle.xPct)}
             onChange={(e) => {
               const xPct = parsePositionPercent(e.target.value)
-              if (xPct !== null) onChangeSubtitleStyle({ xPct })
+              if (xPct !== null) onChange({ subtitleStyle: { xPct } })
             }}
           />
         </div>
@@ -382,7 +373,7 @@ export default function SubtitlesTab({
             value={Math.round(subtitleStyle.yPct)}
             onChange={(e) => {
               const yPct = parsePositionPercent(e.target.value)
-              if (yPct !== null) onChangeSubtitleStyle({ yPct })
+              if (yPct !== null) onChange({ subtitleStyle: { yPct } })
             }}
           />
         </div>
@@ -393,13 +384,13 @@ export default function SubtitlesTab({
           id="subtitle-drag-enabled"
           title="Drag subtitles to reposition"
           checked={subtitleDragEnabled}
-          onChange={onChangeSubtitleDragEnabled}
+          onChange={(value) => onChange({ subtitleDragEnabled: value })}
         />
         <button
           type="button"
           id="subtitle-style-reset"
           className="options-keybind-button"
-          onClick={() => onChangeSubtitleStyle(DEFAULT_SUBTITLE_STYLE)}
+          onClick={() => onChange({ subtitleStyle: DEFAULT_SUBTITLE_STYLE })}
         >
           Reset to default
         </button>
@@ -415,7 +406,7 @@ export default function SubtitlesTab({
           id="translation-enabled"
           title="Enable experimental translation for subtitles and OCR"
           checked={translationEnabled}
-          onChange={onChangeTranslationEnabled}
+          onChange={(value) => onChange({ translationEnabled: value })}
         />
         <p className="options-hint">
           Translation uses your official Microsoft Azure Translator resource. Only explicitly

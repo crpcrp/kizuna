@@ -87,7 +87,7 @@ describe('usePerFileRestore', () => {
     result.input.loadGeneration = 2
     result.hook.rerender({ value: result.input })
 
-    expect(result.dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: 800 })
+    expect(result.dispatch).toHaveBeenCalledWith({ type: 'set', patch: { subtitleOffsetMs: 800 } })
   })
 
   it('restores the folder default for downloaded subtitles without an explicit override', () => {
@@ -104,7 +104,7 @@ describe('usePerFileRestore', () => {
     result.input.loadGeneration = 2
     result.hook.rerender({ value: result.input })
 
-    expect(result.dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: -300 })
+    expect(result.dispatch).toHaveBeenCalledWith({ type: 'set', patch: { subtitleOffsetMs: -300 } })
   })
 
   it('reads dimensions from ffprobe (media), never mpv, for a local path', () => {

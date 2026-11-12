@@ -1,10 +1,9 @@
+import type { SettingsTabProps } from './types'
 import type { StartupBehavior } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 
-export interface StartupTabProps {
+export interface StartupTabProps extends SettingsTabProps {
   active: boolean
-  startupBehavior: StartupBehavior
-  onChangeStartupBehavior: (value: StartupBehavior) => void
   supportsGameOcr: boolean
 }
 
@@ -35,11 +34,12 @@ export const STARTUP_SETTING_ENTRIES: SettingEntry[] = [
 /** Startup surface selection. The choice is persisted for the next launch;
  * it does not affect the currently running renderer. */
 export default function StartupTab({
+  settings,
+  onChange,
   active,
-  startupBehavior,
-  onChangeStartupBehavior,
   supportsGameOcr
 }: StartupTabProps): React.JSX.Element {
+  const { startupBehavior } = settings
   return (
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       <div
@@ -74,7 +74,7 @@ export default function StartupTab({
                 disabled={disabled}
                 aria-labelledby={labelId}
                 aria-describedby={descriptionId}
-                onChange={() => onChangeStartupBehavior(value)}
+                onChange={() => onChange({ startupBehavior: value })}
               />
             </div>
           )

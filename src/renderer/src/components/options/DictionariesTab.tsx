@@ -1,3 +1,4 @@
+import type { SettingsTabProps } from './types'
 import { useState } from 'react'
 import type { PopupSettings } from '../../../../shared/playerSettings'
 import type { McDict } from '../../../../shared/mecab'
@@ -50,12 +51,11 @@ export function parsePopupCountInput(rawValue: string): number | null {
   return Number.isFinite(value) && value >= 1 ? value : null
 }
 
-export interface DictionariesTabProps {
+export interface DictionariesTabProps extends SettingsTabProps {
   active?: boolean
   mecabDicts: McDict[]
   currentMecabDictId: 'ipadic' | 'unidic'
   yomitanDicts: DictInfo[]
-  popupSettings: PopupSettings
   /** User-facing error from the last dictionaries-domain load. Undefined when there is none. */
   loadError?: string
   onSelectMecabDict: (id: 'ipadic' | 'unidic') => void
@@ -71,7 +71,6 @@ export interface DictionariesTabProps {
   onSetYomitanFallbackOnly: (id: number, fallbackOnly: boolean) => void
   onReorderYomitanDicts: (orderedIds: number[]) => void
   onRemoveYomitanDict: (id: number) => void
-  onChangePopupSettings: (value: Partial<PopupSettings>) => void
 }
 
 export const DICTIONARIES_SETTING_ENTRIES: SettingEntry[] = [
@@ -123,11 +122,12 @@ export const DICTIONARIES_SETTING_ENTRIES: SettingEntry[] = [
  * own import-progress overlay state — App/OptionsMenu don't need to know a
  * multi-file import is in flight. */
 export default function DictionariesTab({
+  settings,
+  onChange,
   active = true,
   mecabDicts,
   currentMecabDictId,
   yomitanDicts,
-  popupSettings,
   loadError,
   onSelectMecabDict,
   onOpenUserUnidicDir,
@@ -136,9 +136,9 @@ export default function DictionariesTab({
   onSetYomitanEnabled,
   onSetYomitanFallbackOnly,
   onReorderYomitanDicts,
-  onRemoveYomitanDict,
-  onChangePopupSettings
+  onRemoveYomitanDict
 }: DictionariesTabProps): React.JSX.Element {
+  const { popupSettings } = settings
   const unidicInstallPath = mecabDicts.find((dict) => dict.id === 'unidic')?.dicdir
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null)
 
@@ -376,7 +376,11 @@ export default function DictionariesTab({
           <select
             id="popup-freq-dict-select"
             value={popupSettings.frequencyDictId ?? ''}
-            onChange={(e) => onChangePopupSettings(frequencyDictSelection(e.target.value))}
+            onChange={(e) =>
+              onChange({
+                popupSettings: frequencyDictSelection(e.target.value)
+              })
+            }
           >
             <option value="">None</option>
             {yomitanDicts.map((dict) => (
@@ -396,7 +400,11 @@ export default function DictionariesTab({
           <select
             id="popup-sort-order-select"
             value={popupSettings.sortOrder}
-            onChange={(e) => onChangePopupSettings(sortOrderSelection(e.target.value))}
+            onChange={(e) =>
+              onChange({
+                popupSettings: sortOrderSelection(e.target.value)
+              })
+            }
           >
             <option value="auto">Auto (dictionary default)</option>
             <option value="rank-based">Rank-based (lower rank first)</option>
@@ -418,7 +426,7 @@ export default function DictionariesTab({
             value={popupSettings.maxEntries}
             onChange={(e) => {
               const value = parsePopupCountInput(e.target.value)
-              if (value !== null) onChangePopupSettings({ maxEntries: value })
+              if (value !== null) onChange({ popupSettings: { maxEntries: value } })
             }}
           />
         </div>
@@ -437,7 +445,7 @@ export default function DictionariesTab({
             value={popupSettings.maxMeanings}
             onChange={(e) => {
               const value = parsePopupCountInput(e.target.value)
-              if (value !== null) onChangePopupSettings({ maxMeanings: value })
+              if (value !== null) onChange({ popupSettings: { maxMeanings: value } })
             }}
           />
         </div>

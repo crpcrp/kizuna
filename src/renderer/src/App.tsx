@@ -362,7 +362,7 @@ export default function App({
     // playback position produces stutter (see media-player-features-plan #3).
     if (state.abLoopState.a !== null) {
       void window.kizuna.player.setAbLoop(null, null)
-      dispatch({ type: 'setAbLoop', value: { a: null, b: null } })
+      dispatch({ type: 'set', patch: { abLoopState: { a: null, b: null } } })
     }
     setLoopCue(cue)
   }
@@ -556,10 +556,10 @@ export default function App({
               onCycleAbLoop: handleCycleAbLoop,
               subtitleAutoPauseTiming: state.subtitleAutoPauseTiming,
               onChangeSubtitleAutoPauseTiming: (value) =>
-                dispatch({ type: 'setSubtitleAutoPauseTiming', value }),
+                dispatch({ type: 'set', patch: { subtitleAutoPauseTiming: value } }),
               subtitleAutoPauseScope: state.subtitleAutoPauseScope,
               onChangeSubtitleAutoPauseScope: (value) =>
-                dispatch({ type: 'setSubtitleAutoPauseScope', value })
+                dispatch({ type: 'set', patch: { subtitleAutoPauseScope: value } })
             }}
             vocabulary={{
               ...vocabulary.vocabularyMenu,

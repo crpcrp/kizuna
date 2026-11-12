@@ -155,7 +155,7 @@ async function restoreSubtitle(
   const restoreEmbedded = async (sid: number | null): Promise<string | undefined> => {
     const restoreFileOffset = (): void => {
       const offsetMs = session.getFileSubtitleOffset?.()
-      if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
+      if (offsetMs !== undefined) dispatch({ type: 'set', patch: { subtitleOffsetMs: offsetMs } })
     }
     if (sid === null) {
       if (!superseded()) restoreFileOffset()
@@ -216,7 +216,7 @@ async function restoreSubtitle(
         })
       } else {
         const offsetMs = session.getFileSubtitleOffset?.()
-        if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
+        if (offsetMs !== undefined) dispatch({ type: 'set', patch: { subtitleOffsetMs: offsetMs } })
       }
       return undefined
     } catch (err) {

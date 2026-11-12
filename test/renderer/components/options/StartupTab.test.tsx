@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import StartupTab from '@src/renderer/src/components/options/StartupTab'
@@ -11,9 +12,9 @@ afterEach(() => {
 function renderTab(overrides: Partial<React.ComponentProps<typeof StartupTab>> = {}): void {
   render(
     <StartupTab
+      settings={{ ...initialPlayerState, startupBehavior: 'splash' }}
+      onChange={vi.fn()}
       active
-      startupBehavior="splash"
-      onChangeStartupBehavior={vi.fn()}
       supportsGameOcr
       {...overrides}
     />
@@ -22,7 +23,7 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof StartupTab>> =
 
 describe('StartupTab', () => {
   it('renders the accessible group and selected persisted choice', () => {
-    renderTab({ startupBehavior: 'video-player' })
+    renderTab({ settings: { ...initialPlayerState, startupBehavior: 'video-player' } })
 
     expect(screen.getByRole('radiogroup', { name: 'When Kizuna starts' })).not.toBeNull()
     expect(screen.getByRole('radio', { name: 'Video player' })).toHaveProperty('checked', true)
@@ -31,16 +32,19 @@ describe('StartupTab', () => {
 
   it('dispatches one selection change without changing the current surface', () => {
     const onChangeStartupBehavior = vi.fn()
-    renderTab({ onChangeStartupBehavior })
+    renderTab({ onChange: onChangeStartupBehavior })
 
     fireEvent.click(screen.getByRole('radio', { name: 'Video player' }))
 
     expect(onChangeStartupBehavior).toHaveBeenCalledOnce()
-    expect(onChangeStartupBehavior).toHaveBeenCalledWith('video-player')
+    expect(onChangeStartupBehavior).toHaveBeenCalledWith({ startupBehavior: 'video-player' })
   })
 
   it('disables Game OCR with a visible Windows-only explanation when unsupported', () => {
-    renderTab({ supportsGameOcr: false, startupBehavior: 'game-ocr' })
+    renderTab({
+      supportsGameOcr: false,
+      settings: { ...initialPlayerState, startupBehavior: 'game-ocr' }
+    })
 
     const gameOcr = screen.getByRole('radio', { name: 'Game OCR' }) as HTMLInputElement
     expect(gameOcr.disabled).toBe(true)

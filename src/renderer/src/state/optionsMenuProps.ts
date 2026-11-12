@@ -1,7 +1,9 @@
+import type { OptionsSettingsPatch } from '../components/options/types'
+import type { LoadedRendererSettings } from './rendererSettings'
 import type { Dispatch } from 'react'
 import type { OptionsMenuProps } from '../components/OptionsMenu'
 import type { PlaybackTabProps } from '../components/options/PlaybackTab'
-import type { PlayerAction, PlayerState } from './playerState'
+import type { PlayerAction } from './playerState'
 import type { OptionsDialogActions, OptionsDialogData } from './useOptionsDialog'
 import type { VocabularyKnowledgeOptions } from './useVocabularyMining'
 import type { UpdateSettings } from '../../../shared/update'
@@ -9,25 +11,7 @@ import type { GameOcrTabProps } from '../components/options/GameOcrTab'
 
 /** The player-state fields the dialog shows. Everything else it renders comes
  * from the options-data domains or from another feature's group. */
-export type OptionsSettingsState = Pick<
-  PlayerState,
-  | 'appearance'
-  | 'autoPlayNext'
-  | 'keyBindings'
-  | 'levelColors'
-  | 'mpvExtraArgs'
-  | 'mpvUserConfig'
-  | 'popupSettings'
-  | 'rightClickTogglePause'
-  | 'screenshotFolder'
-  | 'skipSeconds'
-  | 'startupBehavior'
-  | 'subtitleAutoPauseScope'
-  | 'subtitleAutoPauseTiming'
-  | 'subtitleDragEnabled'
-  | 'subtitleStyle'
-  | 'translationEnabled'
->
+export type OptionsSettingsState = LoadedRendererSettings
 
 /** The playback rows owned by the playback/window feature, which measures and
  * drives the mpv outputs behind them. */
@@ -90,9 +74,16 @@ export function buildOptionsMenuProps({
   supportsGameOcr,
   gameOcr
 }: OptionsMenuPropsInput): OptionsMenuProps {
-  // Most rows only dispatch: the settings lifecycle already persists the
-  // reducer fields it watches. The two rows that call `actions.persist` below
-  // are scheduled explicitly because nothing else writes them.
+  const onChange = (patch: OptionsSettingsPatch): void => {
+    const { subtitleStyle, popupSettings, ...fields } = patch
+    if (Object.keys(fields).length) dispatch({ type: 'set', patch: fields })
+    if (subtitleStyle) dispatch({ type: 'setSubtitleStyle', value: subtitleStyle })
+    if (popupSettings) dispatch({ type: 'setPopupSettings', value: popupSettings })
+    if (patch.translationEnabled !== undefined) {
+      actions.persist({ translationEnabled: patch.translationEnabled })
+    }
+  }
+  const shared = { settings, onChange }
   return {
     open,
     requestedCategory,
@@ -104,49 +95,21 @@ export function buildOptionsMenuProps({
       heldModifiers,
       onChangeKeyBinding: (action, binding) => dispatch({ type: 'setKeyBinding', action, binding })
     },
-    startupBehavior: settings.startupBehavior,
-    onChangeStartupBehavior: (value) => dispatch({ type: 'setStartupBehavior', value }),
+    ...shared,
     playback: {
+      ...shared,
       ...playback,
-      skipSeconds: settings.skipSeconds,
-      rightClickTogglePause: settings.rightClickTogglePause,
-      autoPlayNext: settings.autoPlayNext,
-      subtitleAutoPauseTiming: settings.subtitleAutoPauseTiming,
-      subtitleAutoPauseScope: settings.subtitleAutoPauseScope,
-      screenshotFolder: settings.screenshotFolder,
-      mpvUserConfig: settings.mpvUserConfig,
-      mpvExtraArgs: settings.mpvExtraArgs,
-      onChangeSkipSeconds: (value) => dispatch({ type: 'setSkipSeconds', value }),
-      onChangeRightClickTogglePause: (value) =>
-        dispatch({ type: 'setRightClickTogglePause', value }),
-      onChangeAutoPlayNext: (value) => dispatch({ type: 'setAutoPlayNext', value }),
-      onChangeSubtitleAutoPauseTiming: (value) =>
-        dispatch({ type: 'setSubtitleAutoPauseTiming', value }),
-      onChangeSubtitleAutoPauseScope: (value) =>
-        dispatch({ type: 'setSubtitleAutoPauseScope', value }),
-      onChangeScreenshotFolder: (value) => dispatch({ type: 'setScreenshotFolder', value }),
-      onChangeMpvUserConfig: (value) => dispatch({ type: 'setMpvUserConfig', value }),
-      onChangeMpvExtraArgs: (value) => dispatch({ type: 'setMpvExtraArgs', value }),
       onOpenMpvConfigDir: actions.onOpenMpvConfigDir
     },
     appearance: {
-      appearance: settings.appearance,
+      ...shared,
       levelColors: settings.levelColors,
-      onChangeAppearance: (value) => dispatch({ type: 'setAppearance', value }),
       onChangeLevelColor: (level, color) => dispatch({ type: 'setLevelColor', level, color })
     },
     subtitles: {
-      subtitleStyle: settings.subtitleStyle,
-      subtitleDragEnabled: settings.subtitleDragEnabled,
-      translationEnabled: settings.translationEnabled,
+      ...shared,
       translationSettings: data.translationSettings,
       translationLoadError: data.translationError,
-      onChangeSubtitleStyle: (value) => dispatch({ type: 'setSubtitleStyle', value }),
-      onChangeSubtitleDragEnabled: (value) => dispatch({ type: 'setSubtitleDragEnabled', value }),
-      onChangeTranslationEnabled: (value) => {
-        dispatch({ type: 'setTranslationEnabled', value })
-        actions.persist({ translationEnabled: value })
-      },
       onSaveAzureTranslationKey: actions.onSaveAzureTranslationKey,
       onSaveAzureTranslationRegion: actions.onSaveAzureTranslationRegion,
       jimakuSettings: data.jimakuSettings,
@@ -157,11 +120,11 @@ export function buildOptionsMenuProps({
       onOpenJimakuAccount: actions.onOpenJimakuAccount
     },
     dictionaries: {
+      ...shared,
       mecabDicts: data.dictionaries.mecabDicts,
       currentMecabDictId: data.dictionaries.currentMecabDictId,
       yomitanDicts: data.dictionaries.yomitanDicts,
       loadError: data.dictionariesError,
-      popupSettings: settings.popupSettings,
       onSelectMecabDict: knowledge.onSelectMecabDict,
       onOpenUserUnidicDir: actions.onOpenUserUnidicDir,
       onImportYomitanDict: actions.onImportYomitanDict,
@@ -169,8 +132,7 @@ export function buildOptionsMenuProps({
       onSetYomitanEnabled: actions.onSetYomitanEnabled,
       onSetYomitanFallbackOnly: actions.onSetYomitanFallbackOnly,
       onReorderYomitanDicts: actions.onReorderYomitanDicts,
-      onRemoveYomitanDict: actions.onRemoveYomitanDict,
-      onChangePopupSettings: (value) => dispatch({ type: 'setPopupSettings', value })
+      onRemoveYomitanDict: actions.onRemoveYomitanDict
     },
     anki: {
       ankiSettings: data.anki?.settings,

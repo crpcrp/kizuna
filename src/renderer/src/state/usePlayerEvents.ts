@@ -67,12 +67,16 @@ export function usePlayerEvents({
   useEffect(() => {
     // Per-frame position bypasses the reducer; see timePosStore.ts.
     const offTimePos = bridge.player.onTimePos((value) => timePosStore.set(value))
-    const offDuration = bridge.player.onDuration((value) => dispatch({ type: 'duration', value }))
+    const offDuration = bridge.player.onDuration((value) =>
+      dispatch({ type: 'set', patch: { duration: value } })
+    )
     // mpv is the source of truth for pause: this reflects self-pauses the
     // renderer never issued (frame-step lands here, EOF with keep-open).
-    const offPause = bridge.player.onPause((value) => dispatch({ type: 'setPaused', value }))
+    const offPause = bridge.player.onPause((value) =>
+      dispatch({ type: 'set', patch: { paused: value } })
+    )
     const offFullscreen = bridge.windowControls.onFullscreenChange((value) => {
-      dispatch({ type: 'setFullscreen', value })
+      dispatch({ type: 'set', patch: { fullscreen: value } })
       const deferredExit = deferredFullscreenMiniExitRef.current
       if (!value && deferredExit) {
         deferredFullscreenMiniExitRef.current = null

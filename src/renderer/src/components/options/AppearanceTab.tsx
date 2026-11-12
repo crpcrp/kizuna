@@ -1,3 +1,4 @@
+import type { SettingsTabProps } from './types'
 import type { Appearance, LevelColors, UnderlineLevel } from '../../../../shared/playerSettings'
 import { DEFAULT_LEVEL_COLOR_HEX } from '../../util/levelColors'
 import type { SettingEntry } from './types'
@@ -34,11 +35,9 @@ export const APPEARANCE_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-export interface AppearanceTabProps {
+export interface AppearanceTabProps extends SettingsTabProps {
   active: boolean
-  appearance: Appearance
   levelColors: LevelColors
-  onChangeAppearance: (value: Appearance) => void
   onChangeLevelColor: (level: UnderlineLevel, color: string | null) => void
 }
 
@@ -82,12 +81,13 @@ export function UnderlineColorRows({
 
 /** Theme selection and knowledge-level underline colors. */
 export default function AppearanceTab({
+  settings,
+  onChange,
   active,
-  appearance,
   levelColors,
-  onChangeAppearance,
   onChangeLevelColor
 }: AppearanceTabProps): React.JSX.Element {
+  const { appearance } = settings
   return (
     <section className={active ? 'options-tab active' : 'options-tab'} aria-hidden={!active}>
       <div className="options-section">
@@ -104,7 +104,7 @@ export default function AppearanceTab({
               name="appearance-mode"
               value={value}
               checked={appearance === value}
-              onChange={() => onChangeAppearance(value)}
+              onChange={() => onChange({ appearance: value })}
             />
           </div>
         ))}

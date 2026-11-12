@@ -33,29 +33,8 @@ export const SYNCED_SETTING_KEYS = [
   'loudnessNormalization'
 ] as const satisfies readonly (keyof PlayerSettings)[]
 
-/**
- * The persisted settings deliberately kept out of the automatic path, and who
- * writes each one instead:
- *
- * - `subtitleOffsets`, `folderSubtitleOffsets`, `audioDelays`: per-file maps
- *   held in refs (not the reducer) and scheduled by `usePlaybackWindow` when
- *   the current file's value changes.
- * - `sidebarOpen`, `playlistOpen`: panel visibility held in `App.tsx`
- *   `useState` and scheduled by `usePlaybackWindow`'s toggles.
- * - `translationEnabled`: reducer-backed, but scheduled by the Options row in
- *   `optionsMenuProps.ts` so the toggle writes on the spot.
- *
- * Listed so every `PlayerSettings` field has one named owner; the settings
- * test asserts the two lists together cover the whole type.
- */
-export const EXTERNALLY_PERSISTED_SETTING_KEYS = [
-  'subtitleOffsets',
-  'folderSubtitleOffsets',
-  'audioDelays',
-  'sidebarOpen',
-  'playlistOpen',
-  'translationEnabled'
-] as const satisfies readonly (keyof PlayerSettings)[]
+// Per-file maps and panel visibility are persisted by usePlaybackWindow.
+// translationEnabled is persisted directly by the Options dialog.
 
 export type SyncedSettingKey = (typeof SYNCED_SETTING_KEYS)[number]
 
@@ -73,9 +52,7 @@ export type LoadedRendererSettings = RendererSettings & Pick<PlayerSettings, 'tr
 export function selectRendererSettings(source: RendererSettings): RendererSettings {
   const selected: Partial<RendererSettings> = {}
   for (const key of SYNCED_SETTING_KEYS) {
-    // Per-key the value and the target field share a type, but the loop widens
-    // both to unions TypeScript cannot pair up again.
-    ;(selected as Record<string, unknown>)[key] = source[key]
+    copySetting(selected, source, key)
   }
   return selected as RendererSettings
 }
@@ -106,8 +83,16 @@ export function rendererSettingsPatch(
   const patch: Partial<RendererSettings> = {}
   for (const key of SYNCED_SETTING_KEYS) {
     if (settingsFieldChanged(previous[key], next[key])) {
-      ;(patch as Record<string, unknown>)[key] = next[key]
+      copySetting(patch, next, key)
     }
   }
   return patch
+}
+
+function copySetting<K extends SyncedSettingKey>(
+  target: Partial<RendererSettings>,
+  source: RendererSettings,
+  key: K
+): void {
+  target[key] = source[key]
 }

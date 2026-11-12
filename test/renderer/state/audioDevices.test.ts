@@ -164,7 +164,7 @@ describe('useAudioDevices', () => {
 
     pending.resolve()
     await waitFor(() =>
-      expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/live' })
+      expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDevice: 'wasapi/live' } })
     )
     expect(hook.result.current.selectionPending).toBe(false)
   })
@@ -195,9 +195,12 @@ describe('useAudioDevices', () => {
     expect(player.setAudioDevice).toHaveBeenCalledTimes(1)
     pending.resolve()
     await waitFor(() =>
-      expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/first' })
+      expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDevice: 'wasapi/first' } })
     )
-    expect(dispatch).not.toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/second' })
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: 'set',
+      patch: { audioDevice: 'wasapi/second' }
+    })
   })
 
   it('unmutes a selection made after a fallback recovery, once', async () => {
@@ -207,12 +210,12 @@ describe('useAudioDevices', () => {
     )
 
     await act(async () => hook.result.current.requestDevices())
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setMuted', value: false })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { muted: false } })
 
     dispatch.mockClear()
     player.setMuted.mockClear()
     await act(async () => hook.result.current.selectDevice('wasapi/live'))
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/live' })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDevice: 'wasapi/live' } })
     expect(player.setMuted).toHaveBeenCalledTimes(1)
 
     dispatch.mockClear()
@@ -239,7 +242,7 @@ describe('useAudioDevices', () => {
         'The audio device changed, but Kizuna could not restore sound.'
       )
     )
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/live' })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDevice: 'wasapi/live' } })
   })
 
   it('retains the last known list when an explicit refresh fails', async () => {
@@ -284,7 +287,7 @@ describe('useAudioDevices', () => {
     act(() => hook.result.current.requestDevices())
     act(() => hook.result.current.selectDevice('wasapi/live'))
     await waitFor(() =>
-      expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/live' })
+      expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDevice: 'wasapi/live' } })
     )
 
     pendingRefresh.resolve([{ name: 'auto', description: 'Autoselect device' }])
@@ -303,7 +306,10 @@ describe('useAudioDevices', () => {
     pendingSelection.resolve()
 
     await waitFor(() => expect(hook.result.current.selectionPending).toBe(false))
-    expect(dispatch).not.toHaveBeenCalledWith({ type: 'setAudioDevice', value: 'wasapi/live' })
+    expect(dispatch).not.toHaveBeenCalledWith({
+      type: 'set',
+      patch: { audioDevice: 'wasapi/live' }
+    })
 
     pendingRefresh.resolve([{ name: 'auto', description: 'Autoselect device' }])
   })

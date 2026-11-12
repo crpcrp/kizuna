@@ -1,3 +1,4 @@
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { describe, it, expect, vi } from 'vitest'
 import { isValidElement, type ReactElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -111,7 +112,7 @@ describe('OptionsMenu markup', () => {
   })
 
   it('renders the skip-seconds input with the current value', () => {
-    const html = renderMenu({ playback: { skipSeconds: 12 } })
+    const html = renderMenu({ playback: { settings: { ...initialPlayerState, skipSeconds: 12 } } })
     expect(html).toMatch(/id="skip-seconds-input"[^>]*value="12"/)
   })
 
@@ -119,7 +120,9 @@ describe('OptionsMenu markup', () => {
     const htmlDefault = renderMenu()
     expect(htmlDefault).toMatch(/id="right-click-toggle-pause-checkbox"[^>]*checked=""/)
 
-    const htmlDisabled = renderMenu({ playback: { rightClickTogglePause: false } })
+    const htmlDisabled = renderMenu({
+      playback: { settings: { ...initialPlayerState, rightClickTogglePause: false } }
+    })
     expect(htmlDisabled).toContain('id="right-click-toggle-pause-checkbox"')
     expect(htmlDisabled).not.toMatch(/id="right-click-toggle-pause-checkbox"[^>]*checked=""/)
   })
@@ -138,7 +141,7 @@ describe('OptionsMenu markup', () => {
       onClose,
       onCategoryOpen,
       keybindings: { onChangeKeyBinding },
-      playback: { onChangeSkipSeconds }
+      playback: { onChange: onChangeSkipSeconds }
     })
     expect(onClose).not.toHaveBeenCalled()
     expect(onChangeKeyBinding).not.toHaveBeenCalled()
@@ -216,7 +219,9 @@ describe('OptionsMenu Appearance tab', () => {
   })
 
   it('checks the radio matching the appearance prop', () => {
-    const html = renderMenu({ appearance: { appearance: 'dark' } })
+    const html = renderMenu({
+      appearance: { settings: { ...initialPlayerState, appearance: 'dark' } }
+    })
     expect(html).toMatch(/id="appearance-dark"[^>]*checked=""/)
     expect(html).not.toMatch(/id="appearance-system"[^>]*checked=""/)
   })
@@ -390,7 +395,12 @@ describe('OptionsMenu Subtitles tab', () => {
     subtitleStyle = DEFAULT_SUBTITLE_STYLE,
     onChangeSubtitleStyle = noop
   ): string {
-    return renderMenu({ subtitles: { subtitleStyle, onChangeSubtitleStyle } })
+    return renderMenu({
+      subtitles: {
+        settings: { ...initialPlayerState, subtitleStyle },
+        onChange: onChangeSubtitleStyle
+      }
+    })
   }
 
   it('renders font-size and position inputs with the current values', () => {
@@ -429,9 +439,9 @@ describe('OptionsMenu Subtitles tab', () => {
 
   it('renders the subtitle drag toggle enabled by default and accepts the disabled value', () => {
     expect(renderMenu()).toMatch(/id="subtitle-drag-enabled"[^>]*checked=""/)
-    expect(renderMenu({ subtitles: { subtitleDragEnabled: false } })).toMatch(
-      /id="subtitle-drag-enabled"(?![^>]*checked)/
-    )
+    expect(
+      renderMenu({ subtitles: { settings: { ...initialPlayerState, subtitleDragEnabled: false } } })
+    ).toMatch(/id="subtitle-drag-enabled"(?![^>]*checked)/)
   })
 
   it('falls back to DEFAULT_SUBTITLE_STYLE when subtitleStyle is omitted', () => {

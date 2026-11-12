@@ -49,8 +49,8 @@ export interface OptionsMenuProps {
   anki: Omit<AnkiTabProps, 'active'>
   knowledge: Omit<KnowledgeTabProps, 'active'>
   setup: Omit<SetupTabProps, 'active' | 'nowMs' | 'onGoToCategory' | 'categoryLabel'>
-  startupBehavior: StartupTabProps['startupBehavior']
-  onChangeStartupBehavior: StartupTabProps['onChangeStartupBehavior']
+  settings: StartupTabProps['settings']
+  onChange: StartupTabProps['onChange']
   supportsGameOcr: boolean
   gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
@@ -88,8 +88,8 @@ export default function OptionsMenu({
   anki,
   knowledge,
   setup,
-  startupBehavior,
-  onChangeStartupBehavior,
+  settings,
+  onChange,
   supportsGameOcr,
   gameOcr
 }: OptionsMenuProps): React.JSX.Element {
@@ -247,8 +247,8 @@ export default function OptionsMenu({
             {visibleCategory === 'startup' && (
               <StartupTab
                 active
-                startupBehavior={startupBehavior}
-                onChangeStartupBehavior={onChangeStartupBehavior}
+                settings={settings}
+                onChange={onChange}
                 supportsGameOcr={supportsGameOcr}
               />
             )}
