@@ -132,24 +132,8 @@ jobs:
       - name: Check formatting
         run: npm run format:check
 
-      # scripts/run-tests.mjs writes failing test names to test-results.log and
-      # exits non-zero. It runs the full Vitest suite on both legs — no reduced
-      # or allow-failure subset — and the following step uploads the log only
-      # when the test step fails.
       - name: Test
         run: npm test
-
-      # Kept only long enough to diagnose the run that produced it; a failing
-      # PR is fixed in days, not months. The name carries the leg so the two
-      # matrix jobs never collide on one artifact.
-      - name: Upload failing test names
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-results-${{ matrix.id }}
-          path: test-results.log
-          if-no-files-found: ignore
-          retention-days: 7
 
       # Keep notice generation covered by regular CI.
       - name: Generate third-party notices

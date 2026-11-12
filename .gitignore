@@ -27,7 +27,6 @@ resources/*
 
 
 
-test-results.log
 
 # Local Linux development and setup helpers
 /.kizuna-vm-reports/

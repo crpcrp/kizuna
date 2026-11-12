@@ -26,7 +26,7 @@
     "jlpt-kanji-data:update": "node scripts/update-jlpt-kanji.mjs",
     "notices": "node scripts/generate-notices.mjs",
     "test": "node scripts/run-tests.mjs",
-    "test:watch": "vitest",
+    "test:watch": "node scripts/run-tests.mjs watch",
     "postinstall": "install-electron && electron-rebuild -f -w better-sqlite3",
     "dist": "npm run notices && electron-vite build && electron-builder --win nsis --publish never",
     "dist:linux": "npm run notices && electron-vite build && electron-builder --linux AppImage deb --x64 --publish never",
