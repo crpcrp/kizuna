@@ -39,8 +39,6 @@ export interface GameOcrControllerOptions {
    * basename and PID, never a full path.
    */
   log?: (message: string) => void
-  /** Injected so the key-repeat guard does not depend on a real clock. */
-  now?: () => number
 }
 
 export interface GameOcrController {
@@ -110,8 +108,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     shortcut: options.shortcut,
     accelerator: options.accelerator,
     onCapture: () => requestCapture(),
-    onError: reportError,
-    now: options.now ?? (() => Date.now())
+    onError: reportError
   })
 
   const coordinator = createGameOcrCaptureCoordinator({

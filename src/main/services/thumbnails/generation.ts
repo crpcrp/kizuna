@@ -1,12 +1,4 @@
-// Thumbnail generation: pure path/bucket helpers plus a small service that
-// wires them to the injected ffmpeg/filesystem boundaries. `exec` runs ffmpeg
-// (reusing the `FfmpegExec` seam from media/ffmpeg.ts, so tests use
-// test/harness/fakeFfmpeg.ts), and every `fs` touch is injected too. No live
-// binary, no real disk, in tests.
-//
-// Bounding the cache on disk is a separate concern and lives in cache.ts; this
-// module only asks the injected scheduler to sweep after it writes a file.
-
+import fs from 'node:fs'
 import { createHash } from 'node:crypto'
 import { pathApiFor } from '../../platformPath'
 import { subtitleOffsetKey } from '../../../shared/playerSettings'
@@ -85,14 +77,6 @@ export function buildThumbnailArgs(
   ]
 }
 
-/** Injected filesystem boundary for generation — all synchronous, mirroring screenshots.ts. */
-export interface ThumbnailFs {
-  stat(path: string): ThumbnailStat
-  exists(path: string): boolean
-  mkdir(path: string): void // recursive
-  rename(from: string, to: string): void
-}
-
 export interface ThumbnailService {
   /**
    * Resolves the absolute path of the cached jpg for the hovered time, or
@@ -117,7 +101,6 @@ export interface ThumbnailService {
  */
 export function createThumbnailService(deps: {
   exec: FfmpegExec
-  fs: ThumbnailFs
   cacheDir: string
   ffmpegPath: string
   evictionScheduler?: ThumbnailEvictionScheduler
@@ -146,7 +129,7 @@ export function createThumbnailService(deps: {
       }
       if (!statInfo) {
         try {
-          statInfo = deps.fs.stat(path)
+          statInfo = fs.statSync(path)
         } catch {
           return null
         }
@@ -161,7 +144,7 @@ export function createThumbnailService(deps: {
         deps.platform
       )
 
-      if (deps.fs.exists(cachePath)) return cachePath
+      if (fs.existsSync(cachePath)) return cachePath
       if (failed.has(cachePath)) return null
       const existing = inFlight.get(cachePath)
       if (existing) return existing
@@ -171,12 +154,12 @@ export function createThumbnailService(deps: {
       // would otherwise seek past EOF, produce no image, and poison the bucket.
       const seekTime = seekTimeForBucket(bucket, durationSec)
       const job = (async (): Promise<string | null> => {
-        deps.fs.mkdir(dirname(cachePath))
+        fs.mkdirSync(dirname(cachePath), { recursive: true })
         // Unique temp so two processes/buckets racing the same dir never clash.
         const tmp = `${cachePath}.${process.pid}.${(tmpCounter += 1)}.tmp`
         try {
           await deps.exec(deps.ffmpegPath, buildThumbnailArgs(path, seekTime, tmp))
-          deps.fs.rename(tmp, cachePath)
+          fs.renameSync(tmp, cachePath)
           deps.evictionScheduler?.schedule()
           return cachePath
         } catch {

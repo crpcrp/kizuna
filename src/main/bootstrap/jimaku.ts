@@ -6,7 +6,6 @@ import { httpFetch } from '../services/http'
 import { createJimakuArchiveService } from '../services/jimaku/archive'
 import { createJimakuClient } from '../services/jimaku/client'
 import { createJimakuDownloadStore } from '../services/jimaku/downloadStore'
-import { nodeJimakuExportFs } from '../services/jimaku/export'
 import { createJimakuService, type JimakuService } from '../services/jimaku/service'
 import {
   createJimakuSettingsService,
@@ -46,7 +45,7 @@ export function startJimaku(
     downloads,
     archive,
     mediaHistory,
-    subtitleExport: { showSaveDialog: showSaveFileDialog, fs: nodeJimakuExportFs },
+    subtitleExport: { showSaveDialog: showSaveFileDialog },
     openExternal: (url) => deps.shell.openExternal(url)
   })
   registerJimakuSettingsBridge(ipcMain, jimakuSettings)

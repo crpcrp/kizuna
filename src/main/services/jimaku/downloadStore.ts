@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import fs from 'node:fs/promises'
+import { join, resolve } from 'node:path'
 import { pathApiFor } from '../../platformPath'
 import { decodeSubtitleBytes } from '../../media/subtitleEncoding'
 import { pickParser } from '../../media/subtitleLoader'
@@ -18,6 +19,12 @@ export const JIMAKU_MAX_REDIRECTS = 3
 export const JIMAKU_CACHE_MAX_BYTES = 100 * 1024 * 1024
 export const JIMAKU_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 export const JIMAKU_DOWNLOAD_INDEX_NAME = 'index.json'
+
+const DEFAULT_LIMITS = {
+  maxDownloadBytes: JIMAKU_DOWNLOAD_MAX_BYTES,
+  tempMaxAgeMs: JIMAKU_TEMP_MAX_AGE_MS,
+  maxCacheBytes: JIMAKU_CACHE_MAX_BYTES
+}
 
 const INDEX_VERSION = 1
 const TEMP_PREFIX = '.jimaku-'
@@ -90,79 +97,10 @@ export interface JimakuManagedSubtitle {
   format: JimakuSubtitleFormat
 }
 
-export interface JimakuDownloadFileStat {
-  size: number
-  mtimeMs: number
-  isFile?: boolean
-}
-
-export interface JimakuDownloadDirEntry extends JimakuDownloadFileStat {
-  name: string
-}
-
-/** All disk access is injected so the store is testable without user files. */
-export interface JimakuDownloadFs {
-  mkdir(path: string): Promise<void>
-  readFile(path: string): Promise<Uint8Array>
-  writeFile(path: string, data: Uint8Array | string): Promise<void>
-  rename(from: string, to: string): Promise<void>
-  unlink(path: string): Promise<void>
-  readDirectory(path: string): Promise<readonly JimakuDownloadDirEntry[]>
-  stat(path: string): Promise<JimakuDownloadFileStat>
-}
-
-/** Production node:fs adapter. Tests use an in-memory implementation. */
-export const nodeJimakuDownloadFs: JimakuDownloadFs = {
-  mkdir: async (path) => {
-    await mkdir(path, { recursive: true })
-  },
-  readFile: async (path) => readFile(path),
-  writeFile: async (path, data) => {
-    await writeFile(path, data)
-  },
-  rename: (from, to) => rename(from, to),
-  unlink: (path) => unlink(path),
-  readDirectory: async (directory) => {
-    const pathApi = pathApiFor()
-    const entries = await readdir(directory, { withFileTypes: true })
-    const files: JimakuDownloadDirEntry[] = []
-    for (const entry of entries) {
-      if (!entry.isFile()) continue
-      try {
-        const details = await stat(pathApi.join(directory, entry.name))
-        files.push({
-          name: entry.name,
-          size: details.size,
-          mtimeMs: details.mtimeMs,
-          isFile: true
-        })
-      } catch {
-        // A concurrent cleanup can remove an entry between readdir and stat.
-      }
-    }
-    return files
-  },
-  stat: async (path) => {
-    const details = await stat(path)
-    return { size: details.size, mtimeMs: details.mtimeMs, isFile: details.isFile() }
-  }
-}
-
-export type JimakuSubtitleParser = (text: string, format: JimakuSubtitleFormat) => readonly Cue[]
-
-export interface CreateJimakuDownloadStoreDeps {
+interface CreateJimakuDownloadStoreDeps {
   fetch: HttpFetch
   cacheRoot: string
-  fs?: JimakuDownloadFs
-  now?: () => number
-  parseSubtitle?: JimakuSubtitleParser
-  downloadTimeoutMs?: number
-  maxDownloadBytes?: number
-  maxPackageBytes?: number
-  maxRedirects?: number
-  tempMaxAgeMs?: number
-  maxCacheBytes?: number
-  platform?: NodeJS.Platform
+  limits?: Partial<typeof DEFAULT_LIMITS>
 }
 
 export interface JimakuDownloadStore {
@@ -232,18 +170,15 @@ interface DownloadedContent {
 export function createJimakuDownloadStore(
   deps: CreateJimakuDownloadStoreDeps
 ): JimakuDownloadStore {
-  const fs = deps.fs ?? nodeJimakuDownloadFs
-  const now = deps.now ?? Date.now
-  const parseSubtitle = deps.parseSubtitle ?? defaultParseSubtitle
-  const timeoutMs = deps.downloadTimeoutMs ?? JIMAKU_DOWNLOAD_TIMEOUT_MS
-  const maxBytes = deps.maxDownloadBytes ?? JIMAKU_DOWNLOAD_MAX_BYTES
-  const maxPackageBytes = deps.maxPackageBytes ?? JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
-  const maxRedirects = deps.maxRedirects ?? JIMAKU_MAX_REDIRECTS
-  const tempMaxAgeMs = deps.tempMaxAgeMs ?? JIMAKU_TEMP_MAX_AGE_MS
-  const maxCacheBytes = deps.maxCacheBytes ?? JIMAKU_CACHE_MAX_BYTES
-  const platform = deps.platform ?? process.platform
-  const pathApi = pathApiFor(platform)
-  const indexPath = pathApi.join(deps.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME)
+  const {
+    maxDownloadBytes: maxBytes,
+    tempMaxAgeMs,
+    maxCacheBytes
+  } = { ...DEFAULT_LIMITS, ...deps.limits }
+  const timeoutMs = JIMAKU_DOWNLOAD_TIMEOUT_MS
+  const maxPackageBytes = JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
+  const maxRedirects = JIMAKU_MAX_REDIRECTS
+  const indexPath = join(deps.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME)
 
   let index: CacheIndex | undefined
   let operationTail = Promise.resolve()
@@ -270,11 +205,11 @@ export function createJimakuDownloadStore(
 
   function temporaryPath(kind: 'download' | 'index'): string {
     const name = `${TEMP_PREFIX}${kind}-${process.pid}-${(temporaryCounter += 1)}-${randomBytes(8).toString('hex')}.tmp`
-    return pathApi.join(deps.cacheRoot, name)
+    return join(deps.cacheRoot, name)
   }
 
   function contentPath(contentVersion: string, format: JimakuManagedFormat): string {
-    return pathApi.join(deps.cacheRoot, `${contentVersion}.${format}`)
+    return join(deps.cacheRoot, `${contentVersion}.${format}`)
   }
 
   async function ensureIndex(): Promise<CacheIndex> {
@@ -291,7 +226,7 @@ export function createJimakuDownloadStore(
   }
 
   async function saveIndex(): Promise<void> {
-    await fs.mkdir(deps.cacheRoot)
+    await fs.mkdir(deps.cacheRoot, { recursive: true })
     const path = temporaryPath('index')
     try {
       await fs.writeFile(path, JSON.stringify(index ?? emptyIndex()))
@@ -317,8 +252,7 @@ export function createJimakuDownloadStore(
     const path = contentPath(cached.contentVersion, cached.format)
     try {
       const details = await fs.stat(path)
-      if (details.isFile === false || details.size !== cached.byteSize)
-        throw new Error('cache miss')
+      if (!details.isFile() || details.size !== cached.byteSize) throw new Error('cache miss')
     } catch {
       if (removeMissing) {
         delete currentIndex.entries[key]
@@ -374,7 +308,7 @@ export function createJimakuDownloadStore(
 
   async function touchCache(cached: CacheIndexEntry): Promise<void> {
     const previous = cached.lastUsedAt
-    cached.lastUsedAt = now()
+    cached.lastUsedAt = Date.now()
     try {
       await saveIndex()
     } catch {
@@ -395,7 +329,7 @@ export function createJimakuDownloadStore(
     }
     if (await installed()) return finalPath
 
-    await fs.mkdir(deps.cacheRoot)
+    await fs.mkdir(deps.cacheRoot, { recursive: true })
     const temporary = temporaryPath('download')
     try {
       await fs.writeFile(temporary, downloaded.bytes)
@@ -429,7 +363,7 @@ export function createJimakuDownloadStore(
       ...(originalName === file.name ? {} : { originalName }),
       ...(archiveMemberName === undefined ? {} : { archiveMemberName }),
       byteSize: downloaded.bytes.byteLength,
-      lastUsedAt: now()
+      lastUsedAt: Date.now()
     }
     currentIndex.entries[key] = entry
     try {
@@ -450,7 +384,7 @@ export function createJimakuDownloadStore(
     try {
       const text = decodeSubtitleBytes(bytes, 'auto')
       if (looksLikeHtmlOrLogin(text)) return fail({ code: 'invalidSubtitle' })
-      const cues = parseSubtitle(text, format)
+      const cues = defaultParseSubtitle(text, format)
       if (!Array.isArray(cues) || cues.length === 0) return fail({ code: 'invalidSubtitle' })
     } catch {
       return fail({ code: 'invalidSubtitle' })
@@ -591,23 +525,23 @@ export function createJimakuDownloadStore(
     try {
       await exclusive(async () => {
         const canonical = (path: string): string => {
-          const resolved = pathApi.resolve(path)
-          return platform === 'win32' ? resolved.toLowerCase() : resolved
+          const resolved = resolve(path)
+          return process.platform === 'win32' ? resolved.toLowerCase() : resolved
         }
         const protectedSet = new Set([...protectedPaths].map(canonical))
         for (const prepared of active.values()) protectedSet.add(canonical(prepared.managedPath))
 
-        let entries: readonly JimakuDownloadDirEntry[]
+        let entries: Awaited<ReturnType<typeof readDirectory>>
         try {
-          entries = await fs.readDirectory(deps.cacheRoot)
+          entries = await readDirectory(deps.cacheRoot)
         } catch {
           return
         }
 
-        const cutoff = now() - tempMaxAgeMs
+        const cutoff = Date.now() - tempMaxAgeMs
         for (const entry of entries) {
           if (!entry.isFile || !entry.name.startsWith(TEMP_PREFIX)) continue
-          const path = pathApi.join(deps.cacheRoot, entry.name)
+          const path = join(deps.cacheRoot, entry.name)
           if (protectedSet.has(canonical(path))) continue
           if (!Number.isFinite(entry.mtimeMs) || entry.mtimeMs > cutoff) continue
           await safeUnlink(path)
@@ -617,7 +551,7 @@ export function createJimakuDownloadStore(
         const filesByPath = new Map(
           entries
             .filter((entry) => entry.isFile)
-            .map((entry) => [canonical(pathApi.join(deps.cacheRoot, entry.name)), entry])
+            .map((entry) => [canonical(join(deps.cacheRoot, entry.name)), entry])
         )
         const managed = new Map<
           string,
@@ -918,4 +852,19 @@ function isKind(
   kind: PreparedKind
 ): format is JimakuManagedFormat {
   return kind === 'zip' ? format === 'zip' : isSubtitleFormat(format)
+}
+
+async function readDirectory(directory: string) {
+  const entries = await fs.readdir(directory, { withFileTypes: true })
+  const files: { name: string; size: number; mtimeMs: number; isFile: boolean }[] = []
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    try {
+      const details = await fs.stat(join(directory, entry.name))
+      files.push({ name: entry.name, size: details.size, mtimeMs: details.mtimeMs, isFile: true })
+    } catch {
+      // A concurrent cleanup can remove an entry between readdir and stat.
+    }
+  }
+  return files
 }

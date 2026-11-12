@@ -1,7 +1,21 @@
-import { describe, expect, it, vi } from 'vitest'
+import disk from 'node:fs'
+import diskAsync from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   exportManagedJimakuSubtitle,
-  type JimakuExportFs,
   type ShowJimakuSaveDialog
 } from '@src/main/services/jimaku/export'
 import type { JimakuSubtitleExportRequest } from '@src/shared/jimaku'
@@ -35,189 +49,117 @@ function source(format: 'srt' | 'ass' | 'ssa' = 'srt') {
   return { path: `/cache/${CONTENT_VERSION}.${format}`, bytes: BYTES, format }
 }
 
-function makeFs(
-  stat: JimakuExportFs['stat'] = async () => {
-    throw errorWithCode('ENOENT')
-  }
-) {
+function fixture() {
+  const dir = tempDir()
+  const destination = join(dir, 'Show.ja.srt')
+  const showSaveDialog = vi.fn<ShowJimakuSaveDialog>(async () => ({
+    canceled: false,
+    filePath: destination
+  }))
   return {
-    stat: vi.fn(stat),
-    writeFile: vi.fn<JimakuExportFs['writeFile']>(async () => undefined)
+    destination,
+    showSaveDialog,
+    deps: {
+      readSource: async () => source(),
+      isCurrent: () => true,
+      isActive: () => true,
+      showSaveDialog
+    }
   }
 }
 
-describe.each(PATH_PLATFORMS)(
-  'Jimaku subtitle export on $label',
-  ({ platform, path, mediaDir }) => {
-    it.each(['srt', 'ass', 'ssa'] as const)(
-      'uses the original .%s bytes and native save options',
-      async (format) => {
-        const mediaPath = path.join(mediaDir, 'Show.mkv')
-        const destination = path.join(mediaDir, `Show.ja.${format}`)
-        const fs = makeFs()
-        const showSaveDialog = vi.fn<ShowJimakuSaveDialog>(async () => ({
-          canceled: false,
-          filePath: destination
-        }))
-
-        const result = await exportManagedJimakuSubtitle(request(mediaPath, format), {
-          readSource: async () => source(format),
-          isCurrent: () => true,
-          isActive: () => true,
-          showSaveDialog,
-          fs,
-          platform
-        })
-
-        expect(result).toEqual({ status: 'exported', path: destination })
-        expect(showSaveDialog).toHaveBeenCalledWith({
-          defaultPath: destination,
-          filters: [{ name: 'Subtitles', extensions: [format] }],
-          properties: ['showOverwriteConfirmation']
-        })
-        expect(fs.writeFile).toHaveBeenCalledWith(destination, BYTES, { flag: 'wx' })
-      }
-    )
-
-    it('cancels without checking or writing when the dialog is cancelled', async () => {
-      const fs = makeFs()
-      const result = await exportManagedJimakuSubtitle(request(path.join(mediaDir, 'Show.mkv')), {
-        readSource: async () => source(),
-        isCurrent: () => true,
-        isActive: () => true,
-        showSaveDialog: async () => ({ canceled: true }),
-        fs,
-        platform
-      })
-
-      expect(result).toEqual({ status: 'cancelled' })
-      expect(fs.stat).not.toHaveBeenCalled()
-      expect(fs.writeFile).not.toHaveBeenCalled()
-    })
-
-    it('writes an existing file only after native overwrite confirmation', async () => {
-      const destination = path.join(mediaDir, 'Show.ja.srt')
-      const fs = makeFs(async () => ({ isFile: true }))
-      const showSaveDialog = vi.fn<ShowJimakuSaveDialog>(async () => ({
-        canceled: false,
-        filePath: destination
-      }))
-
-      const result = await exportManagedJimakuSubtitle(request(path.join(mediaDir, 'Show.mkv')), {
-        readSource: async () => source(),
+describe.each(PATH_PLATFORMS)('save default on $label', ({ platform, path, mediaDir }) => {
+  it.each(['srt', 'ass', 'ssa'] as const)('suggests a matching .%s path', async (format) => {
+    const showSaveDialog = vi.fn<ShowJimakuSaveDialog>(async () => ({ canceled: true }))
+    await expect(
+      exportManagedJimakuSubtitle(request(path.join(mediaDir, 'Show.mkv'), format), {
+        readSource: async () => source(format),
         isCurrent: () => true,
         isActive: () => true,
         showSaveDialog,
-        fs,
         platform
       })
-
-      expect(result).toEqual({ status: 'exported', path: destination })
-      expect(showSaveDialog.mock.calls[0]?.[0]?.properties).toEqual(['showOverwriteConfirmation'])
-      expect(fs.writeFile).toHaveBeenCalledWith(destination, BYTES, { flag: 'w' })
+    ).resolves.toEqual({ status: 'cancelled' })
+    expect(showSaveDialog).toHaveBeenCalledWith({
+      defaultPath: path.join(mediaDir, `Show.ja.${format}`),
+      filters: [{ name: 'Subtitles', extensions: [format] }],
+      properties: ['showOverwriteConfirmation']
     })
+  })
+})
 
-    it('does not clobber a destination that appears after the dialog', async () => {
-      const destination = path.join(mediaDir, 'Show.ja.srt')
-      const fs = makeFs()
-      fs.writeFile.mockRejectedValueOnce(errorWithCode('EEXIST'))
+describe('subtitle export on disk', () => {
+  it('writes the original bytes and overwrites after native consent', async () => {
+    const f = fixture()
+    for (let i = 0; i < 2; i++) {
+      await expect(
+        exportManagedJimakuSubtitle(request(join(tempDir(), 'Show.mkv')), f.deps)
+      ).resolves.toEqual({ status: 'exported', path: f.destination })
+      expect(new Uint8Array(disk.readFileSync(f.destination))).toEqual(BYTES)
+    }
+  })
 
-      const result = await exportManagedJimakuSubtitle(request(path.join(mediaDir, 'Show.mkv')), {
-        readSource: async () => source(),
-        isCurrent: () => true,
-        isActive: () => true,
-        showSaveDialog: async () => ({ canceled: false, filePath: destination }),
-        fs,
-        platform
+  it('does not clobber a file appearing after the destination check', async () => {
+    const f = fixture()
+    const write = diskAsync.writeFile
+    vi.spyOn(diskAsync, 'writeFile').mockImplementationOnce(async (path, bytes, options) => {
+      disk.writeFileSync(f.destination, 'other writer')
+      return write(path, bytes, options)
+    })
+    await expect(exportManagedJimakuSubtitle(request('/media/Show.mkv'), f.deps)).resolves.toEqual({
+      status: 'error',
+      code: 'destinationChanged'
+    })
+    expect(disk.readFileSync(f.destination, 'utf-8')).toBe('other writer')
+  })
+
+  it('refuses source=destination and directory destinations', async () => {
+    const f = fixture()
+    f.showSaveDialog.mockResolvedValueOnce({ canceled: false, filePath: source().path })
+    await expect(exportManagedJimakuSubtitle(request('/media/Show.mkv'), f.deps)).resolves.toEqual({
+      status: 'error',
+      code: 'invalidDestination'
+    })
+    disk.mkdirSync(f.destination)
+    await expect(exportManagedJimakuSubtitle(request('/media/Show.mkv'), f.deps)).resolves.toEqual({
+      status: 'error',
+      code: 'invalidDestination'
+    })
+  })
+
+  it('reports missing sources and storage failures without creating a destination', async () => {
+    const f = fixture()
+    await expect(
+      exportManagedJimakuSubtitle(request('/media/Show.mkv'), {
+        ...f.deps,
+        readSource: async () => undefined
       })
-
-      expect(result).toEqual({ status: 'error', code: 'destinationChanged' })
-      expect(fs.writeFile).toHaveBeenCalledWith(destination, BYTES, { flag: 'wx' })
+    ).resolves.toEqual({ status: 'error', code: 'notAvailable' })
+    vi.spyOn(diskAsync, 'stat').mockRejectedValueOnce(errorWithCode('EACCES'))
+    await expect(exportManagedJimakuSubtitle(request('/media/Show.mkv'), f.deps)).resolves.toEqual({
+      status: 'error',
+      code: 'storage'
     })
-  }
-)
-
-describe('Jimaku subtitle export validation', () => {
-  const mediaPath = '/media/Show.mkv'
-  const destination = '/media/Show.ja.srt'
-  const base = {
-    readSource: async () => source(),
-    isCurrent: () => true,
-    isActive: () => true,
-    showSaveDialog: async () => ({ canceled: false, filePath: destination }),
-    fs: makeFs(),
-    platform: 'linux' as const
-  }
-
-  it('refuses source=destination and nonregular destinations', async () => {
-    const same = await exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      showSaveDialog: async () => ({ canceled: false, filePath: source().path })
-    })
-    expect(same).toEqual({ status: 'error', code: 'invalidDestination' })
-    expect(base.fs.writeFile).not.toHaveBeenCalled()
-
-    const nonregularFs = makeFs(async () => ({ isFile: false }))
-    const nonregular = await exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      fs: nonregularFs
-    })
-    expect(nonregular).toEqual({ status: 'error', code: 'invalidDestination' })
-    expect(nonregularFs.writeFile).not.toHaveBeenCalled()
+    expect(disk.existsSync(f.destination)).toBe(false)
   })
 
-  it('reports missing sources and storage failures without writing', async () => {
-    const missing = await exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      readSource: async () => undefined
-    })
-    expect(missing).toEqual({ status: 'error', code: 'notAvailable' })
-
-    const permissionFs = makeFs(async () => {
-      throw errorWithCode('EACCES')
-    })
-    const permission = await exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      fs: permissionFs
-    })
-    expect(permission).toEqual({ status: 'error', code: 'storage' })
-    expect(permissionFs.writeFile).not.toHaveBeenCalled()
-  })
-
-  it('cancels when media or selection changes while the dialog is open', async () => {
-    const dialog = deferred<{ canceled: boolean; filePath?: string }>()
-    let current = true
-    let active = true
-    const fs = makeFs()
-    const showSaveDialog = vi.fn<ShowJimakuSaveDialog>(() => dialog.promise)
-    const pending = exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      fs,
-      isCurrent: () => current,
-      isActive: () => active,
-      showSaveDialog
-    })
-
-    await vi.waitFor(() => expect(showSaveDialog).toHaveBeenCalled())
-    current = false
-    dialog.resolve({ canceled: false, filePath: destination })
-    await expect(pending).resolves.toEqual({ status: 'cancelled' })
-    expect(fs.writeFile).not.toHaveBeenCalled()
-
-    const secondDialog = deferred<{ canceled: boolean; filePath?: string }>()
-    current = true
-    const secondShowSaveDialog = vi.fn<ShowJimakuSaveDialog>(() => secondDialog.promise)
-    const second = exportManagedJimakuSubtitle(request(mediaPath), {
-      ...base,
-      fs,
-      isCurrent: () => current,
-      isActive: () => active,
-      showSaveDialog: secondShowSaveDialog
-    })
-    await vi.waitFor(() => expect(secondShowSaveDialog).toHaveBeenCalled())
-    active = false
-    secondDialog.resolve({ canceled: false, filePath: destination })
-    await expect(second).resolves.toEqual({ status: 'cancelled' })
-    expect(fs.writeFile).not.toHaveBeenCalled()
-  })
+  it.each(['media', 'selection'])(
+    'cancels if %s changes while the dialog is open',
+    async (change) => {
+      const f = fixture()
+      const dialog = deferred<{ canceled: boolean; filePath?: string }>()
+      let current = true
+      f.showSaveDialog.mockReturnValueOnce(dialog.promise)
+      const pending = exportManagedJimakuSubtitle(request('/media/Show.mkv'), {
+        ...f.deps,
+        isCurrent: () => (change === 'media' ? current : true),
+        isActive: () => (change === 'selection' ? current : true)
+      })
+      await vi.waitFor(() => expect(f.showSaveDialog).toHaveBeenCalled())
+      current = false
+      dialog.resolve({ canceled: false, filePath: f.destination })
+      await expect(pending).resolves.toEqual({ status: 'cancelled' })
+      expect(disk.existsSync(f.destination)).toBe(false)
+    }
+  )
 })

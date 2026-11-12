@@ -10,7 +10,6 @@ import {
   sweepThumbnailCacheAsync,
   THUMBNAIL_CACHE_MAX_BYTES
 } from '../services/thumbnails/cache'
-import { nodeThumbnailAsyncDirFs, nodeThumbnailFs } from '../services/thumbnails/nodeFs'
 import type { FfmpegExec } from './ffmpeg'
 
 /** Reads a generated thumbnail jpg into a base64 string (no `data:` prefix). */
@@ -43,7 +42,6 @@ export function createCachedThumbnailService(deps: {
 }): ThumbnailService {
   return createThumbnailService({
     exec: deps.execFfmpeg,
-    fs: nodeThumbnailFs,
     cacheDir: deps.cacheDir,
     ffmpegPath: deps.ffmpegPath,
     platform: deps.platform,
@@ -51,9 +49,7 @@ export function createCachedThumbnailService(deps: {
       sweep: () =>
         sweepThumbnailCacheAsync({
           cacheDir: deps.cacheDir,
-          maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
-          fs: nodeThumbnailAsyncDirFs,
-          platform: deps.platform
+          maxBytes: THUMBNAIL_CACHE_MAX_BYTES
         }).then(() => undefined),
       onError: (error) => console.warn('[kizuna] thumbnail cache sweep failed:', error)
     })
@@ -78,8 +74,7 @@ export function scheduleStartupThumbnailSweep(deps: {
     ((cacheDir: string) =>
       sweepThumbnailCacheAsync({
         cacheDir,
-        maxBytes: THUMBNAIL_CACHE_MAX_BYTES,
-        fs: nodeThumbnailAsyncDirFs
+        maxBytes: THUMBNAIL_CACHE_MAX_BYTES
       }))
   const logger = deps.logger ?? console
   deps.onceRendererReady(() => {

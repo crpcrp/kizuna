@@ -10,7 +10,9 @@ Rules that differ inside `src/main/`. The repository-wide principles stay in
   without Electron.
 - Keep every external boundary — mpv, FFmpeg/ffprobe, MeCab, AnkiConnect,
   WaniKani, SQLite, Win32, `electron-updater` — behind a narrow injected
-  interface so tests can pass a fake from `test/harness/`.
+  interface so tests can pass a fake from `test/harness/`. Import `node:fs`
+  directly; test filesystem behavior in temporary directories. Use fake timers
+  and `vi.setSystemTime()` rather than injecting clocks or timers.
 - Do not import `node:path` directly when deriving a user-visible path. Take an
   optional `platform` and resolve through `pathApiFor` in `platformPath.ts`; see
   "Derive a filesystem path" in the codebase map.

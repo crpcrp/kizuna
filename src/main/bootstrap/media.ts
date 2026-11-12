@@ -1,4 +1,3 @@
-import * as fs from 'node:fs'
 import type { IpcMain } from 'electron'
 import { LAUNCH_CHANNELS } from '../../shared/ipcChannels'
 import { scheduleStartupThumbnailSweep } from '../media/thumbnailPreview'
@@ -24,8 +23,8 @@ import type { AppPaths } from './paths'
  * write can happen.
  */
 export function createAppMediaHistoryStore(paths: AppPaths): MediaHistoryStore {
-  const settingsFile = createSettingsFile(paths.settingsFile, fs)
-  return createMediaHistoryStore(createMediaHistoryFile(paths.playbackHistoryFile, fs), {
+  const settingsFile = createSettingsFile(paths.settingsFile)
+  return createMediaHistoryStore(createMediaHistoryFile(paths.playbackHistoryFile), {
     legacy: () => legacyMediaHistory(settingsFile.read())
   })
 }

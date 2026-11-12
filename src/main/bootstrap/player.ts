@@ -39,7 +39,7 @@ export function startPlayerSettings(
 ): MpvConfigManager {
   const mpvConfig = createMpvConfigManager({
     userDataDir: deps.paths.userData,
-    fs,
+
     shell: deps.shell
   })
   registerPlayerSettingsBridge(

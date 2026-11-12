@@ -68,16 +68,19 @@ export interface JimakuArchiveService {
   releasePackage(packageHandle: string): void
 }
 
-export interface CreateJimakuArchiveServiceDeps {
+interface CreateJimakuArchiveServiceDeps {
   downloads: Pick<
     JimakuDownloadStore,
     'preparePackage' | 'prepareExtracted' | 'readPrepared' | 'releasePrepared'
   >
-  maxCompressedBytes?: number
-  maxExpandedBytes?: number
-  maxMemberBytes?: number
+  limits?: Partial<typeof DEFAULT_LIMITS>
   makePackageHandle?: () => string
   makeMemberId?: (packageHandle: string, entryIndex: number) => string
+}
+
+const DEFAULT_LIMITS = {
+  maxExpandedBytes: JIMAKU_ARCHIVE_MAX_EXPANDED_BYTES,
+  maxMemberBytes: JIMAKU_ARCHIVE_MAX_MEMBER_BYTES
 }
 
 const ARCHIVE_TOO_LARGE = Symbol('jimaku-archive-too-large')
@@ -97,9 +100,11 @@ interface ActivePackage {
 export function createJimakuArchiveService(
   deps: CreateJimakuArchiveServiceDeps
 ): JimakuArchiveService {
-  const maxCompressedBytes = deps.maxCompressedBytes ?? JIMAKU_ARCHIVE_MAX_COMPRESSED_BYTES
-  const maxExpandedBytes = deps.maxExpandedBytes ?? JIMAKU_ARCHIVE_MAX_EXPANDED_BYTES
-  const maxMemberBytes = deps.maxMemberBytes ?? JIMAKU_ARCHIVE_MAX_MEMBER_BYTES
+  const maxCompressedBytes = JIMAKU_ARCHIVE_MAX_COMPRESSED_BYTES
+  const { maxExpandedBytes, maxMemberBytes } = {
+    ...DEFAULT_LIMITS,
+    ...deps.limits
+  }
   const makePackageHandle = deps.makePackageHandle ?? defaultPackageHandle
   const makeMemberId = deps.makeMemberId ?? defaultMemberId
   const activePackages = new Map<string, ActivePackage>()

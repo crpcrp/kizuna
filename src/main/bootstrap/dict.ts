@@ -30,7 +30,7 @@ export function startMecab(
       userUnidicDir: userUnidic.dir
     },
     exists: fs.existsSync,
-    isValid: (directory) => isValidMecabDictionaryDir(directory, fs, process.platform),
+    isValid: (directory) => isValidMecabDictionaryDir(directory),
     settings: deps.settings
   })
   registerMecabBridge(deps.ipcMain, mecabService, {

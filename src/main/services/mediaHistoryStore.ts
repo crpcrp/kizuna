@@ -2,6 +2,7 @@
 // its own playback-history.json so frequent progress saves never rewrite
 // settings.json. Writes are asynchronous and serialized through one queue.
 
+import fs from 'node:fs'
 import {
   normalizeMediaHistory,
   type MediaHistory,
@@ -12,15 +13,6 @@ import { isRecord } from '../../shared/guards'
 export interface MediaHistoryIO {
   read(): string | undefined
   write(contents: string): Promise<void>
-}
-
-export interface MediaHistoryFileSystem {
-  readFileSync(path: string, encoding: 'utf-8'): string
-  promises: {
-    writeFile(path: string, contents: string, encoding: 'utf-8'): Promise<void>
-    rename(from: string, to: string): Promise<void>
-    unlink(path: string): Promise<void>
-  }
 }
 
 export interface MediaHistoryStore {
@@ -39,7 +31,7 @@ export interface MediaHistoryStoreOptions extends PathNormalizationOptions {
 }
 
 /** Atomic file boundary: write a sibling temp file, then rename it over the target. */
-export function createMediaHistoryFile(path: string, fs: MediaHistoryFileSystem): MediaHistoryIO {
+export function createMediaHistoryFile(path: string): MediaHistoryIO {
   const temporaryPath = `${path}.tmp`
   return {
     read(): string | undefined {

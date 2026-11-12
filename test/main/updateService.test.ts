@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createUpdateService, type UpdaterAdapter } from '@src/main/updateService'
 import { deferred } from '@test/harness/deferred'
 
@@ -34,17 +34,17 @@ function fakeUpdater() {
 
 function serviceFixture(overrides: Partial<Parameters<typeof createUpdateService>[0]> = {}) {
   const fake = fakeUpdater()
-  let clock = 1_000
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000)
   const prepareInstall = vi.fn(async (install: () => void) => install())
   const service = createUpdateService({
     support: { supported: true, packageType: 'nsis' },
     currentVersion: '0.2.0',
     updater: fake.updater,
     prepareInstall,
-    now: () => clock,
     ...overrides
   })
-  return { ...fake, service, prepareInstall, setClock: (value: number) => (clock = value) }
+  return { ...fake, service, prepareInstall, setClock: (value: number) => vi.setSystemTime(value) }
 }
 
 describe('createUpdateService', () => {
@@ -327,3 +327,5 @@ describe('createUpdateService', () => {
     expect(fixture.updater.removeListener).toHaveBeenCalledTimes(3)
   })
 })
+
+afterEach(() => vi.useRealTimers())

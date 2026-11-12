@@ -1,4 +1,18 @@
-import { describe, it, expect, vi } from 'vitest'
+import disk from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   defaultSettings,
   defaultKnowledgeSettings,
@@ -9,7 +23,7 @@ import {
   createSettingsStore,
   type Settings
 } from '@src/main/services/settings'
-import { createSettingsFile, type SettingsFileSystem } from '@src/main/services/settingsFile'
+import { createSettingsFile } from '@src/main/services/settingsFile'
 import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import { DEFAULT_GAME_OCR_SETTINGS, DEFAULT_GAME_OCR_SHORTCUT } from '@src/shared/gameOcrSettings'
@@ -894,84 +908,39 @@ describe('createSettingsStore', () => {
 })
 
 describe('createSettingsFile', () => {
-  function fakeFileSystem(
-    files: Record<string, string>,
-    failAt?: 'write' | 'rename' | 'unlink'
-  ): { fs: SettingsFileSystem; calls: string[] } {
-    const calls: string[] = []
-    return {
-      calls,
-      fs: {
-        readFileSync(path, _encoding) {
-          calls.push(`read:${path}`)
-          const contents = files[path]
-          if (contents === undefined) throw new Error('missing')
-          return contents
-        },
-        writeFileSync(path, contents, _encoding) {
-          calls.push(`write:${path}`)
-          if (failAt === 'write') throw new Error('write failed')
-          files[path] = contents
-        },
-        renameSync(from, to) {
-          calls.push(`rename:${from}:${to}`)
-          if (failAt === 'rename') throw new Error('rename failed')
-          const contents = files[from]
-          if (contents === undefined) throw new Error('missing temp')
-          files[to] = contents
-          delete files[from]
-        },
-        unlinkSync(path) {
-          calls.push(`unlink:${path}`)
-          if (failAt === 'unlink') throw new Error('unlink failed')
-          delete files[path]
-        }
-      }
-    }
-  }
-
-  it('writes a sibling temporary file before atomically replacing settings', () => {
-    const path = 'C:/data/settings.json'
-    const temporaryPath = `${path}.tmp`
-    const files = { [path]: '{"previous":true}' }
-    const { fs, calls } = fakeFileSystem(files)
-    const file = createSettingsFile(path, fs)
-
-    file.write('{"next":true}')
-
-    expect(calls).toEqual([`write:${temporaryPath}`, `rename:${temporaryPath}:${path}`])
-    expect(files).toEqual({ [path]: '{"next":true}' })
+  it('reads a missing file as absent and atomically replaces existing settings', () => {
+    const path = join(tempDir(), 'settings.json')
+    const file = createSettingsFile(path)
+    expect(file.read()).toBeUndefined()
+    disk.writeFileSync(path, 'previous')
+    file.write('next')
+    expect(file.read()).toBe('next')
+    expect(disk.existsSync(`${path}.tmp`)).toBe(false)
   })
 
-  it.each(['write', 'rename'] as const)(
-    'preserves the prior file and cleans the temporary file after a %s failure',
-    (failAt) => {
-      const path = 'C:/data/settings.json'
-      const temporaryPath = `${path}.tmp`
-      const files = { [path]: '{"previous":true}' }
-      const { fs, calls } = fakeFileSystem(files, failAt)
-      const file = createSettingsFile(path, fs)
-
-      expect(() => file.write('{"next":true}')).toThrow(`${failAt} failed`)
-      expect(files).toEqual({ [path]: '{"previous":true}' })
-      expect(calls.at(-1)).toBe(`unlink:${temporaryPath}`)
+  it.each(['writeFileSync', 'renameSync'] as const)(
+    'preserves settings and cleans temp after %s fails',
+    (method) => {
+      const path = join(tempDir(), 'settings.json')
+      disk.writeFileSync(path, 'previous')
+      vi.spyOn(disk, method).mockImplementationOnce(() => {
+        throw new Error('disk failure')
+      })
+      expect(() => createSettingsFile(path).write('next')).toThrow('disk failure')
+      expect(disk.readFileSync(path, 'utf-8')).toBe('previous')
+      expect(disk.existsSync(`${path}.tmp`)).toBe(false)
     }
   )
 
-  it('propagates the write failure when temporary-file cleanup also fails', () => {
-    const path = 'C:/data/settings.json'
-    const files = { [path]: '{"previous":true}' }
-    const failure = new Error('write failed')
-    const { fs } = fakeFileSystem(files, 'write')
-    fs.writeFileSync = () => {
-      throw failure
-    }
-    fs.unlinkSync = () => {
+  it('preserves the primary error when cleanup fails too', () => {
+    const path = join(tempDir(), 'settings.json')
+    vi.spyOn(disk, 'writeFileSync').mockImplementationOnce(() => {
+      throw new Error('write failed')
+    })
+    vi.spyOn(disk, 'unlinkSync').mockImplementationOnce(() => {
       throw new Error('unlink failed')
-    }
-
-    expect(() => createSettingsFile(path, fs).write('{"next":true}')).toThrow(failure)
-    expect(files).toEqual({ [path]: '{"previous":true}' })
+    })
+    expect(() => createSettingsFile(path).write('next')).toThrow('write failed')
   })
 })
 

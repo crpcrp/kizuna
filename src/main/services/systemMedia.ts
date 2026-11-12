@@ -72,15 +72,13 @@ export interface SystemMediaController {
   dispose(): void
 }
 
-export interface SystemMediaDeps {
+interface SystemMediaDeps {
   globalShortcut: GlobalShortcutLike
   setProgressBar: SetProgressBar
   setThumbarButtons: SetThumbarButtons
   /** Real impl: `webContents.send` — pushes `PLAYER_CHANNELS.mediaKey`. */
   send: (channel: string, value: unknown) => void
   icons: SystemMediaIcons
-  /** Injected clock for the ≥1/sec progress throttle (default `Date.now`). */
-  now?: () => number
 }
 
 /**
@@ -94,7 +92,6 @@ export interface SystemMediaDeps {
  */
 export function createSystemMediaController(deps: SystemMediaDeps): SystemMediaController {
   const { globalShortcut, setProgressBar, setThumbarButtons, send, icons } = deps
-  const now = deps.now ?? ((): number => Date.now())
 
   let shortcutsRegistered = false
   let progressShown = false
@@ -159,7 +156,7 @@ export function createSystemMediaController(deps: SystemMediaDeps): SystemMediaC
     // Throttle the frequent timePos-driven updates to ≥1/sec, but always emit on
     // the first update after a load and whenever the mode changes (pause toggled,
     // or the duration just became known) so those never wait out the interval.
-    const t = now()
+    const t = Date.now()
     const modeChanged = mode !== lastProgressMode
     if (progressShown && !modeChanged && t - lastProgressAt < 1000) return
     setProgressBar(progress, { mode })

@@ -2,10 +2,7 @@ import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { parseJimakuVideoIdentity } from '@src/shared/jimakuMatching'
 import type { JimakuFileRecord } from '@src/main/services/jimaku/client'
-import {
-  createJimakuArchiveService,
-  type CreateJimakuArchiveServiceDeps
-} from '@src/main/services/jimaku/archive'
+import { createJimakuArchiveService } from '@src/main/services/jimaku/archive'
 import type {
   JimakuDownloadStore,
   JimakuPreparedPackage,
@@ -75,7 +72,10 @@ function makeDownloads(bytes: Uint8Array) {
   return { downloads, calls, released }
 }
 
-function makeService(bytes: Uint8Array, overrides: Partial<CreateJimakuArchiveServiceDeps> = {}) {
+function makeService(
+  bytes: Uint8Array,
+  overrides: Partial<Parameters<typeof createJimakuArchiveService>[0]> = {}
+) {
   const fake = makeDownloads(bytes)
   const service = createJimakuArchiveService({
     downloads: fake.downloads,
@@ -219,7 +219,7 @@ describe('Jimaku archive service', () => {
       'Title - 08.srt': new Uint8Array(8),
       'large.bin': new Uint8Array(100)
     })
-    const { service, released } = makeService(bytes, { maxExpandedBytes: 12 })
+    const { service, released } = makeService(bytes, { limits: { maxExpandedBytes: 12 } })
 
     await expect(
       service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)
@@ -229,7 +229,7 @@ describe('Jimaku archive service', () => {
 
   it('rejects an archive with an oversized subtitle member', async () => {
     const bytes = zipSync({ 'Title - 07.srt': SRT_BYTES })
-    const { service } = makeService(bytes, { maxMemberBytes: 4 })
+    const { service } = makeService(bytes, { limits: { maxMemberBytes: 4 } })
 
     await expect(
       service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)
@@ -240,7 +240,7 @@ describe('Jimaku archive service', () => {
     const bytes = zipSync({ 'Title - 07.srt': new Uint8Array(20) }, { level: 0 })
     const offset = firstCentralOffset(bytes)
     bytes.set([1, 0, 0, 0], offset + 24)
-    const { service } = makeService(bytes, { maxMemberBytes: 10 })
+    const { service } = makeService(bytes, { limits: { maxMemberBytes: 10 } })
 
     await expect(
       service.inspect(42, fileRecord(bytes), parseJimakuVideoIdentity('Title - 07.mkv'), false)

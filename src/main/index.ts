@@ -10,7 +10,6 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
-import * as fs from 'node:fs'
 import { registerWindowControls, sendToWindow } from './windowOptions'
 import { LAUNCH_CHANNELS } from '../shared/ipcChannels'
 import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
@@ -124,10 +123,10 @@ function bootstrap(lifecycle: AppLifecycleCoordinator, hasLaunchPath: boolean): 
     resourcesPath: paths.resourcesPath,
     appRoot: paths.appRoot
   })
-  const userUnidic = createUserUnidicManager({ userDataDir: paths.userData, fs, shell })
+  const userUnidic = createUserUnidicManager({ userDataDir: paths.userData, shell })
   // Read history before any settings write can drop the legacy key.
   const historyStore = createAppMediaHistoryStore(paths)
-  const settings = createSettingsStore(createSettingsFile(paths.settingsFile, fs))
+  const settings = createSettingsStore(createSettingsFile(paths.settingsFile))
   const deps: BootstrapDeps = {
     ipcMain,
     settings,

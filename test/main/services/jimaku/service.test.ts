@@ -1,4 +1,18 @@
-import { describe, expect, it, vi } from 'vitest'
+import disk from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JimakuArchiveService } from '@src/main/services/jimaku/archive'
 import type { JimakuClient, JimakuFileRecord } from '@src/main/services/jimaku/client'
 import { createJimakuService } from '@src/main/services/jimaku/service'
@@ -195,12 +209,8 @@ describe('createJimakuService', () => {
       canceled: false,
       filePath: options.defaultPath ?? ''
     }))
-    const fs = {
-      stat: vi.fn(async () => {
-        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-      }),
-      writeFile: vi.fn(async () => undefined)
-    }
+    const destination = join(tempDir(), 'episode.ass')
+    vi.mocked(showSaveDialog).mockResolvedValue({ canceled: false, filePath: destination })
     const service = createJimakuService({
       client: {
         searchEntries: vi.fn(),
@@ -219,7 +229,7 @@ describe('createJimakuService', () => {
         releasePackage: vi.fn()
       },
       mediaHistory: history,
-      subtitleExport: { showSaveDialog, fs, platform: 'linux' },
+      subtitleExport: { showSaveDialog, platform: 'linux' },
       openExternal: vi.fn()
     })
 
@@ -229,11 +239,9 @@ describe('createJimakuService', () => {
         mediaGeneration: 1,
         provenance
       })
-    ).resolves.toEqual({ status: 'exported', path: '/media/Anime title - 01.ja.ass' })
+    ).resolves.toEqual({ status: 'exported', path: destination })
     expect(downloads.readManagedSubtitle).toHaveBeenCalledWith(provenance)
-    expect(fs.writeFile).toHaveBeenCalledWith('/media/Anime title - 01.ja.ass', bytes, {
-      flag: 'wx'
-    })
+    expect(new Uint8Array(disk.readFileSync(destination))).toEqual(bytes)
 
     history.getPlaybackHistory.mockReturnValue({ positionSeconds: 0, updatedAt: 0 })
     await expect(

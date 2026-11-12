@@ -52,12 +52,11 @@ export interface UpdateService {
   dispose(): void
 }
 
-export interface CreateUpdateServiceDeps {
+interface CreateUpdateServiceDeps {
   support: UpdateSupport
   currentVersion: string
   updater?: UpdaterAdapter
   prepareInstall: (install: () => void) => Promise<void>
-  now?: () => number
   allowAutomaticChecks?: boolean
 }
 
@@ -137,7 +136,6 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
     ? { status: 'idle' }
     : { status: 'unsupported', reason: deps.support.reason }
   const subscribers = new Set<(state: UpdateState) => void>()
-  const now = deps.now ?? Date.now
   const packageType = deps.support.supported ? deps.support.packageType : 'nsis'
   let release: UpdateRelease | undefined
   let checkPromise: Promise<UpdateState> | undefined
@@ -157,7 +155,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
   const onProgress = (incoming: UpdaterProgress): void => {
     if (disposed || !release || state.status !== 'downloading') return
     const progress = boundedProgress(incoming)
-    const timestamp = now()
+    const timestamp = Date.now()
     const emit = progress.percent === 100 || timestamp - lastProgressAt >= PROGRESS_INTERVAL_MS
     if (emit) lastProgressAt = timestamp
     publish({ status: 'downloading', ...release, progress }, emit)
@@ -174,7 +172,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
       return {
         status: 'noPublishedRelease',
         currentVersion: deps.currentVersion,
-        checkedAt: new Date(now()).toISOString()
+        checkedAt: new Date(Date.now()).toISOString()
       }
     return errorState('check', false, reason)
   }
@@ -234,7 +232,7 @@ export function createUpdateService(deps: CreateUpdateServiceDeps): UpdateServic
           return publish({
             status: 'upToDate',
             currentVersion: deps.currentVersion,
-            checkedAt: new Date(now()).toISOString()
+            checkedAt: new Date(Date.now()).toISOString()
           })
         })
         .catch((error: unknown) => {

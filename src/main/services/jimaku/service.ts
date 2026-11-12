@@ -34,11 +34,7 @@ import {
 } from './client'
 import type { JimakuArchiveInspection, JimakuArchiveService } from './archive'
 import type { JimakuDownloadStore, JimakuPreparedSubtitle } from './downloadStore'
-import {
-  exportManagedJimakuSubtitle,
-  type JimakuExportFs,
-  type ShowJimakuSaveDialog
-} from './export'
+import { exportManagedJimakuSubtitle, type ShowJimakuSaveDialog } from './export'
 import type { JimakuSettingsService } from './settings'
 import type { MediaHistoryService } from '../mediaHistory'
 import { fail, ok } from './result'
@@ -95,7 +91,7 @@ interface SessionState {
   valid: boolean
 }
 
-export interface CreateJimakuServiceDeps {
+interface CreateJimakuServiceDeps {
   client: Pick<JimakuClient, 'searchEntries' | 'getEntry' | 'listFiles'>
   settings: Pick<JimakuSettingsService, 'getConfigGeneration' | 'onConfigChange' | 'getFolderHint'>
   downloads: Pick<JimakuDownloadStore, 'prepareDirect' | 'releasePrepared'> &
@@ -107,12 +103,9 @@ export interface CreateJimakuServiceDeps {
     >
   subtitleExport?: {
     showSaveDialog: ShowJimakuSaveDialog
-    fs?: JimakuExportFs
     platform?: NodeJS.Platform
   }
   openExternal: (url: string) => Promise<void>
-  now?: () => number
-  cacheTtlMs?: number
   makeId?: (kind: IdKind, counter: number) => string
 }
 
@@ -165,8 +158,6 @@ export interface JimakuService {
 }
 
 export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuService {
-  const now = deps.now ?? Date.now
-  const cacheTtlMs = deps.cacheTtlMs ?? JIMAKU_SEARCH_CACHE_TTL_MS
   let idCounter = 0
   let disposed = false
   const sessions = new Map<string, SessionState>()
@@ -354,7 +345,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     const refresh = request.refresh === true
     const pending = beginOperation(session)
 
-    if (!refresh && cached && cached.expiresAt > now()) {
+    if (!refresh && cached && cached.expiresAt > Date.now()) {
       clearSearchResults(session)
       session.entries = new Map(cached.result.entries.map((entry) => [entry.id, entry]))
       finishOperation(session, pending)
@@ -372,7 +363,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     clearSearchResults(session)
     session.entries = new Map(result.value.entries.map((entry) => [entry.id, entry]))
     session.titleCache.set(cacheKey, {
-      expiresAt: now() + cacheTtlMs,
+      expiresAt: Date.now() + JIMAKU_SEARCH_CACHE_TTL_MS,
       result: result.value
     })
     return ok(result.value)
@@ -408,7 +399,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
     }
 
     const cached = session.fileCache.get(entry.id)
-    if (refresh !== true && cached && cached.expiresAt > now()) {
+    if (refresh !== true && cached && cached.expiresAt > Date.now()) {
       clearFileResults(session)
       const value = materializeFiles(session, entry, cached.files)
       finishOperation(session, pending)
@@ -425,7 +416,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
 
     clearFileResults(session)
     const files = result.value.map((file) => ({ ...file }))
-    session.fileCache.set(entry.id, { expiresAt: now() + cacheTtlMs, files })
+    session.fileCache.set(entry.id, { expiresAt: Date.now() + JIMAKU_SEARCH_CACHE_TTL_MS, files })
     return ok(materializeFiles(session, entry, files))
   }
 
@@ -631,7 +622,6 @@ export function createJimakuService(deps: CreateJimakuServiceDeps): JimakuServic
       isCurrent: () => isCurrentMedia(request.mediaPath, request.mediaGeneration),
       isActive,
       showSaveDialog: exportOptions.showSaveDialog,
-      fs: exportOptions.fs,
       platform: exportOptions.platform
     })
   }

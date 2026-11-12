@@ -1,15 +1,5 @@
-// Thumbnail cache lifecycle: LRU eviction and the debounced scheduler that
-// drives it. Generation itself lives in generation.ts.
-//
-// The cache grows one file-dir per opened media file (see `thumbnailCachePath`),
-// and a replaced/re-encoded file leaves its old dir orphaned. To bound disk
-// use, a sweep deletes the least-recently-used file-dirs until the cache is
-// back under a byte cap. The same async sweep runs once after the renderer is
-// ready at startup and, debounced, after thumbnail writes. The selection
-// (`selectEvictions`) and per-dir summary (`summarizeCacheDir`) are pure; the
-// walk and deletes go through an injected fs so they are testable without disk.
-
-import { pathApiFor } from '../../platformPath'
+import { readdir, stat, rm } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
 
 export type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
@@ -28,17 +18,12 @@ export interface ThumbnailCacheEntry {
 }
 
 /**
- * Coalesces post-write cache sweeps into one bounded delayed job. The timer is
- * injected so tests can advance it deterministically without waiting.
+ * Coalesces post-write cache sweeps into one bounded delayed job.
  */
 export function createDebouncedThumbnailEviction(deps: {
   sweep: () => Promise<void> | void
   onError?: (error: unknown) => void
-  delayMs?: number
-  setTimeout?: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>
 }): ThumbnailEvictionScheduler {
-  const delayMs = deps.delayMs ?? 1000
-  const setTimeoutFn = deps.setTimeout ?? setTimeout
   let pending = false
   let running = false
   let reschedule = false
@@ -65,10 +50,10 @@ export function createDebouncedThumbnailEviction(deps: {
     }
     if (pending) return
     pending = true
-    setTimeoutFn(() => {
+    setTimeout(() => {
       pending = false
       void run()
-    }, delayMs)
+    }, 1000)
   }
 
   return {
@@ -111,33 +96,17 @@ export function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): Thumbnai
   }
 }
 
-/** Async directory-walk boundary for cache eviction, kept off the main thread. */
-export interface ThumbnailAsyncDirFs {
-  readSubdirs(dir: string): Promise<string[]>
-  readFiles(dir: string): Promise<string[]>
-  stat(path: string): Promise<ThumbnailStat>
-  remove(path: string): Promise<void>
-}
-
 /**
  * Walks `cacheDir` into one {@link ThumbnailCacheEntry} per file-dir, summing
  * bytes and taking the newest mtime as the recency proxy.
  */
-export async function collectCacheEntriesAsync(
-  cacheDir: string,
-  fs: Omit<ThumbnailAsyncDirFs, 'remove'>,
-  platform: NodeJS.Platform = process.platform
-): Promise<ThumbnailCacheEntry[]> {
-  const { join } = pathApiFor(platform)
-  const subdirs = await fs.readSubdirs(cacheDir)
+export async function collectCacheEntriesAsync(cacheDir: string): Promise<ThumbnailCacheEntry[]> {
+  const subdirs = await listNames(cacheDir, 'dir')
   return Promise.all(
     subdirs.map(async (name) => {
       const dir = join(cacheDir, name)
-      const files = await fs.readFiles(dir)
-      return summarizeCacheDir(
-        dir,
-        await Promise.all(files.map((file) => fs.stat(join(dir, file))))
-      )
+      const files = await listNames(dir, 'file')
+      return summarizeCacheDir(dir, await Promise.all(files.map((file) => stat(join(dir, file)))))
     })
   )
 }
@@ -149,14 +118,18 @@ export async function collectCacheEntriesAsync(
 export async function sweepThumbnailCacheAsync(deps: {
   cacheDir: string
   maxBytes: number
-  fs: ThumbnailAsyncDirFs
-  /** Path semantics for the cache walk; defaults to the host platform. */
-  platform?: NodeJS.Platform
 }): Promise<string[]> {
-  const evicted = selectEvictions(
-    await collectCacheEntriesAsync(deps.cacheDir, deps.fs, deps.platform),
-    deps.maxBytes
-  )
-  await Promise.all(evicted.map((path) => deps.fs.remove(path)))
+  const evicted = selectEvictions(await collectCacheEntriesAsync(deps.cacheDir), deps.maxBytes)
+  await Promise.all(evicted.map((path) => rm(path, { recursive: true, force: true })))
   return evicted
+}
+
+async function listNames(dir: string, kind: 'dir' | 'file'): Promise<string[]> {
+  try {
+    return (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => (kind === 'dir' ? entry.isDirectory() : entry.isFile()))
+      .map((entry) => entry.name)
+  } catch {
+    return []
+  }
 }

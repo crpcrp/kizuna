@@ -30,7 +30,8 @@ architectural changes.
   implementation details.
 - Use fakes or fixtures for mpv, FFmpeg, MeCab, AnkiConnect, WaniKani, SQLite,
   and other external boundaries. Automated tests must not require live accounts,
-  network services, or bundled binaries.
+  network services, or bundled binaries. Test local filesystem behavior in a
+  temporary directory, with spies only for specific failure cases.
 - Keep tests independent of the host OS. Pass an explicit platform to code that
   derives filesystem paths and assert both variants (see "Derive a filesystem
   path" in `docs/codebase-map.md`). Skipping a case for the running platform is

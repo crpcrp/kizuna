@@ -29,6 +29,7 @@ export const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
 export const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
 
 export interface PpOcrWorkerOptions {
+  limits?: Partial<typeof DEFAULT_TIMEOUTS>
   executablePath: string
   modelPaths: PpOcrModelPaths
   /**
@@ -36,9 +37,6 @@ export interface PpOcrWorkerOptions {
    * worker's own maximum, which is only right for a whole-desktop capture.
    */
   detectionSideLength?: number
-  startupTimeoutMs?: number
-  recognitionTimeoutMs?: number
-  shutdownTimeoutMs?: number
   spawn?: PpOcrSpawn
   onStateChange?: (status: PpOcrWorkerStatus) => void
 }
@@ -128,11 +126,14 @@ interface PendingRecognition {
   timer?: ReturnType<typeof setTimeout>
 }
 
+const DEFAULT_TIMEOUTS = {
+  startupTimeoutMs: STARTUP_TIMEOUT_MS,
+  recognitionTimeoutMs: RECOGNITION_TIMEOUT_MS,
+  shutdownTimeoutMs: SHUTDOWN_TIMEOUT_MS
+}
+
 class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
-  private readonly options: PpOcrWorkerOptions &
-    Required<
-      Pick<PpOcrWorkerOptions, 'startupTimeoutMs' | 'recognitionTimeoutMs' | 'shutdownTimeoutMs'>
-    >
+  private readonly options: PpOcrWorkerOptions & typeof DEFAULT_TIMEOUTS
 
   private status: PpOcrWorkerStatus = { state: 'stopped' }
   private processRecord?: ProcessRecord
@@ -152,9 +153,8 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   constructor(options: PpOcrWorkerOptions) {
     this.options = {
       ...options,
-      startupTimeoutMs: options.startupTimeoutMs ?? STARTUP_TIMEOUT_MS,
-      recognitionTimeoutMs: options.recognitionTimeoutMs ?? RECOGNITION_TIMEOUT_MS,
-      shutdownTimeoutMs: options.shutdownTimeoutMs ?? SHUTDOWN_TIMEOUT_MS
+      ...DEFAULT_TIMEOUTS,
+      ...options.limits
     }
   }
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createGameOcrShortcutOwner,
   type GameOcrShortcut
@@ -11,13 +11,13 @@ function setup(
 ) {
   const shortcut: GameOcrShortcut = { register: vi.fn(register), unregister: vi.fn() }
   const onError = vi.fn()
-  let clock = 10_000
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(10_000)
   const owner = createGameOcrShortcutOwner({
     shortcut,
     accelerator: 'Control+Shift+G',
     onCapture: vi.fn(async () => undefined),
     onError,
-    now: () => clock,
     ...overrides
   })
   return {
@@ -25,7 +25,7 @@ function setup(
     shortcut,
     onError,
     advance: (ms: number) => {
-      clock += ms
+      vi.setSystemTime(Date.now() + ms)
     }
   }
 }
@@ -168,3 +168,5 @@ describe('createGameOcrShortcutOwner', () => {
     )
   })
 })
+
+afterEach(() => vi.useRealTimers())
