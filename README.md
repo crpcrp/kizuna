@@ -131,10 +131,8 @@ then select UniDic under Options > Parser & Dictionaries. If the folder is
 missing or has the wrong layout, Kizuna reports UniDic as **Missing** and keeps
 bundled IPADIC available. Keep the dictionary in this persistent folder rather
 than under the application installation/resources directory so application
-updates cannot delete it. Existing installations with a dictionary in the old
-`resources/mecab/unidic` location are migrated when possible; do not install new
-copies there. Unpackaged Linux development continues using the system
-dictionary.
+updates cannot delete it. Unpackaged Linux development continues using the
+system dictionary.
 
 ### Yomitan-format dictionaries
 

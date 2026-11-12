@@ -1,0 +1,142 @@
+{
+  "mecabDictId": "unidic",
+  "dictOrder": [
+    2,
+    1
+  ],
+  "anki": {
+    "url": "http://127.0.0.1:8765",
+    "apiKey": "",
+    "deckName": "Japanese",
+    "modelName": "",
+    "fieldMap": {
+      "word": "Expression",
+      "reading": "",
+      "definition": "",
+      "sentence": "",
+      "frequency": "",
+      "pitchAccent": "",
+      "jlptLevel": "",
+      "wordAudio": "",
+      "picture": "Screenshot",
+      "sentenceAudio": ""
+    },
+    "tags": [
+      "kizuna"
+    ],
+    "includeWordAudio": true,
+    "duplicatePolicy": "prevent-deck"
+  },
+  "knowledge": {
+    "wanikaniTokenEnc": "",
+    "ankiKnownDecks": [],
+    "ankiKnownField": "",
+    "knownIntervalDays": 21,
+    "wellKnownIntervalDays": 90,
+    "coloringEnabled": true,
+    "staleAfterHours": 23
+  },
+  "updates": {
+    "checkAutomatically": true
+  },
+  "player": {
+    "startupBehavior": "splash",
+    "keyBindings": {
+      "togglePause": "KeyK",
+      "toggleFullscreen": "KeyF",
+      "exitFullscreen": "Escape",
+      "skipBack": "ArrowLeft",
+      "skipForward": "ArrowRight",
+      "speedDown": "ControlLeft+ArrowDown",
+      "speedUp": "ControlLeft+ArrowUp",
+      "speedReset": "Backspace",
+      "replayLine": "KeyR",
+      "prevLine": "Comma",
+      "nextLine": "Period",
+      "loopLine": "KeyL",
+      "abLoop": "ShiftLeft+KeyL",
+      "frameStep": "ShiftLeft+Period",
+      "frameBack": "ShiftLeft+Comma",
+      "prevFile": "KeyP",
+      "nextFile": "KeyN",
+      "prevChapter": "ControlLeft+ArrowLeft",
+      "nextChapter": "ControlLeft+ArrowRight",
+      "screenshot": "KeyS",
+      "miniPlayer": "ControlLeft+KeyM",
+      "subtitleFontScaleUp": "KeyI",
+      "subtitleFontScaleDown": "ControlLeft+MouseWheelDown"
+    },
+    "skipSeconds": 5,
+    "popupSettings": {
+      "frequencyDictId": null,
+      "sortOrder": "auto",
+      "maxEntries": 5,
+      "maxMeanings": 3
+    },
+    "subtitleStyle": {
+      "fontScale": 1,
+      "outlineSizePx": 1,
+      "xPct": 50,
+      "yPct": 82,
+      "backgroundEnabled": true
+    },
+    "subtitleDragEnabled": true,
+    "rightClickTogglePause": true,
+    "autoPlayNext": false,
+    "subtitleAutoPauseTiming": "off",
+    "subtitleAutoPauseScope": "all",
+    "subtitleOffsets": {
+      "/videos/a.mkv": 250
+    },
+    "folderSubtitleOffsets": {
+      "/videos": -100
+    },
+    "audioDelays": {
+      "/videos/a.mkv": 40
+    },
+    "appearance": "system",
+    "sidebarOpen": false,
+    "playlistOpen": false,
+    "translationEnabled": false,
+    "levelColors": {},
+    "screenshotFolder": null,
+    "mpvUserConfig": false,
+    "mpvExtraArgs": [],
+    "videoAdjustments": {
+      "brightness": 0,
+      "contrast": 0,
+      "saturation": 0,
+      "gamma": 0,
+      "hue": 0,
+      "rotate": 0,
+      "deinterlace": false
+    },
+    "audioDevice": "auto",
+    "loudnessNormalization": false
+  },
+  "gameOcr": {
+    "captureShortcut": "Alt+\\"
+  },
+  "translation": {
+    "azureSubscriptionKeyEnc": "",
+    "azureRegion": ""
+  },
+  "jimaku": {
+    "apiKeyEnc": "",
+    "folderHints": {}
+  },
+  "mediaHistory": {
+    "recentFiles": [
+      {
+        "path": "/videos/a.mkv",
+        "openedAt": 1
+      }
+    ],
+    "playbackByPath": {
+      "/videos/a.mkv": {
+        "positionSeconds": 42,
+        "updatedAt": 2
+      }
+    }
+  }
+}

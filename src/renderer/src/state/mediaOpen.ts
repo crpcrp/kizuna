@@ -153,12 +153,12 @@ async function restoreSubtitle(
   // Restores an embedded stream: the saved track, else this file's default.
   // Also the fallback when a saved external file can no longer be read.
   const restoreEmbedded = async (sid: number | null): Promise<string | undefined> => {
-    const restoreLegacyOffset = (): void => {
-      const offsetMs = session.getLegacySubtitleOffset?.()
+    const restoreFileOffset = (): void => {
+      const offsetMs = session.getFileSubtitleOffset?.()
       if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
     }
     if (sid === null) {
-      if (!superseded()) restoreLegacyOffset()
+      if (!superseded()) restoreFileOffset()
       return undefined
     }
     try {
@@ -167,13 +167,13 @@ async function restoreSubtitle(
       cueCache.set(sid, cues)
       dispatch({ type: 'cuesLoaded', cues })
       dispatch({ type: 'selectSubtitle', id: sid })
-      restoreLegacyOffset()
+      restoreFileOffset()
       return undefined
     } catch (err) {
       if (superseded()) return undefined
       dispatch({ type: 'cuesLoaded', cues: [] })
       dispatch({ type: 'selectSubtitle', id: null })
-      restoreLegacyOffset()
+      restoreFileOffset()
       return errorMessage(err)
     }
   }
@@ -207,7 +207,7 @@ async function restoreSubtitle(
       if (provenance) {
         const offsetMs =
           history.subtitleOffsetsByVersion?.[provenance.contentVersion] ??
-          session.getLegacySubtitleOffset?.() ??
+          session.getFileSubtitleOffset?.() ??
           0
         dispatch({
           type: 'setSubtitleVersionOffset',
@@ -215,7 +215,7 @@ async function restoreSubtitle(
           value: offsetMs
         })
       } else {
-        const offsetMs = session.getLegacySubtitleOffset?.()
+        const offsetMs = session.getFileSubtitleOffset?.()
         if (offsetMs !== undefined) dispatch({ type: 'setSubtitleOffset', value: offsetMs })
       }
       return undefined

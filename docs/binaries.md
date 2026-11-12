@@ -89,11 +89,8 @@ not under the package-managed resources directory:
 - Linux: `~/.config/Kizuna/mecab/unidic`
 
 Use Options > Parser & Dictionaries > Open UniDic folder to create and reveal
-the exact folder. Existing Windows installations that used the old
-`resources/mecab/unidic` location are preserved by the installer and migrated
-on startup; packaged Linux runs migrate the same legacy path when it remains
-available, while unpackaged Linux keeps using the system UniDic without copying
-it. The persistent location survives package updates.
+the exact folder. Unpackaged Linux also uses the system UniDic. The persistent
+location survives package updates.
 
 The FFmpeg build must provide `libmp3lame` for mined sentence audio. If it does
 not, card creation continues without that audio clip.

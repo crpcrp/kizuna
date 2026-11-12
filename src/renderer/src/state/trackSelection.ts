@@ -351,7 +351,7 @@ async function runLoadExternalSubtitle(
     options.offsetMs ??
     (options.provenance
       ? (session.getSubtitleVersionOffset?.(options.provenance.contentVersion) ?? 0)
-      : session.getLegacySubtitleOffset?.())
+      : session.getFileSubtitleOffset?.())
   if (options.provenance) {
     if (offsetMs !== undefined) {
       dispatch({

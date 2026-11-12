@@ -18,9 +18,8 @@ describe('Game OCR shortcut settings', () => {
     }
   })
 
-  it('normalizes the Electron backslash token and the legacy DOM name', () => {
+  it('keeps the Electron backslash token and displays it as í', () => {
     expect(normalizeGameOcrShortcut('Alt+\\')).toBe('Alt+\\')
-    expect(normalizeGameOcrShortcut('Alt+Backslash')).toBe('Alt+\\')
     expect(formatGameOcrShortcutForDisplay('Alt+\\')).toBe('Alt+í')
   })
 

@@ -79,33 +79,6 @@ describe('initSchema', () => {
     db.close()
   })
 
-  it('adds nullable metadata_json to a database created before provenance storage', () => {
-    const db = new Database(':memory:')
-    db.exec(`
-      CREATE TABLE known_words (
-        source TEXT NOT NULL,
-        lemma TEXT NOT NULL,
-        reading TEXT NOT NULL DEFAULT '',
-        level TEXT NOT NULL,
-        srs_stage INTEGER,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY (source, lemma, reading)
-      )
-    `)
-
-    initSchema(db)
-
-    expect(columnNames(db, 'known_words')).toContain('metadata_json')
-    expect(
-      db
-        .prepare(
-          `INSERT INTO known_words (source, lemma, reading, level, updated_at) VALUES (?, ?, ?, ?, ?)`
-        )
-        .run('wanikani', '猫', 'ねこ', 'known', '2026-07-11T00:00:00.000Z')
-    ).toBeDefined()
-    db.close()
-  })
-
   it('enforces (source, lemma, reading) as the primary key', () => {
     const db = new Database(':memory:')
     initSchema(db)

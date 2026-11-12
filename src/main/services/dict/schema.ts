@@ -10,7 +10,6 @@
  */
 export interface DbLike {
   exec(sql: string): unknown
-  prepare(sql: string): { all(): unknown[] }
 }
 
 /** Bump when the on-disk schema shape changes; stored per-dictionary row. */
@@ -40,7 +39,8 @@ CREATE TABLE IF NOT EXISTS terms (
   def_tags TEXT,
   rules TEXT,
   score INTEGER,
-  sequence INTEGER
+  sequence INTEGER,
+  glossary_json TEXT
 )`
 
 export const CREATE_TERMS_EXPRESSION_INDEX = `
@@ -84,68 +84,11 @@ export const SCHEMA_STATEMENTS = [
 ]
 
 /**
- * Columns added to existing tables after their initial release. `CREATE
- * TABLE IF NOT EXISTS` is a no-op against a table that already exists on
- * disk, so a dict DB created before one of these columns existed would
- * otherwise keep missing it forever — this backfills it in place.
- */
-const COLUMN_MIGRATIONS: Array<{ table: string; column: string; addColumnSql: string }> = [
-  {
-    table: 'dictionaries',
-    column: 'schema_version',
-    addColumnSql: 'ALTER TABLE dictionaries ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 0'
-  },
-  {
-    table: 'terms',
-    column: 'def_tags',
-    addColumnSql: 'ALTER TABLE terms ADD COLUMN def_tags TEXT'
-  },
-  {
-    table: 'terms',
-    column: 'glossary_json',
-    addColumnSql: 'ALTER TABLE terms ADD COLUMN glossary_json TEXT'
-  },
-  {
-    table: 'dictionaries',
-    column: 'frequency_mode',
-    addColumnSql:
-      "ALTER TABLE dictionaries ADD COLUMN frequency_mode TEXT NOT NULL DEFAULT 'rank-based'"
-  },
-  {
-    table: 'dictionaries',
-    column: 'styles_css',
-    addColumnSql: 'ALTER TABLE dictionaries ADD COLUMN styles_css TEXT'
-  },
-  {
-    table: 'dictionaries',
-    column: 'fallback_only',
-    addColumnSql: 'ALTER TABLE dictionaries ADD COLUMN fallback_only INTEGER NOT NULL DEFAULT 0'
-  },
-  {
-    table: 'term_meta',
-    column: 'pitch_positions',
-    addColumnSql: 'ALTER TABLE term_meta ADD COLUMN pitch_positions TEXT'
-  }
-]
-
-function existingColumns(db: DbLike, table: string): Set<string> {
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>
-  return new Set(rows.map((row) => row.name))
-}
-
-/**
  * Creates the dictionary/term tables and lookup indexes on `db` if they
- * don't already exist, then backfills any columns from `COLUMN_MIGRATIONS`
- * that a pre-existing table is missing. Idempotent — safe to call on every
- * startup.
+ * don't already exist. Idempotent — safe to call on every startup.
  */
 export function initSchema(db: DbLike): void {
   for (const statement of SCHEMA_STATEMENTS) {
     db.exec(statement)
-  }
-  for (const { table, column, addColumnSql } of COLUMN_MIGRATIONS) {
-    if (!existingColumns(db, table).has(column)) {
-      db.exec(addColumnSql)
-    }
   }
 }

@@ -245,26 +245,12 @@ describe('mergeSettings — anki/knowledge sub-objects', () => {
     })
   })
 
-  it('leaves Frequency unmapped for a settings file written before the field existed', () => {
-    const merged = mergeSettings({
-      anki: { fieldMap: { word: 'Word', reading: 'Reading', sentence: 'Sentence' } }
-    })
-    expect(merged.anki.fieldMap.frequency).toBe('')
-  })
-
   it('keeps a persisted Frequency mapping and rejects a non-string one', () => {
     const mapped = mergeSettings({ anki: { fieldMap: { frequency: 'Freq' } } })
     const nonString = mergeSettings({ anki: { fieldMap: { frequency: 7 } } })
 
     expect(mapped.anki.fieldMap.frequency).toBe('Freq')
     expect(nonString.anki.fieldMap.frequency).toBe('')
-  })
-
-  it('leaves Pitch accent unmapped for a settings file written before the field existed', () => {
-    const merged = mergeSettings({
-      anki: { fieldMap: { word: 'Word', reading: 'Reading', sentence: 'Sentence' } }
-    })
-    expect(merged.anki.fieldMap.pitchAccent).toBe('')
   })
 
   it('keeps a persisted Pitch accent mapping and rejects a non-string one', () => {
@@ -459,51 +445,6 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     )
   })
 
-  it('splits the legacy subtitleFontScale wheel binding into directional actions', () => {
-    const merged = mergeSettings({
-      player: { keyBindings: { subtitleFontScale: 'ShiftLeft+MouseWheel' } }
-    })
-    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('ShiftLeft+MouseWheelUp')
-    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('ShiftLeft+MouseWheelDown')
-    expect(merged.player.keyBindings).not.toHaveProperty('subtitleFontScale')
-
-    const ctrl = mergeSettings({
-      player: { keyBindings: { subtitleFontScale: 'ControlLeft+MouseWheel' } }
-    })
-    expect(ctrl.player.keyBindings.subtitleFontScaleUp).toBe('ControlLeft+MouseWheelUp')
-    expect(ctrl.player.keyBindings.subtitleFontScaleDown).toBe('ControlLeft+MouseWheelDown')
-  })
-
-  it('keeps a legacy custom key as the increase binding without duplicating it', () => {
-    const merged = mergeSettings({ player: { keyBindings: { subtitleFontScale: 'KeyZ' } } })
-    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('KeyZ')
-    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe(
-      DEFAULT_PLAYER_SETTINGS.keyBindings.subtitleFontScaleDown
-    )
-  })
-
-  it('ignores a legacy subtitleFontScale once the new bindings are stored', () => {
-    const merged = mergeSettings({
-      player: {
-        keyBindings: {
-          subtitleFontScale: 'KeyZ',
-          subtitleFontScaleUp: 'KeyI',
-          subtitleFontScaleDown: 'KeyO'
-        }
-      }
-    })
-    expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('KeyI')
-    expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('KeyO')
-  })
-
-  it('falls back to the directional defaults for malformed legacy data', () => {
-    for (const subtitleFontScale of [123, '', 'ShiftLeft', 'a+b+c', null]) {
-      const merged = mergeSettings({ player: { keyBindings: { subtitleFontScale } } })
-      expect(merged.player.keyBindings.subtitleFontScaleUp).toBe('ShiftLeft+MouseWheelUp')
-      expect(merged.player.keyBindings.subtitleFontScaleDown).toBe('ShiftLeft+MouseWheelDown')
-    }
-  })
-
   it('falls back to default skipSeconds when the stored value is not a positive finite number', () => {
     expect(mergeSettings({ player: { skipSeconds: 'ten' } }).player.skipSeconds).toBe(
       DEFAULT_PLAYER_SETTINGS.skipSeconds
@@ -599,11 +540,6 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
       expect('volumeBoostEnabled' in merged).toBe(false)
       expect(merged.loudnessNormalization).toBe(true)
     }
-  })
-
-  it('ignores the removed legacy online-subtitle language setting', () => {
-    const player = mergeSettings({ player: { preferredUrlSubtitleLanguage: 'ja' } }).player
-    expect('preferredUrlSubtitleLanguage' in player).toBe(false)
   })
 
   it('defaults videoAdjustments to neutral and normalizes a malformed block', () => {
@@ -769,23 +705,6 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     expect(merged.player.subtitleOffsets).toEqual({ '/videos/a.mkv': 250 })
   })
 
-  it('migrates legacy raw-path subtitleOffsets keys to canonical keys', () => {
-    const merged = mergeSettings({
-      player: { subtitleOffsets: { 'E:\\Video\\A.mkv': 250, 'E:/Video/B.mkv': -100 } }
-    })
-    expect(merged.player.subtitleOffsets).toEqual({
-      'e:\\video\\a.mkv': 250,
-      'e:\\video\\b.mkv': -100
-    })
-  })
-
-  it('collapses two legacy spellings of one file into a single entry', () => {
-    const merged = mergeSettings({
-      player: { subtitleOffsets: { 'E:\\A.mkv': 250, 'e:\\a.mkv': 500 } }
-    })
-    expect(merged.player.subtitleOffsets).toEqual({ 'e:\\a.mkv': 500 })
-  })
-
   it('accepts a valid folderSubtitleOffsets map, defaulting to {} when absent', () => {
     const merged = mergeSettings({
       player: { folderSubtitleOffsets: { '/videos': 250, 'e:\\video': -100 } }
@@ -814,11 +733,11 @@ describe('mergeSettings — player settings block (Options menu persistence)', (
     expect(mergeSettings({}).player.audioDelays).toEqual(DEFAULT_PLAYER_SETTINGS.audioDelays)
   })
 
-  it('drops malformed audioDelays entries, canonicalizes keys, and rejects garbage maps', () => {
+  it('drops malformed audioDelays entries and rejects garbage maps', () => {
     const merged = mergeSettings({
-      player: { audioDelays: { 'E:\\Video\\A.mkv': 250, '/bad': 'nope', '/worse': Infinity } }
+      player: { audioDelays: { '/videos/a.mkv': 250, '/bad': 'nope', '/worse': Infinity } }
     })
-    expect(merged.player.audioDelays).toEqual({ 'e:\\video\\a.mkv': 250 })
+    expect(merged.player.audioDelays).toEqual({ '/videos/a.mkv': 250 })
     expect(mergeSettings({ player: { audioDelays: 'nope' } }).player.audioDelays).toEqual({})
     expect(mergeSettings({ player: { audioDelays: [1, 2] } }).player.audioDelays).toEqual({})
   })
@@ -1078,24 +997,6 @@ describe('mergeSettings anki media mappings', () => {
 
     expect(merged.anki.fieldMap.picture).toBe('')
     expect(merged.anki.fieldMap.sentenceAudio).toBe('')
-  })
-
-  // The mapping is the only switch now; a settings file from the build that had
-  // the toggles must not carry a disabling flag forward into the merged shape.
-  it('drops the retired includeScreenshot/includeSentenceAudio flags', () => {
-    const merged = mergeSettings({
-      anki: {
-        deckName: 'Japanese',
-        includeScreenshot: false,
-        includeSentenceAudio: false,
-        fieldMap: { picture: 'Screenshot', sentenceAudio: 'SentenceAudio' }
-      }
-    })
-
-    expect(merged.anki).not.toHaveProperty('includeScreenshot')
-    expect(merged.anki).not.toHaveProperty('includeSentenceAudio')
-    expect(merged.anki.fieldMap.picture).toBe('Screenshot')
-    expect(merged.anki.fieldMap.sentenceAudio).toBe('SentenceAudio')
   })
 
   it('leaves every pre-existing Anki setting untouched while adding the new keys', () => {

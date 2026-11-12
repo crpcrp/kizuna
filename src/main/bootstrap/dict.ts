@@ -1,7 +1,6 @@
 import * as fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
-import type { Shell } from 'electron'
 import {
   configureDictConnection,
   createDictService,
@@ -12,53 +11,8 @@ import { createMecabService, registerMecabBridge } from '../mecabBridge'
 import type { BinaryPaths } from '../resourcePaths'
 import { createWorkerImporter } from '../services/dict/workerImporter'
 import { isValidMecabDictionaryDir } from '../services/mecab/dictionaryValidation'
-import {
-  createUserUnidicManager,
-  migrateLegacyUnidic,
-  type UserUnidicManager
-} from '../services/mecab/unidic'
+import type { UserUnidicManager } from '../services/mecab/unidic'
 import type { BootstrapDeps } from './deps'
-import type { AppPaths } from './paths'
-
-/**
- * Creates the user-owned UniDic folder manager and preserves UniDic installed
- * under the old package-managed resource path. Windows NSIS runs an equivalent
- * pre-uninstall copy before this code starts; the startup path covers
- * development and Linux package/AppImage transitions. Migration failures are
- * actionable diagnostics only: IPADIC remains usable.
- */
-export function prepareUserUnidic(deps: {
-  paths: AppPaths
-  binaryPaths: BinaryPaths
-  shell: Shell
-}): UserUnidicManager {
-  const { paths, binaryPaths } = deps
-  const userUnidic = createUserUnidicManager({ userDataDir: paths.userData, fs, shell: deps.shell })
-
-  // Unpackaged Linux resolves the distro's shared UniDic path, not a legacy
-  // Kizuna resource folder; never copy a system dictionary into app data.
-  if (!paths.isPackaged && process.platform === 'linux') return userUnidic
-  // Same guard the NSIS hook applies: only a compiled dictionary is worth
-  // migrating. Copying an empty leftover folder would claim the persistent
-  // target and block a later migration of a real one.
-  if (!isValidMecabDictionaryDir(binaryPaths.unidicDir, fs, process.platform)) return userUnidic
-
-  const result = migrateLegacyUnidic({
-    legacyDir: binaryPaths.unidicDir,
-    targetDir: userUnidic.dir,
-    fs,
-    platform: process.platform
-  })
-  if (result.status === 'migrated') {
-    console.log(`[kizuna] migrated legacy UniDic to ${result.target}`)
-  } else if (result.status === 'failed') {
-    console.warn(
-      `[kizuna] could not migrate legacy UniDic from ${result.source} to ${result.target}: ${result.error}. ` +
-        'Open Options > Parser & Dictionaries > Open UniDic folder to install it manually; IPADIC remains available.'
-    )
-  }
-  return userUnidic
-}
 
 /** Registers the mecab IPC bridge (tokenize/listDicts/selectDict). */
 export function startMecab(
