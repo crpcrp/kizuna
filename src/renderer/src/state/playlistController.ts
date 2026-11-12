@@ -20,7 +20,7 @@ import {
   type RepeatMode,
   type Rng
 } from './playlist'
-import { isRemoteUrl } from '../../../shared/mediaFileTypes'
+import { classifyMediaFileName, isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { type OpenMediaResult } from './mediaSession'
 export interface PlaylistControllerState {
   playlist: PlaylistState
@@ -261,4 +261,34 @@ export function createPlaylistController(rng: Rng = Math.random): PlaylistContro
       return true
     }
   }
+}
+
+export interface PlaylistAppendDeps {
+  readPlaylist: (path: string) => Promise<string[]>
+  addPaths: (paths: string[]) => Promise<void>
+}
+
+export type PlaylistAppendResult =
+  { status: 'added'; count: number } | { status: 'empty' } | { status: 'unreadable' }
+
+export async function appendPathsToPlaylist(
+  paths: string[],
+  deps: PlaylistAppendDeps
+): Promise<PlaylistAppendResult> {
+  const expanded: string[] = []
+  for (const path of paths) {
+    if (classifyMediaFileName(path) === 'playlist') {
+      try {
+        expanded.push(...(await deps.readPlaylist(path)))
+      } catch {
+        return { status: 'unreadable' }
+      }
+    } else {
+      expanded.push(path)
+    }
+  }
+  const localPaths = expanded.filter((path) => !isRemoteUrl(path))
+  if (localPaths.length === 0) return { status: 'empty' }
+  await deps.addPaths(localPaths)
+  return { status: 'added', count: localPaths.length }
 }

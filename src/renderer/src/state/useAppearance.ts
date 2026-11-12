@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import type { Appearance, LevelColors } from '../../../shared/playerSettings'
 import { applyLevelColors } from '../util/levelColors'
-import { createThemeController } from './themeController'
 
 export interface UseAppearanceInput {
   /** Persisted appearance mode: 'system' follows the OS preference. */
@@ -11,35 +10,26 @@ export interface UseAppearanceInput {
   levelColors: LevelColors
 }
 
-/**
- * Applies the appearance settings to the document: resolves `appearance` to a
- * concrete theme on `<html data-theme="…">` (following OS changes while in
- * system mode) and paints the underline-color overrides as inline custom
- * properties, which outrank both theme.css blocks — so an override holds
- * across a light/dark switch. Owns the theme controller's OS listener and its
- * disposal, and applies the default theme until loadSettings lands so the
- * window is never themeless.
- */
 export function useAppearance({ appearance, levelColors }: UseAppearanceInput): void {
-  const [themeController] = useState(() =>
-    createThemeController(
-      (theme) => {
-        document.documentElement.dataset.theme = theme
-      },
-      (query) => window.matchMedia(query)
-    )
-  )
-
   useEffect(() => {
-    themeController.setAppearance(appearance)
-  }, [appearance, themeController])
-  useEffect(() => {
-    return () => {
-      themeController.dispose()
+    if (appearance !== 'system') {
+      document.documentElement.dataset.theme = resolveTheme(appearance, false)
+      return
     }
-  }, [themeController])
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = (): void => {
+      document.documentElement.dataset.theme = resolveTheme(appearance, query.matches)
+    }
+    apply()
+    query.addEventListener('change', apply)
+    return () => query.removeEventListener('change', apply)
+  }, [appearance])
 
   useEffect(() => {
     applyLevelColors(document.documentElement.style, levelColors)
   }, [levelColors])
+}
+
+export function resolveTheme(appearance: Appearance, systemPrefersDark: boolean): 'light' | 'dark' {
+  return appearance === 'system' ? (systemPrefersDark ? 'dark' : 'light') : appearance
 }

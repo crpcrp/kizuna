@@ -9,7 +9,6 @@ import type { SubtitleReportProps } from '../components/SubtitleReport'
 import type { SubtitleSidebarProps } from '../components/SubtitleSidebar'
 import type { WordPopupProps } from '../components/WordPopup'
 import type { MineMediaSource } from './ankiMining'
-import { copySidebarCue } from './appChrome'
 import type { OptionsDataController } from './optionsData'
 import type { PlayerAction, PlayerState } from './playerState'
 import { useBulkMining, type BulkMiningViewModel } from './useBulkMining'
@@ -207,7 +206,7 @@ export function useVocabularyMining({
     },
     subtitleSidebar: {
       spansForCue: caches.spansForCue,
-      onCopyCue: (cue) => void copySidebarCue(bridge.clipboard.writeText, cue),
+      onCopyCue: (cue) => void bridge.clipboard.writeText(cue.text),
       onTranslateCue: translationEnabled
         ? (cue, requestId) => bridge.translate.translate(cue.text, requestId)
         : undefined,

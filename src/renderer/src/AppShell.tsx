@@ -5,7 +5,7 @@ import App from './App'
 import OptionsSurface from './OptionsSurface'
 import SplashScreen from './components/SplashScreen'
 import UpdateNotifications from './components/UpdateNotifications'
-import { UpdatesProvider } from './state/updatesContext'
+import { UpdatesProvider } from './state/useUpdates'
 import { useUpdates } from './state/useUpdates'
 import { errorMessage } from './util/errorMessage'
 

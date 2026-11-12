@@ -17,3 +17,5 @@ Rules that differ inside `src/renderer/`. The repository-wide principles stay in
   own window). They share no React tree, and a new entry must be declared in
   `electron.vite.config.ts`'s renderer inputs. See
   [docs/game-ocr.md](../../docs/game-ocr.md).
+
+- Do not create a module for a function with one caller unless it holds non-trivial logic.

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { BulkMiningPresentation } from './bulkMiningPresentation'
+import type { BulkMiningPresentation } from './useBulkMining'
 
 export interface VideoMargins {
   top: number

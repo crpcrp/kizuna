@@ -25,11 +25,8 @@ import {
 } from './mediaSession'
 import {
   appendPathsToPlaylist,
-  appendPlaylistFile,
   type PlaylistAppendResult,
-  type PlaylistAppendDeps
-} from './playlistAppend'
-import {
+  type PlaylistAppendDeps,
   createPlaylistController,
   type PlaylistControllerState,
   type PlaylistLoadDeps
@@ -343,7 +340,7 @@ export function useMediaSession({
       pathForFile: (file) => bridge.files.pathForFile(file),
       openPath,
       loadSubtitle: (videoPath, path) => loadExternalSubtitle(openSession(), videoPath, path),
-      appendPlaylistFile: (path) => appendPlaylistFile(path, playlistAppendDeps()),
+      appendPlaylistFile: (path) => appendPathsToPlaylist([path], playlistAppendDeps()),
       reportError: recentFiles.reportError
     })
   const handleDropRef = useLatestRef(handleDrop)

@@ -25,7 +25,6 @@ import { seekTargetForCue } from './state/cueNavigation'
 import { cycleAbLoopAction } from './state/playbackCommands'
 import { cueKey } from './state/tokenization'
 import { activeLoopCue, loopSeekTarget, replayCue, type LoopSelection } from './state/cueNavigation'
-import { appClassName, toggleFromRightClick } from './state/appChrome'
 import { buildPlayerAdapter } from './state/playerAdapter'
 import { createSubtitleAutoPauseController, useSubtitleAutoPause } from './state/subtitleAutoPause'
 import { miniPlayerSubtitleStyle } from './state/miniPlayer'
@@ -512,13 +511,15 @@ export default function App({
   return (
     <div
       id="app"
-      className={appClassName(
-        state.fullscreen,
-        reveal.top || menuBarOpen,
-        reveal.bottom,
-        miniPlayerActive,
-        cursorHidden
-      )}
+      className={[
+        state.fullscreen ? 'fullscreen' : '',
+        reveal.top || menuBarOpen ? 'reveal-top' : '',
+        reveal.bottom ? 'reveal-bottom' : '',
+        miniPlayerActive ? 'mini-player' : '',
+        cursorHidden ? 'cursor-hidden' : ''
+      ]
+        .filter(Boolean)
+        .join(' ')}
     >
       <div id="top-controls" ref={topBarRef}>
         <WindowChrome fullscreen={state.fullscreen} filePath={state.filePath} />
@@ -624,7 +625,7 @@ export default function App({
           onDoubleClick={playbackWindow.fullscreen.toggle}
           onContextMenu={(e) => {
             e.preventDefault()
-            toggleFromRightClick(state.rightClickTogglePause, state.paused, playerAdapter.setPause)
+            if (state.rightClickTogglePause) playerAdapter.setPause(!state.paused)
           }}
         >
           <SubtitleOverlay
