@@ -21,15 +21,12 @@ import {
  * Everything on the wire is encoded and decoded by `ppOcrProtocol.ts`.
  */
 
-/** Conservative defaults; each can be lowered in tests or development tools. */
-export const PP_OCR_STARTUP_TIMEOUT_MS = 15_000
-export const PP_OCR_RECOGNITION_TIMEOUT_MS = 30_000
-export const PP_OCR_SHUTDOWN_TIMEOUT_MS = 2_000
+/** Conservative default timeouts; tests lower them. */
+const STARTUP_TIMEOUT_MS = 15_000
+const RECOGNITION_TIMEOUT_MS = 30_000
+const SHUTDOWN_TIMEOUT_MS = 2_000
 export const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
 export const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
-
-const MAX_TIMEOUT_MS = 5 * 60 * 1000
-const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 
 export interface PpOcrWorkerOptions {
   executablePath: string
@@ -42,9 +39,6 @@ export interface PpOcrWorkerOptions {
   startupTimeoutMs?: number
   recognitionTimeoutMs?: number
   shutdownTimeoutMs?: number
-  maxStdoutBytes?: number
-  maxStderrBytes?: number
-  maxImageBase64Bytes?: number
   spawn?: PpOcrSpawn
   onStateChange?: (status: PpOcrWorkerStatus) => void
 }
@@ -135,18 +129,10 @@ interface PendingRecognition {
 }
 
 class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
-  private readonly options: Required<
-    Pick<
-      PpOcrWorkerOptions,
-      | 'startupTimeoutMs'
-      | 'recognitionTimeoutMs'
-      | 'shutdownTimeoutMs'
-      | 'maxStdoutBytes'
-      | 'maxStderrBytes'
-      | 'maxImageBase64Bytes'
+  private readonly options: PpOcrWorkerOptions &
+    Required<
+      Pick<PpOcrWorkerOptions, 'startupTimeoutMs' | 'recognitionTimeoutMs' | 'shutdownTimeoutMs'>
     >
-  > &
-    PpOcrWorkerOptions
 
   private status: PpOcrWorkerStatus = { state: 'stopped' }
   private processRecord?: ProcessRecord
@@ -164,15 +150,11 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   private stopRequested = false
 
   constructor(options: PpOcrWorkerOptions) {
-    validateOptions(options)
     this.options = {
       ...options,
-      startupTimeoutMs: options.startupTimeoutMs ?? PP_OCR_STARTUP_TIMEOUT_MS,
-      recognitionTimeoutMs: options.recognitionTimeoutMs ?? PP_OCR_RECOGNITION_TIMEOUT_MS,
-      shutdownTimeoutMs: options.shutdownTimeoutMs ?? PP_OCR_SHUTDOWN_TIMEOUT_MS,
-      maxStdoutBytes: options.maxStdoutBytes ?? PP_OCR_MAX_STDOUT_BYTES,
-      maxStderrBytes: options.maxStderrBytes ?? PP_OCR_MAX_STDERR_BYTES,
-      maxImageBase64Bytes: options.maxImageBase64Bytes ?? PP_OCR_MAX_IMAGE_BASE64_BYTES
+      startupTimeoutMs: options.startupTimeoutMs ?? STARTUP_TIMEOUT_MS,
+      recognitionTimeoutMs: options.recognitionTimeoutMs ?? RECOGNITION_TIMEOUT_MS,
+      shutdownTimeoutMs: options.shutdownTimeoutMs ?? SHUTDOWN_TIMEOUT_MS
     }
   }
 
@@ -216,7 +198,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
   }
 
   recognize(request: PpOcrRequest): Promise<OcrResult> {
-    const inputError = validatePpOcrRequest(request, this.options.maxImageBase64Bytes)
+    const inputError = validatePpOcrRequest(request, PP_OCR_MAX_IMAGE_BASE64_BYTES)
     if (inputError) return Promise.reject(inputError)
 
     const result = new Promise<OcrResult>((resolve, reject) => {
@@ -368,12 +350,12 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     if (record !== this.processRecord || record.exited || this.stoppingRecord === record) return
     const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     this.stdoutBytes += Buffer.byteLength(text, 'utf8')
-    if (this.stdoutBytes > this.options.maxStdoutBytes) {
+    if (this.stdoutBytes > PP_OCR_MAX_STDOUT_BYTES) {
       this.fail(new PpOcrWorkerError('output-limit'), record)
       return
     }
     this.stdoutBuffer += text
-    if (Buffer.byteLength(this.stdoutBuffer, 'utf8') > this.options.maxStdoutBytes) {
+    if (Buffer.byteLength(this.stdoutBuffer, 'utf8') > PP_OCR_MAX_STDOUT_BYTES) {
       this.fail(new PpOcrWorkerError('output-limit'), record)
       return
     }
@@ -400,7 +382,7 @@ class PpOcrWorkerServiceImpl implements PpOcrWorkerService {
     const text = typeof chunk === 'string' ? chunk : chunk.toString('utf8')
     this.stderrBytes += Buffer.byteLength(text, 'utf8')
     this.stderrTail = (this.stderrTail + text).slice(-PP_OCR_STDERR_TAIL_CHARS)
-    if (this.stderrBytes > this.options.maxStderrBytes) {
+    if (this.stderrBytes > PP_OCR_MAX_STDERR_BYTES) {
       this.fail(new PpOcrWorkerError('output-limit'), record)
     }
   }
@@ -622,46 +604,6 @@ function createProcessRecord(process: PpOcrWorkerProcess): ProcessRecord {
     resolveExit = resolve
   })
   return { process, exited: false, exitPromise, resolveExit }
-}
-
-function validateOptions(options: PpOcrWorkerOptions): void {
-  if (!options || typeof options.executablePath !== 'string' || options.executablePath === '') {
-    throw new PpOcrWorkerError('invalid-input')
-  }
-  if (!options.modelPaths || !nonEmpty(options.modelPaths.detection)) {
-    throw new PpOcrWorkerError('invalid-input')
-  }
-  if (!nonEmpty(options.modelPaths.recognition)) {
-    throw new PpOcrWorkerError('invalid-input')
-  }
-  for (const value of [
-    options.startupTimeoutMs,
-    options.recognitionTimeoutMs,
-    options.shutdownTimeoutMs
-  ]) {
-    if (
-      value !== undefined &&
-      (!Number.isSafeInteger(value) || value <= 0 || value > MAX_TIMEOUT_MS)
-    ) {
-      throw new PpOcrWorkerError('invalid-input')
-    }
-  }
-  for (const value of [
-    options.maxStdoutBytes,
-    options.maxStderrBytes,
-    options.maxImageBase64Bytes
-  ]) {
-    if (
-      value !== undefined &&
-      (!Number.isSafeInteger(value) || value <= 0 || value > MAX_BUFFER_BYTES)
-    ) {
-      throw new PpOcrWorkerError('invalid-input')
-    }
-  }
-}
-
-function nonEmpty(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0
 }
 
 function delay(ms: number): Promise<void> {

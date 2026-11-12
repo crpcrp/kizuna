@@ -119,7 +119,6 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       frozen: vi.fn(),
       captureBytes: vi.fn(),
       onRegions: vi.fn(() => listenerCleanup),
-      regionsRendered: vi.fn(),
       onCopySelection: vi.fn(() => listenerCleanup),
       rendererReady: vi.fn(),
       close: vi.fn()
@@ -377,7 +376,6 @@ export function fakeGameOcrApi(): FakeGameOcrApi {
       'onDiscard',
       'onRecognitionState',
       'onRegions',
-      'regionsRendered',
       'onCopySelection',
       'rendererReady',
       'close'

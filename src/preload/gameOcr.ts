@@ -24,7 +24,6 @@ const api = {
     onDiscard: (cb) => subscribe(GAME_OCR_CHANNELS.discard, cb),
     onRecognitionState: (cb) => subscribe(GAME_OCR_CHANNELS.recognitionState, cb),
     onRegions: (cb) => subscribe(GAME_OCR_CHANNELS.regions, cb),
-    regionsRendered: (value) => ipcRenderer.send(GAME_OCR_CHANNELS.regionsRendered, value),
     onCopySelection: (cb) => subscribe(GAME_OCR_CHANNELS.copySelection, cb),
     rendererReady: () => ipcRenderer.send(GAME_OCR_CHANNELS.rendererReady),
     close: () => ipcRenderer.send(GAME_OCR_CHANNELS.close)

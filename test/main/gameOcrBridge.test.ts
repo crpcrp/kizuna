@@ -3,7 +3,7 @@ import { registerGameOcrBridge } from '@src/main/gameOcrBridge'
 import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
 import { fakeIpc } from '@test/harness/fakeIpcMain'
-import type { GameOcrRuntimeService } from '@src/main/services/gameOcr/runtime'
+import type { GameOcrRuntimeService } from '@src/main/services/gameOcr/controller'
 
 const status: GameOcrRuntimeStatus = {
   shortcut: 'Ctrl+Shift+O',

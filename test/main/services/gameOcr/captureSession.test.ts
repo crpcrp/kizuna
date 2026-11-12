@@ -51,28 +51,9 @@ describe('Game OCR capture sessions', () => {
     expect(fake.windows[0].visible()).toBe(true)
     expect(fake.queue[0]).toBeDefined()
 
-    const secondRequest = fake.recognitionRequests[1]
-    firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
-    await Promise.resolve()
-    expect(fake.onResult).not.toHaveBeenCalled()
-
-    secondRequest.deferred.resolve(result(secondRequest.request.sessionId, 2, 'new'))
-    await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledOnce())
-    expect(fake.onResult).toHaveBeenCalledOnce()
-    expect(fake.onResult).toHaveBeenCalledWith(
-      result(secondRequest.request.sessionId, secondRequest.request.captureId, 'new')
-    )
-  })
-
-  it('publishes accepted regions only for the capture they belong to', async () => {
-    const fake = setup()
-    await fake.controller.arm()
-    await fake.controller.capture()
-    const firstRequest = fake.recognitionRequests[0]
-    await fake.controller.capture()
-    const secondRequest = fake.recognitionRequests[1]
+    // The stale result is dropped; only the current capture's regions publish.
     const frame = fake.windows[0]
-
+    const secondRequest = fake.recognitionRequests[1]
     firstRequest.deferred.resolve(result(firstRequest.request.sessionId, 1, 'old'))
     await Promise.resolve()
     expect(frame.setRegions).not.toHaveBeenCalled()
@@ -81,22 +62,7 @@ describe('Game OCR capture sessions', () => {
     secondRequest.deferred.resolve(fresh)
     await vi.waitFor(() => expect(frame.setRegions).toHaveBeenCalledOnce())
     expect(frame.setRegions).toHaveBeenCalledWith(fresh)
-    // The sign only covers the recognition it belongs to.
     expect(frame.setRecognizing).toHaveBeenCalledWith(false)
-  })
-
-  it('does not wait for renderer discard before a visible recapture', async () => {
-    const discardGate = deferred<void>()
-    const fake = setup({}, { discard: () => discardGate.promise })
-    await expect(fake.controller.arm()).resolves.toBe(true)
-    await fake.controller.capture()
-
-    const second = fake.controller.capture()
-    await second
-    expect(fake.targets.resolve).toHaveBeenCalledTimes(2)
-    expect(fake.windows[0].discard).not.toHaveBeenCalled()
-    expect(fake.windows[0]?.visible()).toBe(true)
-    discardGate.resolve()
   })
 
   it('starts a newer capture without waiting for an obsolete freeze', async () => {
@@ -139,8 +105,9 @@ describe('Game OCR capture sessions', () => {
 
     const request = fake.recognitionRequests[0]
     request.deferred.resolve(result(request.request.sessionId, request.request.captureId, '日本語'))
-    await vi.waitFor(() => expect(fake.onResult).toHaveBeenCalledOnce())
-    expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
+    await vi.waitFor(() =>
+      expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
+    )
   })
 
   it('passes the selected display source to the frame', async () => {
@@ -181,21 +148,6 @@ describe('Game OCR capture sessions', () => {
     )
   })
 
-  it('falls back to the bare stage when the failure carries no message', async () => {
-    const fake = setup()
-    await fake.controller.arm()
-    await fake.controller.capture()
-
-    fake.recognitionRequests[0].deferred.reject(new Error(''))
-
-    await vi.waitFor(() =>
-      expect(fake.controller.getStatus()).toMatchObject({
-        state: 'error',
-        error: 'Game OCR recognition failed.'
-      })
-    )
-  })
-
   it('captures immediately after dismissal without a compositor wait', async () => {
     const fake = setup()
     await fake.controller.arm()
@@ -207,67 +159,6 @@ describe('Game OCR capture sessions', () => {
 
     expect(fake.events).toEqual(['capture:2', 'moveTo:1:200', 'present:1', 'recognize:2'])
     expect(fake.targets.resolve).toHaveBeenCalledTimes(2)
-  })
-
-  it('freezes the display the pointer is on', async () => {
-    const fake = setup()
-    await fake.controller.arm()
-    await fake.controller.capture()
-
-    expect(fake.windows[0].freeze).toHaveBeenCalledWith(
-      expect.objectContaining({ sourceId: 'screen:1:0', imageSize: { width: 640, height: 480 } })
-    )
-  })
-
-  it('reports shortcut-to-word-box timing only after the renderer paints the boxes', async () => {
-    let clock = 0
-    const onTimings = vi.fn()
-    const fake = setup({ now: () => (clock += 2), onTimings })
-    await fake.controller.arm()
-    await fake.controller.capture()
-
-    expect(onTimings).not.toHaveBeenCalled()
-    const request = fake.recognitionRequests[0]
-    request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'text'))
-    await vi.waitFor(() => expect(fake.windows[0].setRegions).toHaveBeenCalledOnce())
-    expect(onTimings).not.toHaveBeenCalled()
-
-    fake.windows[0].triggerRegionsRendered(request.request)
-    expect(onTimings).toHaveBeenCalledOnce()
-    expect(onTimings.mock.calls[0][0]).toMatchObject({
-      sessionId: 1,
-      captureId: 1,
-      cursorMs: 0,
-      displayMs: 0,
-      sourceMs: 0,
-      captureEventLoopMs: expect.any(Number),
-      targetCacheHit: false,
-      sourceCacheHit: false,
-      recognizeMs: expect.any(Number),
-      renderMs: expect.any(Number),
-      totalMs: expect.any(Number)
-    })
-
-    // A capture reports once; a repeated paint acknowledgement adds nothing.
-    fake.windows[0].triggerRegionsRendered(request.request)
-    expect(onTimings).toHaveBeenCalledOnce()
-  })
-
-  it('keeps capturing when the timing observer throws', async () => {
-    const fake = setup({
-      onTimings: () => {
-        throw new Error('logging failed')
-      }
-    })
-    await fake.controller.arm()
-    await fake.controller.capture()
-    const request = fake.recognitionRequests[0]
-    request.deferred.resolve(result(request.request.sessionId, request.request.captureId, 'text'))
-    await vi.waitFor(() => expect(fake.windows[0].setRegions).toHaveBeenCalledOnce())
-    fake.windows[0].triggerRegionsRendered(request.request)
-
-    expect(fake.controller.getStatus()).toMatchObject({ state: 'inspecting' })
-    expect(fake.onError).not.toHaveBeenCalled()
   })
 
   it('reuses the retained window across frames and rebuilds it after one is destroyed', async () => {
@@ -379,15 +270,15 @@ describe('Game OCR focused-window capture', () => {
   })
 
   it('reports what it captured, without a full executable path', async () => {
-    const diagnostics: string[] = []
+    const lines: string[] = []
     const fake = setup({
-      onDiagnostic: (message: string) => diagnostics.push(message),
+      log: (message: string) => lines.push(message),
       queue: [windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 })]
     })
     await fake.controller.arm()
     await fake.controller.capture()
 
-    expect(diagnostics).toEqual(['[game-ocr] target window game.exe (pid 4321) 1024x768'])
+    expect(lines).toEqual(['[game-ocr] target window game.exe (pid 4321) 1024x768'])
   })
 
   it('falls back to display capture when the window will not freeze', async () => {
@@ -414,25 +305,8 @@ describe('Game OCR focused-window capture', () => {
       expect.objectContaining({ sourceId: 'screen:2:0', targetKind: 'display' })
     )
     expect(fake.onError).not.toHaveBeenCalled()
-  })
-
-  it('retries a failed window capture under a fresh capture identity', async () => {
-    const fake = setup(
-      {
-        queue: [windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 }), target(2)]
-      },
-      {
-        freeze: async (request) => {
-          if (request.captureId === 1) throw new Error('capture is not available for this window')
-          return request.imageSize
-        }
-      }
-    )
-    await fake.controller.arm()
-    await fake.controller.capture()
-
-    // The abandoned window capture's late reply must not be mistaken for the
-    // display capture that replaced it.
+    // The retry runs under a fresh capture identity, so the abandoned window
+    // capture's late reply cannot be mistaken for the display capture.
     expect(fake.recognitionRequests).toHaveLength(1)
     expect(fake.recognitionRequests[0]?.request.captureId).toBe(2)
   })
@@ -483,33 +357,5 @@ describe('Game OCR focused-window capture', () => {
       captureId: 2,
       imageSize: { width: 800, height: 600 }
     })
-  })
-
-  it('records the target kind and foreground cost in the latency report', async () => {
-    const timings: Array<{ targetKind: string; foregroundMs: number }> = []
-    const fake = setup({
-      onTimings: (value: { targetKind: string; foregroundMs: number }) => timings.push(value),
-      queue: [
-        {
-          ...windowTarget('1902762', { x: 0, y: 0, width: 1024, height: 768 }),
-          diagnostics: {
-            cursorMs: 0,
-            displayMs: 0,
-            sourceMs: 0,
-            foregroundMs: 3,
-            targetCacheHit: false,
-            sourceCacheHit: false
-          }
-        }
-      ]
-    })
-    await fake.controller.arm()
-    await fake.controller.capture()
-    fake.recognitionRequests[0]?.deferred.resolve(result(1, 1, '日本語'))
-    await Promise.resolve()
-    await Promise.resolve()
-    fake.windows[0].triggerRegionsRendered({ sessionId: 1, captureId: 1 })
-
-    expect(timings[0]).toMatchObject({ targetKind: 'window', foregroundMs: 3 })
   })
 })

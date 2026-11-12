@@ -2,8 +2,7 @@ import { GAME_OCR_CHANNELS } from '../../../shared/ipcChannels'
 import type {
   GameOcrCaptureBytes,
   GameOcrFreezeRequest,
-  GameOcrFrozenFrame,
-  GameOcrRegionsRendered
+  GameOcrFrozenFrame
 } from '../../../shared/gameOcr'
 import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/ocr'
 import { parseWindowSourceHandle } from './windowCapture'
@@ -49,8 +48,6 @@ export interface GameOcrWindow {
   reportFrozen(frozen: GameOcrFrozenFrame): void
   /** Renderer→main report carrying the encoded screenshot. */
   reportCaptureBytes(value: GameOcrCaptureBytes): void
-  /** Renderer→main report that the accepted word boxes reached a paint. */
-  reportRegionsRendered(value: GameOcrRegionsRendered): void
   /** Updates the small renderer-owned recognition indicator. */
   setRecognizing(recognizing: boolean): void
   /**
@@ -85,8 +82,6 @@ export interface GameOcrWindow {
   onDismissed(listener: () => void): () => void
   /** Subscribes to native close/crash cleanup notifications. */
   onClosed(listener: () => void): () => void
-  /** Subscribes to the renderer's final word-box paint acknowledgement. */
-  onRegionsRendered(listener: (value: GameOcrRegionsRendered) => void): () => void
 }
 
 export interface GameOcrWindowControllerOptions {
@@ -116,7 +111,6 @@ export function createGameOcrWindowController({
   let bounds: OcrDisplayBounds | undefined = displayBounds ? { ...displayBounds } : undefined
   const closeListeners = new Set<() => void>()
   const dismissListeners = new Set<() => void>()
-  const regionsRenderedListeners = new Set<(value: GameOcrRegionsRendered) => void>()
   const frozenWaiters = new Map<
     number,
     {
@@ -305,11 +299,6 @@ export function createGameOcrWindowController({
       else waiter.resolve(value.imageBytes)
     },
 
-    reportRegionsRendered(value): void {
-      if (closed || !rendererIsReady) return
-      for (const listener of regionsRenderedListeners) listener(value)
-    },
-
     setRecognizing(recognizing): void {
       if (closed || !rendererLoaded) return
       sendToWindow(window, GAME_OCR_CHANNELS.recognitionState, recognizing)
@@ -387,12 +376,47 @@ export function createGameOcrWindowController({
     onClosed(listener): () => void {
       closeListeners.add(listener)
       return () => closeListeners.delete(listener)
-    },
-
-    onRegionsRendered(listener): () => void {
-      regionsRenderedListeners.add(listener)
-      return () => regionsRenderedListeners.delete(listener)
     }
+  }
+}
+
+type GameOcrIpcListener = (event: { sender: unknown }, value: unknown) => void
+
+/** Minimal ipcMain surface used to bind this renderer to its native window. */
+export interface GameOcrIpcMain {
+  on(channel: string, listener: GameOcrIpcListener): unknown
+  removeListener(channel: string, listener: GameOcrIpcListener): unknown
+}
+
+/** Routes the renderer's reports to the controller, only from this window's webContents. */
+export function registerGameOcrIpc(
+  ipc: GameOcrIpcMain,
+  window: GameOcrNativeWindow,
+  controller: Pick<
+    GameOcrWindow,
+    'rendererReady' | 'dismiss' | 'reportFrozen' | 'reportCaptureBytes'
+  >
+): () => void {
+  const handlers: [string, (value: unknown) => void][] = [
+    [GAME_OCR_CHANNELS.rendererReady, () => controller.rendererReady()],
+    // The renderer returns the user to the live game; it does not tear the
+    // retained window down. Stopping Game OCR is what closes it for good.
+    [GAME_OCR_CHANNELS.close, () => void controller.dismiss()],
+    [GAME_OCR_CHANNELS.frozen, (value) => controller.reportFrozen(value as GameOcrFrozenFrame)],
+    [
+      GAME_OCR_CHANNELS.captureBytes,
+      (value) => controller.reportCaptureBytes(value as GameOcrCaptureBytes)
+    ]
+  ]
+  const listeners = handlers.map(([channel, handle]) => {
+    const listener: GameOcrIpcListener = (event, value) => {
+      if (event.sender === window.webContents) handle(value)
+    }
+    ipc.on(channel, listener)
+    return [channel, listener] as const
+  })
+  return () => {
+    for (const [channel, listener] of listeners) ipc.removeListener(channel, listener)
   }
 }
 

@@ -1,6 +1,6 @@
 import type { GameOcrRuntimeStatus } from '../../../shared/gameOcr'
 import type { OptionsPresentationOrigin } from '../appShell'
-import type { GameOcrRuntimeService } from './runtime'
+import type { GameOcrRuntimeService } from './controller'
 
 export interface GameOcrBackgroundWindow {
   hide(): void

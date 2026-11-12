@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import type { OcrDisplayBounds } from '../../../shared/ocr'
 import {
@@ -9,28 +8,19 @@ import {
 } from '../../windowOptions'
 import {
   createGameOcrWindowController,
+  registerGameOcrIpc,
+  type GameOcrIpcMain,
   type GameOcrNativeWindow,
   type GameOcrWindow
 } from './frozenFrameController'
-import { registerGameOcrIpc, type GameOcrIpcMain } from './frozenFrameIpc'
-
-/** Options needed to construct the Windows-only frozen-frame window. */
-export interface GameOcrWindowConstructionOptions {
-  preloadPath: string
-  displayBounds: OcrDisplayBounds
-}
 
 /** The construction-time surface: what the controller needs, plus loading. */
 export interface GameOcrConstructedWindow extends GameOcrNativeWindow {
   /** Excludes this overlay from Windows desktop capture. */
   setContentProtection(enable: boolean): void
   loadURL(url: string): Promise<unknown> | unknown
-  loadFile(path: string, options?: { query?: Record<string, string> }): Promise<unknown> | unknown
-  webContents: GameOcrNativeWindow['webContents'] &
-    NavigationGuardTarget &
-    InputGuardTarget & {
-      openDevTools?(options?: { mode?: string }): void
-    }
+  loadFile(path: string): Promise<unknown> | unknown
+  webContents: GameOcrNativeWindow['webContents'] & NavigationGuardTarget & InputGuardTarget
 }
 
 /** Display events that invalidate an active frozen frame's placement. */
@@ -90,49 +80,19 @@ export function getGameOcrWindowOptions(
   }
 }
 
-export interface CreateGameOcrWindowOptions extends GameOcrWindowConstructionOptions {
-  platform?: NodeJS.Platform
+export interface CreateGameOcrWindowOptions {
+  preloadPath: string
+  displayBounds: OcrDisplayBounds
   devUrl?: string
   packagedHtmlPath: string
-  createWindow?: (options: BrowserWindowConstructorOptions) => BrowserWindow
-  ipcMain?: GameOcrIpcMain
-  displayEvents?: GameOcrDisplayEvents
-  /**
-   * Asks the frozen-frame renderer to narrate the input it receives, and opens
-   * its devtools detached so the log is readable while a frame covers the
-   * display. Whether a press reaches the page at all is the one question about
-   * this window that cannot be answered from inside the application.
-   */
-  traceInput?: boolean
+  createWindow: (options: BrowserWindowConstructorOptions) => BrowserWindow
+  ipcMain: GameOcrIpcMain
+  displayEvents: GameOcrDisplayEvents
 }
 
-/**
- * Production factory. The service is intentionally unavailable on Linux and
- * other platforms; the later Game OCR coordinator can keep that branch out of
- * the normal window-pair abstraction.
- */
+/** Builds the Windows-only frozen-frame window; the bootstrap never calls it elsewhere. */
 export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOcrWindow {
-  if ((options.platform ?? process.platform) !== 'win32') return unsupportedWindow()
-
-  let electron:
-    | {
-        BrowserWindow: typeof BrowserWindow
-        ipcMain?: GameOcrIpcMain
-        screen?: GameOcrDisplayEvents
-      }
-    | undefined
-  const createWindow =
-    options.createWindow ??
-    ((windowOptions) => {
-      const loadedElectron = createRequire(import.meta.url)('electron') as {
-        BrowserWindow: typeof BrowserWindow
-        ipcMain?: GameOcrIpcMain
-        screen?: GameOcrDisplayEvents
-      }
-      electron = loadedElectron
-      return new loadedElectron.BrowserWindow(windowOptions)
-    })
-  const window = createWindow(
+  const window = options.createWindow(
     getGameOcrWindowOptions(options.preloadPath, options.displayBounds)
   ) as unknown as GameOcrConstructedWindow
   // Windows clamps a window's *initial* size to the display's work area, so a
@@ -148,67 +108,26 @@ export function createGameOcrWindow(options: CreateGameOcrWindowOptions): GameOc
   applyNavigationGuards(window.webContents)
   applyReloadGuard(window.webContents)
 
-  const query = options.traceInput ? '?trace=input' : ''
   if (options.devUrl) {
-    void window.loadURL(`${options.devUrl.replace(/\/$/, '')}/gameOcr.html${query}`)
+    void window.loadURL(`${options.devUrl.replace(/\/$/, '')}/gameOcr.html`)
   } else {
-    // loadFile keeps the query out of the path, which a file:// URL would not.
-    void window.loadFile(
-      options.packagedHtmlPath,
-      options.traceInput ? { query: { trace: 'input' } } : {}
-    )
-  }
-  if (options.traceInput) {
-    window.webContents.openDevTools?.({ mode: 'detach' })
+    void window.loadFile(options.packagedHtmlPath)
   }
 
   const controller = createGameOcrWindowController({
     window,
     displayBounds: options.displayBounds
   })
-  const ipc = options.ipcMain ?? electron?.ipcMain
-  if (ipc) {
-    const removeIpcHandlers = registerGameOcrIpc(ipc, window, controller)
-    controller.onClosed(removeIpcHandlers)
+  controller.onClosed(registerGameOcrIpc(options.ipcMain, window, controller))
+  const { displayEvents } = options
+  const closeForDisplayChange = (): void => {
+    void controller.close()
   }
-  const displayEvents = options.displayEvents ?? electron?.screen
-  if (displayEvents) {
-    const closeForDisplayChange = (): void => {
-      void controller.close()
-    }
-    displayEvents.on('display-metrics-changed', closeForDisplayChange)
-    displayEvents.on('display-removed', closeForDisplayChange)
-    controller.onClosed(() => {
-      displayEvents.removeListener('display-metrics-changed', closeForDisplayChange)
-      displayEvents.removeListener('display-removed', closeForDisplayChange)
-    })
-  }
+  displayEvents.on('display-metrics-changed', closeForDisplayChange)
+  displayEvents.on('display-removed', closeForDisplayChange)
+  controller.onClosed(() => {
+    displayEvents.removeListener('display-metrics-changed', closeForDisplayChange)
+    displayEvents.removeListener('display-removed', closeForDisplayChange)
+  })
   return controller
-}
-
-function unsupportedWindow(): GameOcrWindow {
-  return {
-    freeze: async () => {
-      throw new Error('Game OCR frozen-frame presentation is only supported on Windows.')
-    },
-    captureBytes: async () => {
-      throw new Error('Game OCR frozen-frame presentation is only supported on Windows.')
-    },
-    reportFrozen: () => {},
-    reportCaptureBytes: () => {},
-    reportRegionsRendered: () => {},
-    setRecognizing: () => {},
-    setRegions: () => {},
-    rendererReady: () => {},
-    copySelection: () => {},
-    moveTo: () => {},
-    discard: async () => {},
-    dismiss: async () => {},
-    close: async () => {},
-    isVisible: () => false,
-    isFocused: () => false,
-    onDismissed: () => () => {},
-    onClosed: () => () => {},
-    onRegionsRendered: () => () => {}
-  }
 }

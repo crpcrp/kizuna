@@ -1,6 +1,15 @@
 import * as fs from 'node:fs'
 import { join } from 'node:path'
-import { globalShortcut, nativeImage, screen, type IpcMain } from 'electron'
+import {
+  BrowserWindow,
+  desktopCapturer,
+  globalShortcut,
+  Menu,
+  nativeImage,
+  screen,
+  Tray,
+  type IpcMain
+} from 'electron'
 import { registerGameOcrBridge } from '../gameOcrBridge'
 import type { MpvController } from '../mpv/controller'
 import {
@@ -13,15 +22,14 @@ import {
   type GameOcrBackgroundLifecycle
 } from '../services/gameOcr/backgroundLifecycle'
 import { createGameOcrCaptureTargets } from '../services/gameOcr/captureTarget'
-import { createGameOcrController, writeGameOcrTotalTime } from '../services/gameOcr/controller'
-import { createProductionDisplaySources } from '../services/gameOcr/displayCapture'
-import { createProductionForegroundWindowSource } from '../services/gameOcr/foregroundWindow'
-import { createGameOcrWindow } from '../services/gameOcr/frozenFrameElectron'
 import {
+  createGameOcrController,
   createGameOcrRuntimeService,
   type GameOcrRuntimeService
-} from '../services/gameOcr/runtime'
-import { createElectronGameOcrTrayFactory } from '../services/gameOcr/tray'
+} from '../services/gameOcr/controller'
+import { createGameOcrDisplaySources } from '../services/gameOcr/displayCapture'
+import { createProductionForegroundWindowSource } from '../services/gameOcr/foregroundWindow'
+import { createGameOcrWindow } from '../services/gameOcr/frozenFrameElectron'
 import type { AppShellCoordinator } from '../services/appShell'
 import { resolveDetectionSideLength } from '../services/ocr/ppOcrProtocol'
 import { createPpOcrWorkerService } from '../services/ocr/ppOcrWorker'
@@ -96,8 +104,8 @@ export function startGameOcr(deps: {
     onStateChange: (status) => late.runtime?.updateWorkerStatus(status)
   })
   const targets = createGameOcrCaptureTargets({
-    foreground: createProductionForegroundWindowSource(process.platform),
-    displays: createProductionDisplaySources(process.platform),
+    foreground: createProductionForegroundWindowSource(),
+    displays: createGameOcrDisplaySources({ screen, desktopCapturer }),
     screen
   })
   const gameOcrController = createGameOcrController({
@@ -106,25 +114,17 @@ export function startGameOcr(deps: {
     targets,
     createPresentation: (bounds) =>
       createGameOcrWindow({
-        platform: process.platform,
         preloadPath: paths.gameOcrPreload,
         displayBounds: bounds,
         devUrl: process.env['ELECTRON_RENDERER_URL'],
         packagedHtmlPath: paths.gameOcrHtml,
+        createWindow: (options) => new BrowserWindow(options),
         ipcMain,
-        displayEvents: screen,
-        traceInput: Boolean(process.env['KIZUNA_GAME_OCR_TIMING'])
+        displayEvents: screen
       }),
     ocr: worker,
     onError: (message) => late.runtime?.reportError(message),
-    // The renderer acknowledges a browser paint after React commits the word
-    // boxes, so this is the complete delay the person at the shortcut feels.
-    ...(!paths.isPackaged
-      ? {
-          onTimings: writeGameOcrTotalTime,
-          onDiagnostic: (message: string) => console.log(message)
-        }
-      : {})
+    ...(!paths.isPackaged ? { log: (message: string) => console.log(message) } : {})
   })
   const runtime = createGameOcrRuntimeService({
     settings: deps.settings,
@@ -141,9 +141,20 @@ export function startGameOcr(deps: {
       showOptions: async (origin) => (await deps.appShell()?.showOptions(origin)) === 'options',
       showPlayer: async () => (await deps.appShell()?.showPlayer()) === 'player'
     },
-    tray: createElectronGameOcrTrayFactory(
-      nativeImage.createFromPath(join(paths.iconsDir, 'play.png'))
-    ),
+    tray: {
+      // The lifecycle sets the tooltip: it owns when the tray means "armed".
+      create(actions) {
+        const tray = new Tray(nativeImage.createFromPath(join(paths.iconsDir, 'play.png')))
+        tray.setContextMenu(
+          Menu.buildFromTemplate([
+            { label: 'Options', click: actions.options },
+            { label: 'Video player', click: actions.videoPlayer },
+            { label: 'Quit Kizuna', click: actions.quit }
+          ])
+        )
+        return tray
+      }
+    },
     stopPlayer: () => deps.controller.stopPlayback(),
     quit: deps.quit
   })

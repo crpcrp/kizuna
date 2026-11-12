@@ -30,7 +30,7 @@ export interface GameOcrShortcutOwnerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
   /** Runs one capture for one physical press of the capture accelerator. */
-  onCapture: (pressedAt: number) => Promise<void>
+  onCapture: () => Promise<void>
   onError: (message: string, error: unknown) => void
   now: () => number
 }
@@ -67,7 +67,7 @@ export function createGameOcrShortcutOwner(
     if (pressedAt - lastCaptureAt < SHORTCUT_REPEAT_GUARD_MS) return
     lastCaptureAt = pressedAt
     captureInFlight = true
-    void options.onCapture(pressedAt).finally(() => {
+    void options.onCapture().finally(() => {
       captureInFlight = false
     })
   }

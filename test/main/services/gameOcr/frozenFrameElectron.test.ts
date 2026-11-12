@@ -4,6 +4,7 @@ import {
   createGameOcrWindow,
   getGameOcrWindowOptions
 } from '@src/main/services/gameOcr/frozenFrameElectron'
+import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
 import { fakeNativeWindow } from '@test/harness/fakeFrozenFrame'
 
 describe('getGameOcrWindowOptions', () => {
@@ -40,19 +41,45 @@ describe('getGameOcrWindowOptions', () => {
   })
 })
 
+function setup() {
+  const fake = fakeNativeWindow()
+  const ipcListeners = new Map<string, (event: { sender: unknown }, value?: unknown) => void>()
+  const ipcMain = {
+    on: vi.fn((channel: string, listener: (event: { sender: unknown }) => void) => {
+      ipcListeners.set(channel, listener)
+    }),
+    removeListener: vi.fn()
+  }
+  const displayListeners = new Map<string, () => void>()
+  const displayEvents = {
+    on: vi.fn((event: string, listener: () => void) => displayListeners.set(event, listener)),
+    removeListener: vi.fn()
+  }
+  const displayBounds = { x: 0, y: 0, width: 2560, height: 1440 }
+  const createWindow = vi.fn(() => fake.window as unknown as BrowserWindow)
+  const frame = createGameOcrWindow({
+    preloadPath: '/fake/preload.js',
+    displayBounds,
+    packagedHtmlPath: '/fake/gameOcr.html',
+    createWindow,
+    ipcMain,
+    displayEvents
+  })
+  return {
+    fake,
+    frame,
+    ipcMain,
+    ipcListeners,
+    displayEvents,
+    displayListeners,
+    displayBounds,
+    createWindow
+  }
+}
+
 describe('createGameOcrWindow', () => {
   it('re-asserts the display bounds Windows clamps away at construction', () => {
-    const fake = fakeNativeWindow()
-    const displayBounds = { x: 0, y: 0, width: 2560, height: 1440 }
-    const createWindow = vi.fn(() => fake.window as unknown as BrowserWindow)
-
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds,
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow
-    })
+    const { fake, createWindow, displayBounds } = setup()
 
     expect(createWindow).toHaveBeenCalledWith(expect.objectContaining(displayBounds))
     // Windows shrinks the *initial* size of a window to the display's work
@@ -60,83 +87,34 @@ describe('createGameOcrWindow', () => {
     // short and leaves a live strip of the game showing below the screenshot.
     expect(fake.window.setBounds).toHaveBeenCalledWith(displayBounds)
     expect(fake.window.setContentProtection).toHaveBeenCalledWith(true)
-    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
+    expect(fake.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html')
   })
 
-  it('asks the renderer to trace its input only when tracing is on', () => {
-    const off = fakeNativeWindow()
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow: () => off.window as unknown as BrowserWindow
-    })
-    expect(off.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {})
-    expect(off.window.webContents.openDevTools).not.toHaveBeenCalled()
+  it('accepts renderer reports only from its own window', () => {
+    const { fake, ipcListeners } = setup()
+    fake.fireRenderer('did-finish-load')
+    fake.window.show()
 
-    const on = fakeNativeWindow()
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow: () => on.window as unknown as BrowserWindow,
-      traceInput: true
-    })
-    // Detached, because the frame covers the display it would otherwise share.
-    expect(on.window.loadFile).toHaveBeenCalledWith('/fake/gameOcr.html', {
-      query: { trace: 'input' }
-    })
-    expect(on.window.webContents.openDevTools).toHaveBeenCalledWith({ mode: 'detach' })
+    // The renderer's close request hides the frame; another renderer's does not.
+    ipcListeners.get(GAME_OCR_CHANNELS.close)!({ sender: { id: 'the player window' } })
+    expect(fake.window.hide).not.toHaveBeenCalled()
+
+    ipcListeners.get(GAME_OCR_CHANNELS.close)!({ sender: fake.window.webContents })
+    expect(fake.window.hide).toHaveBeenCalledOnce()
   })
 
   it('closes the frame when the displays change, and then stops listening', async () => {
-    const fake = fakeNativeWindow()
-    const listeners = new Map<string, () => void>()
-    const displayEvents = {
-      on: vi.fn((event: string, listener: () => void) => listeners.set(event, listener)),
-      removeListener: vi.fn()
-    }
-
-    createGameOcrWindow({
-      platform: 'win32',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow: () => fake.window as unknown as BrowserWindow,
-      displayEvents
-    })
+    const { fake, ipcMain, displayEvents, displayListeners } = setup()
 
     // The screenshot was taken on a geometry that no longer exists.
-    listeners.get('display-metrics-changed')!()
+    displayListeners.get('display-metrics-changed')!()
     expect(fake.window.close).toHaveBeenCalledOnce()
 
     fake.fireWindow('closed')
     await Promise.resolve()
     expect(displayEvents.removeListener).toHaveBeenCalledTimes(2)
-  })
-
-  it('answers with an inert window on platforms without frozen-frame support', async () => {
-    const createWindow = vi.fn()
-    const window = createGameOcrWindow({
-      platform: 'linux',
-      preloadPath: '/fake/preload.js',
-      displayBounds: { x: 0, y: 0, width: 800, height: 600 },
-      packagedHtmlPath: '/fake/gameOcr.html',
-      createWindow
-    })
-
-    expect(createWindow).not.toHaveBeenCalled()
-    expect(window.isVisible()).toBe(false)
-    await expect(
-      window.freeze({
-        sessionId: 1,
-        captureId: 1,
-        sourceId: 'screen:0:0',
-        targetKind: 'display',
-        imageSize: { width: 800, height: 600 }
-      })
-    ).rejects.toThrow('only supported on Windows')
+    for (const [channel, listener] of ipcMain.on.mock.calls) {
+      expect(ipcMain.removeListener).toHaveBeenCalledWith(channel, listener)
+    }
   })
 })

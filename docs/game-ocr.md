@@ -90,7 +90,6 @@ when:
 
 | Reason | Why |
 |---|---|
-| `unsupported` | Not Windows |
 | `query-failed` | The native boundary could not load or answer |
 | `no-foreground` | Nothing holds the foreground |
 | `own-process` | Kizuna is in front. Its frozen frame is excluded from capture, so capturing it would produce a black image |
@@ -291,24 +290,6 @@ the native `hide()` immediately and lets renderer state, selection, and pending
 lookup cleanup finish afterwards. It never waits for Electron's `hide` event,
 which can lag the visible transition by seconds on Windows.
 
-Development runs log the complete shortcut-to-word-box time after the renderer
-acknowledges a browser paint. The historical `dismiss`, `queue`, and `settle`
-fields remain, but are no longer work stages: dismissal and settle are zero,
-while queue measures only synchronous shortcut dispatch into capture and should
-also be effectively zero. Capture, presentation, recognition, and rendering
-remain real stage costs.
-The capture field is split by what was actually consulted. A window capture
-reports `foreground` (the native query) and `source constructed`, because it
-consults neither the cursor, nor Electron's display lookup, nor source
-enumeration. A display capture reports `cursor`, `display`, `source`
-cached-or-enumerated, and `target cached/resolved` as before. Both report
-`event-loop`, the time lost between the adapter's measured work and the
-controller continuation; neither a window target nor a warm display target
-crosses an asynchronous boundary, so that remainder should stay effectively
-zero, while cold source enumeration can still yield.
-`KIZUNA_GAME_OCR_TIMING=1` additionally enables the frozen frame's detailed
-input trace.
-
 ### Detection input size
 
 `--det-side-len` **sets** the detection input; it does not cap it. The worker
@@ -490,11 +471,10 @@ given environment.
 | 15a | Regional Translator configured with its identifier (for example, `northeurope`) | Translation succeeds; a portal display name containing spaces is not used as the header value |
 | 16 | Worker failure and Retry | Error is reported in Options; Retry recovers without restarting Kizuna |
 | 17 | Quit Kizuna from tray | Shortcut, worker process, frozen window, screenshot, and tray are all released |
-| 18 | Recognition timing, full 2560×1440 display vs a 1024×768 window | Record both; the window should be substantially faster |
 
 ### Recorded run
 
-No Windows manual run has been recorded yet. Rows 1–18 are **unverified**; the
+No Windows manual run has been recorded yet. Rows 1–17 are **unverified**; the
 integration matrix is expected to be filled in on a machine with a packaged
 build and a real game, and the results recorded in this section with the build
 version, Windows version, DPI scale, and monitor layout used.

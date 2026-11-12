@@ -69,7 +69,7 @@ function setup(
   return {
     foreground,
     displays,
-    targets: createGameOcrCaptureTargets({ foreground, displays, screen, now: () => 0 })
+    targets: createGameOcrCaptureTargets({ foreground, displays, screen })
   }
 }
 
@@ -97,7 +97,6 @@ describe('createGameOcrCaptureTargets', () => {
   })
 
   it.each([
-    ['the native boundary is unavailable', 'unsupported'],
     ['the native query failed', 'query-failed'],
     ['nothing holds the foreground', 'no-foreground'],
     ['Kizuna holds the foreground', 'own-process'],

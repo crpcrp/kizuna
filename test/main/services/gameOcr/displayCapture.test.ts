@@ -57,7 +57,6 @@ describe('createGameOcrDisplaySources', () => {
     const getSources = vi.fn(async () => [source(8), source(7)])
     const screenApi = screenFor([selected, other])
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenApi,
       desktopCapturer: { getSources }
     })
@@ -86,7 +85,6 @@ describe('createGameOcrDisplaySources', () => {
     const getSources = vi.fn(async () => [source(7)])
     const screenApi = screenFor([display()])
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenApi,
       desktopCapturer: { getSources }
     })
@@ -101,16 +99,7 @@ describe('createGameOcrDisplaySources', () => {
     expect(getSources).toHaveBeenCalledOnce()
     expect(screenApi.getCursorScreenPoint).toHaveBeenCalledTimes(3)
     expect(screenApi.getDisplayNearestPoint).toHaveBeenCalledOnce()
-    expect(first.diagnostics).toMatchObject({
-      targetCacheHit: false,
-      sourceCacheHit: false
-    })
-    expect(second.diagnostics).toMatchObject({
-      displayMs: 0,
-      sourceMs: 0,
-      targetCacheHit: true,
-      sourceCacheHit: true
-    })
+    expect(second).toBe(first)
 
     // Stop, shutdown, or a display change releases both caches, so the next
     // capture resolves the display and enumerates source ids again.
@@ -124,7 +113,6 @@ describe('createGameOcrDisplaySources', () => {
     let known: DisplayCaptureSource[] = []
     const getSources = vi.fn(async () => known)
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenFor([display({ id: 9 })]),
       desktopCapturer: { getSources }
     })
@@ -137,7 +125,6 @@ describe('createGameOcrDisplaySources', () => {
 
   it('reports a display with no capture source clearly', async () => {
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenFor([display()]),
       desktopCapturer: { getSources: async () => [source(99)] }
     })
@@ -147,7 +134,6 @@ describe('createGameOcrDisplaySources', () => {
 
   it('reports a protected or denied desktop capture clearly', async () => {
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenFor([display()]),
       desktopCapturer: {
         getSources: async () => {
@@ -168,21 +154,10 @@ describe('createGameOcrDisplaySources', () => {
     ]
   ] as const)('%s fails with a clear error', async (_label, makeDisplay, code) => {
     const sources = createGameOcrDisplaySources({
-      platform: 'win32',
       screen: screenFor([makeDisplay()]),
       desktopCapturer: { getSources: async () => [source(7)] }
     })
 
     await expect(sources.cursorDisplay()).rejects.toMatchObject({ code })
-  })
-
-  it('refuses on any platform but Windows', async () => {
-    const sources = createGameOcrDisplaySources({
-      platform: 'linux',
-      screen: screenFor([display()]),
-      desktopCapturer: { getSources: async () => [source(7)] }
-    })
-
-    await expect(sources.cursorDisplay()).rejects.toMatchObject({ code: 'unsupported' })
   })
 })
