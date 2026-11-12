@@ -19,10 +19,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JimakuFileRecord } from '@src/main/services/jimaku/client'
 import {
   createJimakuDownloadStore,
-  JIMAKU_DOWNLOAD_INDEX_NAME,
+  JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
+} from '@src/main/services/jimaku/downloadStore'
+import {
   JIMAKU_DOWNLOAD_ORIGIN,
   JIMAKU_DOWNLOAD_TIMEOUT_MS
-} from '@src/main/services/jimaku/downloadStore'
+} from '@src/main/services/jimaku/download'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
 
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n'
@@ -58,9 +60,6 @@ function makeStore(
     http,
     store,
     cacheRoot,
-    advance(ms: number) {
-      vi.setSystemTime(Date.now() + ms)
-    },
     setTime(value: number) {
       vi.setSystemTime(value)
     }
@@ -72,7 +71,7 @@ function hash(bytes: Uint8Array): string {
 }
 
 describe('Jimaku download store', () => {
-  it('downloads, validates, stores, indexes, and exposes an opaque prepared record', async () => {
+  it('downloads and retains the original bytes until its handle is released', async () => {
     const entryId = 42
     const file = fileRecord(entryId)
     const { store, http, cacheRoot } = makeStore({
@@ -84,7 +83,7 @@ describe('Jimaku download store', () => {
     expect(result).toEqual({
       ok: true,
       value: {
-        handle: expect.stringMatching(/^jimaku-\d+-[0-9a-f]{24}$/),
+        handle: expect.any(String),
         contentVersion: hash(BYTES),
         originalName: file.name,
         format: 'srt',
@@ -103,7 +102,7 @@ describe('Jimaku download store', () => {
     store.releasePrepared(result.value.handle)
     expect(store.lookupPrepared(result.value.handle)).toBeUndefined()
     expect(disk.existsSync(result.value.managedPath)).toBe(true)
-    expect(disk.existsSync(join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME))).toBe(true)
+    expect(disk.readdirSync(cacheRoot)).toEqual([`${hash(BYTES)}.srt`])
     expect(http.calls[0]?.init).toMatchObject({ method: 'GET', redirect: 'manual' })
     expect(http.calls[0]?.init?.headers).toBeUndefined()
   })
@@ -209,6 +208,16 @@ describe('Jimaku download redirects and limits', () => {
     for (const call of http.calls) expect(call.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
   })
 
+  it('follows a relative redirect within the same entry', async () => {
+    const file = fileRecord(42)
+    const { store, http } = makeStore({
+      [file.url]: { status: 302, headers: { location: 'redirect.srt' } },
+      [`${JIMAKU_DOWNLOAD_ORIGIN}/entry/42/download/redirect.srt`]: { bytes: BYTES }
+    })
+    await expect(store.prepareDirect(42, file)).resolves.toMatchObject({ ok: true })
+    expect(http.calls).toHaveLength(2)
+  })
+
   it('rejects a cross-origin redirect with Jimaku recovery and does not follow it', async () => {
     const entryId = 61
     const file = fileRecord(entryId)
@@ -228,7 +237,7 @@ describe('Jimaku download redirects and limits', () => {
 
   it('enforces a declared byte limit before reading the body', async () => {
     const entryId = 62
-    const file = fileRecord(entryId)
+    const file = fileRecord(entryId, 'episode.srt', { size: 1 })
     const { store, http } = makeStore(
       { [file.url]: { headers: { 'content-length': '5' }, bytes: BYTES } },
       { limits: { maxDownloadBytes: 4 } }
@@ -244,7 +253,7 @@ describe('Jimaku download redirects and limits', () => {
   it('enforces a streamed byte limit when Content-Length is absent or false', async () => {
     for (const header of [undefined, 'false']) {
       const entryId = header === undefined ? 63 : 64
-      const file = fileRecord(entryId)
+      const file = fileRecord(entryId, 'episode.srt', { size: 1 })
       const { store, http } = makeStore(
         {
           [file.url]: {
@@ -264,330 +273,279 @@ describe('Jimaku download redirects and limits', () => {
   })
 })
 
-describe('Jimaku download cache', () => {
-  it('uses the provenance key for cache hits and treats a changed revision as new content', async () => {
-    const entryId = 70
-    const file = fileRecord(entryId)
-    const changed = { ...file, lastModified: 'revision-2' }
+function provenance(contentVersion = hash(BYTES), fileName = 'episode.srt') {
+  return { provider: 'jimaku' as const, entryId: 42, contentVersion, fileName }
+}
+
+describe('Jimaku content storage', () => {
+  it('deduplicates identical bytes and keeps changed content alongside old history', async () => {
+    const file = fileRecord(42)
     const changedBytes = new TextEncoder().encode(SRT.replace('こんにちは', 'さようなら'))
-    const { store, http } = makeStore({
+    const { store, cacheRoot } = makeStore({
       [file.url]: [{ bytes: BYTES }, { bytes: changedBytes }]
     })
-
-    const first = await store.prepareDirect(entryId, file)
-    const hit = await store.lookupCached(entryId, file)
-    const second = await store.prepareDirect(entryId, changed)
-
-    expect(first.ok).toBe(true)
-    expect(hit?.contentVersion).toBe(hash(BYTES))
-    expect(second.ok).toBe(true)
-    if (second.ok) expect(second.value.contentVersion).toBe(hash(changedBytes))
-    expect(http.calls).toHaveLength(2)
-  })
-
-  it('reuses content storage for identical bytes with different names and revisions', async () => {
-    const first = fileRecord(71, 'one.srt')
-    const second = fileRecord(71, 'two.srt', {
-      lastModified: 'revision-2',
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/71/download/two.srt`
+    const first = await store.prepareDirect(42, file)
+    const second = await store.prepareDirect(42, { ...file, lastModified: 'revision-2' })
+    const same = await store.prepareExtracted(42, file, 'other.srt', BYTES)
+    expect(first.ok && second.ok && same.ok).toBe(true)
+    if (!first.ok || !second.ok || !same.ok) return
+    expect(first.value.managedPath).toBe(same.value.managedPath)
+    expect(second.value.contentVersion).toBe(hash(changedBytes))
+    expect(disk.readdirSync(cacheRoot).sort()).toEqual(
+      [`${hash(BYTES)}.srt`, `${hash(changedBytes)}.srt`].sort()
+    )
+    await expect(store.readManagedSubtitle(provenance())).resolves.toMatchObject({
+      bytes: Buffer.from(BYTES)
     })
-    const { store, cacheRoot, http } = makeStore({
-      [first.url]: { bytes: BYTES },
-      [second.url]: { bytes: BYTES }
-    })
-
-    const one = await store.prepareDirect(71, first)
-    const two = await store.prepareDirect(71, second)
-
-    expect(one.ok).toBe(true)
-    expect(two.ok).toBe(true)
-    if (!one.ok || !two.ok) return
-    expect(one.value.contentVersion).toBe(two.value.contentVersion)
-    expect(one.value.managedPath).toBe(two.value.managedPath)
-    expect(
-      disk
-        .readdirSync(cacheRoot)
-        .map((name) => join(cacheRoot, name))
-        .filter((value) => value.endsWith(`.${one.value.format}`))
-    ).toEqual([join(cacheRoot, `${hash(BYTES)}.srt`)])
-    expect(http.calls).toHaveLength(2)
   })
 
-  it('does not redownload for a cache lookup, but an explicit preparation repairs a missing file', async () => {
-    const entryId = 72
-    const file = fileRecord(entryId)
-    const { store, http } = makeStore({ [file.url]: { bytes: BYTES } })
-    const first = await store.prepareDirect(entryId, file)
-    expect(first.ok).toBe(true)
-    if (!first.ok) return
-
-    await diskAsync.unlink(first.value.managedPath)
-    await expect(store.lookupCached(entryId, file)).resolves.toBeUndefined()
-    expect(http.calls).toHaveLength(1)
-
-    await expect(store.prepareDirect(entryId, file)).resolves.toMatchObject({ ok: true })
-    expect(http.calls).toHaveLength(2)
-  })
-
-  it('recovers from a corrupt index without deleting completed files', async () => {
-    const entryId = 73
-    const file = fileRecord(entryId)
+  it('restores and exports history bytes offline after restart without an index', async () => {
+    const file = fileRecord(42)
     const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
-    disk.writeFileSync(
-      join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
-      new TextEncoder().encode('{bad')
-    )
-
-    const result = await store.prepareDirect(entryId, file)
-
-    expect(result.ok).toBe(true)
-    expect(disk.existsSync(join(cacheRoot, `${hash(BYTES)}.srt`))).toBe(true)
-    await expect(store.lookupCached(entryId, file)).resolves.toMatchObject({
-      contentVersion: hash(BYTES)
+    const prepared = await store.prepareDirect(42, file)
+    expect(prepared.ok).toBe(true)
+    if (!prepared.ok) return
+    const offline = fakeHttp({})
+    const restarted = createJimakuDownloadStore({ fetch: offline.fetch, cacheRoot })
+    await restarted.cleanup([prepared.value.managedPath])
+    await expect(restarted.readManagedSubtitle(provenance())).resolves.toEqual({
+      path: prepared.value.managedPath,
+      bytes: Buffer.from(BYTES),
+      format: 'srt'
     })
+    expect(offline.calls).toHaveLength(0)
   })
 
-  it('loads a cache written by a previous version without redownloading', async () => {
-    const entryId = 75
-    const file = fileRecord(entryId)
-    const { store, http, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
-    disk.writeFileSync(join(cacheRoot, `${hash(BYTES)}.srt`), BYTES)
+  it('treats missing, corrupted and invalid history content as a local miss', async () => {
+    const { store, cacheRoot, http } = makeStore({})
+    await expect(store.readManagedSubtitle(provenance())).resolves.toBeUndefined()
     disk.writeFileSync(
-      join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
-      new TextEncoder().encode(
-        JSON.stringify({
-          version: 1,
-          entries: {
-            [JSON.stringify([entryId, file.name, file.size, file.lastModified])]: {
-              entryId,
-              remoteFilename: file.name,
-              remoteSize: file.size,
-              remoteRevision: file.lastModified,
-              contentVersion: hash(BYTES),
-              format: 'srt',
-              byteSize: BYTES.byteLength,
-              lastUsedAt: 1
-            }
-          }
-        })
-      )
+      join(cacheRoot, `${hash(BYTES)}.srt`),
+      SRT.replace('こんにちは', 'さようなら')
     )
-
-    await expect(store.prepareDirect(entryId, file)).resolves.toMatchObject({
-      ok: true,
-      value: { contentVersion: hash(BYTES), managedPath: join(cacheRoot, `${hash(BYTES)}.srt`) }
-    })
+    await expect(store.readManagedSubtitle(provenance())).resolves.toBeUndefined()
+    const invalid = new TextEncoder().encode('<html>login</html>')
+    disk.writeFileSync(join(cacheRoot, `${hash(invalid)}.srt`), invalid)
+    await expect(store.readManagedSubtitle(provenance(hash(invalid)))).resolves.toBeUndefined()
+    await expect(store.readManagedSubtitle(provenance('../outside'))).resolves.toBeUndefined()
     expect(http.calls).toHaveLength(0)
   })
 
-  it('serializes concurrent duplicate preparations', async () => {
-    const entryId = 74
-    const file = fileRecord(entryId)
-    const { store, http } = makeStore({ [file.url]: { bytes: BYTES } })
+  it('does not let a pending request block another download', async () => {
+    const pending = fileRecord(42)
+    const ready = fileRecord(43)
+    const { store, http } = makeStore({
+      [pending.url]: { deferred: true },
+      [ready.url]: { bytes: BYTES }
+    })
+    const controller = new AbortController()
+    const waiting = store.prepareDirect(42, pending, controller.signal)
+    try {
+      await expect(store.prepareDirect(43, ready)).resolves.toMatchObject({ ok: true })
+      expect(http.calls).toHaveLength(2)
+    } finally {
+      controller.abort()
+      await expect(waiting).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
+    }
+  })
 
+  it('installs concurrent identical content atomically', async () => {
+    const file = fileRecord(42)
+    const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
     const results = await Promise.all([
-      store.prepareDirect(entryId, file),
-      store.prepareDirect(entryId, file)
+      store.prepareDirect(42, file),
+      store.prepareDirect(42, file)
     ])
-
     expect(results.every((result) => result.ok)).toBe(true)
-    expect(http.calls).toHaveLength(1)
+    expect(disk.readdirSync(cacheRoot)).toEqual([`${hash(BYTES)}.srt`])
   })
 })
 
-describe('Jimaku download failure and cleanup handling', () => {
-  it('maps timeout and caller abort to sanitized results and removes no usable handle', async () => {
-    const entryId = 80
-    const file = fileRecord(entryId)
+describe('Jimaku download failures', () => {
+  it.each([
+    [401, 'unauthorized'],
+    [403, 'unauthorized'],
+    [404, 'notFound'],
+    [429, 'rateLimited'],
+    [503, 'serviceUnavailable'],
+    [400, 'invalidResponse']
+  ])('sanitizes HTTP %s as %s', async (status, code) => {
+    const file = fileRecord(42)
+    const { store, cacheRoot } = makeStore({ [file.url]: { status } })
+    await expect(store.prepareDirect(42, file)).resolves.toEqual({ ok: false, error: { code } })
+    expect(disk.readdirSync(cacheRoot)).toEqual([])
+  })
+
+  it('maps timeouts and network errors without exposing server details', async () => {
+    const file = fileRecord(42)
     const { store, http } = makeStore({
       [file.url]: [
-        { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) },
-        { deferred: true }
+        { error: Object.assign(new Error('private'), { name: 'TimeoutError' }) },
+        { error: new Error('private') }
       ]
     })
-    await expect(store.prepareDirect(entryId, file)).resolves.toEqual({
+    await expect(store.prepareDirect(42, file)).resolves.toEqual({
       ok: false,
       error: { code: 'timeout' }
     })
+    await expect(store.prepareDirect(42, file)).resolves.toEqual({
+      ok: false,
+      error: { code: 'network' }
+    })
     expect(http.calls[0]?.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
+  })
 
+  it('does not fetch or retain a preparation after cancellation', async () => {
+    const file = fileRecord(42)
+    const { store, http, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
     const controller = new AbortController()
-    const cancelled = store.prepareDirect(entryId, file, controller.signal)
-    await vi.waitFor(() => expect(http.calls).toHaveLength(2))
     controller.abort()
-    await expect(cancelled).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
+    await expect(store.prepareDirect(42, file, controller.signal)).resolves.toEqual({
+      ok: false,
+      error: { code: 'cancelled' }
+    })
+    expect(http.calls).toHaveLength(0)
+    expect(disk.readdirSync(cacheRoot)).toEqual([])
   })
 
-  it('sanitizes content and index write failures and never returns a handle', async () => {
-    const entryId = 81
-    const file = fileRecord(entryId)
-    const writeFailure = makeStore({ [file.url]: { bytes: BYTES } })
-    const write = vi.spyOn(diskAsync, 'writeFile').mockRejectedValueOnce(new Error('disk full'))
-    await expect(writeFailure.store.prepareDirect(entryId, file)).resolves.toEqual({
+  it('discards a download cancelled while it is being written', async () => {
+    const file = fileRecord(42)
+    const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
+    const controller = new AbortController()
+    const write = diskAsync.writeFile
+    vi.spyOn(diskAsync, 'writeFile').mockImplementationOnce(async (...args) => {
+      await write(...args)
+      controller.abort()
+    })
+    await expect(store.prepareDirect(42, file, controller.signal)).resolves.toEqual({
       ok: false,
-      error: { code: 'storage' }
+      error: { code: 'cancelled' }
     })
-
-    write.mockRestore()
-    const indexFailure = makeStore({ [file.url]: { bytes: BYTES } })
-    const rename = diskAsync.rename
-    vi.spyOn(diskAsync, 'rename').mockImplementation(async (from, to) => {
-      if (to === join(indexFailure.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME))
-        throw new Error('rename failed')
-      return rename(from, to)
-    })
-    await expect(indexFailure.store.prepareDirect(entryId, file)).resolves.toEqual({
-      ok: false,
-      error: { code: 'storage' }
-    })
-    expect(disk.readdirSync(indexFailure.cacheRoot).some((value) => value.endsWith('.srt'))).toBe(
-      true
-    )
+    expect(disk.readdirSync(cacheRoot)).toEqual([])
   })
 
-  it('removes only stale temporary files and leaves unindexed completed files alone', async () => {
-    const entryId = 82
-    const file = fileRecord(entryId)
+  it.each(['writeFile', 'rename'] as const)(
+    'cleans temporary files after a %s failure',
+    async (method) => {
+      const file = fileRecord(42)
+      const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
+      vi.spyOn(diskAsync, method).mockRejectedValueOnce(new Error('disk full'))
+      await expect(store.prepareDirect(42, file)).resolves.toEqual({
+        ok: false,
+        error: { code: 'storage' }
+      })
+      expect(disk.readdirSync(cacheRoot)).toEqual([])
+      await expect(store.prepareDirect(42, file)).resolves.toMatchObject({ ok: true })
+    }
+  )
+})
+
+describe('Jimaku cache cleanup', () => {
+  it('removes old unreferenced content and stale temporary files, preserving history and unrelated files', async () => {
     const { store, cacheRoot, setTime } = makeStore(
-      { [file.url]: { bytes: BYTES } },
-      {
-        limits: { tempMaxAgeMs: 100 }
-      }
+      {},
+      { limits: { tempMaxAgeMs: 100, cacheMaxAgeMs: 200 } }
     )
-    const old = join(cacheRoot, '.jimaku-download-old.tmp')
-    const fresh = join(cacheRoot, '.jimaku-download-fresh.tmp')
-    const completed = join(cacheRoot, 'completed.srt')
-    disk.writeFileSync(old, new Uint8Array([1]))
-    disk.utimesSync(old, 0 / 1000, 0 / 1000)
-    disk.writeFileSync(fresh, new Uint8Array([2]))
-    disk.utimesSync(fresh, 950 / 1000, 950 / 1000)
-    disk.writeFileSync(completed, new Uint8Array([3]))
-    disk.utimesSync(completed, 0 / 1000, 0 / 1000)
-    setTime(1_000)
-
-    await store.cleanup([fresh])
-
-    expect(disk.existsSync(old)).toBe(false)
-    expect(disk.existsSync(fresh)).toBe(true)
-    expect(disk.existsSync(completed)).toBe(true)
+    const names = [
+      '.jimaku-old.tmp',
+      '.jimaku-fresh.tmp',
+      `${'a'.repeat(64)}.srt`,
+      `${'b'.repeat(64)}.zip`,
+      `${'c'.repeat(64)}.ass`,
+      'unrelated.txt'
+    ]
+    for (const [i, name] of names.entries()) {
+      disk.writeFileSync(join(cacheRoot, name), BYTES)
+      disk.utimesSync(join(cacheRoot, name), i === 1 ? 0.95 : 0, i === 1 ? 0.95 : 0)
+    }
+    setTime(1000)
+    await store.cleanup([join(cacheRoot, names[4])])
+    expect(disk.readdirSync(cacheRoot).sort()).toEqual([names[1], names[4], names[5]].sort())
   })
 
-  it('evicts unprotected indexed files while retaining active and protected paths', async () => {
-    const makeBytes = (text: string) =>
-      new TextEncoder().encode(`1\n00:00:01,000 --> 00:00:02,000\n${text}\n`)
-    const bytesA = makeBytes('A')
-    const bytesB = makeBytes('B')
-    const bytesC = makeBytes('C')
-    const fileA = fileRecord(83, 'a.srt', {
-      size: bytesA.byteLength,
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/83/download/a.srt`
-    })
-    const fileB = fileRecord(84, 'b.srt', {
-      size: bytesB.byteLength,
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/84/download/b.srt`
-    })
-    const fileC = fileRecord(85, 'c.srt', {
-      size: bytesC.byteLength,
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/85/download/c.srt`
-    })
-    const { store, http } = makeStore(
-      {
-        [fileA.url]: { bytes: bytesA },
-        [fileB.url]: { bytes: bytesB },
-        [fileC.url]: { bytes: bytesC }
-      },
-      { limits: { maxCacheBytes: bytesA.byteLength + bytesB.byteLength } }
+  it('evicts oldest content to the cap while retaining active handles and history paths', async () => {
+    const file = fileRecord(42)
+    const { store, cacheRoot } = makeStore(
+      { [file.url]: { bytes: BYTES } },
+      { limits: { maxCacheBytes: BYTES.length * 3 } }
     )
-
-    const first = await store.prepareDirect(83, fileA)
-    const protectedFile = await store.prepareDirect(84, fileB)
-    const evictable = await store.prepareDirect(85, fileC)
-    expect(first.ok && protectedFile.ok && evictable.ok).toBe(true)
-    if (!first.ok || !protectedFile.ok || !evictable.ok) return
-    store.releasePrepared(protectedFile.value.handle)
-    store.releasePrepared(evictable.value.handle)
-
-    await store.cleanup([protectedFile.value.managedPath])
-
-    expect(http.calls).toHaveLength(3)
-    expect(disk.existsSync(first.value.managedPath)).toBe(true)
-    expect(disk.existsSync(protectedFile.value.managedPath)).toBe(true)
-    expect(disk.existsSync(evictable.value.managedPath)).toBe(false)
+    const active = await store.prepareDirect(42, file)
+    expect(active.ok).toBe(true)
+    if (!active.ok) return
+    const protectedPath = join(cacheRoot, `${'a'.repeat(64)}.srt`)
+    const oldest = join(cacheRoot, `${'b'.repeat(64)}.zip`)
+    const newest = join(cacheRoot, `${'c'.repeat(64)}.ass`)
+    for (const [i, path] of [protectedPath, oldest, newest].entries()) {
+      disk.writeFileSync(path, BYTES)
+      disk.utimesSync(path, i + 1, i + 1)
+    }
+    await store.cleanup([protectedPath])
+    expect(disk.existsSync(oldest)).toBe(false)
+    expect(disk.existsSync(newest)).toBe(true)
+    expect(disk.existsSync(protectedPath)).toBe(true)
+    expect(disk.existsSync(active.value.managedPath)).toBe(true)
+    store.releasePrepared(active.value.handle)
+    disk.utimesSync(active.value.managedPath, 0, 0)
+    vi.setSystemTime(31 * 24 * 60 * 60 * 1000)
+    await store.cleanup([protectedPath])
+    expect(disk.existsSync(active.value.managedPath)).toBe(false)
   })
 })
 
 describe('Jimaku package storage', () => {
-  it('stores ZIP bytes without subtitle parsing and preserves extracted-member provenance', async () => {
-    const zipBytes = zipSync({ 'Title - 07.srt': BYTES })
-    const packageFile = fileRecord(90, 'pack.zip', {
-      size: zipBytes.byteLength,
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/90/download/pack.zip`
-    })
-    const { store, http, cacheRoot } = makeStore({
-      [packageFile.url]: { bytes: zipBytes }
-    })
-
-    const pack = await store.preparePackage(90, packageFile)
-
+  it('retains ZIP bytes and restores an extracted member offline after restart', async () => {
+    const zipBytes = zipSync({ 'sub/Title - 07.srt': BYTES })
+    const file = fileRecord(42, 'pack.zip', { size: zipBytes.byteLength })
+    const { store, cacheRoot } = makeStore({ [file.url]: { bytes: zipBytes } })
+    const pack = await store.preparePackage(42, file)
     expect(pack).toMatchObject({ ok: true, value: { format: 'zip', size: zipBytes.byteLength } })
-    expect(http.calls).toHaveLength(1)
     if (!pack.ok) return
-    await expect(store.preparePackage(90, packageFile)).resolves.toMatchObject({
-      ok: true,
-      value: { format: 'zip' }
-    })
-    expect(http.calls).toHaveLength(1)
-    expect(new Uint8Array((await store.readPrepared(pack.value.handle))!)).toEqual(zipBytes)
-    expect(disk.existsSync(join(cacheRoot, `${hash(zipBytes)}.zip`))).toBe(true)
-    await expect(store.lookupCachedPackage(90, packageFile)).resolves.toMatchObject({
-      format: 'zip',
-      contentVersion: hash(zipBytes)
-    })
-
-    const extracted = await store.prepareExtracted(90, packageFile, 'sub/Title - 07.srt', BYTES)
+    await expect(store.readPrepared(pack.value.handle)).resolves.toEqual(Buffer.from(zipBytes))
+    const memberName = 'sub/Title - 07.srt'
+    const extracted = await store.prepareExtracted(42, file, memberName, BYTES)
     expect(extracted).toMatchObject({
       ok: true,
       value: {
-        originalName: 'sub/Title - 07.srt',
-        format: 'srt',
-        provenance: {
-          remoteFilename: 'pack.zip',
-          archiveMemberName: 'sub/Title - 07.srt'
-        }
+        originalName: memberName,
+        provenance: { remoteFilename: 'pack.zip', archiveMemberName: memberName }
       }
     })
-    expect(http.calls).toHaveLength(1)
-    if (!extracted.ok) return
+    const offline = fakeHttp({})
+    const restarted = createJimakuDownloadStore({ fetch: offline.fetch, cacheRoot })
     await expect(
-      store.readManagedSubtitle({
-        provider: 'jimaku',
-        entryId: 90,
-        fileName: extracted.value.originalName,
-        contentVersion: extracted.value.contentVersion,
-        archiveMemberName: 'sub/Title - 07.srt'
+      restarted.readManagedSubtitle({
+        ...provenance(hash(BYTES), memberName),
+        archiveMemberName: memberName
       })
-    ).resolves.toEqual({
-      path: extracted.value.managedPath,
-      bytes: Buffer.from(BYTES),
-      format: 'srt'
-    })
+    ).resolves.toMatchObject({ bytes: Buffer.from(BYTES), format: 'srt' })
+    expect(offline.calls).toHaveLength(0)
   })
 
-  it('uses the member name in extracted cache identity', async () => {
-    const zipBytes = zipSync({ 'Title - 07.srt': BYTES })
-    const packageFile = fileRecord(91, 'pack.zip', {
-      size: zipBytes.byteLength,
-      url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/91/download/pack.zip`
+  it('caps ZIP downloads before fetching and while reading the response', async () => {
+    const file = fileRecord(42, 'pack.zip', { size: JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES + 1 })
+    const { store, http } = makeStore({
+      [file.url]: { headers: { 'content-length': String(file.size) } }
     })
-    const { store } = makeStore({})
+    await expect(store.preparePackage(42, file)).resolves.toEqual({
+      ok: false,
+      error: { code: 'tooLarge' }
+    })
+    expect(http.calls).toHaveLength(0)
+    await expect(store.preparePackage(42, { ...file, size: 1 })).resolves.toEqual({
+      ok: false,
+      error: { code: 'tooLarge' }
+    })
+    expect(http.calls).toHaveLength(1)
+  })
 
-    const first = await store.prepareExtracted(91, packageFile, 'one.srt', BYTES)
-    const second = await store.prepareExtracted(91, packageFile, 'two.srt', BYTES)
-
-    expect(first.ok).toBe(true)
-    expect(second.ok).toBe(true)
-    if (!first.ok || !second.ok) return
-    expect(first.value.originalName).toBe('one.srt')
-    expect(second.value.originalName).toBe('two.srt')
+  it('rejects invalid or oversized extracted subtitles', async () => {
+    const file = fileRecord(42, 'pack.zip')
+    const { store } = makeStore({}, { limits: { maxDownloadBytes: BYTES.length } })
+    await expect(
+      store.prepareExtracted(42, file, 'bad.srt', new TextEncoder().encode('bad'))
+    ).resolves.toMatchObject({ ok: false, error: { code: 'invalidSubtitle' } })
+    await expect(
+      store.prepareExtracted(42, file, 'large.srt', new Uint8Array(BYTES.length + 1))
+    ).resolves.toMatchObject({ ok: false, error: { code: 'tooLarge' } })
   })
 })
