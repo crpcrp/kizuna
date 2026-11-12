@@ -21,7 +21,6 @@ import { makeAnkiSettings } from '@test/harness/ankiFixtures'
  * mine without a clip, so extraction reports "nothing to attach". */
 const noSentenceAudio: SentenceAudioService = { extract: async () => null }
 
-/** Fake settings IO (mirrors mecabBridge.service.test.ts's fakeIo). */
 const configuredAnkiSettings = makeAnkiSettings({
   deckName: 'Japanese',
   modelName: 'Kizuna',

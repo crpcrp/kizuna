@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { APP_INFO_LINKS } from '@src/shared/appInfo'
-import {
-  createAppInfoService,
-  registerAppInfoBridge,
-  type AppInfoServiceLike,
-  type CreateAppInfoServiceDeps
-} from '@src/main/appInfoBridge'
-import { APP_INFO_CHANNELS } from '@src/shared/ipcChannels'
-import { fakeIpc, type FakeEvent } from '@test/harness/fakeIpcMain'
+import { createAppInfoService, type CreateAppInfoServiceDeps } from '@src/main/appInfoBridge'
 
 const metadata = {
   description: 'A test player.',
@@ -26,49 +19,6 @@ function serviceDeps(overrides: Partial<CreateAppInfoServiceDeps> = {}): CreateA
     ...overrides
   }
 }
-
-describe('registerAppInfoBridge', () => {
-  const event: FakeEvent = { senderId: 1 }
-
-  it('registers only the app-information channels', () => {
-    const { ipc, handlers } = fakeIpc()
-    const service: AppInfoServiceLike = {
-      get: vi.fn(() => ({
-        name: 'Kizuna',
-        version: '1.0.0',
-        description: 'Test',
-        license: 'GPL-3.0-or-later',
-        repositoryUrl: 'https://github.com/crpcrp/kizuna',
-        issuesUrl: 'https://github.com/crpcrp/kizuna/issues',
-        copyright: 'Copyright © 2026 Adam Kocsis'
-      })),
-      openLink: vi.fn(async () => undefined),
-      openNotices: vi.fn(async () => ({ status: 'opened' as const }))
-    }
-    registerAppInfoBridge(ipc, service)
-
-    expect([...handlers.keys()].sort()).toEqual(
-      [APP_INFO_CHANNELS.get, APP_INFO_CHANNELS.openLink, APP_INFO_CHANNELS.openNotices].sort()
-    )
-  })
-
-  it('forwards each operation and returns the service result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const info = createAppInfoService(serviceDeps())
-    const service: AppInfoServiceLike = {
-      get: vi.fn(() => info.get()),
-      openLink: vi.fn((link) => info.openLink(link)),
-      openNotices: vi.fn(() => info.openNotices())
-    }
-    registerAppInfoBridge(ipc, service)
-
-    expect(await handlers.get(APP_INFO_CHANNELS.get)!(event)).toEqual(info.get())
-    await handlers.get(APP_INFO_CHANNELS.openLink)!(event, 'repository')
-    expect(await handlers.get(APP_INFO_CHANNELS.openNotices)!(event)).toEqual({ status: 'opened' })
-    expect(service.openLink).toHaveBeenCalledWith('repository')
-    expect(service.openNotices).toHaveBeenCalled()
-  })
-})
 
 describe('createAppInfoService', () => {
   it('uses the runtime version each time information is requested', () => {

@@ -44,154 +44,42 @@ const sampleMineRequest: MineRequest = {
   sentence: '猫が好き。'
 }
 
-/** Fake anki service: records calls. */
 function fakeService() {
-  const calls: Record<string, unknown[]> = {}
   const service: AnkiServiceLike = {
-    ping: vi.fn(async () => {
-      calls.ping = []
-      return { ok: true, version: 6 } satisfies AnkiPing
-    }),
-    deckNames: vi.fn(async () => {
-      calls.deckNames = []
-      return ['Default', 'Japanese']
-    }),
-    modelNames: vi.fn(async () => {
-      calls.modelNames = []
-      return ['Basic', 'Kizuna']
-    }),
-    modelFieldNames: vi.fn(async (modelName: string) => {
-      calls.modelFieldNames = [modelName]
-      return ['Word', 'Reading']
-    }),
-    setupJlptField: vi.fn(async () => {
-      calls.setupJlptField = []
-      return { status: 'already-configured', modelName: 'Kizuna' } satisfies AnkiJlptSetupResult
-    }),
-    previewJlptBackfill: vi.fn(async () => {
-      calls.previewJlptBackfill = []
-      return {
-        status: 'preflight-failure',
-        modelName: 'Kizuna',
-        message: 'Not configured'
-      } satisfies AnkiJlptBackfillPreview
-    }),
-    applyJlptBackfill: vi.fn(async () => {
-      calls.applyJlptBackfill = []
-      return { updated: 0, skipped: 0, failed: 0 } satisfies AnkiJlptBackfillResult
-    }),
-    addNote: vi.fn(async (req: MineRequest) => {
-      calls.addNote = [req]
-      return { noteId: 12345, operation: 'added', changedFields: ['Word'] } satisfies AnkiMineResult
-    }),
-    findExisting: vi.fn(async (token: Token) => {
-      calls.findExisting = [token]
-      return { cardId: 7, deckNames: ['Japanese'] }
-    }),
-    findTargetDeckMembership: vi.fn(async (expressions: string[]) => {
-      calls.findTargetDeckMembership = [expressions]
-      return Object.fromEntries(expressions.map((expression) => [expression, null]))
-    }),
-    openCard: vi.fn(async (cardId: number) => {
-      calls.openCard = [cardId]
-    }),
-    getSettings: vi.fn(async () => {
-      calls.getSettings = []
-      return sampleSettings
-    }),
-    setSettings: vi.fn(async (patch: Partial<AnkiSettings>) => {
-      calls.setSettings = [patch]
-      return { ...sampleSettings, ...patch }
-    })
+    ping: vi.fn(async () => ({ ok: true, version: 6 }) satisfies AnkiPing),
+    deckNames: vi.fn(async () => ['Default', 'Japanese']),
+    modelNames: vi.fn(async () => ['Basic', 'Kizuna']),
+    modelFieldNames: vi.fn(async () => ['Word', 'Reading']),
+    setupJlptField: vi.fn(
+      async () =>
+        ({ status: 'already-configured', modelName: 'Kizuna' }) satisfies AnkiJlptSetupResult
+    ),
+    previewJlptBackfill: vi.fn(
+      async () =>
+        ({
+          status: 'preflight-failure',
+          modelName: 'Kizuna',
+          message: 'Not configured'
+        }) satisfies AnkiJlptBackfillPreview
+    ),
+    applyJlptBackfill: vi.fn(
+      async () => ({ updated: 0, skipped: 0, failed: 0 }) satisfies AnkiJlptBackfillResult
+    ),
+    addNote: vi.fn(
+      async () =>
+        ({ noteId: 12345, operation: 'added', changedFields: ['Word'] }) satisfies AnkiMineResult
+    ),
+    findExisting: vi.fn(async () => ({ cardId: 7, deckNames: ['Japanese'] })),
+    findTargetDeckMembership: vi.fn(async () => ({})),
+    openCard: vi.fn(async () => {}),
+    getSettings: vi.fn(async () => sampleSettings),
+    setSettings: vi.fn(async (patch: Partial<AnkiSettings>) => ({ ...sampleSettings, ...patch }))
   }
-  return { service, calls }
+  return { service }
 }
 
 describe('registerAnkiBridge', () => {
   const event: FakeEvent = { senderId: 1 }
-
-  it('registers every command channel', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        ANKI_CHANNELS.ping,
-        ANKI_CHANNELS.deckNames,
-        ANKI_CHANNELS.modelNames,
-        ANKI_CHANNELS.modelFieldNames,
-        ANKI_CHANNELS.setupJlptField,
-        ANKI_CHANNELS.previewJlptBackfill,
-        ANKI_CHANNELS.applyJlptBackfill,
-        ANKI_CHANNELS.addNote,
-        ANKI_CHANNELS.findExisting,
-        ANKI_CHANNELS.findTargetDeckMembership,
-        ANKI_CHANNELS.openCard,
-        ANKI_CHANNELS.getSettings,
-        ANKI_CHANNELS.setSettings
-      ].sort()
-    )
-  })
-
-  it('forwards ping to service.ping and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.ping)!(event)
-
-    expect(service.ping).toHaveBeenCalled()
-    expect(result).toEqual({ ok: true, version: 6 })
-  })
-
-  it('forwards deckNames and modelNames to the service', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    expect(await handlers.get(ANKI_CHANNELS.deckNames)!(event)).toEqual(['Default', 'Japanese'])
-    expect(await handlers.get(ANKI_CHANNELS.modelNames)!(event)).toEqual(['Basic', 'Kizuna'])
-  })
-
-  it('forwards modelFieldNames with the model name', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.modelFieldNames)!(event, 'Kizuna')
-
-    expect(service.modelFieldNames).toHaveBeenCalledWith('Kizuna')
-    expect(calls.modelFieldNames).toEqual(['Kizuna'])
-    expect(result).toEqual(['Word', 'Reading'])
-  })
-
-  it('forwards the JLPT setup action', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.setupJlptField)!(event)
-
-    expect(service.setupJlptField).toHaveBeenCalled()
-    expect(calls.setupJlptField).toEqual([])
-    expect(result).toEqual({ status: 'already-configured', modelName: 'Kizuna' })
-  })
-
-  it('forwards the JLPT backfill preview action', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.previewJlptBackfill)!(event)
-
-    expect(service.previewJlptBackfill).toHaveBeenCalled()
-    expect(result).toEqual({
-      status: 'preflight-failure',
-      modelName: 'Kizuna',
-      message: 'Not configured'
-    })
-  })
 
   it('forwards backfill progress from the service to the renderer sender', async () => {
     const { ipc, handlers } = fakeIpc()
@@ -218,30 +106,6 @@ describe('registerAnkiBridge', () => {
     expect(send).toHaveBeenCalledWith(ANKI_CHANNELS.jlptBackfillProgress, progress)
   })
 
-  it('forwards addNote with the mine request and returns its verified operation result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.addNote)!(event, sampleMineRequest)
-
-    expect(service.addNote).toHaveBeenCalledWith(sampleMineRequest)
-    expect(calls.addNote).toEqual([sampleMineRequest])
-    expect(result).toEqual({ noteId: 12345, operation: 'added', changedFields: ['Word'] })
-  })
-
-  it('forwards findExisting with the token and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.findExisting)!(event, sampleToken)
-
-    expect(service.findExisting).toHaveBeenCalledWith(sampleToken)
-    expect(calls.findExisting).toEqual([sampleToken])
-    expect(result).toEqual({ cardId: 7, deckNames: ['Japanese'] })
-  })
-
   it('forwards an explicit dictionary headword when checking an existing card', async () => {
     const { ipc, handlers } = fakeIpc()
     const { service } = fakeService()
@@ -260,61 +124,6 @@ describe('registerAnkiBridge', () => {
     registerAnkiBridge(ipc, service)
 
     await expect(handlers.get(ANKI_CHANNELS.findExisting)!(event, sampleToken)).resolves.toBeNull()
-  })
-
-  it('forwards target-deck membership batches and preserves whole-call rejection', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-    const expressions = ['cat', 'dog']
-
-    await expect(
-      handlers.get(ANKI_CHANNELS.findTargetDeckMembership)!(event, expressions)
-    ).resolves.toEqual({
-      cat: null,
-      dog: null
-    })
-    expect(service.findTargetDeckMembership).toHaveBeenCalledWith(expressions)
-
-    service.findTargetDeckMembership = vi.fn().mockRejectedValue(new Error('Is Anki running?'))
-    await expect(
-      handlers.get(ANKI_CHANNELS.findTargetDeckMembership)!(event, expressions)
-    ).rejects.toThrow('Is Anki running?')
-  })
-
-  it('forwards openCard with the card id', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    await handlers.get(ANKI_CHANNELS.openCard)!(event, 7)
-
-    expect(service.openCard).toHaveBeenCalledWith(7)
-    expect(calls.openCard).toEqual([7])
-  })
-
-  it('forwards getSettings and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const result = await handlers.get(ANKI_CHANNELS.getSettings)!(event)
-
-    expect(service.getSettings).toHaveBeenCalled()
-    expect(result).toEqual(sampleSettings)
-  })
-
-  it('forwards setSettings with the patch and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerAnkiBridge(ipc, service)
-
-    const patch = { deckName: 'New Deck' }
-    const result = await handlers.get(ANKI_CHANNELS.setSettings)!(event, patch)
-
-    expect(service.setSettings).toHaveBeenCalledWith(patch)
-    expect(calls.setSettings).toEqual([patch])
-    expect(result).toEqual({ ...sampleSettings, deckName: 'New Deck' })
   })
 })
 

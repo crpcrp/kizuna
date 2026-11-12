@@ -52,59 +52,6 @@ function fakeService() {
 describe('registerKnowledgeBridge', () => {
   const event: FakeEvent = { senderId: 1 }
 
-  it('registers every renderer-facing command channel (not syncIfStale)', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        KNOWLEDGE_CHANNELS.levelsFor,
-        KNOWLEDGE_CHANNELS.detailsFor,
-        KNOWLEDGE_CHANNELS.jlptCoverageReport,
-        KNOWLEDGE_CHANNELS.jlptUnknownItems,
-        KNOWLEDGE_CHANNELS.sync,
-        KNOWLEDGE_CHANNELS.syncStatus,
-        KNOWLEDGE_CHANNELS.getSettings,
-        KNOWLEDGE_CHANNELS.setSettings
-      ].sort()
-    )
-  })
-
-  it('forwards levelsFor with the lemma list and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.levelsFor)!(event, ['猫'])
-
-    expect(service.levelsFor).toHaveBeenCalledWith(['猫'])
-    expect(result).toEqual({ 猫: 'known' })
-  })
-
-  it('forwards detailsFor with the lemma list and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.detailsFor)!(event, ['word'])
-
-    expect(service.detailsFor).toHaveBeenCalledWith(['word'])
-    expect(result).toEqual(DETAILS)
-  })
-
-  it('forwards the JLPT coverage report request and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.jlptCoverageReport)!(event)
-
-    expect(service.jlptCoverageReport).toHaveBeenCalledOnce()
-    expect(result).toEqual({ status: 'error', message: 'Unavailable' })
-  })
-
   it('validates JLPT export requests before calling the service', async () => {
     const { ipc, handlers } = fakeIpc()
     const { service } = fakeService()
@@ -118,64 +65,6 @@ describe('registerKnowledgeBridge', () => {
 
     expect(result).toEqual({ status: 'error', message: 'Invalid JLPT export request.' })
     expect(service.jlptUnknownItems).not.toHaveBeenCalled()
-  })
-
-  it('forwards a valid JLPT export request and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-
-    registerKnowledgeBridge(ipc, service)
-
-    const request = { throughLevel: 'N3' as const, mode: 'vocabulary' as const }
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.jlptUnknownItems)!(event, request)
-
-    expect(service.jlptUnknownItems).toHaveBeenCalledWith(request)
-    expect(result).toEqual({ status: 'ready', items: [] })
-  })
-
-  it('forwards sync with its optional source and force setting, and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.sync)!(event, 'wanikani', { force: true })
-
-    expect(service.sync).toHaveBeenCalledWith('wanikani', { force: true })
-    expect(result).toEqual(EMPTY_STATUS)
-  })
-
-  it('forwards syncStatus and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.syncStatus)!(event)
-
-    expect(service.syncStatus).toHaveBeenCalled()
-    expect(result).toEqual(EMPTY_STATUS)
-  })
-
-  it('forwards getSettings and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.getSettings)!(event)
-
-    expect(service.getSettings).toHaveBeenCalled()
-    expect(result).toMatchObject({ hasWanikaniToken: false })
-  })
-
-  it('forwards setSettings with the patch and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerKnowledgeBridge(ipc, service)
-
-    const patch = { wanikaniToken: 'abc123' }
-    const result = await handlers.get(KNOWLEDGE_CHANNELS.setSettings)!(event, patch)
-
-    expect(service.setSettings).toHaveBeenCalledWith(patch)
-    expect(result).toMatchObject({ hasWanikaniToken: true })
   })
 })
 

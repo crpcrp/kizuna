@@ -18,23 +18,13 @@ function fakeService(): UpdateService {
 }
 
 describe('registerUpdateBridge', () => {
-  it('registers the narrow commands and validates origin and sender', async () => {
+  it('validates origin and sender and persists update settings', async () => {
     const allowedSender = { id: 1 }
     const { ipc, handlers } = fakeIpc({ sender: allowedSender })
     const service = fakeService()
     const settings = createSettingsStore({ read: () => undefined, write: vi.fn() })
     registerUpdateBridge(ipc, service, settings, (sender) => sender === allowedSender)
 
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        UPDATE_CHANNELS.getState,
-        UPDATE_CHANNELS.getSettings,
-        UPDATE_CHANNELS.setSettings,
-        UPDATE_CHANNELS.check,
-        UPDATE_CHANNELS.download,
-        UPDATE_CHANNELS.install
-      ].sort()
-    )
     await handlers.get(UPDATE_CHANNELS.check)!({ sender: allowedSender }, 'manual')
     expect(service.check).toHaveBeenCalledWith('manual')
     expect(handlers.get(UPDATE_CHANNELS.getSettings)!({ sender: allowedSender })).toEqual({

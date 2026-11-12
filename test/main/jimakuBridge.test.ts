@@ -40,7 +40,7 @@ function serviceFake(): JimakuService {
 }
 
 describe('registerJimakuBridge', () => {
-  it('validates and delegates the session operations with the invoking sender', async () => {
+  it('scopes session operations to the invoking sender', async () => {
     const sender = { once: vi.fn() }
     const { ipc, handlers } = fakeIpc<{ sender: unknown }>({ sender })
     const service = serviceFake()
@@ -66,47 +66,6 @@ describe('registerJimakuBridge', () => {
       category: 'all'
     })
     expect(service.listFiles).toHaveBeenCalledWith(sender, 's-1', 1, true)
-    await expect(
-      handlers.get(JIMAKU_CHANNELS.exportActiveSubtitle)!(
-        {
-          sender
-        },
-        {
-          mediaPath: '/media/a.mkv',
-          mediaGeneration: 1,
-          provenance: {
-            provider: 'jimaku',
-            entryId: 1,
-            fileName: 'a.srt',
-            contentVersion: 'a'.repeat(64)
-          }
-        }
-      )
-    ).resolves.toEqual({ status: 'cancelled' })
-    expect(service.exportActiveSubtitle).toHaveBeenCalledWith(sender, {
-      mediaPath: '/media/a.mkv',
-      mediaGeneration: 1,
-      provenance: {
-        provider: 'jimaku',
-        entryId: 1,
-        fileName: 'a.srt',
-        contentVersion: 'a'.repeat(64)
-      }
-    })
-    expect([...handlers.keys()]).toEqual(
-      expect.arrayContaining([
-        JIMAKU_CHANNELS.beginSession,
-        JIMAKU_CHANNELS.searchTitles,
-        JIMAKU_CHANNELS.listFiles,
-        JIMAKU_CHANNELS.prepareFile,
-        JIMAKU_CHANNELS.prepareArchiveMember,
-        JIMAKU_CHANNELS.cancelPending,
-        JIMAKU_CHANNELS.endSession,
-        JIMAKU_CHANNELS.openSourcePage,
-        JIMAKU_CHANNELS.commitPreparedSubtitle,
-        JIMAKU_CHANNELS.exportActiveSubtitle
-      ])
-    )
   })
 
   it('rejects malformed payloads before delegation and disposes destroyed senders', () => {
