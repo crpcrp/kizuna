@@ -27,7 +27,7 @@ import { platformKeyFor } from './vendorResources.mjs'
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Default bundle location. Gitignored — it is build output, not a source file. */
-export const DEFAULT_OUT_DIR = join('build', 'notices')
+const DEFAULT_OUT_DIR = join('build', 'notices')
 
 /**
  * Read `--out <path>` / `--out=<path>` out of argv.
@@ -35,7 +35,7 @@ export const DEFAULT_OUT_DIR = join('build', 'notices')
  * @param {string[]} argv
  * @returns {string | undefined}
  */
-export function parseOutDirArg(argv) {
+function parseOutDirArg(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--out') return argv[i + 1]
     const inline = /^--out=(.+)$/.exec(argv[i])
@@ -50,7 +50,7 @@ export function parseOutDirArg(argv) {
  * @param {string[]} argv
  * @returns {string | undefined}
  */
-export function parsePlatformArg(argv) {
+function parsePlatformArg(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--platform') return argv[i + 1]
     const inline = /^--platform=(.+)$/.exec(argv[i])
@@ -89,11 +89,7 @@ async function main() {
   console.log('Notices bundle is ready.')
 }
 
-// Only run when invoked as a command, so `test/scripts/generate-notices.test.ts`
-// can import `parseOutDirArg` without writing a bundle.
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch((error) => {
-    console.error(`\n${error.message}\n`)
-    process.exitCode = 1
-  })
-}
+main().catch((error) => {
+  console.error(`\n${error.message}\n`)
+  process.exitCode = 1
+})

@@ -1,7 +1,7 @@
 /* Seekbar hover preview: absolutely positioned within `.seek-wrap`, centered
    on the cursor where space permits and clamped at the edges. `pointer-events:
    none` keeps it from intercepting the very hover that drives it. Colors come only from
-   theme.css semantic tokens (test/renderer/themeCss.test.ts enforces this). */
+   theme.css semantic tokens (test/repoInvariants.test.ts enforces this). */
 
 .seek-preview {
   position: absolute;

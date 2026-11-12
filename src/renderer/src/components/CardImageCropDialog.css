@@ -1,5 +1,5 @@
 /* Mined-card picture crop modal. Colors come only from theme.css semantic
-   variables (test/renderer/themeCss.test.ts enforces this). */
+   variables (test/repoInvariants.test.ts enforces this). */
 
 #card-image-overlay {
   position: fixed;

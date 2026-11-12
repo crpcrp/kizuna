@@ -205,8 +205,7 @@ Windows and Linux packaging both live in `electron-builder.cjs`, driven by
 `npm run dist` and `npm run dist:linux`. Linux artifacts are verified by
 `npm run smoke:linux` (`scripts/smoke-linux-package.mjs`, with its pure
 assertions in `scripts/linuxPackaging.mjs`), which runs only in the release
-workflow. Anything assertable without a real build belongs in
-`test/linuxPackagingConfig.test.ts` so it fails in ordinary CI instead.
+workflow.
 
 The packaged GUI check waits on `src/main/startupProbe.ts`, which reports
 startup milestones on stdout when `KIZUNA_STARTUP_PROBE=1`. Adding a startup
@@ -216,8 +215,5 @@ Use these owners when release behavior changes:
 
 | Concern | Source of truth | Regression coverage |
 |---|---|---|
-| CI host matrix and required commands | `.github/workflows/ci.yml` | `test/repoConfig.test.ts` |
-| Artifact targets, names, deb dependencies, desktop entry | `electron-builder.cjs` | `test/linuxPackagingConfig.test.ts` |
 | Linux archive/install/startup smoke | `scripts/smoke-linux-package.mjs` and `scripts/linuxPackaging.mjs` | `test/scripts/linuxPackaging.test.ts` |
-| Release job ordering, assets, checksums, provenance | `.github/workflows/release.yml` | `test/releaseWorkflow.test.ts` |
 | Cross-platform path expectations | `test/harness/platformPaths.ts` | owning main/shared tests |
