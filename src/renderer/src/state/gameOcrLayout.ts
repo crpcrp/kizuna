@@ -1,3 +1,4 @@
+import { clamp } from '../../../shared/math'
 import type { OcrBounds, OcrImageSize } from '../../../shared/ocr'
 
 export interface GameOcrLayoutSize {
@@ -103,10 +104,6 @@ function nonNegativeFinite(value: number): number {
 
 function finiteOrZero(value: number): number {
   return Number.isFinite(value) ? value : 0
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(Math.max(value, minimum), maximum)
 }
 
 function compareNumbers(left: number, right: number): number {

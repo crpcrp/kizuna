@@ -4,6 +4,8 @@
 // report pointer positions. The one impure step (drawing to a canvas) takes an
 // injected canvas, keeping it testable without a real one.
 
+import { clamp } from '../../../shared/math'
+
 export interface Point {
   x: number
   y: number
@@ -30,10 +32,6 @@ export const MIN_CROP_DISPLAY_PX = 8
 
 /** Longest allowed edge for JPEGs attached to mined Anki cards. */
 export const CARD_IMAGE_MAX_DIMENSION_PX = 1280
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max)
-}
 
 /**
  * Fits an integer pixel size within `maxDimension` without upscaling. The

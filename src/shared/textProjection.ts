@@ -5,6 +5,8 @@
 // and every token offset in this codebase is an offset into the analysis text.
 // This module is the only place the two offset spaces are converted.
 
+import { clamp } from './math'
+
 /**
  * A half-open range using JavaScript string offsets (UTF-16 code units), the
  * same convention used by `Token.startOffset` and `InteractiveText`.
@@ -124,14 +126,11 @@ export function clipAnalysisRangeToDisplayRanges(
   range: TextOffsetRange
 ): TextOffsetRange[] {
   const length = projection.analysisText.length
-  const startOffset = clamp(range.startOffset, 0, length)
-  const endOffset = clamp(range.endOffset, startOffset, length)
+  const integerOr = (value: number, fallback: number): number =>
+    Number.isInteger(value) ? value : fallback
+  const startOffset = clamp(integerOr(range.startOffset, 0), 0, length)
+  const endOffset = clamp(integerOr(range.endOffset, startOffset), startOffset, length)
   return mapAnalysisRangeToDisplayRanges(projection, { startOffset, endOffset })
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  if (!Number.isInteger(value)) return minimum
-  return Math.min(Math.max(value, minimum), maximum)
 }
 
 function assertOffset(offset: number, length: number, label: string): void {
