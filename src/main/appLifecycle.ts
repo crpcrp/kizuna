@@ -20,10 +20,7 @@ export interface QuittableController {
 /** Maximum time to wait for asynchronous shutdown work before forcing teardown. */
 export const SHUTDOWN_TIMEOUT_MS = 2_000
 
-export type SetTimeoutFn = (callback: () => void, delayMs: number) => unknown
-export type ClearTimeoutFn = (handle: unknown) => void
-
-export interface QuitCoordinatorDeps {
+interface QuitCoordinatorDeps {
   defaultSession: FlushableSession
   controller: QuittableController
   stopGameOcr?: () => Promise<void>
@@ -32,8 +29,6 @@ export interface QuitCoordinatorDeps {
   releasePowerSave?: () => void
   disposeSystemMedia?: () => void
   appQuit: () => void
-  setTimeoutFn?: SetTimeoutFn
-  clearTimeoutFn?: ClearTimeoutFn
   onError?: (operation: string, error: unknown) => void
   onShutdownStart?: () => void
 }
@@ -56,12 +51,6 @@ function defaultOnError(operation: string, error: unknown): void {
  * `app.on('before-quit', ...)`.
  */
 export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLifecycleCoordinator {
-  const flushHistory = deps.flushHistory ?? (() => {})
-  const releasePowerSave = deps.releasePowerSave ?? (() => {})
-  const disposeSystemMedia = deps.disposeSystemMedia ?? (() => {})
-  const setTimeoutFn = deps.setTimeoutFn ?? ((callback, delayMs) => setTimeout(callback, delayMs))
-  const clearTimeoutFn =
-    deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>))
   const onError = deps.onError ?? defaultOnError
 
   let shutdownStarted = false
@@ -119,15 +108,15 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
 
     // Keep the existing synchronous order: release media surfaces, then the
     // power-save blocker, then flush history and renderer storage.
-    runSafely('system-media disposal', disposeSystemMedia)
-    runSafely('power-save release', releasePowerSave)
+    runSafely('system-media disposal', () => deps.disposeSystemMedia?.())
+    runSafely('power-save release', () => deps.releasePowerSave?.())
 
-    const historyFlush = startAsync(async () => flushHistory())
+    const historyFlush = startAsync(async () => deps.flushHistory?.())
     runSafely('session storage flush', () => deps.defaultSession.flushStorageData())
     const controllerQuit = startAsync(() => deps.controller.quit())
     const gameOcrStop = startAsync(() => deps.stopGameOcr?.() ?? Promise.resolve())
     const cleanup = Promise.allSettled([controllerQuit, gameOcrStop, historyFlush])
-    const timer = setTimeoutFn(() => {
+    const timer = setTimeout(() => {
       disposeHard()
       finishShutdown()
     }, SHUTDOWN_TIMEOUT_MS)
@@ -138,7 +127,7 @@ export function createAppLifecycleCoordinator(deps: QuitCoordinatorDeps): AppLif
         if (result.status === 'rejected') reportFailure(operations[index], result.reason)
       }
       if (shutdownAllowed) return
-      clearTimeoutFn(timer)
+      clearTimeout(timer)
       finishShutdown()
     })
     return shutdownPromise

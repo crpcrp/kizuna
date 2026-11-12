@@ -43,7 +43,7 @@ export interface JimakuSettingsService {
   onConfigChange(listener: (generation: number) => void): () => void
 }
 
-export interface CreateJimakuSettingsServiceDeps {
+interface CreateJimakuSettingsServiceDeps {
   settings: SettingsStore
   secrets: SecretCodec
   client: Pick<JimakuClient, 'searchEntries'>

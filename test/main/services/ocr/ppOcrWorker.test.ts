@@ -60,16 +60,22 @@ class FakePpOcrProcess extends EventEmitter implements PpOcrWorkerProcess {
   }
 }
 
-function createService(process: FakePpOcrProcess, overrides = {}) {
+function createService(
+  process: FakePpOcrProcess,
+  overrides: Partial<Parameters<typeof createPpOcrWorkerService>[0]> = {}
+) {
   const spawn: PpOcrSpawn = vi.fn(() => process)
   const service = createPpOcrWorkerService({
     executablePath: 'ppocr-worker.exe',
     modelPaths: { detection: 'det', recognition: 'rec', keys: 'keys' },
     spawn,
-    startupTimeoutMs: 100,
-    recognitionTimeoutMs: 1_000,
-    shutdownTimeoutMs: 20,
-    ...overrides
+    ...overrides,
+    limits: {
+      startupTimeoutMs: 100,
+      recognitionTimeoutMs: 1_000,
+      shutdownTimeoutMs: 20,
+      ...overrides.limits
+    }
   })
   return { service, spawn }
 }
@@ -205,7 +211,7 @@ describe('createPpOcrWorkerService', () => {
     await expect(exitedRequest).rejects.toMatchObject({ code: 'worker-exited' })
 
     const timeoutProcess = new FakePpOcrProcess()
-    const timeout = createService(timeoutProcess, { recognitionTimeoutMs: 5 }).service
+    const timeout = createService(timeoutProcess, { limits: { recognitionTimeoutMs: 5 } }).service
     const timeoutRequest = timeout.recognize(request())
     timeoutProcess.ready()
     await expect(timeoutRequest).rejects.toMatchObject({ code: 'recognition-timeout' })
@@ -269,7 +275,7 @@ describe('createPpOcrWorkerService', () => {
 
   it('bounds shutdown when a child process refuses to exit', async () => {
     const process = new FakePpOcrProcess(false)
-    const { service } = createService(process, { shutdownTimeoutMs: 5 })
+    const { service } = createService(process, { limits: { shutdownTimeoutMs: 5 } })
     const pending = service.recognize(request())
     process.ready()
     const pendingRejection = expect(pending).rejects.toMatchObject({ code: 'cancelled' })

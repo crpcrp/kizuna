@@ -1,4 +1,4 @@
-import { stat, writeFile } from 'node:fs/promises'
+import fs from 'node:fs/promises'
 import type { SaveDialogOptions } from 'electron'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { pathApiFor } from '../../platformPath'
@@ -17,22 +17,11 @@ export type ShowJimakuSaveDialog = (
   options: JimakuSaveDialogOptions
 ) => Promise<{ canceled: boolean; filePath?: string }>
 
-export interface JimakuExportFs {
-  stat(path: string): Promise<{ isFile: boolean }>
-  writeFile(path: string, bytes: Uint8Array, options: { flag: 'w' | 'wx' }): Promise<void>
-}
-
-export const nodeJimakuExportFs: JimakuExportFs = {
-  stat: async (path) => ({ isFile: (await stat(path)).isFile() }),
-  writeFile: (path, bytes, options) => writeFile(path, bytes, options)
-}
-
 export interface JimakuSubtitleExportDeps {
   readSource(): Promise<JimakuManagedSubtitle | undefined>
   isCurrent(): boolean
   isActive(): boolean
   showSaveDialog: ShowJimakuSaveDialog
-  fs?: JimakuExportFs
   platform?: NodeJS.Platform
 }
 
@@ -80,11 +69,10 @@ export async function exportManagedJimakuSubtitle(
     return { status: 'error', code: 'notAvailable' }
   }
 
-  const fs = deps.fs ?? nodeJimakuExportFs
   let overwrite = false
   try {
     const target = await fs.stat(destination)
-    if (!target.isFile) return { status: 'error', code: 'invalidDestination' }
+    if (!target.isFile()) return { status: 'error', code: 'invalidDestination' }
     overwrite = true
   } catch (error) {
     if (!isMissing(error)) return { status: 'error', code: 'storage' }

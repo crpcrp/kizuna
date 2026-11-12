@@ -36,20 +36,15 @@ export interface JimakuClient {
   listFiles(entryId: number, signal?: AbortSignal): Promise<JimakuResult<JimakuFileRecord[]>>
 }
 
-export interface CreateJimakuClientDeps {
+interface CreateJimakuClientDeps {
   getApiKey: () => string | null | undefined
   fetch: HttpFetch
-  now?: () => number
-  requestTimeoutMs?: number
 }
 
 const INVALID = Symbol('jimaku-invalid')
 
 /** Creates a read-only, fixed-origin Jimaku API client. */
 export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
-  const now = deps.now ?? Date.now
-  const requestTimeoutMs = deps.requestTimeoutMs ?? JIMAKU_REQUEST_TIMEOUT_MS
-
   let cooldownUntilMs: number | undefined
 
   async function request<T>(
@@ -60,7 +55,7 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
     const apiKey = deps.getApiKey()?.trim() || undefined
     if (apiKey === undefined) return fail({ code: 'notConfigured' })
 
-    if (cooldownUntilMs !== undefined && now() < cooldownUntilMs) {
+    if (cooldownUntilMs !== undefined && Date.now() < cooldownUntilMs) {
       return fail({ code: 'rateLimited', retryAt: toIsoTimestamp(cooldownUntilMs) })
     }
     if (signal?.aborted) return fail({ code: 'cancelled' })
@@ -70,12 +65,12 @@ export function createJimakuClient(deps: CreateJimakuClientDeps): JimakuClient {
         method: 'GET',
         headers: { Authorization: apiKey },
         signal,
-        timeoutMs: requestTimeoutMs
+        timeoutMs: JIMAKU_REQUEST_TIMEOUT_MS
       })
       if (response.status === 401 || response.status === 403) return fail({ code: 'unauthorized' })
       if (response.status === 404) return fail({ code: 'notFound' })
       if (response.status === 429)
-        return fail({ code: 'rateLimited', retryAt: recordRateLimit(response, now()) })
+        return fail({ code: 'rateLimited', retryAt: recordRateLimit(response, Date.now()) })
       if (response.status >= 500 && response.status <= 599)
         return fail({ code: 'serviceUnavailable' })
       if (response.status < 200 || response.status >= 300) return fail({ code: 'invalidResponse' })

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   createSystemMediaController,
   MEDIA_KEY_BINDINGS,
@@ -29,7 +29,9 @@ function fakeShortcut(): GlobalShortcutLike & { callbacks: Map<string, () => voi
   }
 }
 
-function setup(now: () => number = () => 0) {
+function setup() {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(0)
   const globalShortcut = fakeShortcut()
   const setProgressBar = vi.fn()
   const setThumbarButtons = vi.fn<(buttons: ThumbarButton[]) => void>()
@@ -39,8 +41,7 @@ function setup(now: () => number = () => 0) {
     setProgressBar,
     setThumbarButtons,
     send,
-    icons: ICONS,
-    now
+    icons: ICONS
   })
   return { globalShortcut, setProgressBar, setThumbarButtons, send, controller }
 }
@@ -160,27 +161,27 @@ describe('createSystemMediaController — taskbar progress', () => {
   })
 
   it('throttles frequent time updates to at most one per second', () => {
-    let clock = 1000
-    const { setProgressBar, controller } = setup(() => clock)
+    const { setProgressBar, controller } = setup()
+    vi.setSystemTime(1000)
 
     controller.update({ fileLoaded: true, paused: false, timePos: 1, duration: 100 })
     expect(setProgressBar).toHaveBeenCalledTimes(1)
 
-    clock = 1500
+    vi.setSystemTime(1500)
     controller.update({ fileLoaded: true, paused: false, timePos: 2, duration: 100 })
     expect(setProgressBar).toHaveBeenCalledTimes(1) // within the 1s window: dropped
 
-    clock = 2000
+    vi.setSystemTime(2000)
     controller.update({ fileLoaded: true, paused: false, timePos: 3, duration: 100 })
     expect(setProgressBar).toHaveBeenCalledTimes(2) // a full second later: emitted
   })
 
   it('emits immediately when the mode changes even inside the throttle window', () => {
-    let clock = 1000
-    const { setProgressBar, controller } = setup(() => clock)
+    const { setProgressBar, controller } = setup()
+    vi.setSystemTime(1000)
 
     controller.update({ fileLoaded: true, paused: false, timePos: 1, duration: 100 })
-    clock = 1200
+    vi.setSystemTime(1200)
     controller.update({ fileLoaded: true, paused: true, timePos: 1, duration: 100 })
 
     expect(setProgressBar).toHaveBeenLastCalledWith(0.01, { mode: 'paused' })
@@ -264,3 +265,5 @@ describe('createSystemMediaController — dispose', () => {
     expect(setThumbarButtons).not.toHaveBeenCalled()
   })
 })
+
+afterEach(() => vi.useRealTimers())

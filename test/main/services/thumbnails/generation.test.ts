@@ -1,15 +1,26 @@
-import { describe, it, expect, vi } from 'vitest'
-import { posix } from 'node:path'
+import disk from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   seekTimeForBucket,
   thumbnailCachePath,
   buildThumbnailArgs,
-  createThumbnailService,
-  type ThumbnailFs,
-  type ThumbnailStat
+  createThumbnailService
 } from '@src/main/services/thumbnails/generation'
-import { fakeFfmpegSuccess, fakeFfmpegFailure } from '@test/harness/fakeFfmpeg'
+import { deferred } from '@test/harness/deferred'
 
 describe('seekTimeForBucket', () => {
   it('returns the bucket midpoint in seconds', () => {
@@ -87,219 +98,90 @@ describe('buildThumbnailArgs', () => {
   })
 })
 
-/** Minimal fake fs: an in-memory set of "existing" files + a stat table. */
-function fakeFs(
-  stats: Record<string, ThumbnailStat>,
-  existing: Set<string> = new Set()
-): { fs: ThumbnailFs; existing: Set<string>; mkdirs: string[] } {
-  const mkdirs: string[] = []
-  const fs: ThumbnailFs = {
-    stat(path) {
-      const s = stats[path]
-      if (!s) throw new Error(`no such file: ${path}`)
-      return s
-    },
-    exists: (path) => existing.has(path),
-    mkdir: (path) => mkdirs.push(path),
-    // Rename simulates ffmpeg's output landing at the final cache path.
-    rename: (_from, to) => existing.add(to)
-  }
-  return { fs, existing, mkdirs }
+function fixture() {
+  const dir = tempDir()
+  const media = join(dir, 'episode.mkv')
+  const cacheDir = join(dir, 'cache')
+  disk.writeFileSync(media, 'video')
+  const exec = vi.fn(async (_file: string, args: string[]) => {
+    disk.writeFileSync(args.at(-1)!, 'jpg')
+  })
+  const schedule = vi.fn()
+  const service = createThumbnailService({
+    exec,
+    cacheDir,
+    ffmpegPath: 'ffmpeg',
+    evictionScheduler: { schedule }
+  })
+  return { ...service, media, cacheDir, exec, schedule }
 }
 
-// The service's caching/serialization behavior does not depend on separators,
-// so it is pinned to one target; the table above covers both path shapes.
-describe('createThumbnailService.getThumbnail', () => {
-  it('returns null (no ffmpeg) when the time has no bucket', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 1, mtimeMs: 2 } })
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    expect(await svc.getThumbnail('/v/ep1.mkv', 10, 0.5)).toBeNull()
-    expect(ffmpeg.calls).toHaveLength(0)
+describe('thumbnail generation on disk', () => {
+  it('writes atomically, serves subsequent hovers from cache, and schedules one sweep', async () => {
+    const f = fixture()
+    const output = await f.getThumbnail(f.media, 50, 100)
+    expect(output).not.toBeNull()
+    expect(disk.readFileSync(output!, 'utf-8')).toBe('jpg')
+    expect(f.exec.mock.calls[0][1].at(-1)).toMatch(/\.tmp$/)
+    expect(await f.getThumbnail(f.media, 50.4, 100)).toBe(output)
+    expect(f.exec).toHaveBeenCalledTimes(1)
+    expect(f.schedule).toHaveBeenCalledTimes(1)
   })
 
-  it('runs ffmpeg once and returns the cache path on a miss', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs, mkdirs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
-
-    const out = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
-    expect(out).toBe(expected)
-    expect(ffmpeg.calls).toHaveLength(1)
-    expect(ffmpeg.calls[0].ffmpegPath).toBe('/bin/ffmpeg')
-    expect(mkdirs).toEqual([posix.dirname(expected)])
-    // ffmpeg wrote to a temp path, not the final one directly.
-    expect(ffmpeg.calls[0].args.at(-1)).not.toBe(expected)
-    expect(ffmpeg.calls[0].args.at(-1)).toMatch(/\.tmp$/)
+  it('seeks strictly inside the last bucket at the right edge', async () => {
+    const f = fixture()
+    expect(await f.getThumbnail(f.media, 100, 100)).not.toBeNull()
+    const args = f.exec.mock.calls[0][1]
+    expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(99.5)
   })
 
-  it('seeks to the bucket midpoint, not the raw hover time, at the right edge', async () => {
-    // A hover at/after the reported end maps to bucket 99. Passing that raw
-    // time to `-ss` would seek past EOF, yield no frame, and poison the bucket;
-    // the service must seek to the bucket midpoint (99.5% of duration) instead.
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
+  it('deduplicates concurrent requests for one bucket', async () => {
+    const f = fixture()
+    const gate = deferred<void>()
+    f.exec.mockImplementationOnce(async (_file, args) => {
+      await gate.promise
+      disk.writeFileSync(args.at(-1)!, 'jpg')
     })
-    const out = await svc.getThumbnail('/v/ep1.mkv', 100, 100) // timeSec >= durationSec
-    expect(out).toBe(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 99, 'linux'))
-    const ssValue = Number(ffmpeg.calls[0].args[ffmpeg.calls[0].args.indexOf('-ss') + 1])
-    expect(ssValue).toBeCloseTo(99.5)
-    expect(ssValue).toBeLessThan(100)
+    const first = f.getThumbnail(f.media, 50, 100)
+    const second = f.getThumbnail(f.media, 50, 100)
+    gate.resolve()
+    const [a, b] = await Promise.all([first, second])
+    expect(a).not.toBeNull()
+    expect(a).toBe(b)
+    expect(f.exec).toHaveBeenCalledTimes(1)
   })
 
-  it('serves an existing cache file without spawning ffmpeg', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const cached = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } }, new Set([cached]))
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(cached)
-    expect(ffmpeg.calls).toHaveLength(0)
-  })
-
-  it('re-runs ffmpeg for a file replaced at the same path (new stat → new dir)', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const stats: Record<string, ThumbnailStat> = { '/v/ep1.mkv': { size: 100, mtimeMs: 200 } }
-    const { fs } = fakeFs(stats)
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-
-    const first = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
-    expect(ffmpeg.calls).toHaveLength(1)
-    // Same path, but the file changed: bump size + mtime and reopen it so the
-    // memoized stat is refreshed.
-    stats['/v/ep1.mkv'] = { size: 999, mtimeMs: 300 }
-    await svc.getThumbnail('/other.mkv', 50, 100).catch(() => null) // force path change
-    const second = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
-
+  it('refreshes file identity after another file is opened', async () => {
+    const f = fixture()
+    const first = await f.getThumbnail(f.media, 50, 100)
+    disk.writeFileSync(f.media, 'replacement video')
+    await f.getThumbnail(join(f.cacheDir, 'missing'), 50, 100)
+    const second = await f.getThumbnail(f.media, 50, 100)
+    expect(second).not.toBeNull()
     expect(second).not.toBe(first)
-    // The replacement produced a fresh ffmpeg run into a different cache dir.
-    expect(ffmpeg.calls.length).toBeGreaterThanOrEqual(2)
+    expect(f.exec).toHaveBeenCalledTimes(2)
   })
 
-  it('memoizes the cache path so a second hover on the same bucket hits cache', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    const a = await svc.getThumbnail('/v/ep1.mkv', 50, 100)
-    const b = await svc.getThumbnail('/v/ep1.mkv', 50.4, 100) // same bucket 50
-    expect(a).toBe(b)
-    expect(ffmpeg.calls).toHaveLength(1) // second call served from the written file
+  it('returns null without spawning for missing files or invalid durations', async () => {
+    const f = fixture()
+    expect(await f.getThumbnail(f.media, 50, 0.5)).toBeNull()
+    expect(await f.getThumbnail(join(f.cacheDir, 'missing'), 50, 100)).toBeNull()
+    expect(f.exec).not.toHaveBeenCalled()
   })
 
-  it('serializes concurrent requests for the same bucket into one ffmpeg run', async () => {
-    let resolveExec: (() => void) | undefined
-    const gate = new Promise<void>((r) => {
-      resolveExec = r
-    })
-    const calls: string[][] = []
-    const exec = vi.fn(async (_p: string, args: string[]) => {
-      calls.push(args)
-      await gate
-    })
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({
-      exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-
-    const p1 = svc.getThumbnail('/v/ep1.mkv', 50, 100)
-    const p2 = svc.getThumbnail('/v/ep1.mkv', 50, 100)
-    resolveExec?.()
-    const [a, b] = await Promise.all([p1, p2])
-    expect(a).toBe(b)
-    expect(calls).toHaveLength(1)
-  })
-
-  it('returns null on ffmpeg failure and caches the failure (no re-spawn)', async () => {
-    const ffmpeg = fakeFfmpegFailure(new Error('ffmpeg: corrupt region'))
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBeNull()
-    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBeNull()
-    expect(ffmpeg.calls).toHaveLength(1) // second hover did not re-run ffmpeg
-  })
-
-  it('returns null when the file cannot be stat-ed', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs } = fakeFs({}) // no stat entry
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux'
-    })
-    expect(await svc.getThumbnail('/v/gone.mkv', 50, 100)).toBeNull()
-    expect(ffmpeg.calls).toHaveLength(0)
-  })
-
-  // Generation's only tie to the cache-lifecycle module (cache.ts): a write
-  // asks the injected scheduler to sweep. The debounce/eviction policy itself
-  // is covered in cache.test.ts.
-  it('schedules eviction after a write, preserves the result, and skips cache hits', async () => {
-    const ffmpeg = fakeFfmpegSuccess()
-    const { fs } = fakeFs({ '/v/ep1.mkv': { size: 100, mtimeMs: 200 } })
-    const schedule = vi.fn()
-    const svc = createThumbnailService({
-      exec: ffmpeg.exec,
-      fs,
-      cacheDir: '/cache',
-      ffmpegPath: '/bin/ffmpeg',
-      platform: 'linux',
-      evictionScheduler: { schedule }
-    })
-    const expected = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 50, 'linux')
-
-    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
-    expect(schedule).toHaveBeenCalledTimes(1)
-    expect(posix.dirname(expected)).toContain('cache')
-
-    expect(await svc.getThumbnail('/v/ep1.mkv', 50, 100)).toBe(expected)
-    expect(schedule).toHaveBeenCalledTimes(1)
-  })
+  it.each(['exec', 'rename'] as const)(
+    'remembers %s failures without respawning',
+    async (failure) => {
+      const f = fixture()
+      if (failure === 'exec') f.exec.mockRejectedValueOnce(new Error('ffmpeg failed'))
+      else
+        vi.spyOn(disk, 'renameSync').mockImplementationOnce(() => {
+          throw new Error('rename failed')
+        })
+      expect(await f.getThumbnail(f.media, 50, 100)).toBeNull()
+      expect(await f.getThumbnail(f.media, 50, 100)).toBeNull()
+      expect(f.exec).toHaveBeenCalledTimes(1)
+      expect(f.schedule).not.toHaveBeenCalled()
+    }
+  )
 })

@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HttpFetch, HttpResponse } from '@src/main/services/http'
 import {
   createJimakuClient,
   JIMAKU_API_BASE,
   JIMAKU_MAX_RESPONSE_BYTES,
-  JIMAKU_REQUEST_TIMEOUT_MS,
-  type CreateJimakuClientDeps
+  JIMAKU_REQUEST_TIMEOUT_MS
 } from '@src/main/services/jimaku/client'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
 
@@ -24,7 +23,7 @@ function searchUrl(query: string, anime: boolean): string {
 
 function makeClient(
   routes: Record<string, FakeHttpRoute | FakeHttpRoute[]>,
-  overrides: Partial<Omit<CreateJimakuClientDeps, 'fetch' | 'getApiKey'>> & {
+  overrides: Partial<Omit<Parameters<typeof createJimakuClient>[0], 'fetch' | 'getApiKey'>> & {
     apiKey?: string | null
   } = {}
 ) {
@@ -193,29 +192,27 @@ describe('createJimakuClient', () => {
     })
   })
 
-  it('shares a fractional 429 cooldown and retries only after the injected clock passes it', async () => {
-    let currentTime = 10_000
+  it('shares a fractional 429 cooldown and retries only after the clock passes it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(10_000)
     const url = searchUrl('Frieren', true)
-    const { client, http } = makeClient(
-      {
-        [url]: [{ status: 429, headers: { 'x-ratelimit-reset-after': '0.98' } }, { json: [] }]
-      },
-      { now: () => currentTime }
-    )
+    const { client, http } = makeClient({
+      [url]: [{ status: 429, headers: { 'x-ratelimit-reset-after': '0.98' } }, { json: [] }]
+    })
 
     await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
       ok: false,
       error: { code: 'rateLimited', retryAt: '1970-01-01T00:00:10.980Z' }
     })
 
-    currentTime = 10_500
+    vi.setSystemTime(10_500)
     await expect(client.getEntry(42)).resolves.toEqual({
       ok: false,
       error: { code: 'rateLimited', retryAt: '1970-01-01T00:00:10.980Z' }
     })
     expect(http.calls).toHaveLength(1)
 
-    currentTime = 10_980
+    vi.setSystemTime(10_980)
     await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
       ok: true,
       value: []
@@ -227,8 +224,10 @@ describe('createJimakuClient', () => {
     [{ 'x-ratelimit-reset': '20' }, '1970-01-01T00:00:20.000Z'],
     [{}, '1970-01-01T00:01:10.000Z']
   ] as const)('uses the reset timestamp or 60-second fallback: %j', async (headers, retryAt) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(10_000)
     const url = searchUrl('Frieren', true)
-    const { client } = makeClient({ [url]: { status: 429, headers } }, { now: () => 10_000 })
+    const { client } = makeClient({ [url]: { status: 429, headers } })
 
     await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
       ok: false,
@@ -246,14 +245,13 @@ describe('createJimakuClient', () => {
     controller.abort()
     await expect(cancelled).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
 
-    const timeoutClient = makeClient(
-      { [url]: { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) } },
-      { requestTimeoutMs: 25 }
-    )
+    const timeoutClient = makeClient({
+      [url]: { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) }
+    })
     await expect(
       timeoutClient.client.searchEntries({ query: 'Frieren', anime: true })
     ).resolves.toEqual({ ok: false, error: { code: 'timeout' } })
-    expect(timeoutClient.http.calls[0]?.init?.timeoutMs).toBe(25)
+    expect(timeoutClient.http.calls[0]?.init?.timeoutMs).toBe(JIMAKU_REQUEST_TIMEOUT_MS)
   })
 
   it('rejects an oversized body even when Content-Length is absent', async () => {
@@ -346,7 +344,7 @@ describe('createJimakuClient', () => {
         text: async () => '[]'
       }
     }
-    const deps: CreateJimakuClientDeps = { getApiKey: () => apiKey, fetch }
+    const deps: Parameters<typeof createJimakuClient>[0] = { getApiKey: () => apiKey, fetch }
     const client = createJimakuClient(deps)
 
     await client.searchEntries({ query: 'Frieren', anime: true })
@@ -365,3 +363,5 @@ describe('createJimakuClient', () => {
     expect(JSON.stringify(result)).not.toContain('secret-token')
   })
 })
+
+afterEach(() => vi.useRealTimers())

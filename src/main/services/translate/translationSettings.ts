@@ -12,7 +12,7 @@ export interface TranslationSettingsService {
   getAzureRegion(): string
 }
 
-export interface CreateTranslationSettingsServiceDeps {
+interface CreateTranslationSettingsServiceDeps {
   settings: SettingsStore
   secrets: SecretCodec
 }

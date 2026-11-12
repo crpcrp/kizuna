@@ -1,9 +1,22 @@
-import { describe, expect, it, vi } from 'vitest'
+import disk from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createMediaHistoryFile,
   createMediaHistoryStore,
   legacyMediaHistory,
-  type MediaHistoryFileSystem,
   type MediaHistoryIO
 } from '@src/main/services/mediaHistoryStore'
 import type { MediaHistory } from '@src/shared/mediaHistory'
@@ -169,47 +182,22 @@ describe('createMediaHistoryStore', () => {
 })
 
 describe('createMediaHistoryFile', () => {
-  function fakeFs(failRename = false): { fs: MediaHistoryFileSystem; calls: string[] } {
-    const calls: string[] = []
-    return {
-      calls,
-      fs: {
-        readFileSync: () => {
-          throw Object.assign(new Error('missing'), { code: 'ENOENT' })
-        },
-        promises: {
-          writeFile: async (path) => {
-            calls.push(`write ${path}`)
-          },
-          rename: async (from, to) => {
-            calls.push(`rename ${from} ${to}`)
-            if (failRename) throw new Error('EPERM')
-          },
-          unlink: async (path) => {
-            calls.push(`unlink ${path}`)
-          }
-        }
-      }
-    }
-  }
-
-  it('writes a sibling temp file and renames it over the target', async () => {
-    const { fs, calls } = fakeFs()
-    const file = createMediaHistoryFile('/data/playback-history.json', fs)
-
+  it('reads missing history and replaces a file through a sibling temp file', async () => {
+    const path = join(tempDir(), 'history.json')
+    const file = createMediaHistoryFile(path)
     expect(file.read()).toBeUndefined()
-    await file.write('{}')
-    expect(calls).toEqual([
-      'write /data/playback-history.json.tmp',
-      'rename /data/playback-history.json.tmp /data/playback-history.json'
-    ])
+    await file.write('previous')
+    await file.write('next')
+    expect(file.read()).toBe('next')
+    expect(disk.existsSync(`${path}.tmp`)).toBe(false)
   })
 
-  it('removes the temp file and rethrows when the rename fails', async () => {
-    const { fs, calls } = fakeFs(true)
-    const file = createMediaHistoryFile('/data/playback-history.json', fs)
-
-    await expect(file.write('{}')).rejects.toThrow('EPERM')
-    expect(calls.at(-1)).toBe('unlink /data/playback-history.json.tmp')
+  it('preserves history and removes the temp file when rename fails', async () => {
+    const path = join(tempDir(), 'history.json')
+    disk.writeFileSync(path, 'previous')
+    vi.spyOn(disk.promises, 'rename').mockRejectedValueOnce(new Error('EPERM'))
+    await expect(createMediaHistoryFile(path).write('next')).rejects.toThrow('EPERM')
+    expect(disk.readFileSync(path, 'utf-8')).toBe('previous')
+    expect(disk.existsSync(`${path}.tmp`)).toBe(false)
   })
 })

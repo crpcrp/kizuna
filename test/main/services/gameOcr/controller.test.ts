@@ -1,7 +1,7 @@
 // The lifecycle facade: arming, stopping, shortcut ownership, and the status
 // it publishes. Capture and recognition flow lives in captureSession.test.ts.
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createGameOcrRuntimeService,
   type GameOcrController,
@@ -15,10 +15,11 @@ import { fakeIo } from '@test/harness/fakeSettingsIo'
 
 describe('createGameOcrController', () => {
   it('coalesces key-repeat callbacks from one held shortcut chord', async () => {
-    let clock = 1_000
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(1_000)
     const firstFreeze = deferred<{ width: number; height: number }>()
     const fake = setup(
-      { now: () => clock },
+      {},
       {
         freeze: (request) =>
           request.captureId === 1 ? firstFreeze.promise : Promise.resolve(request.imageSize)
@@ -31,7 +32,7 @@ describe('createGameOcrController', () => {
 
     // Even a repeat outside the time guard is ignored while this physical
     // press's first presentation is still opening its stream.
-    clock += 1_000
+    vi.setSystemTime(Date.now() + 1_000)
     fake.shortcutCallback?.()
     await Promise.resolve()
     expect(fake.windows[0].freeze).toHaveBeenCalledOnce()
@@ -39,7 +40,7 @@ describe('createGameOcrController', () => {
     firstFreeze.resolve({ width: 640, height: 480 })
     await vi.waitFor(() => expect(fake.recognitionRequests).toHaveLength(1))
 
-    clock += 1_000
+    vi.setSystemTime(Date.now() + 1_000)
     fake.shortcutCallback?.()
     await vi.waitFor(() => expect(fake.windows[0].freeze).toHaveBeenCalledTimes(2))
   })
@@ -346,3 +347,5 @@ describe('Game OCR runtime service', () => {
     expect(fake.runtime.getStatus().game).not.toHaveProperty('error')
   })
 })
+
+afterEach(() => vi.useRealTimers())

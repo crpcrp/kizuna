@@ -1,101 +1,35 @@
+import disk from 'node:fs'
+import diskAsync from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
 import { createHash } from 'node:crypto'
 import { zipSync } from 'fflate'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JimakuFileRecord } from '@src/main/services/jimaku/client'
 import {
   createJimakuDownloadStore,
   JIMAKU_DOWNLOAD_INDEX_NAME,
   JIMAKU_DOWNLOAD_ORIGIN,
-  JIMAKU_DOWNLOAD_TIMEOUT_MS,
-  type CreateJimakuDownloadStoreDeps,
-  type JimakuDownloadDirEntry,
-  type JimakuDownloadFs,
-  type JimakuDownloadFileStat
+  JIMAKU_DOWNLOAD_TIMEOUT_MS
 } from '@src/main/services/jimaku/downloadStore'
-import { pathApiFor } from '@src/main/platformPath'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
-import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n'
 const ASS =
   '[Script Info]\nTitle: test\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
   'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,こんばんは\n'
 const BYTES = new TextEncoder().encode(SRT)
-
-class MemoryFs implements JimakuDownloadFs {
-  readonly files = new Map<string, { bytes: Uint8Array; mtimeMs: number }>()
-  readonly directories = new Set<string>()
-  failWritePath: string | undefined
-  failRenameDestination: string | undefined
-
-  constructor(
-    private readonly platform: NodeJS.Platform,
-    private readonly clock: () => number
-  ) {}
-
-  private get path() {
-    return pathApiFor(this.platform)
-  }
-
-  async mkdir(path: string): Promise<void> {
-    this.directories.add(path)
-  }
-
-  async readFile(path: string): Promise<Uint8Array> {
-    const entry = this.files.get(path)
-    if (entry === undefined) throw missing(path)
-    return entry.bytes.slice()
-  }
-
-  async writeFile(path: string, data: Uint8Array | string): Promise<void> {
-    if (this.failWritePath === undefined || path.includes(this.failWritePath)) {
-      if (this.failWritePath !== undefined) throw new Error('disk full')
-    }
-    const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data
-    this.files.set(path, { bytes: bytes.slice(), mtimeMs: this.clock() })
-  }
-
-  async rename(from: string, to: string): Promise<void> {
-    if (this.failRenameDestination !== undefined && to === this.failRenameDestination) {
-      throw new Error('rename failed')
-    }
-    const entry = this.files.get(from)
-    if (entry === undefined) throw missing(from)
-    this.files.set(to, entry)
-    this.files.delete(from)
-  }
-
-  async unlink(path: string): Promise<void> {
-    this.files.delete(path)
-  }
-
-  async readDirectory(path: string): Promise<readonly JimakuDownloadDirEntry[]> {
-    if (!this.directories.has(path)) throw missing(path)
-    return [...this.files.entries()]
-      .filter(([file]) => this.path.dirname(file) === path)
-      .map(([file, entry]) => ({
-        name: this.path.basename(file),
-        size: entry.bytes.byteLength,
-        mtimeMs: entry.mtimeMs,
-        isFile: true
-      }))
-  }
-
-  async stat(path: string): Promise<JimakuDownloadFileStat> {
-    const entry = this.files.get(path)
-    if (entry === undefined) throw missing(path)
-    return { size: entry.bytes.byteLength, mtimeMs: entry.mtimeMs, isFile: true }
-  }
-
-  put(path: string, bytes: Uint8Array, mtimeMs = this.clock()): void {
-    this.directories.add(this.path.dirname(path))
-    this.files.set(path, { bytes: bytes.slice(), mtimeMs })
-  }
-}
-
-function missing(path: string): Error & { code: string } {
-  return Object.assign(new Error(`missing: ${path}`), { code: 'ENOENT' })
-}
 
 function fileRecord(
   entryId: number,
@@ -112,36 +46,23 @@ function fileRecord(
 }
 
 function makeStore(
-  platform: NodeJS.Platform,
   route: Record<string, FakeHttpRoute | FakeHttpRoute[]>,
-  overrides: Partial<CreateJimakuDownloadStoreDeps> = {}
+  overrides: Partial<Parameters<typeof createJimakuDownloadStore>[0]> = {}
 ) {
-  let currentTime = 1_000_000
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000_000)
   const http = fakeHttp(route)
-  const path = pathApiFor(platform)
-  const cacheRoot = path.join(
-    platform === 'win32' ? 'C:\\Users\\me\\AppData\\Roaming\\Kizuna' : '/home/me/.config/Kizuna',
-    'jimaku'
-  )
-  const fs = new MemoryFs(platform, () => currentTime)
-  const store = createJimakuDownloadStore({
-    fetch: http.fetch,
-    fs,
-    cacheRoot,
-    platform,
-    now: () => currentTime,
-    ...overrides
-  })
+  const cacheRoot = tempDir()
+  const store = createJimakuDownloadStore({ fetch: http.fetch, cacheRoot, ...overrides })
   return {
     http,
-    fs,
     store,
     cacheRoot,
     advance(ms: number) {
-      currentTime += ms
+      vi.setSystemTime(Date.now() + ms)
     },
     setTime(value: number) {
-      currentTime = value
+      vi.setSystemTime(value)
     }
   }
 }
@@ -150,11 +71,11 @@ function hash(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-describe.each(PATH_PLATFORMS)('Jimaku download store on $label', ({ platform, path }) => {
+describe('Jimaku download store', () => {
   it('downloads, validates, stores, indexes, and exposes an opaque prepared record', async () => {
     const entryId = 42
     const file = fileRecord(entryId)
-    const { store, fs, http, cacheRoot } = makeStore(platform, {
+    const { store, http, cacheRoot } = makeStore({
       [file.url]: { bytes: BYTES }
     })
 
@@ -167,7 +88,7 @@ describe.each(PATH_PLATFORMS)('Jimaku download store on $label', ({ platform, pa
         contentVersion: hash(BYTES),
         originalName: file.name,
         format: 'srt',
-        managedPath: path.join(cacheRoot, `${hash(BYTES)}.srt`),
+        managedPath: join(cacheRoot, `${hash(BYTES)}.srt`),
         size: BYTES.byteLength,
         provenance: {
           entryId,
@@ -181,8 +102,8 @@ describe.each(PATH_PLATFORMS)('Jimaku download store on $label', ({ platform, pa
     expect(store.lookupPrepared(result.value.handle)).toEqual(result.value)
     store.releasePrepared(result.value.handle)
     expect(store.lookupPrepared(result.value.handle)).toBeUndefined()
-    expect(fs.files.has(result.value.managedPath)).toBe(true)
-    expect(fs.files.has(path.join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME))).toBe(true)
+    expect(disk.existsSync(result.value.managedPath)).toBe(true)
+    expect(disk.existsSync(join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME))).toBe(true)
     expect(http.calls[0]?.init).toMatchObject({ method: 'GET', redirect: 'manual' })
     expect(http.calls[0]?.init?.headers).toBeUndefined()
   })
@@ -199,7 +120,7 @@ describe.each(PATH_PLATFORMS)('Jimaku download store on $label', ({ platform, pa
         size: bytes.byteLength,
         url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/${entryId}/download/episode.${extension}`
       })
-      const { store, fs, cacheRoot } = makeStore(platform, {
+      const { store, cacheRoot } = makeStore({
         [file.url]: { bytes }
       })
 
@@ -208,8 +129,8 @@ describe.each(PATH_PLATFORMS)('Jimaku download store on $label', ({ platform, pa
       expect(result.ok).toBe(true)
       if (!result.ok) return
       expect(result.value.format).toBe(extension)
-      expect(fs.files.get(result.value.managedPath)?.bytes).toEqual(bytes)
-      expect(result.value.managedPath).toBe(path.join(cacheRoot, `${hash(bytes)}.${extension}`))
+      expect(new Uint8Array(disk.readFileSync(result.value.managedPath))).toEqual(bytes)
+      expect(result.value.managedPath).toBe(join(cacheRoot, `${hash(bytes)}.${extension}`))
     }
   )
 })
@@ -221,7 +142,7 @@ describe('Jimaku download validation', () => {
       'http://jimaku.cc/entry/42/download/episode.srt',
       `${JIMAKU_DOWNLOAD_ORIGIN}/entry/41/download/episode.srt`
     ]) {
-      const { store, http } = makeStore('linux', {})
+      const { store, http } = makeStore({})
       const result = await store.prepareDirect(42, fileRecord(42, 'episode.srt', { url }))
 
       expect(result).toEqual({
@@ -240,7 +161,7 @@ describe('Jimaku download validation', () => {
     for (const text of cases) {
       const entryId = cases.indexOf(text) + 50
       const file = fileRecord(entryId)
-      const { store } = makeStore('linux', {
+      const { store } = makeStore({
         [file.url]: { bytes: new TextEncoder().encode(text) }
       })
 
@@ -253,7 +174,7 @@ describe('Jimaku download validation', () => {
 
   it('rejects an unsupported extension before fetching', async () => {
     const file = fileRecord(55, 'episode.txt')
-    const { store, http } = makeStore('linux', { [file.url]: { bytes: BYTES } })
+    const { store, http } = makeStore({ [file.url]: { bytes: BYTES } })
 
     await expect(store.prepareDirect(55, file)).resolves.toEqual({
       ok: false,
@@ -272,7 +193,7 @@ describe('Jimaku download redirects and limits', () => {
     const third = `${JIMAKU_DOWNLOAD_ORIGIN}/entry/${entryId}/download/third.srt`
     const fourth = `${JIMAKU_DOWNLOAD_ORIGIN}/entry/${entryId}/download/fourth.srt`
     const final = `${JIMAKU_DOWNLOAD_ORIGIN}/entry/${entryId}/download/final.srt`
-    const { store, http } = makeStore('linux', {
+    const { store, http } = makeStore({
       [first]: { status: 302, headers: { location: second } },
       [second]: { status: 307, headers: { location: third } },
       [third]: { status: 302, headers: { location: fourth } },
@@ -291,7 +212,7 @@ describe('Jimaku download redirects and limits', () => {
   it('rejects a cross-origin redirect with Jimaku recovery and does not follow it', async () => {
     const entryId = 61
     const file = fileRecord(entryId)
-    const { store, http } = makeStore('linux', {
+    const { store, http } = makeStore({
       [file.url]: { status: 302, headers: { location: 'https://example.test/episode.srt' } }
     })
 
@@ -309,9 +230,8 @@ describe('Jimaku download redirects and limits', () => {
     const entryId = 62
     const file = fileRecord(entryId)
     const { store, http } = makeStore(
-      'linux',
       { [file.url]: { headers: { 'content-length': '5' }, bytes: BYTES } },
-      { maxDownloadBytes: 4 }
+      { limits: { maxDownloadBytes: 4 } }
     )
 
     await expect(store.prepareDirect(entryId, file)).resolves.toEqual({
@@ -326,14 +246,13 @@ describe('Jimaku download redirects and limits', () => {
       const entryId = header === undefined ? 63 : 64
       const file = fileRecord(entryId)
       const { store, http } = makeStore(
-        'linux',
         {
           [file.url]: {
             ...(header === undefined ? {} : { headers: { 'content-length': header } }),
             bytes: [new Uint8Array([1, 2, 3]), new Uint8Array([4, 5])]
           }
         },
-        { maxDownloadBytes: 4, parseSubtitle: () => [{ start: 0, end: 1, text: 'x' }] }
+        { limits: { maxDownloadBytes: 4 } }
       )
 
       await expect(store.prepareDirect(entryId, file)).resolves.toEqual({
@@ -351,7 +270,7 @@ describe('Jimaku download cache', () => {
     const file = fileRecord(entryId)
     const changed = { ...file, lastModified: 'revision-2' }
     const changedBytes = new TextEncoder().encode(SRT.replace('こんにちは', 'さようなら'))
-    const { store, http } = makeStore('linux', {
+    const { store, http } = makeStore({
       [file.url]: [{ bytes: BYTES }, { bytes: changedBytes }]
     })
 
@@ -372,7 +291,7 @@ describe('Jimaku download cache', () => {
       lastModified: 'revision-2',
       url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/71/download/two.srt`
     })
-    const { store, fs, cacheRoot, http } = makeStore('linux', {
+    const { store, cacheRoot, http } = makeStore({
       [first.url]: { bytes: BYTES },
       [second.url]: { bytes: BYTES }
     })
@@ -385,21 +304,24 @@ describe('Jimaku download cache', () => {
     if (!one.ok || !two.ok) return
     expect(one.value.contentVersion).toBe(two.value.contentVersion)
     expect(one.value.managedPath).toBe(two.value.managedPath)
-    expect([...fs.files.keys()].filter((value) => value.endsWith(`.${one.value.format}`))).toEqual([
-      pathApiFor('linux').join(cacheRoot, `${hash(BYTES)}.srt`)
-    ])
+    expect(
+      disk
+        .readdirSync(cacheRoot)
+        .map((name) => join(cacheRoot, name))
+        .filter((value) => value.endsWith(`.${one.value.format}`))
+    ).toEqual([join(cacheRoot, `${hash(BYTES)}.srt`)])
     expect(http.calls).toHaveLength(2)
   })
 
   it('does not redownload for a cache lookup, but an explicit preparation repairs a missing file', async () => {
     const entryId = 72
     const file = fileRecord(entryId)
-    const { store, fs, http } = makeStore('linux', { [file.url]: { bytes: BYTES } })
+    const { store, http } = makeStore({ [file.url]: { bytes: BYTES } })
     const first = await store.prepareDirect(entryId, file)
     expect(first.ok).toBe(true)
     if (!first.ok) return
 
-    await fs.unlink(first.value.managedPath)
+    await diskAsync.unlink(first.value.managedPath)
     await expect(store.lookupCached(entryId, file)).resolves.toBeUndefined()
     expect(http.calls).toHaveLength(1)
 
@@ -410,16 +332,16 @@ describe('Jimaku download cache', () => {
   it('recovers from a corrupt index without deleting completed files', async () => {
     const entryId = 73
     const file = fileRecord(entryId)
-    const { store, fs, cacheRoot } = makeStore('linux', { [file.url]: { bytes: BYTES } })
-    fs.put(
-      pathApiFor('linux').join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
+    const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
+    disk.writeFileSync(
+      join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
       new TextEncoder().encode('{bad')
     )
 
     const result = await store.prepareDirect(entryId, file)
 
     expect(result.ok).toBe(true)
-    expect(fs.files.has(pathApiFor('linux').join(cacheRoot, `${hash(BYTES)}.srt`))).toBe(true)
+    expect(disk.existsSync(join(cacheRoot, `${hash(BYTES)}.srt`))).toBe(true)
     await expect(store.lookupCached(entryId, file)).resolves.toMatchObject({
       contentVersion: hash(BYTES)
     })
@@ -428,10 +350,9 @@ describe('Jimaku download cache', () => {
   it('loads a cache written by a previous version without redownloading', async () => {
     const entryId = 75
     const file = fileRecord(entryId)
-    const { store, fs, http, cacheRoot } = makeStore('linux', { [file.url]: { bytes: BYTES } })
-    const join = pathApiFor('linux').join
-    fs.put(join(cacheRoot, `${hash(BYTES)}.srt`), BYTES)
-    fs.put(
+    const { store, http, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
+    disk.writeFileSync(join(cacheRoot, `${hash(BYTES)}.srt`), BYTES)
+    disk.writeFileSync(
       join(cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME),
       new TextEncoder().encode(
         JSON.stringify({
@@ -462,7 +383,7 @@ describe('Jimaku download cache', () => {
   it('serializes concurrent duplicate preparations', async () => {
     const entryId = 74
     const file = fileRecord(entryId)
-    const { store, http } = makeStore('linux', { [file.url]: { bytes: BYTES } })
+    const { store, http } = makeStore({ [file.url]: { bytes: BYTES } })
 
     const results = await Promise.all([
       store.prepareDirect(entryId, file),
@@ -478,7 +399,7 @@ describe('Jimaku download failure and cleanup handling', () => {
   it('maps timeout and caller abort to sanitized results and removes no usable handle', async () => {
     const entryId = 80
     const file = fileRecord(entryId)
-    const { store, http } = makeStore('linux', {
+    const { store, http } = makeStore({
       [file.url]: [
         { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) },
         { deferred: true }
@@ -500,48 +421,55 @@ describe('Jimaku download failure and cleanup handling', () => {
   it('sanitizes content and index write failures and never returns a handle', async () => {
     const entryId = 81
     const file = fileRecord(entryId)
-    const writeFailure = makeStore('linux', { [file.url]: { bytes: BYTES } })
-    writeFailure.fs.failWritePath = '.jimaku-download'
+    const writeFailure = makeStore({ [file.url]: { bytes: BYTES } })
+    const write = vi.spyOn(diskAsync, 'writeFile').mockRejectedValueOnce(new Error('disk full'))
     await expect(writeFailure.store.prepareDirect(entryId, file)).resolves.toEqual({
       ok: false,
       error: { code: 'storage' }
     })
 
-    const indexFailure = makeStore('linux', { [file.url]: { bytes: BYTES } })
-    indexFailure.fs.failRenameDestination = pathApiFor('linux').join(
-      indexFailure.cacheRoot,
-      JIMAKU_DOWNLOAD_INDEX_NAME
-    )
+    write.mockRestore()
+    const indexFailure = makeStore({ [file.url]: { bytes: BYTES } })
+    const rename = diskAsync.rename
+    vi.spyOn(diskAsync, 'rename').mockImplementation(async (from, to) => {
+      if (to === join(indexFailure.cacheRoot, JIMAKU_DOWNLOAD_INDEX_NAME))
+        throw new Error('rename failed')
+      return rename(from, to)
+    })
     await expect(indexFailure.store.prepareDirect(entryId, file)).resolves.toEqual({
       ok: false,
       error: { code: 'storage' }
     })
-    expect([...indexFailure.fs.files.keys()].some((value) => value.endsWith('.srt'))).toBe(true)
+    expect(disk.readdirSync(indexFailure.cacheRoot).some((value) => value.endsWith('.srt'))).toBe(
+      true
+    )
   })
 
   it('removes only stale temporary files and leaves unindexed completed files alone', async () => {
     const entryId = 82
     const file = fileRecord(entryId)
-    const { store, fs, cacheRoot, setTime } = makeStore(
-      'linux',
+    const { store, cacheRoot, setTime } = makeStore(
       { [file.url]: { bytes: BYTES } },
       {
-        tempMaxAgeMs: 100
+        limits: { tempMaxAgeMs: 100 }
       }
     )
-    const old = pathApiFor('linux').join(cacheRoot, '.jimaku-download-old.tmp')
-    const fresh = pathApiFor('linux').join(cacheRoot, '.jimaku-download-fresh.tmp')
-    const completed = pathApiFor('linux').join(cacheRoot, 'completed.srt')
-    fs.put(old, new Uint8Array([1]), 0)
-    fs.put(fresh, new Uint8Array([2]), 950)
-    fs.put(completed, new Uint8Array([3]), 0)
+    const old = join(cacheRoot, '.jimaku-download-old.tmp')
+    const fresh = join(cacheRoot, '.jimaku-download-fresh.tmp')
+    const completed = join(cacheRoot, 'completed.srt')
+    disk.writeFileSync(old, new Uint8Array([1]))
+    disk.utimesSync(old, 0 / 1000, 0 / 1000)
+    disk.writeFileSync(fresh, new Uint8Array([2]))
+    disk.utimesSync(fresh, 950 / 1000, 950 / 1000)
+    disk.writeFileSync(completed, new Uint8Array([3]))
+    disk.utimesSync(completed, 0 / 1000, 0 / 1000)
     setTime(1_000)
 
     await store.cleanup([fresh])
 
-    expect(fs.files.has(old)).toBe(false)
-    expect(fs.files.has(fresh)).toBe(true)
-    expect(fs.files.has(completed)).toBe(true)
+    expect(disk.existsSync(old)).toBe(false)
+    expect(disk.existsSync(fresh)).toBe(true)
+    expect(disk.existsSync(completed)).toBe(true)
   })
 
   it('evicts unprotected indexed files while retaining active and protected paths', async () => {
@@ -562,14 +490,13 @@ describe('Jimaku download failure and cleanup handling', () => {
       size: bytesC.byteLength,
       url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/85/download/c.srt`
     })
-    const { store, fs, http } = makeStore(
-      'linux',
+    const { store, http } = makeStore(
       {
         [fileA.url]: { bytes: bytesA },
         [fileB.url]: { bytes: bytesB },
         [fileC.url]: { bytes: bytesC }
       },
-      { maxCacheBytes: bytesA.byteLength + bytesB.byteLength }
+      { limits: { maxCacheBytes: bytesA.byteLength + bytesB.byteLength } }
     )
 
     const first = await store.prepareDirect(83, fileA)
@@ -583,46 +510,35 @@ describe('Jimaku download failure and cleanup handling', () => {
     await store.cleanup([protectedFile.value.managedPath])
 
     expect(http.calls).toHaveLength(3)
-    expect(fs.files.has(first.value.managedPath)).toBe(true)
-    expect(fs.files.has(protectedFile.value.managedPath)).toBe(true)
-    expect(fs.files.has(evictable.value.managedPath)).toBe(false)
+    expect(disk.existsSync(first.value.managedPath)).toBe(true)
+    expect(disk.existsSync(protectedFile.value.managedPath)).toBe(true)
+    expect(disk.existsSync(evictable.value.managedPath)).toBe(false)
   })
 })
 
 describe('Jimaku package storage', () => {
   it('stores ZIP bytes without subtitle parsing and preserves extracted-member provenance', async () => {
     const zipBytes = zipSync({ 'Title - 07.srt': BYTES })
-    let parseCalls = 0
     const packageFile = fileRecord(90, 'pack.zip', {
       size: zipBytes.byteLength,
       url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/90/download/pack.zip`
     })
-    const { store, fs, http, cacheRoot } = makeStore(
-      'linux',
-      {
-        [packageFile.url]: { bytes: zipBytes }
-      },
-      {
-        parseSubtitle: () => {
-          parseCalls += 1
-          return [{ start: 0, end: 1, text: 'x' }]
-        }
-      }
-    )
+    const { store, http, cacheRoot } = makeStore({
+      [packageFile.url]: { bytes: zipBytes }
+    })
 
     const pack = await store.preparePackage(90, packageFile)
 
     expect(pack).toMatchObject({ ok: true, value: { format: 'zip', size: zipBytes.byteLength } })
     expect(http.calls).toHaveLength(1)
-    expect(parseCalls).toBe(0)
     if (!pack.ok) return
     await expect(store.preparePackage(90, packageFile)).resolves.toMatchObject({
       ok: true,
       value: { format: 'zip' }
     })
     expect(http.calls).toHaveLength(1)
-    expect(await store.readPrepared(pack.value.handle)).toEqual(zipBytes)
-    expect(fs.files.has(pathApiFor('linux').join(cacheRoot, `${hash(zipBytes)}.zip`))).toBe(true)
+    expect(new Uint8Array((await store.readPrepared(pack.value.handle))!)).toEqual(zipBytes)
+    expect(disk.existsSync(join(cacheRoot, `${hash(zipBytes)}.zip`))).toBe(true)
     await expect(store.lookupCachedPackage(90, packageFile)).resolves.toMatchObject({
       format: 'zip',
       contentVersion: hash(zipBytes)
@@ -640,7 +556,6 @@ describe('Jimaku package storage', () => {
         }
       }
     })
-    expect(parseCalls).toBe(1)
     expect(http.calls).toHaveLength(1)
     if (!extracted.ok) return
     await expect(
@@ -653,7 +568,7 @@ describe('Jimaku package storage', () => {
       })
     ).resolves.toEqual({
       path: extracted.value.managedPath,
-      bytes: BYTES,
+      bytes: Buffer.from(BYTES),
       format: 'srt'
     })
   })
@@ -664,7 +579,7 @@ describe('Jimaku package storage', () => {
       size: zipBytes.byteLength,
       url: `${JIMAKU_DOWNLOAD_ORIGIN}/entry/91/download/pack.zip`
     })
-    const { store } = makeStore('linux', {})
+    const { store } = makeStore({})
 
     const first = await store.prepareExtracted(91, packageFile, 'one.srt', BYTES)
     const second = await store.prepareExtracted(91, packageFile, 'two.srt', BYTES)

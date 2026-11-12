@@ -1,5 +1,18 @@
-import { describe, it, expect, vi } from 'vitest'
-import { WINDOWS_PATHS } from '@test/harness/platformPaths'
+import disk from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+const tempDirs: string[] = []
+function tempDir(): string {
+  const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
+  tempDirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+  for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
+})
+import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   createDebouncedThumbnailEviction,
   selectEvictions,
@@ -7,9 +20,7 @@ import {
   collectCacheEntriesAsync,
   sweepThumbnailCacheAsync,
   THUMBNAIL_CACHE_MAX_BYTES,
-  type ThumbnailCacheEntry,
-  type ThumbnailAsyncDirFs,
-  type ThumbnailStat
+  type ThumbnailCacheEntry
 } from '@src/main/services/thumbnails/cache'
 
 const entry = (path: string, bytes: number, mtimeMs: number): ThumbnailCacheEntry => ({
@@ -67,70 +78,37 @@ describe('summarizeCacheDir', () => {
   })
 })
 
-describe('collectCacheEntriesAsync', () => {
-  it('sums bytes and takes the newest mtime per file-dir', async () => {
-    // Pinned to Linux path rules so the fake's keys are literal; the Windows
-    // layout is asserted separately below.
-    const stats: Record<string, ThumbnailStat> = {
-      ['/cache/h1/0.jpg']: { size: 100, mtimeMs: 10 },
-      ['/cache/h1/1.jpg']: { size: 50, mtimeMs: 40 },
-      ['/cache/h2/0.jpg']: { size: 200, mtimeMs: 5 }
+describe('thumbnail cache on disk', () => {
+  it('walks only files within subdirectories and removes the oldest directory', async () => {
+    const cacheDir = tempDir()
+    const old = join(cacheDir, 'old')
+    const recent = join(cacheDir, 'recent')
+    for (const [dir, time] of [
+      [old, 1],
+      [recent, 9]
+    ] as const) {
+      disk.mkdirSync(dir)
+      const file = join(dir, '0.jpg')
+      disk.writeFileSync(file, new Uint8Array(400))
+      disk.utimesSync(file, time, time)
     }
-    const fs: Omit<ThumbnailAsyncDirFs, 'remove'> = {
-      readSubdirs: async (dir) => (dir === '/cache' ? ['h1', 'h2'] : []),
-      readFiles: async (dir) => (dir === '/cache/h1' ? ['0.jpg', '1.jpg'] : ['0.jpg']),
-      stat: async (p) => stats[p]
-    }
-    await expect(collectCacheEntriesAsync('/cache', fs, 'linux')).resolves.toEqual([
-      { path: '/cache/h1', bytes: 150, mtimeMs: 40 },
-      { path: '/cache/h2', bytes: 200, mtimeMs: 5 }
+    disk.writeFileSync(join(cacheDir, 'unrelated'), 'keep')
+    disk.mkdirSync(join(recent, 'nested'))
+    const entries = await collectCacheEntriesAsync(cacheDir)
+    expect(entries.sort((a, b) => a.mtimeMs - b.mtimeMs)).toEqual([
+      { path: old, bytes: 400, mtimeMs: 1000 },
+      { path: recent, bytes: 400, mtimeMs: 9000 }
+    ])
+    await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 500 })).resolves.toEqual([old])
+    expect(disk.existsSync(old)).toBe(false)
+    expect(disk.existsSync(join(cacheDir, 'unrelated'))).toBe(true)
+    await expect(collectCacheEntriesAsync(cacheDir)).resolves.toEqual([
+      { path: recent, bytes: 400, mtimeMs: 9000 }
     ])
   })
 
-  it('walks a Windows cache directory with backslash-joined file-dirs', async () => {
-    const cacheDir = WINDOWS_PATHS.path.join(WINDOWS_PATHS.userDataDir, 'thumbnails')
-    const fileDir = `${cacheDir}\\h1`
-    const fs: Omit<ThumbnailAsyncDirFs, 'remove'> = {
-      readSubdirs: async (dir) => (dir === cacheDir ? ['h1'] : []),
-      readFiles: async (dir) => (dir === fileDir ? ['0.jpg'] : []),
-      stat: async (p) =>
-        p === `${fileDir}\\0.jpg` ? { size: 100, mtimeMs: 10 } : { size: 0, mtimeMs: 0 }
-    }
-    await expect(collectCacheEntriesAsync(cacheDir, fs, 'win32')).resolves.toEqual([
-      { path: fileDir, bytes: 100, mtimeMs: 10 }
-    ])
-  })
-
-  it('returns [] for a missing cache dir', async () => {
-    const fs: Omit<ThumbnailAsyncDirFs, 'remove'> = {
-      readSubdirs: async () => [],
-      readFiles: async () => [],
-      stat: async () => ({ size: 0, mtimeMs: 0 })
-    }
-    await expect(collectCacheEntriesAsync('/cache', fs, 'linux')).resolves.toEqual([])
-  })
-})
-
-describe('sweepThumbnailCacheAsync', () => {
-  it('uses the same LRU selection while awaiting async traversal and removal', async () => {
-    const removed: string[] = []
-    const fs: ThumbnailAsyncDirFs = {
-      readSubdirs: vi.fn(async () => ['old', 'new']),
-      readFiles: vi.fn(async () => ['0.jpg']),
-      stat: vi.fn(async (path) => ({ size: 400, mtimeMs: path.includes('old') ? 1 : 9 })),
-      remove: vi.fn(async (path) => {
-        removed.push(path)
-      })
-    }
-
-    await expect(
-      sweepThumbnailCacheAsync({ cacheDir: '/cache', maxBytes: 500, fs, platform: 'linux' })
-    ).resolves.toEqual(['/cache/old'])
-    expect(removed).toEqual(['/cache/old'])
-    await expect(collectCacheEntriesAsync('/cache', fs, 'linux')).resolves.toEqual([
-      { path: '/cache/old', bytes: 400, mtimeMs: 1 },
-      { path: '/cache/new', bytes: 400, mtimeMs: 9 }
-    ])
+  it('treats missing cache directories as empty', async () => {
+    await expect(collectCacheEntriesAsync(join(tempDir(), 'missing'))).resolves.toEqual([])
   })
 })
 
@@ -139,17 +117,17 @@ describe('createDebouncedThumbnailEviction', () => {
     vi.useFakeTimers()
     try {
       const sweep = vi.fn()
-      const scheduler = createDebouncedThumbnailEviction({ sweep, delayMs: 100 })
+      const scheduler = createDebouncedThumbnailEviction({ sweep })
 
       scheduler.schedule()
       scheduler.schedule()
-      vi.advanceTimersByTime(99)
+      vi.advanceTimersByTime(999)
       expect(sweep).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
       expect(sweep).toHaveBeenCalledTimes(1)
 
       scheduler.schedule()
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(sweep).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
@@ -164,10 +142,10 @@ describe('createDebouncedThumbnailEviction', () => {
         resolveFirst = resolve
       })
       const sweep = vi.fn().mockReturnValueOnce(first).mockResolvedValueOnce(undefined)
-      const scheduler = createDebouncedThumbnailEviction({ sweep, delayMs: 100 })
+      const scheduler = createDebouncedThumbnailEviction({ sweep })
 
       scheduler.schedule()
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(sweep).toHaveBeenCalledTimes(1)
       scheduler.schedule()
       scheduler.schedule()
@@ -175,7 +153,7 @@ describe('createDebouncedThumbnailEviction', () => {
 
       resolveFirst!()
       await Promise.resolve()
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(sweep).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
@@ -190,13 +168,13 @@ describe('createDebouncedThumbnailEviction', () => {
         .fn()
         .mockRejectedValueOnce(new Error('disk unavailable'))
         .mockResolvedValueOnce(undefined)
-      const scheduler = createDebouncedThumbnailEviction({ sweep, onError, delayMs: 100 })
+      const scheduler = createDebouncedThumbnailEviction({ sweep, onError })
 
       scheduler.schedule()
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'disk unavailable' }))
       scheduler.schedule()
-      await vi.advanceTimersByTimeAsync(100)
+      await vi.advanceTimersByTimeAsync(1000)
       expect(sweep).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
