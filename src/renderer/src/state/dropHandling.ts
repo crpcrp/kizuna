@@ -1,6 +1,6 @@
 import { pickDropTarget } from '../../../shared/mediaFileTypes'
 import type { OpenMediaResult } from './mediaSession'
-import type { PlaylistAppendResult } from './playlistAppend'
+import type { PlaylistAppendResult } from './playlistController'
 
 interface DropHandlerDeps {
   hasVideo: boolean

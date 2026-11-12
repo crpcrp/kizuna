@@ -8,9 +8,8 @@ import type { PlaybackMenuProps } from '../components/menu/PlaybackMenu'
 import type { SubtitleMenuProps } from '../components/menu/SubtitleMenu'
 import type { VideoMenuProps } from '../components/menu/VideoMenu'
 import type { PlaybackTabProps } from '../components/options/PlaybackTab'
-import { toggleSidebar } from './appChrome'
 import { useAudioDevices } from './audioDevices'
-import type { BulkMiningPresentation } from './bulkMiningPresentation'
+import type { BulkMiningPresentation } from './useBulkMining'
 import { INACTIVE_MINI_PLAYER, type MiniPlayerState } from './miniPlayer'
 import { applyOffsetToFolder, nextAudioDelays, nextSubtitleOffsets } from './perFileOffsets'
 import { applyVideoAdjustments, frameStepAction, type FrameStepGuard } from './playbackCommands'
@@ -356,9 +355,9 @@ export function usePlaybackWindow({
   }
 
   const handleToggleSidebar = (): void => {
-    toggleSidebar(sidebarOpen, setSidebarOpen, (patch) =>
-      settingsPersistenceRef.current.schedule(patch)
-    )
+    const next = !sidebarOpen
+    setSidebarOpen(next)
+    settingsPersistenceRef.current.schedule({ sidebarOpen: next })
   }
 
   const handleTogglePlaylist = (): void => {

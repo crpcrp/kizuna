@@ -9,7 +9,7 @@ import {
   hideBulkMiningToSidebar,
   reopenBulkMiningModal,
   type BulkMiningPresentation
-} from './bulkMiningPresentation'
+} from './useBulkMining'
 import {
   createJlptBulkExportController,
   type JlptBulkExportController,

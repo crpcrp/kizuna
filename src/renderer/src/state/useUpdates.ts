@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import {
+  createContext,
+  createElement,
+  useContext,
+  useCallback,
+  useEffect,
+  useReducer,
+  useRef,
+  useState
+} from 'react'
 import type { KizunaApi } from '../../../shared/preloadApi'
 import type { UpdateSettings, UpdateState } from '../../../shared/update'
 import {
@@ -29,7 +38,7 @@ export interface UseUpdatesOptions {
   /**
    * False leaves the updater completely alone: no subscription, no hydration
    * and no automatic check. Used by a surface that reads the shell-owned
-   * controller instead of running one of its own (see `updatesContext.tsx`).
+   * controller instead of running one of its own.
    */
   active?: boolean
 }
@@ -134,4 +143,33 @@ export function useUpdates(
     },
     checkManually: () => invoke(() => bridge.updates.check('manual'))
   }
+}
+
+const UpdatesContext = createContext<UpdatesController | null>(null)
+
+/**
+ * Shares the shell-owned updater with every surface below it. The application
+ * shell mounts for splash, Options and the player alike, so the startup check
+ * runs once per renderer session regardless of the start mode, and a dismissed
+ * release stays dismissed across a surface switch.
+ */
+export function UpdatesProvider({
+  value,
+  children
+}: {
+  value: UpdatesController
+  children: React.ReactNode
+}): React.JSX.Element {
+  return createElement(UpdatesContext.Provider, { value }, children)
+}
+
+/**
+ * The shell-owned controller when there is one. A surface rendered without the
+ * provider (tests, SSR markup) falls back to its own controller so it keeps
+ * working standalone.
+ */
+export function useSurfaceUpdates(bridge: UpdatesBridge): UpdatesController {
+  const shared = useContext(UpdatesContext)
+  const own = useUpdates(bridge, { active: shared === null })
+  return shared ?? own
 }

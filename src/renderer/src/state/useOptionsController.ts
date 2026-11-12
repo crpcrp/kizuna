@@ -20,7 +20,7 @@ import { useGameOcr, type UseGameOcrResult } from './useGameOcr'
 import { useOptionsDialog, type UseOptionsDialogResult } from './useOptionsDialog'
 import type { PerFileValueRefs } from './usePlaybackWindow'
 import { useSettingsLifecycle } from './useSettingsLifecycle'
-import { useSurfaceUpdates } from './updatesContext'
+import { useSurfaceUpdates } from './useUpdates'
 import type { UpdatesController } from './useUpdates'
 
 const NOOP_SET_STATE: Dispatch<SetStateAction<boolean>> = () => undefined

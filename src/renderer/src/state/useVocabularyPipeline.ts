@@ -25,7 +25,7 @@ import type {
   WholeTrackVocabularyCoordinator,
   WholeTrackVocabularyResult
 } from './wholeTrackVocabulary'
-import { wholeTrackVocabularyDependencyKey } from './wholeTrackVocabularyKey'
+import { wholeTrackVocabularyDependencyKey } from './wholeTrackVocabulary'
 import type { VocabularySpan } from './vocabularySpans'
 import type { SubtitleReportController } from './subtitleReportController'
 

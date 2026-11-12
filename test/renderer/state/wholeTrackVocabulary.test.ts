@@ -5,7 +5,9 @@ import type { KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import {
   createWholeTrackVocabularyCoordinator,
-  type WholeTrackVocabularyInput
+  type WholeTrackVocabularyInput,
+  wholeTrackVocabularyDependencyKey,
+  type WholeTrackVocabularyDependencies
 } from '@src/renderer/src/state/wholeTrackVocabulary'
 import type {
   VocabularySpanController,
@@ -281,4 +283,40 @@ describe('whole-track vocabulary coordinator', () => {
       })
     }
   )
+})
+
+const dependencies: WholeTrackVocabularyDependencies = {
+  filePath: 'episode.mkv',
+  subtitleTrackId: 2,
+  japaneseSubtitleSelected: true,
+  cues: [{ start: 0, end: 1, text: 'word' }],
+  frequencyDictId: 1,
+  sortOrder: 'auto',
+  dictionarySettings: { yomitanDicts: [{ id: 1, enabled: true }] },
+  knowledgeEpoch: 3
+}
+
+describe('wholeTrackVocabularyDependencyKey', () => {
+  it('excludes Anki-domain data but changes for vocabulary inputs', () => {
+    const key = wholeTrackVocabularyDependencyKey(dependencies)
+    const ankiLoadingOrReady = {
+      ...dependencies,
+      anki: { status: 'ready', duplicatePolicy: 'overwrite', deck: 'Target' }
+    }
+    expect(wholeTrackVocabularyDependencyKey(ankiLoadingOrReady)).toBe(key)
+
+    expect(
+      wholeTrackVocabularyDependencyKey({
+        ...dependencies,
+        cues: [{ start: 1, end: 2, text: 'other' }]
+      })
+    ).not.toBe(key)
+    expect(
+      wholeTrackVocabularyDependencyKey({
+        ...dependencies,
+        dictionarySettings: { yomitanDicts: [{ id: 1, enabled: false }] }
+      })
+    ).not.toBe(key)
+    expect(wholeTrackVocabularyDependencyKey({ ...dependencies, knowledgeEpoch: 4 })).not.toBe(key)
+  })
 })
