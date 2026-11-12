@@ -68,11 +68,7 @@ module.exports = {
   },
   nsis: {
     oneClick: false,
-    allowToChangeInstallationDirectory: true,
-    // Preserve a legacy resources/mecab/unidic folder before NSIS removes the
-    // old installation during an upgrade. Runtime startup performs the same
-    // migration for Linux and development installs.
-    include: 'build/installer.nsh'
+    allowToChangeInstallationDirectory: true
   },
   linux: {
     // Both targets are x64-only: resources.lock.json pins one Linux payload

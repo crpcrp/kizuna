@@ -16,7 +16,6 @@ import {
   normalizeSubtitleAutoPauseTiming,
   normalizeSubtitleStyle,
   normalizeVideoAdjustments,
-  subtitleOffsetKey,
   type PlayerSettings
 } from '../../shared/playerSettings'
 import { defaultAnkiSettings, mergeAnkiSettings, type AnkiSettings } from '../../shared/anki'
@@ -378,22 +377,15 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
   }
 }
 
-/** Deep-merges `raw` into a subtitle-offset map (`Record<string, number>`, ms);
+/** Deep-merges `raw` into an offset map (`Record<string, number>`, ms);
  * non-numeric/non-finite entries are dropped rather than falling back
  * wholesale, so one corrupted entry doesn't discard every other file's stored
- * offset. Surviving keys are canonicalized with `subtitleOffsetKey`, which
- * migrates legacy raw-path keys written before canonicalization; two legacy
- * keys that fold to the same canonical key collapse into one entry (last one
- * wins). Serves both `subtitleOffsets` (per-file keys) and
- * `folderSubtitleOffsets` (folder keys — already canonical, since
- * `subtitleOffsetFolderKey` derives them from `subtitleOffsetKey`, so passing
- * them through again is a no-op). Also serves `audioDelays` (per-file ms delays,
- * keyed the same way as `subtitleOffsets`). */
+ * offset. Serves `subtitleOffsets`, `folderSubtitleOffsets`, and `audioDelays`. */
 function mergeOffsetMap(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
   const result: Record<string, number> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof value === 'number' && Number.isFinite(value)) result[subtitleOffsetKey(key)] = value
+    if (typeof value === 'number' && Number.isFinite(value)) result[key] = value
   }
   return result
 }

@@ -33,7 +33,6 @@ const NAMED_KEYS = new Set([
   'Comma',
   'Period',
   'Slash',
-  'Backslash',
   'BracketLeft',
   'BracketRight',
   'Semicolon',
@@ -103,9 +102,6 @@ function canonicalModifier(raw: string): (typeof MODIFIER_ORDER)[number] | null 
 }
 
 function canonicalKey(raw: string): string | null {
-  // Older builds used the DOM code name; migrate it to Electron's supported
-  // punctuation token while keeping existing settings usable.
-  if (raw === 'Backslash') return ELECTRON_INTL_BACKSLASH
   if (/^[A-Za-z]$/.test(raw)) return raw.toUpperCase()
   if (/^[0-9]$/.test(raw)) return raw
   if (/^F(?:[1-9]|1[0-2])$/i.test(raw)) return raw.toUpperCase()

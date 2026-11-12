@@ -145,29 +145,23 @@ export default function App({
   // is OR'd into the top-controls reveal below.
   const [menuBarOpen, setMenuBarOpen] = useState(false)
   const stateRef = useLatestRef(state)
+  const getFileSubtitleOffset = (): number =>
+    stateRef.current.filePath
+      ? subtitleOffsetForFile(
+          perFileValues.subtitleOffsetsRef.current,
+          perFileValues.folderSubtitleOffsetsRef.current,
+          stateRef.current.filePath
+        )
+      : 0
   const mediaSession = useMediaSession({
     bridge: kizuna,
     dispatch,
     player: playerAdapter,
     state,
     stateRef,
-    getLegacySubtitleOffset: () =>
-      stateRef.current.filePath
-        ? subtitleOffsetForFile(
-            perFileValues.subtitleOffsetsRef.current,
-            perFileValues.folderSubtitleOffsetsRef.current,
-            stateRef.current.filePath
-          )
-        : 0,
+    getFileSubtitleOffset,
     getSubtitleVersionOffset: (contentVersion) =>
-      stateRef.current.subtitleOffsetsByVersion[contentVersion] ??
-      (stateRef.current.filePath
-        ? subtitleOffsetForFile(
-            perFileValues.subtitleOffsetsRef.current,
-            perFileValues.folderSubtitleOffsetsRef.current,
-            stateRef.current.filePath
-          )
-        : 0)
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? getFileSubtitleOffset()
   })
   const jimaku = useJimakuController({
     jimaku: kizuna.jimaku ?? ({} as KizunaApi['jimaku']),
@@ -177,14 +171,7 @@ export default function App({
     }),
     subtitles: mediaSession.subtitleActions,
     getSubtitleOffset: (contentVersion) =>
-      stateRef.current.subtitleOffsetsByVersion[contentVersion] ??
-      (stateRef.current.filePath
-        ? subtitleOffsetForFile(
-            perFileValues.subtitleOffsetsRef.current,
-            perFileValues.folderSubtitleOffsetsRef.current,
-            stateRef.current.filePath
-          )
-        : 0)
+      stateRef.current.subtitleOffsetsByVersion[contentVersion] ?? getFileSubtitleOffset()
   })
   useEffect(() => {
     reportErrorRef.current = mediaSession.banner.reportError

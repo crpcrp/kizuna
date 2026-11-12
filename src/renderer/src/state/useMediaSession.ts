@@ -68,7 +68,7 @@ export interface UseMediaSessionInput {
   player: Pick<PlayerApi, 'setPause'>
   state: SessionState
   stateRef: RefObject<PlayerState>
-  getLegacySubtitleOffset?: () => number
+  getFileSubtitleOffset?: () => number
   getSubtitleVersionOffset?: (contentVersion: string) => number
 }
 
@@ -131,7 +131,7 @@ export function useMediaSession({
   player,
   state,
   stateRef,
-  getLegacySubtitleOffset,
+  getFileSubtitleOffset,
   getSubtitleVersionOffset
 }: UseMediaSessionInput): UseMediaSessionResult {
   const subtitleToken = useRef<SubtitleRequestToken>({ current: 0 })
@@ -166,7 +166,7 @@ export function useMediaSession({
     subtitleToken: subtitleToken.current,
     cueCache: subtitleCueCache.current,
     fileToken: fileLoadToken.current,
-    getLegacySubtitleOffset,
+    getFileSubtitleOffset,
     getSubtitleVersionOffset,
     captureSubtitleSelection: () => captureSubtitleSelectionSnapshot(stateRef.current),
     onSubtitleSelectionApplied: rememberSubtitleSnapshot,
@@ -271,9 +271,8 @@ export function useMediaSession({
       state.externalSubtitleEncoding,
       {
         offsetMs: provenance
-          ? (state.subtitleOffsetsByVersion[provenance.contentVersion] ??
-            getLegacySubtitleOffset?.())
-          : getLegacySubtitleOffset?.(),
+          ? (state.subtitleOffsetsByVersion[provenance.contentVersion] ?? getFileSubtitleOffset?.())
+          : getFileSubtitleOffset?.(),
         ...(provenance ? { provenance } : {}),
         previousSnapshot,
         onApplied: rememberSubtitleSnapshot
@@ -290,8 +289,8 @@ export function useMediaSession({
       {
         offsetMs: state.externalSubtitleProvenance
           ? (state.subtitleOffsetsByVersion[state.externalSubtitleProvenance.contentVersion] ??
-            getLegacySubtitleOffset?.())
-          : getLegacySubtitleOffset?.(),
+            getFileSubtitleOffset?.())
+          : getFileSubtitleOffset?.(),
         ...(state.externalSubtitleProvenance
           ? { provenance: state.externalSubtitleProvenance }
           : {}),

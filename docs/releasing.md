@@ -10,6 +10,14 @@ Windows may show an unknown-publisher or Microsoft Defender SmartScreen
 warning. The Linux AppImage and deb are also unsigned. Signing is planned only
 after the project is accepted by an open-source signing service.
 
+## Upgrade floor
+
+Data written by the two releases before the current one must upgrade cleanly
+(with 0.5.0 current: 0.4.4 and 0.4.3). Migrations and compatibility shims for
+anything older are removed; users on older versions install a floor release
+and start it once first. `test/main/upgradeFloor.test.ts` loads fixtures from
+the floor release; regenerate them when the floor moves.
+
 ## Prepare the version
 
 From a branch based on current `main`, update both package files without

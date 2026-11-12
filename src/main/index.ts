@@ -20,6 +20,7 @@ import { registerClipboardBridge } from './clipboardBridge'
 import { createSafeStorageCodec } from './services/secrets'
 import { createSettingsStore, type SettingsStore } from './services/settings'
 import { createSettingsFile } from './services/settingsFile'
+import { createUserUnidicManager } from './services/mecab/unidic'
 import type { JimakuService } from './services/jimaku/service'
 import type { MediaHistoryService } from './services/mediaHistory'
 import type { MpvConfigManager } from './services/mpvConfig'
@@ -31,7 +32,7 @@ import type { UpdateService } from './updateService'
 import type { BootstrapDeps, MainWindowRef, SendToMain } from './bootstrap/deps'
 import { resolveAppPaths } from './bootstrap/paths'
 import { createAppMediaHistoryStore, startMedia, startMediaHistory } from './bootstrap/media'
-import { prepareUserUnidic, startDict, startMecab } from './bootstrap/dict'
+import { startDict, startMecab } from './bootstrap/dict'
 import { startAnki } from './bootstrap/anki'
 import { startKnowledge } from './bootstrap/knowledge'
 import { startTranslation } from './bootstrap/translation'
@@ -123,7 +124,7 @@ function bootstrap(lifecycle: AppLifecycleCoordinator, hasLaunchPath: boolean): 
     resourcesPath: paths.resourcesPath,
     appRoot: paths.appRoot
   })
-  const userUnidic = prepareUserUnidic({ paths, binaryPaths, shell })
+  const userUnidic = createUserUnidicManager({ userDataDir: paths.userData, fs, shell })
   // Read history before any settings write can drop the legacy key.
   const historyStore = createAppMediaHistoryStore(paths)
   const settings = createSettingsStore(createSettingsFile(paths.settingsFile, fs))

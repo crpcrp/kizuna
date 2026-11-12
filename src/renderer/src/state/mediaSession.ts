@@ -147,8 +147,8 @@ export interface OpenSession {
   fileToken: SubtitleRequestToken
   /** Encoding to use for a restored external subtitle that saved none. */
   externalSubtitleEncoding?: SubtitleEncoding
-  /** Current video's legacy local/embedded offset. */
-  getLegacySubtitleOffset?: () => number
+  /** Current video's per-file/folder offset for local and embedded subtitles. */
+  getFileSubtitleOffset?: () => number
   /** Existing per-video downloaded-version offset, or the file/folder fallback. */
   getSubtitleVersionOffset?: (contentVersion: string) => number
   /** Captures the active selection immediately before a successful replacement. */

@@ -28,9 +28,6 @@ export interface ImportDb extends DbLike {
     // which only declares run/all) still satisfy this interface — the real
     // better-sqlite3 handle always has `.get()` at runtime regardless.
     get?(...params: unknown[]): unknown
-    // Required by DbLike (schema.ts's initSchema uses it to read PRAGMA
-    // table_info for column migrations) — the real better-sqlite3 handle
-    // always has `.all()` regardless of whether import logic calls it.
     all(...params: unknown[]): unknown[]
   }
   transaction(fn: () => number): () => number

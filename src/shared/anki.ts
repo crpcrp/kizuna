@@ -90,13 +90,7 @@ export const defaultAnkiSettings: AnkiSettings = {
   duplicatePolicy: 'prevent-deck'
 }
 
-/**
- * Deep-merges `raw` against `defaultAnkiSettings`; never throws. The result is
- * rebuilt key by key, so a settings file written by an older build keeps its
- * field mapping while its retired `includeScreenshot` / `includeSentenceAudio`
- * flags are simply dropped — an install that had them off is not left with the
- * media features still disabled.
- */
+/** Deep-merges `raw` against `defaultAnkiSettings`; never throws. Unknown keys are dropped. */
 export function mergeAnkiSettings(raw: unknown): AnkiSettings {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const rawFieldMap =

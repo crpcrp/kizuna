@@ -54,11 +54,6 @@ export type KeyBinding = string
 export const MOUSE_WHEEL_UP_BINDING_CODE = 'MouseWheelUp'
 export const MOUSE_WHEEL_DOWN_BINDING_CODE = 'MouseWheelDown'
 
-/** Directionless wheel pseudo-code written by releases before the subtitle-size
- * shortcut was split into separate increase/decrease actions. Only read by
- * `normalizeKeyBindings` when migrating a stored `subtitleFontScale` value. */
-export const LEGACY_MOUSE_WHEEL_BINDING_CODE = 'MouseWheel'
-
 /** The binding each action is triggered by. */
 export type KeyBindings = Record<PlayerKeyAction, KeyBinding>
 
@@ -104,29 +99,9 @@ export function normalizeKeyBinding(raw: unknown): KeyBinding | null {
   return raw
 }
 
-/** Splits a legacy directionless wheel binding into its up/down counterparts,
- * or returns null when `binding` is not a wheel binding at all. */
-function splitLegacyWheelBinding(binding: KeyBinding): [KeyBinding, KeyBinding] | null {
-  const parts = binding.split('+')
-  if (parts[parts.length - 1] !== LEGACY_MOUSE_WHEEL_BINDING_CODE) return null
-  const modifiers = parts.slice(0, -1)
-  return [
-    [...modifiers, MOUSE_WHEEL_UP_BINDING_CODE].join('+'),
-    [...modifiers, MOUSE_WHEEL_DOWN_BINDING_CODE].join('+')
-  ]
-}
-
 /**
  * Validates a stored `keyBindings` object against the current action list,
- * falling back to `DEFAULT_KEY_BINDINGS` per action. Unknown keys — including
- * the legacy `subtitleFontScale` field — are dropped from the result so they
- * can never affect routing again.
- *
- * A stored `subtitleFontScale` is migrated when neither directional action was
- * stored: a wheel chord splits into the same chord's up/down variants (so the
- * old `ShiftLeft+MouseWheel` default becomes the two new defaults), while an
- * ordinary key is kept as the increase binding and decrease keeps its default
- * wheel-down binding rather than duplicating that key on both actions.
+ * falling back to `DEFAULT_KEY_BINDINGS` per action. Unknown keys are dropped.
  */
 export function normalizeKeyBindings(raw: unknown): KeyBindings {
   const stored = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
@@ -135,16 +110,6 @@ export function normalizeKeyBindings(raw: unknown): KeyBindings {
     const binding = normalizeKeyBinding(stored[action])
     if (binding) bindings[action] = binding
   }
-
-  const migrated = normalizeKeyBinding(stored.subtitleFontScale)
-  if (migrated && !normalizeKeyBinding(stored.subtitleFontScaleUp)) {
-    const split = splitLegacyWheelBinding(migrated)
-    bindings.subtitleFontScaleUp = split ? split[0] : migrated
-    if (split && !normalizeKeyBinding(stored.subtitleFontScaleDown)) {
-      bindings.subtitleFontScaleDown = split[1]
-    }
-  }
-
   return bindings
 }
 
