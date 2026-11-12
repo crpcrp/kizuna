@@ -10,6 +10,7 @@ import { replaceSource, setSyncState } from './store'
 import type { IntervalThresholds } from './levels'
 import { levelFromAnkiCard } from './levels'
 import { maxKnowledgeLevel, type AnkiSourceDetail } from '../../../shared/knowledge'
+import { stripTags } from '../../html'
 
 /** cardsInfo request-size chunk — matches wanikani/sync.ts's chunking idiom. */
 const CARDS_INFO_CHUNK_SIZE = 500
@@ -35,23 +36,12 @@ function deckSearchTerm(deckName: string): string {
  * than trying to whitelist every input shape.
  */
 export function normalizeAnkiField(html: string): string {
-  let normalized = html
-  let previous: string
-  // Removing an outer tag can expose another tag, so repeat until stable.
-  do {
-    previous = normalized
-    normalized = normalized
-      .replace(/<rt>[^<]*<\/rt>/gi, '')
-      .replace(/<rp>[^<]*<\/rp>/gi, '')
-      .replace(/<\/?ruby>/gi, '')
-      .replace(/ ?([^ >]+?)\[(.+?)\]/g, '$1') // Anki's kanji filter: drops the separator space
-      .replace(/\[[^\]]*\]/g, '')
-      .replace(/<br\s*\/?>/gi, '')
-      .replace(/<\/?div[^>]*>/gi, '')
-      .replace(/<[^>]+>/g, '')
-  } while (normalized !== previous)
-
-  return normalized.replace(/&nbsp;/gi, '').trim()
+  const withoutRubyText = html.replace(/<rt>[^<]*<\/rt>/gi, '').replace(/<rp>[^<]*<\/rp>/gi, '')
+  return stripTags(withoutRubyText)
+    .replace(/ ?([^ >]+?)\[(.+?)\]/g, '$1') // Anki's kanji filter: drops the separator space
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/&nbsp;/gi, '')
+    .trim()
 }
 
 /**

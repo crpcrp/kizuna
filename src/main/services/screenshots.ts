@@ -1,8 +1,7 @@
 // mpv and filesystem operations are injected so screenshot tests do not need a
 // live player or real disk.
 
-import { randomBytes } from 'node:crypto'
-import { pathApiFor } from '../platformPath'
+import { pathApiFor, uniqueTempName } from '../platformPath'
 
 /** Characters Windows forbids in a filename (`<>:"/\|?*`), plus ASCII control
  * chars — matched globally so `sanitizeScreenshotName` can replace them. */
@@ -96,7 +95,7 @@ export interface FrameCaptureService {
  * screenshot folder. mpv can only write a screenshot to a path, so this reuses
  * that same path (`takeScreenshot`) against an injected temporary directory and
  * deletes the file in `finally` — on success and on failure alike. Every
- * boundary (mpv, temp dir, read, delete, name suffix) is injected so the flow
+ * boundary (mpv, temp dir, read, delete) is injected so the flow
  * is unit-testable without a live mpv or real disk.
  */
 export function createFrameCaptureService(deps: {
@@ -104,16 +103,13 @@ export function createFrameCaptureService(deps: {
   tempDir(): string
   readBase64(path: string): Promise<string>
   remove(path: string): Promise<void>
-  /** Distinguishes concurrent captures; defaults to a random suffix. */
-  uniqueSuffix?: () => string
   /** Path semantics for the temp file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): FrameCaptureService {
-  const suffix = deps.uniqueSuffix ?? (() => randomBytes(6).toString('hex'))
   const { join } = pathApiFor(deps.platform)
   return {
     async captureFrameData(): Promise<string> {
-      const path = join(deps.tempDir(), `kizuna-frame-${suffix()}.png`)
+      const path = join(deps.tempDir(), uniqueTempName('kizuna-frame', 'png'))
       try {
         await deps.takeScreenshot(path)
         return await deps.readBase64(path)

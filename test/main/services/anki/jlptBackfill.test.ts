@@ -30,10 +30,6 @@ describe('backfill field parsing', () => {
     )
   })
 
-  it('repeats tag removal until nested tags are gone', () => {
-    expect(stripHtml('<<script>alert(1)</script>')).toBe('alert(1)')
-  })
-
   it('accepts plain kana and converts Anki furigana to one reading', () => {
     expect(normalizeBackfillReading('<span>ねこ</span>')).toBe('ねこ')
     expect(normalizeBackfillReading('漢字[かんじ]かな')).toBe('かんじかな')

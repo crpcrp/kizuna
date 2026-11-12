@@ -16,6 +16,7 @@
 // `resolveBinaryPaths` in `resourcePaths.ts` established this pattern; this
 // module is the reusable form of it.
 
+import { randomBytes } from 'node:crypto'
 import { posix, win32 } from 'node:path'
 import type { PathPlatform } from '../shared/mediaHistory'
 
@@ -37,4 +38,9 @@ export function pathApiFor(platform: NodeJS.Platform = process.platform): typeof
  */
 export function pathPlatformFor(platform: NodeJS.Platform = process.platform): PathPlatform {
   return platform === 'win32' ? 'win32' : 'posix'
+}
+
+/** `<prefix>-<12 random hex>.<ext>`, so concurrent temp files never collide. */
+export function uniqueTempName(prefix: string, ext: string): string {
+  return `${prefix}-${randomBytes(6).toString('hex')}.${ext}`
 }

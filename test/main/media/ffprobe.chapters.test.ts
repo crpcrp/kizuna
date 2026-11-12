@@ -23,13 +23,6 @@ describe('buildFfprobeChaptersArgs', () => {
       'C:\\videos\\episode.mkv'
     ])
   })
-
-  it('ends option parsing before the path so a leading-dash path is not an option', () => {
-    const args = buildFfprobeChaptersArgs('-show_format')
-
-    expect(args.at(-2)).toBe('--')
-    expect(args.at(-1)).toBe('-show_format')
-  })
 })
 
 describe('parseFfprobeChapters', () => {

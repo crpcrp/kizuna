@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { identityCodec, createSafeStorageCodec, readSecret } from '@src/main/services/secrets'
+import {
+  identityCodec,
+  createSafeStorageCodec,
+  encodeSecret,
+  readSecret
+} from '@src/main/services/secrets'
+import { reversingCodec } from '@test/harness/fakeSecrets'
 import { fakeSafeStorage } from '@test/harness/fakeSecrets'
 
 describe('identityCodec', () => {
@@ -69,5 +75,22 @@ describe('readSecret', () => {
       }
     })
     expect(readSecret(throwingCodec, 'corrupt-blob')).toBe('')
+  })
+
+  it('returns "" when the codec itself throws', () => {
+    const codec = {
+      ...identityCodec,
+      decrypt: () => {
+        throw new Error('keychain unavailable')
+      }
+    }
+    expect(readSecret(codec, 'blob')).toBe('')
+  })
+})
+
+describe('encodeSecret', () => {
+  it('encrypts the trimmed value and clears blank input', () => {
+    expect(encodeSecret(reversingCodec, '  key  ')).toBe('yek')
+    expect(encodeSecret(reversingCodec, '   ')).toBe('')
   })
 })

@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { posix } from 'node:path'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
-  bucketFor,
   seekTimeForBucket,
   thumbnailCachePath,
   buildThumbnailArgs,
@@ -11,33 +10,6 @@ import {
   type ThumbnailStat
 } from '@src/main/services/thumbnails/generation'
 import { fakeFfmpegSuccess, fakeFfmpegFailure } from '@test/harness/fakeFfmpeg'
-
-describe('bucketFor', () => {
-  it('maps a time to its 1-percent bucket (floor)', () => {
-    expect(bucketFor(0, 100)).toBe(0)
-    expect(bucketFor(50, 100)).toBe(50)
-    expect(bucketFor(0.9, 100)).toBe(0)
-    expect(bucketFor(1.5, 100)).toBe(1)
-  })
-
-  it('clamps to 0..99', () => {
-    expect(bucketFor(-5, 100)).toBe(0)
-    // At and past the reported end, the last bucket (99), never 100.
-    expect(bucketFor(100, 100)).toBe(99)
-    expect(bucketFor(999, 100)).toBe(99)
-  })
-
-  it('returns null for non-finite inputs', () => {
-    expect(bucketFor(Number.NaN, 100)).toBeNull()
-    expect(bucketFor(10, Number.POSITIVE_INFINITY)).toBeNull()
-    expect(bucketFor(10, Number.NaN)).toBeNull()
-  })
-
-  it('returns null for durations under 1 second (too short / unknown)', () => {
-    expect(bucketFor(0.2, 0.5)).toBeNull()
-    expect(bucketFor(0, 0)).toBeNull()
-  })
-})
 
 describe('seekTimeForBucket', () => {
   it('returns the bucket midpoint in seconds', () => {

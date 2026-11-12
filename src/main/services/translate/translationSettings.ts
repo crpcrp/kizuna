@@ -2,7 +2,7 @@ import type {
   PublicTranslationSettings,
   TranslationSettingsPatch
 } from '../../../shared/translation'
-import { readSecret, type SecretCodec } from '../secrets'
+import { encodeSecret, readSecret, type SecretCodec } from '../secrets'
 import type { SettingsStore } from '../settings'
 
 export interface TranslationSettingsService {
@@ -22,13 +22,8 @@ const SAVE_FAILURE = 'Could not save translation settings.'
 export function createTranslationSettingsService(
   deps: CreateTranslationSettingsServiceDeps
 ): TranslationSettingsService {
-  const readAzureSubscriptionKey = (): string => {
-    try {
-      return readSecret(deps.secrets, deps.settings.get().translation.azureSubscriptionKeyEnc)
-    } catch {
-      return ''
-    }
-  }
+  const readAzureSubscriptionKey = (): string =>
+    readSecret(deps.secrets, deps.settings.get().translation.azureSubscriptionKeyEnc)
 
   const getSettings = (): PublicTranslationSettings => ({
     hasAzureKey: readAzureSubscriptionKey() !== '',
@@ -52,9 +47,7 @@ export function createTranslationSettingsService(
             azureSubscriptionKeyEnc:
               patch.azureSubscriptionKey === undefined
                 ? current.azureSubscriptionKeyEnc
-                : patch.azureSubscriptionKey.trim() === ''
-                  ? ''
-                  : deps.secrets.encrypt(patch.azureSubscriptionKey.trim()),
+                : encodeSecret(deps.secrets, patch.azureSubscriptionKey),
             azureRegion: patch.azureRegion?.trim() ?? current.azureRegion
           }
         })

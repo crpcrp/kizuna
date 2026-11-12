@@ -8,6 +8,7 @@ import type {
 } from '../shared/update'
 import type { UpdateSupport } from './updateSupport'
 import { classifyUpdaterError } from './updaterErrors'
+import { stripTags } from './html'
 
 export interface UpdaterInfo {
   version: string
@@ -64,11 +65,7 @@ const PROGRESS_INTERVAL_MS = 200
 const MAX_RELEASE_TEXT = 4_000
 
 function plainText(value: string): string {
-  return value
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, MAX_RELEASE_TEXT)
+  return stripTags(value, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_RELEASE_TEXT)
 }
 
 function releaseNotes(info: UpdaterInfo): string | undefined {

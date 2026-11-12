@@ -7,7 +7,7 @@ import type {
   JimakuSettingsStatus,
   JimakuTestOutcome
 } from '../../../shared/jimaku'
-import { readSecret, type SecretCodec } from '../secrets'
+import { encodeSecret, readSecret, type SecretCodec } from '../secrets'
 import {
   defaultJimakuSettings,
   jimakuFolderHintKey,
@@ -75,13 +75,8 @@ export function createJimakuSettingsService(
   }
 
   function readApiKey(): string {
-    const encoded = storedValue()
-    if (encoded === '') return ''
-
     try {
-      const value = readSecret(deps.secrets, encoded)
-      const normalized = normalizeApiKey(value)
-      return normalized
+      return normalizeApiKey(readSecret(deps.secrets, storedValue()))
     } catch {
       return ''
     }
@@ -123,7 +118,7 @@ export function createJimakuSettingsService(
 
     let encoded = ''
     try {
-      encoded = apiKey === '' ? '' : deps.secrets.encrypt(apiKey)
+      encoded = encodeSecret(deps.secrets, apiKey)
       if (apiKey !== '' && (typeof encoded !== 'string' || encoded === '')) throw new Error()
       const current = deps.settings.get().jimaku
       deps.settings.set({ jimaku: { ...current, apiKeyEnc: encoded } })

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import type { Cue } from '../../shared/cue'
-import { extractSubtitleTrack, type FfmpegExec } from './ffmpeg'
+import { buildFfmpegExtractArgs, type FfmpegExec } from './ffmpeg'
 import { parseSrt } from './srtParser'
 import { parseAss } from './assParser'
 
@@ -42,8 +42,7 @@ export function pickParser(outputPath: string): (content: string) => Cue[] {
 
 /**
  * Loads cues for a chosen subtitle stream in an MKV: extracts the stream to
- * `outputPath` via ffmpeg (`extractSubtitleTrack`, using the injected
- * `exec`), reads the extracted file back via the injected `readFile`, then
+ * `outputPath` via ffmpeg (using the injected `exec`), reads the extracted file back via the injected `readFile`, then
  * parses its contents into `Cue[]` using the parser selected by
  * `outputPath`'s extension (`pickParser`). Any rejection from `exec` or
  * `readFile` propagates unchanged — callers decide how to surface it.
@@ -53,7 +52,7 @@ export async function loadSubtitleCues(
   deps: LoadSubtitleCuesDeps
 ): Promise<Cue[]> {
   const { ffmpegPath, inputPath, streamIndex, outputPath } = params
-  await extractSubtitleTrack(ffmpegPath, inputPath, streamIndex, outputPath, deps.exec)
+  await deps.exec(ffmpegPath, buildFfmpegExtractArgs(inputPath, streamIndex, outputPath))
   const content = await deps.readFile(outputPath)
   return pickParser(outputPath)(content)
 }
