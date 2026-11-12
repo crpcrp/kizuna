@@ -51,12 +51,8 @@ npm run format:check
 npm test
 ```
 
-Focused Vitest runs must use Electron's Node ABI because of `better-sqlite3`:
-
-```powershell
-$env:ELECTRON_RUN_AS_NODE = '1'
-& .\\node_modules\\electron\\dist\\electron.exe .\\node_modules\\vitest\\vitest.mjs run test\\<path>.test.ts
-```
+Run one file with `npm test -- run test\<path>.test.ts`; `npm test` runs
+Vitest under Electron's Node ABI, which `better-sqlite3` requires.
 
 Do not call live external integrations from tests.
 

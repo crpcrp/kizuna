@@ -226,7 +226,8 @@ npm run format:check
 npm test
 ```
 
-Use `npm run test:watch` while iterating locally. CI runs the standard checks,
+Use `npm run test:watch` while iterating locally, or
+`npm test -- run test/<path>.test.ts` for one file. CI runs the standard checks,
 the third-party notices, and a production build on both Windows x64 and Linux
 x64 for every pull request; see [Contributing](CONTRIBUTING.md).
 
