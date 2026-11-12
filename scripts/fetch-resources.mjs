@@ -32,40 +32,11 @@ import {
   VENDOR_STAMP_FILE,
   acquireResources,
   platformKeyFor,
+  readFlag,
   selectPlatformLock
 } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-
-/**
- * Read `--vendor-dir <path>` / `--vendor-dir=<path>` out of argv.
- *
- * @param {string[]} argv
- * @returns {string | undefined}
- */
-export function parseVendorDirArg(argv) {
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--vendor-dir') return argv[i + 1]
-    const inline = /^--vendor-dir=(.+)$/.exec(argv[i])
-    if (inline) return inline[1]
-  }
-  return undefined
-}
-
-/**
- * Read --platform <key> / --platform=<key> out of argv.
- *
- * @param {string[]} argv
- * @returns {string | undefined}
- */
-export function parsePlatformArg(argv) {
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--platform') return argv[i + 1]
-    const inline = /^--platform=(.+)$/.exec(argv[i])
-    if (inline) return inline[1]
-  }
-  return undefined
-}
 
 /**
  * Unpack `asset` into `dir` with the system tar. Windows 10 and later ship
@@ -185,9 +156,9 @@ async function main() {
   const lock = JSON.parse(await readFile(join(repoRoot, 'resources.lock.json'), 'utf-8'))
 
   const args = process.argv.slice(2)
-  const platformKey = parsePlatformArg(args) ?? platformKeyFor()
+  const platformKey = readFlag(args, 'platform') ?? platformKeyFor()
   const selected = selectPlatformLock(lock, platformKey)
-  const existingCheckout = parseVendorDirArg(args) ?? process.env.KIZUNA_VENDOR_DIR
+  const existingCheckout = readFlag(args, 'vendor-dir') ?? process.env.KIZUNA_VENDOR_DIR
   const vendorDir = existingCheckout
     ? resolve(existingCheckout)
     : join(repoRoot, '.vendor-cache', selected.source.repo.split('/')[1])
@@ -209,8 +180,7 @@ async function main() {
   console.log('resources/ is ready.')
 }
 
-// Only run when invoked as a command. `test/scripts/fetch-resources.test.ts`
-// imports this module for `parseVendorDirArg`, and must not trigger a download.
+// Only run when invoked as a command.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
     console.error(`\n${error.message}\n`)

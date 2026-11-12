@@ -22,42 +22,12 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, resolve } from 'node:path'
 
 import { generateNotices } from './notices.mjs'
-import { platformKeyFor } from './vendorResources.mjs'
+import { platformKeyFor, readFlag } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /** Default bundle location. Gitignored — it is build output, not a source file. */
 const DEFAULT_OUT_DIR = join('build', 'notices')
-
-/**
- * Read `--out <path>` / `--out=<path>` out of argv.
- *
- * @param {string[]} argv
- * @returns {string | undefined}
- */
-function parseOutDirArg(argv) {
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--out') return argv[i + 1]
-    const inline = /^--out=(.+)$/.exec(argv[i])
-    if (inline) return inline[1]
-  }
-  return undefined
-}
-
-/**
- * Read --platform <key> / --platform=<key> out of argv.
- *
- * @param {string[]} argv
- * @returns {string | undefined}
- */
-function parsePlatformArg(argv) {
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === '--platform') return argv[i + 1]
-    const inline = /^--platform=(.+)$/.exec(argv[i])
-    if (inline) return inline[1]
-  }
-  return undefined
-}
 
 /** @param {string} name @returns {Promise<any>} */
 const readJson = async (name) => JSON.parse(await readFile(join(repoRoot, name), 'utf-8'))
@@ -71,8 +41,8 @@ async function main() {
   ])
 
   const args = process.argv.slice(2)
-  const outDir = resolve(parseOutDirArg(args) ?? join(repoRoot, DEFAULT_OUT_DIR))
-  const platformKey = parsePlatformArg(args) ?? platformKeyFor()
+  const outDir = resolve(readFlag(args, 'out') ?? join(repoRoot, DEFAULT_OUT_DIR))
+  const platformKey = readFlag(args, 'platform') ?? platformKeyFor()
 
   await generateNotices({
     notices,

@@ -1,4 +1,4 @@
-import { JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
+import { isJlptLevel, JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
 import { normalizeKnowledgeLemma } from '../../../shared/knowledge'
 import type { JlptVocabularySnapshot } from './classifier'
 
@@ -16,11 +16,13 @@ export interface JlptCanonicalVocabularyInventory {
 
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
 
-function isJlptLevel(value: unknown): value is JlptLevel {
-  return typeof value === 'string' && JLPT_LEVELS.includes(value as JlptLevel)
-}
-
-function validateSnapshot(snapshot: JlptVocabularySnapshot): void {
+/** Throws unless `snapshot` has the pinned OpenJLPT schema and source metadata. */
+export function validateJlptSnapshot(
+  snapshot: Pick<JlptVocabularySnapshot, 'schemaVersion' | 'source' | 'inputRecordCount'> & {
+    entries: readonly unknown[]
+  },
+  kind: 'kanji' | 'vocabulary'
+): void {
   if (
     !snapshot ||
     typeof snapshot !== 'object' ||
@@ -29,7 +31,7 @@ function validateSnapshot(snapshot: JlptVocabularySnapshot): void {
     snapshot.inputRecordCount < 0 ||
     !Array.isArray(snapshot.entries)
   ) {
-    throw new Error('Invalid JLPT vocabulary snapshot')
+    throw new Error(`Invalid JLPT ${kind} snapshot`)
   }
 
   const source = snapshot.source
@@ -44,7 +46,7 @@ function validateSnapshot(snapshot: JlptVocabularySnapshot): void {
     typeof source.license !== 'string' ||
     source.license.trim() === ''
   ) {
-    throw new Error('Invalid JLPT vocabulary snapshot metadata')
+    throw new Error(`Invalid JLPT ${kind} snapshot metadata`)
   }
 }
 
@@ -64,7 +66,7 @@ function chooseReading(readings: Set<string>): string {
 export function buildJlptVocabularyInventory(
   snapshot: JlptVocabularySnapshot
 ): JlptCanonicalVocabularyInventory {
-  validateSnapshot(snapshot)
+  validateJlptSnapshot(snapshot, 'vocabulary')
 
   const rowsByExpression = new Map<string, Map<JlptLevel, Set<string>>>()
   let nonEmptyRecordCount = 0

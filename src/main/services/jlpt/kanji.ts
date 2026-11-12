@@ -1,5 +1,6 @@
 import kanji from './data/kanji.json'
-import { JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
+import { isJlptLevel, JLPT_LEVELS, type JlptLevel } from '../../../shared/jlpt'
+import { validateJlptSnapshot } from './vocabularyInventory'
 import { normalizeKnowledgeLemma } from '../../../shared/knowledge'
 
 export type JlptKanjiEntry = readonly [
@@ -32,10 +33,6 @@ export interface JlptKanjiInventory {
 
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
 
-function isJlptLevel(value: unknown): value is JlptLevel {
-  return typeof value === 'string' && JLPT_LEVELS.includes(value as JlptLevel)
-}
-
 function isFrequency(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
 }
@@ -55,37 +52,9 @@ function mergeFrequency(
   return left ?? right
 }
 
-function validateSnapshot(snapshot: JlptKanjiSnapshot): void {
-  if (
-    !snapshot ||
-    typeof snapshot !== 'object' ||
-    snapshot.schemaVersion !== 1 ||
-    !Number.isInteger(snapshot.inputRecordCount) ||
-    snapshot.inputRecordCount < 0 ||
-    !Array.isArray(snapshot.entries)
-  ) {
-    throw new Error('Invalid JLPT kanji snapshot')
-  }
-
-  const source = snapshot.source
-  if (
-    !source ||
-    typeof source.name !== 'string' ||
-    source.name.trim() === '' ||
-    typeof source.version !== 'string' ||
-    source.version.trim() === '' ||
-    typeof source.commit !== 'string' ||
-    source.commit.trim() === '' ||
-    typeof source.license !== 'string' ||
-    source.license.trim() === ''
-  ) {
-    throw new Error('Invalid JLPT kanji snapshot metadata')
-  }
-}
-
 /** Builds the deterministic character-level inventory used by JLPT export. */
 export function buildJlptKanjiInventory(snapshot: JlptKanjiSnapshot): JlptKanjiInventory {
-  validateSnapshot(snapshot)
+  validateJlptSnapshot(snapshot, 'kanji')
 
   const byCharacter = new Map<string, { level: JlptLevel; frequency: number | null }>()
   for (const [index, rawEntry] of snapshot.entries.entries()) {
