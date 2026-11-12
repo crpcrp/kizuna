@@ -1,4 +1,5 @@
 // Shared mutable controller state and operation bookkeeping.
+import type { JimakuServiceErrorCode, JimakuServiceResult } from '../../../../shared/jimaku'
 import type { StoredSubtitleSelection } from '../../../../shared/mediaHistory'
 import type { SubtitleSelectionSnapshot } from '../trackSelection'
 import type {
@@ -27,6 +28,32 @@ export const INITIAL_STATE: JimakuControllerState = {
   failedCategories: []
 }
 
+/** Clears every title/file choice and returns to the title list. */
+export const TITLE_CHOICE_RESET = {
+  phase: { kind: 'choosingTitle' },
+  entries: [],
+  shownEntries: [],
+  selectedEntry: undefined,
+  rememberedTitle: undefined,
+  files: [],
+  shownFiles: [],
+  selectedFile: undefined,
+  archive: undefined,
+  selectedMember: undefined,
+  showingMoreFiles: false,
+  showingAllFiles: false,
+  partial: false,
+  failedCategories: [],
+  notice: undefined
+} as const satisfies Partial<JimakuControllerState>
+
+/** True while a cancellable service or subtitle request is in flight. */
+export const isBusy = (phase: JimakuControllerPhase): boolean =>
+  phase.kind === 'searchingTitles' ||
+  phase.kind === 'loadingFiles' ||
+  phase.kind === 'downloading' ||
+  phase.kind === 'applying'
+
 export type Operation = {
   id: number
   filePath: string
@@ -34,43 +61,12 @@ export type Operation = {
   sessionId?: string
 }
 
-export interface JimakuCore {
-  state: JimakuControllerState
-  operationId: number
-  sessionId?: string
-  previousSelection?: SubtitleSelectionSnapshot
-  knownVersionIds: Set<string>
-  /** State restored when the in-flight operation is cancelled. */
-  cancelState?: JimakuControllerState
-  getDeps(): JimakuControllerDeps
-  subscribe(listener: () => void): () => void
-  set(next: JimakuControllerState): void
-  media(): JimakuMediaContext
-  contextMatches(path: string, generation: number): boolean
-  operationMatches(operation: Operation): boolean
-  clearSession(): void
-  cancelPending(): void
-  startOperation(
-    nextPhase: JimakuControllerPhase,
-    restore: JimakuControllerState
-  ): Operation | undefined
-  finishOperation(operation: Operation): void
-  fail(
-    code: JimakuControllerErrorCode,
-    recovery: JimakuRecoveryTarget,
-    base?: JimakuControllerState
-  ): void
-  serviceError(value: unknown): JimakuControllerErrorCode
-  triedVersions(currentVersionId: string | undefined): string[]
-  resetTitleChoice(): void
-  /** Invalidates pending work, ends the session, and returns to the idle state. */
-  reset(): void
-}
+export type JimakuCore = ReturnType<typeof createJimakuCore>
 
 export const versionOf = (selection: StoredSubtitleSelection): string | undefined =>
   selection.mode === 'external' ? selection.provenance?.contentVersion : undefined
 
-export function createJimakuCore(getDeps: () => JimakuControllerDeps): JimakuCore {
+export function createJimakuCore(getDeps: () => JimakuControllerDeps) {
   const listeners = new Set<() => void>()
 
   const set = (next: JimakuControllerState): void => {
@@ -125,13 +121,7 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps): JimakuCor
       core.state.mediaGeneration !== current.loadGeneration
     )
       return undefined
-    if (
-      core.state.phase.kind === 'searchingTitles' ||
-      core.state.phase.kind === 'loadingFiles' ||
-      core.state.phase.kind === 'downloading' ||
-      core.state.phase.kind === 'applying'
-    )
-      cancelPending()
+    if (isBusy(core.state.phase)) cancelPending()
     const operation: Operation = {
       id: ++core.operationId,
       filePath: current.filePath,
@@ -143,17 +133,21 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps): JimakuCor
     return operation
   }
 
-  const finishOperation = (operation: Operation): void => {
-    if (operationMatches(operation)) core.cancelState = undefined
+  const abortOperation = (): void => {
+    cancelPending()
+    ++core.operationId
+    core.cancelState = undefined
   }
 
-  const fail = (
-    code: JimakuControllerErrorCode,
-    recovery: JimakuRecoveryTarget,
-    base: JimakuControllerState = core.state
-  ): void => {
+  const restoreCancelState = (): void => {
+    const restore = core.cancelState
     core.cancelState = undefined
-    set({ ...base, phase: { kind: 'error', code, recovery }, notice: undefined })
+    if (restore) set({ ...restore, notice: undefined })
+  }
+
+  const fail = (code: JimakuControllerErrorCode, recovery: JimakuRecoveryTarget): void => {
+    core.cancelState = undefined
+    set({ ...core.state, phase: { kind: 'error', code, recovery }, notice: undefined })
   }
 
   const serviceError = (value: unknown): JimakuControllerErrorCode => {
@@ -194,48 +188,54 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps): JimakuCor
   const triedVersions = (currentVersionId: string | undefined): string[] =>
     [...core.knownVersionIds].filter((version) => version !== currentVersionId)
 
-  const resetTitleChoice = (): void => {
-    cancelPending()
-    ++core.operationId
+  const request = async <T>(
+    operation: Operation,
+    recovery: 'titles' | 'files',
+    call: (sessionId: string) => Promise<JimakuServiceResult<T>>,
+    onError?: (code: JimakuServiceErrorCode) => boolean
+  ): Promise<T | undefined> => {
+    let result: JimakuServiceResult<T>
+    try {
+      result = await call(operation.sessionId!)
+    } catch {
+      result = { ok: false, error: { code: 'network' } }
+    }
+    if (!operationMatches(operation)) return undefined
+    if (!result.ok && result.error.code === 'cancelled') {
+      restoreCancelState()
+      return undefined
+    }
     core.cancelState = undefined
-    set({
-      ...core.state,
-      phase: { kind: 'choosingTitle' },
-      entries: [],
-      shownEntries: [],
-      selectedEntry: undefined,
-      rememberedTitle: undefined,
-      files: [],
-      shownFiles: [],
-      selectedFile: undefined,
-      archive: undefined,
-      selectedMember: undefined,
-      showingMoreFiles: false,
-      showingAllFiles: false,
-      partial: false,
-      failedCategories: [],
-      notice: undefined
-    })
+    if (result.ok) return result.value
+    if (!onError?.(result.error.code)) fail(serviceError(result.error.code), recovery)
+    return undefined
+  }
+
+  const resetTitleChoice = (): void => {
+    abortOperation()
+    set({ ...core.state, ...TITLE_CHOICE_RESET })
   }
 
   const reset = (): void => {
-    ++core.operationId
-    cancelPending()
+    abortOperation()
     clearSession()
-    core.cancelState = undefined
     core.previousSelection = undefined
     core.knownVersionIds = new Set()
     set(INITIAL_STATE)
   }
 
-  const core: JimakuCore = {
+  const core = {
     state: INITIAL_STATE,
     operationId: 0,
-    knownVersionIds: new Set(),
+    sessionId: undefined as string | undefined,
+    previousSelection: undefined as SubtitleSelectionSnapshot | undefined,
+    knownVersionIds: new Set<string>(),
+    /** State restored when the in-flight operation is cancelled. */
+    cancelState: undefined as JimakuControllerState | undefined,
     getDeps,
-    subscribe(listener) {
+    subscribe(listener: () => void): () => void {
       listeners.add(listener)
-      return () => listeners.delete(listener)
+      return () => void listeners.delete(listener)
     },
     set,
     media,
@@ -244,7 +244,9 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps): JimakuCor
     clearSession,
     cancelPending,
     startOperation,
-    finishOperation,
+    abortOperation,
+    restoreCancelState,
+    request,
     fail,
     serviceError,
     triedVersions,

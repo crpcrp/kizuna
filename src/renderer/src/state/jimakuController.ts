@@ -1,17 +1,13 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import type { JimakuEntry } from '../../../shared/jimaku'
-import { createJimakuCore } from './jimaku/core'
+import { createJimakuCore, isBusy } from './jimaku/core'
 import { createJimakuPrepare } from './jimaku/prepare'
-import { createJimakuRemembered } from './jimaku/remembered'
 import { createJimakuSearch } from './jimaku/search'
 import type {
   JimakuController,
   JimakuControllerDeps,
-  JimakuEpisodeEdit,
-  JimakuIdentityPatch,
   UseJimakuControllerResult
 } from './jimaku/types'
-import { useLatestCallback, useLatestRef } from './useLatestRef'
+import { useLatestRef } from './useLatestRef'
 
 export type * from './jimaku/types'
 
@@ -21,26 +17,16 @@ export function createJimakuController(deps: JimakuControllerDeps): JimakuContro
 export function createJimakuController(deps: () => JimakuControllerDeps): JimakuController
 export function createJimakuController(source: ControllerDepsSource): JimakuController {
   const core = createJimakuCore(typeof source === 'function' ? source : () => source)
-  const { cancelPending, set } = core
   return {
     getState: () => core.state,
     subscribe: core.subscribe,
     ...createJimakuSearch(core),
     ...createJimakuPrepare(core),
-    ...createJimakuRemembered(core),
     cancelOperation(): void {
-      if (
-        core.state.phase.kind !== 'searchingTitles' &&
-        core.state.phase.kind !== 'loadingFiles' &&
-        core.state.phase.kind !== 'downloading' &&
-        core.state.phase.kind !== 'applying'
-      )
-        return
-      cancelPending()
+      if (!isBusy(core.state.phase)) return
+      core.cancelPending()
       ++core.operationId
-      const restore = core.cancelState
-      core.cancelState = undefined
-      if (restore) set({ ...restore, notice: undefined })
+      core.restoreCancelState()
     },
     close: core.reset,
     syncMedia(): void {
@@ -74,26 +60,12 @@ export function useJimakuController(input: JimakuControllerDeps): UseJimakuContr
   }, [controller, currentMedia.filePath, currentMedia.loadGeneration])
   useEffect(() => () => controller.close(), [controller])
 
-  return {
-    ...state,
-    controller,
-    open: useLatestCallback(() => controller.open()),
-    rememberTitle: useLatestCallback((remember: boolean) => controller.rememberTitle(remember)),
-    clearRememberedTitle: useLatestCallback(() => controller.clearRememberedTitle()),
-    changeTitle: useLatestCallback(() => controller.changeTitle()),
-    editIdentity: useLatestCallback((patch: JimakuIdentityPatch) => controller.editIdentity(patch)),
-    editEpisode: useLatestCallback((value: JimakuEpisodeEdit) => controller.editEpisode(value)),
-    search: useLatestCallback(() => controller.search()),
-    chooseTitle: useLatestCallback((entry: number | JimakuEntry) => controller.chooseTitle(entry)),
-    showMoreFiles: useLatestCallback(() => controller.showMoreFiles()),
-    showAllFiles: useLatestCallback(() => controller.showAllFiles()),
-    chooseFile: useLatestCallback((candidateId: string) => controller.chooseFile(candidateId)),
-    chooseMember: useLatestCallback((memberId: string) => controller.chooseMember(memberId)),
-    cancelOperation: useLatestCallback(() => controller.cancelOperation()),
-    close: useLatestCallback(() => controller.close()),
-    tryAnother: useLatestCallback(() => controller.tryAnother()),
-    revert: useLatestCallback(() => controller.revert()),
-    refresh: useLatestCallback(() => controller.refresh()),
-    openSourcePage: useLatestCallback((entryId?: number) => controller.openSourcePage(entryId))
-  }
+  // Controller methods close over the controller, so they are already stable.
+  const {
+    getState: _getState,
+    subscribe: _subscribe,
+    syncMedia: _syncMedia,
+    ...actions
+  } = controller
+  return { ...state, ...actions, controller }
 }

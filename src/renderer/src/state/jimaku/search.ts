@@ -1,10 +1,10 @@
-// Title search, file listing, and archive inspection phases.
+// Title search, file listing, archive inspection, and remembered-title phases.
 import type {
-  JimakuArchiveMember,
   JimakuArchiveMembersResult,
   JimakuEntry,
   JimakuFileCandidate,
   JimakuFolderHint,
+  JimakuFolderHintInput,
   JimakuTitleSearchRequest
 } from '../../../../shared/jimaku'
 import {
@@ -14,8 +14,14 @@ import {
   type JimakuEpisodeRange,
   type JimakuVideoIdentity
 } from '../../../../shared/jimakuMatching'
-import { INITIAL_STATE, versionOf, type JimakuCore, type Operation } from './core'
-import { copyFolderHint, entryFromFolderHint, identityFromFolderHint } from './remembered'
+import {
+  INITIAL_STATE,
+  TITLE_CHOICE_RESET,
+  isBusy,
+  versionOf,
+  type JimakuCore,
+  type Operation
+} from './core'
 import type { JimakuApi, JimakuController, JimakuEpisodeEdit, JimakuIdentityPatch } from './types'
 
 export type JimakuSearchActions = Pick<
@@ -31,7 +37,34 @@ export type JimakuSearchActions = Pick<
   | 'tryAnother'
   | 'refresh'
   | 'openSourcePage'
+  | 'rememberTitle'
+  | 'clearRememberedTitle'
 >
+
+const copyFolderHint = (hint: JimakuFolderHint): JimakuFolderHint => ({ ...hint })
+
+const entryFromFolderHint = (hint: JimakuFolderHint): JimakuEntry => ({
+  id: hint.entryId,
+  name: hint.name,
+  ...(hint.englishName ? { englishName: hint.englishName } : {}),
+  ...(hint.japaneseName ? { japaneseName: hint.japaneseName } : {}),
+  flags: {
+    anime: hint.category === 'anime',
+    movie: false,
+    external: false,
+    unverified: false,
+    adult: false
+  }
+})
+
+const identityFromFolderHint = (
+  identity: JimakuVideoIdentity,
+  hint: JimakuFolderHint
+): JimakuVideoIdentity => ({
+  ...identity,
+  titleQuery: hint.name,
+  unknowns: identity.unknowns.filter((unknown) => unknown.field !== 'title')
+})
 
 const copyEntries = (entries: readonly JimakuEntry[]): JimakuEntry[] =>
   entries.map((entry) => ({ ...entry, flags: { ...entry.flags } }))
@@ -60,72 +93,76 @@ const fileRows = (
   return showMore || showAll ? [...candidates] : candidates.slice(0, 5)
 }
 
+type RankedFile = ReturnType<typeof rankJimakuFiles>[number]
+
+/** Re-ranks `items` for `identity`; undefined when names cannot be matched back one-to-one. */
+const rerank = <T>(
+  entry: JimakuEntry,
+  identity: JimakuVideoIdentity,
+  items: readonly T[],
+  nameOf: (item: T) => string,
+  merge: (item: T, ranked: RankedFile) => T
+): T[] | undefined => {
+  const ranked = rankJimakuFiles(
+    { flags: { movie: entry.flags.movie } },
+    identity,
+    items.map(nameOf),
+    {
+      showAllFiles: true
+    }
+  )
+  const remaining = new Map<string, T[]>()
+  for (const item of items)
+    remaining.set(nameOf(item), [...(remaining.get(nameOf(item)) ?? []), item])
+  const result = ranked.flatMap((rankedItem) => {
+    const original = remaining.get(rankedItem.name)?.shift()
+    return original ? [merge(original, rankedItem)] : []
+  })
+  return result.length === items.length ? result : undefined
+}
+
 const rerankFiles = (
   entry: JimakuEntry,
   identity: JimakuVideoIdentity | undefined,
   files: readonly JimakuFileCandidate[]
-): JimakuFileCandidate[] => {
-  if (!identity) return copyFiles(files)
-  const ranked = rankJimakuFiles(
-    { flags: { movie: entry.flags.movie } },
-    identity,
-    files.map((file) => file.name),
-    { showAllFiles: true }
-  )
-  const remaining = new Map<string, JimakuFileCandidate[]>()
-  for (const file of files) {
-    const group = remaining.get(file.name) ?? []
-    group.push(file)
-    remaining.set(file.name, group)
-  }
-  const result: JimakuFileCandidate[] = []
-  for (const rankedFile of ranked) {
-    const group = remaining.get(rankedFile.name)
-    const original = group?.shift()
-    if (!original) continue
-    result.push({
-      ...original,
-      format: rankedFile.format,
-      status: rankedFile.status,
-      reasons: [...rankedFile.reasons]
-    })
-  }
-  return result.length === files.length ? result : copyFiles(files)
-}
+): JimakuFileCandidate[] =>
+  (identity &&
+    rerank(
+      entry,
+      identity,
+      files,
+      (file) => file.name,
+      (file, ranked) => ({
+        ...file,
+        format: ranked.format,
+        status: ranked.status,
+        reasons: [...ranked.reasons]
+      })
+    )) ??
+  copyFiles(files)
 
 const rerankArchive = (
   archive: JimakuArchiveMembersResult,
   entry: JimakuEntry,
   identity: JimakuVideoIdentity | undefined
 ): JimakuArchiveMembersResult => {
-  if (!identity) return copyArchive(archive)
-  const ranked = rankJimakuFiles(
-    { flags: { movie: entry.flags.movie } },
-    identity,
-    archive.members.map((member) => member.displayName),
-    { showAllFiles: true }
-  )
-  const remaining = new Map<string, JimakuArchiveMember[]>()
-  for (const member of archive.members) {
-    const group = remaining.get(member.displayName) ?? []
-    group.push(member)
-    remaining.set(member.displayName, group)
-  }
-  const result: JimakuArchiveMember[] = []
-  for (const rankedMember of ranked) {
-    const group = remaining.get(rankedMember.name)
-    const original = group?.shift()
-    if (!original) continue
-    const sizeReasons = original.reasons.filter((reason) => /size|limit/iu.test(reason))
-    result.push({
-      ...original,
-      status: sizeReasons.length > 0 ? 'excluded' : rankedMember.status,
-      reasons: [...rankedMember.reasons, ...sizeReasons]
-    })
-  }
-  return result.length === archive.members.length
-    ? { ...copyArchive(archive), members: result }
-    : copyArchive(archive)
+  const members =
+    identity &&
+    rerank(
+      entry,
+      identity,
+      archive.members,
+      (member) => member.displayName,
+      (member, ranked) => {
+        const sizeReasons = member.reasons.filter((reason) => /size|limit/iu.test(reason))
+        return {
+          ...member,
+          status: sizeReasons.length > 0 ? 'excluded' : ranked.status,
+          reasons: [...ranked.reasons, ...sizeReasons]
+        }
+      }
+    )
+  return members ? { ...copyArchive(archive), members } : copyArchive(archive)
 }
 
 const exactTitle = (query: string, entries: readonly JimakuEntry[]): JimakuEntry | undefined => {
@@ -202,9 +239,9 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     contextMatches,
     operationMatches,
     clearSession,
-    cancelPending,
+    abortOperation,
     startOperation,
-    finishOperation,
+    request,
     fail,
     serviceError,
     triedVersions,
@@ -226,11 +263,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
 
     const categoryChanged = patch.category !== undefined && patch.category !== core.state.category
     const identityChanged = queryChanged || categoryChanged || patch.episode !== undefined
-    if (identityChanged) {
-      cancelPending()
-      ++core.operationId
-      core.cancelState = undefined
-    }
+    if (identityChanged) abortOperation()
 
     if (patch.episode !== undefined) identity = withEpisode(identity, patch.episode)
     const episodeChanged = patch.episode !== undefined
@@ -239,23 +272,9 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     if (queryChanged || categoryChanged) {
       set({
         ...core.state,
-        phase: { kind: 'choosingTitle' },
+        ...TITLE_CHOICE_RESET,
         identity,
-        ...(patch.category === undefined ? {} : { category: patch.category }),
-        entries: [],
-        shownEntries: [],
-        selectedEntry: undefined,
-        rememberedTitle: undefined,
-        files: [],
-        shownFiles: [],
-        selectedFile: undefined,
-        archive: undefined,
-        selectedMember: undefined,
-        showingMoreFiles: false,
-        showingAllFiles: false,
-        partial: false,
-        failedCategories: [],
-        notice: undefined
+        ...(patch.category === undefined ? {} : { category: patch.category })
       })
       return
     }
@@ -291,6 +310,73 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     })
   }
 
+  const rememberTitle = async (remember: boolean): Promise<void> => {
+    const path = core.state.mediaPath
+    const generation = core.state.mediaGeneration
+    const entry = core.state.selectedEntry
+    const identity = core.state.identity
+    if (!path || generation === undefined || !entry || !identity) return
+
+    if (!remember) {
+      const existing = core.state.rememberedTitle
+      if (!existing) return
+      try {
+        await getDeps().jimaku.clearFolderHint(path, existing.season)
+      } catch {
+        return
+      }
+      if (
+        core.state.mediaPath === path &&
+        core.state.mediaGeneration === generation &&
+        core.state.selectedEntry?.id === entry.id
+      )
+        set({ ...core.state, rememberedTitle: undefined })
+      return
+    }
+
+    const input: JimakuFolderHintInput = {
+      entryId: entry.id,
+      name: entry.name,
+      ...(entry.englishName ? { englishName: entry.englishName } : {}),
+      ...(entry.japaneseName ? { japaneseName: entry.japaneseName } : {}),
+      category: entry.flags.anime ? 'anime' : 'liveAction',
+      ...(identity.season === undefined ? {} : { season: identity.season })
+    }
+    let saved: JimakuFolderHint
+    try {
+      saved = await getDeps().jimaku.setFolderHint(path, input)
+    } catch {
+      return
+    }
+    if (
+      core.state.phase.kind !== 'idle' &&
+      core.state.mediaPath === path &&
+      core.state.mediaGeneration === generation &&
+      core.state.selectedEntry?.id === entry.id
+    )
+      set({ ...core.state, rememberedTitle: copyFolderHint(saved) })
+  }
+
+  const clearRememberedTitle = async (): Promise<void> => {
+    const path = core.state.mediaPath
+    const generation = core.state.mediaGeneration
+    const existing = core.state.rememberedTitle
+    if (!path || generation === undefined || !existing) return
+    try {
+      await getDeps().jimaku.clearFolderHint(path, existing.season)
+    } catch {
+      return
+    }
+    if (
+      core.state.phase.kind === 'idle' ||
+      core.state.mediaPath !== path ||
+      core.state.mediaGeneration !== generation ||
+      core.state.rememberedTitle?.entryId !== existing.entryId
+    )
+      return
+    resetTitleChoice()
+  }
+
   const changeTitle = (): void => {
     if (!core.sessionId || core.state.phase.kind === 'idle' || !core.state.identity) return
     resetTitleChoice()
@@ -314,35 +400,24 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     const operation = startOperation({ kind: 'searchingTitles' }, restore)
     if (!operation) return
     set({ ...core.state, rememberedTitle: undefined })
-    let result: Awaited<ReturnType<JimakuApi['searchTitles']>>
-    try {
-      const request: JimakuTitleSearchRequest = {
-        query,
-        category: core.state.category,
-        ...(refresh ? { refresh: true } : {})
-      }
-      result = await getDeps().jimaku.searchTitles(operation.sessionId!, request)
-    } catch {
-      result = { ok: false, error: { code: 'network' } }
+    const searchRequest: JimakuTitleSearchRequest = {
+      query,
+      category: core.state.category,
+      ...(refresh ? { refresh: true } : {})
     }
-    if (!operationMatches(operation)) return
-    const cancelledRestore = core.cancelState
-    finishOperation(operation)
-    if (!result.ok) {
-      if (result.error.code === 'cancelled') {
-        core.cancelState = undefined
-        if (cancelledRestore) set({ ...cancelledRestore, notice: undefined })
-        return
-      }
-      if (result.error.code === 'notConfigured') {
+    const value = await request(
+      operation,
+      'titles',
+      (sessionId) => getDeps().jimaku.searchTitles(sessionId, searchRequest),
+      (code) => {
+        if (code !== 'notConfigured') return false
         clearSession()
         set({ ...core.state, phase: { kind: 'setupRequired' }, notice: undefined })
-        return
+        return true
       }
-      fail(serviceError(result.error.code), 'titles')
-      return
-    }
-    const entries = copyEntries(result.value.entries)
+    )
+    if (!value) return
+    const entries = copyEntries(value.entries)
     const selectedEntry = exactTitle(query, entries)
     if (entries.length === 0) {
       set({
@@ -351,8 +426,8 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
         shownEntries: [],
         selectedEntry: undefined,
         phase: { kind: 'error', code: 'notFound', recovery: 'titles' },
-        partial: result.value.partial,
-        failedCategories: [...(result.value.failedCategories ?? [])],
+        partial: value.partial,
+        failedCategories: [...(value.failedCategories ?? [])],
         notice: undefined
       })
       return
@@ -370,8 +445,8 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       selectedMember: undefined,
       showingMoreFiles: false,
       showingAllFiles: false,
-      partial: result.value.partial,
-      failedCategories: [...(result.value.failedCategories ?? [])],
+      partial: value.partial,
+      failedCategories: [...(value.failedCategories ?? [])],
       notice: undefined
     })
   }
@@ -397,25 +472,11 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     }
     const operation = startOperation({ kind: 'loadingFiles' }, restore)
     if (!operation) return
-    let result: Awaited<ReturnType<JimakuApi['listFiles']>>
-    try {
-      result = await getDeps().jimaku.listFiles(operation.sessionId!, entry.id, refresh)
-    } catch {
-      result = { ok: false, error: { code: 'network' } }
-    }
-    if (!operationMatches(operation)) return
-    const cancelledRestore = core.cancelState
-    finishOperation(operation)
-    if (!result.ok) {
-      if (result.error.code === 'cancelled') {
-        core.cancelState = undefined
-        if (cancelledRestore) set({ ...cancelledRestore, notice: undefined })
-        return
-      }
-      fail(serviceError(result.error.code), 'files')
-      return
-    }
-    const files = rerankFiles(entry, core.state.identity, copyFiles(result.value.files))
+    const value = await request(operation, 'files', (sessionId) =>
+      getDeps().jimaku.listFiles(sessionId, entry.id, refresh)
+    )
+    if (!value) return
+    const files = rerankFiles(entry, core.state.identity, copyFiles(value.files))
     if (files.length === 0) {
       set({
         ...core.state,
@@ -441,6 +502,8 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
   }
 
   return {
+    rememberTitle,
+    clearRememberedTitle,
     async open(): Promise<void> {
       if (core.state.phase.kind !== 'idle' && core.state.phase.kind !== 'setupRequired') return
       const current = media()
@@ -589,16 +652,8 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
         !contextMatches(core.state.mediaPath ?? '', core.state.mediaGeneration ?? -1)
       )
         return
-      if (
-        core.state.phase.kind === 'searchingTitles' ||
-        core.state.phase.kind === 'loadingFiles' ||
-        core.state.phase.kind === 'downloading'
-      ) {
-        cancelPending()
-        ++core.operationId
-        core.cancelState = undefined
-      }
       if (core.state.phase.kind === 'applying') return
+      if (isBusy(core.state.phase)) abortOperation()
       if (core.state.files.length > 0 && core.state.selectedEntry) {
         set({
           ...core.state,
@@ -635,25 +690,17 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       if (!current.filePath || !contextMatches(current.filePath, current.loadGeneration)) return
       const sourceOperationId = core.operationId
       const sourceSessionId = core.sessionId
+      const stillCurrent = (): boolean =>
+        core.operationId === sourceOperationId &&
+        core.sessionId === sourceSessionId &&
+        core.state.phase.kind !== 'idle' &&
+        contextMatches(current.filePath!, current.loadGeneration)
+      const recovery = (): 'files' | 'titles' => (core.state.selectedEntry ? 'files' : 'titles')
       try {
         const result = await getDeps().jimaku.openSourcePage(sourceSessionId, entryId)
-        if (
-          core.operationId !== sourceOperationId ||
-          core.sessionId !== sourceSessionId ||
-          core.state.phase.kind === 'idle' ||
-          !contextMatches(current.filePath, current.loadGeneration)
-        )
-          return
-        if (!result.ok)
-          fail(serviceError(result.error.code), core.state.selectedEntry ? 'files' : 'titles')
+        if (stillCurrent() && !result.ok) fail(serviceError(result.error.code), recovery())
       } catch {
-        if (
-          core.operationId === sourceOperationId &&
-          core.sessionId === sourceSessionId &&
-          core.state.phase.kind !== 'idle' &&
-          contextMatches(current.filePath, current.loadGeneration)
-        )
-          fail('openExternalFailed', core.state.selectedEntry ? 'files' : 'titles')
+        if (stillCurrent()) fail('openExternalFailed', recovery())
       }
     }
   }

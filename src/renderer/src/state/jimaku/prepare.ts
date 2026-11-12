@@ -3,7 +3,7 @@ import type { JimakuPreparedSubtitleResult } from '../../../../shared/jimaku'
 import type { SubtitleSelectionSnapshot } from '../trackSelection'
 import { versionOf, type JimakuCore, type Operation } from './core'
 import { copyArchive } from './search'
-import type { JimakuApi, JimakuController, JimakuSelectionApplyResult } from './types'
+import type { JimakuController, JimakuSelectionApplyResult } from './types'
 
 export type JimakuPrepareActions = Pick<JimakuController, 'chooseFile' | 'chooseMember' | 'revert'>
 
@@ -14,9 +14,9 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
     media,
     operationMatches,
     startOperation,
-    finishOperation,
+    request,
+    restoreCancelState,
     fail,
-    serviceError,
     triedVersions
   } = core
 
@@ -82,9 +82,7 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
     }
     if (!operationMatches(operation)) return
     if (applied.status === 'stale') {
-      const restore = core.cancelState
-      core.cancelState = undefined
-      if (restore) set({ ...restore, notice: undefined })
+      restoreCancelState()
       return
     }
     if (applied.status === 'error') {
@@ -139,36 +137,22 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
     )
     if (!operation) return
     set({ ...core.state, selectedFile: candidate, archive: undefined, selectedMember: undefined })
-    let result: Awaited<ReturnType<JimakuApi['prepareFile']>>
-    try {
-      result = await getDeps().jimaku.prepareFile(operation.sessionId!, candidate.candidateId)
-    } catch {
-      result = { ok: false, error: { code: 'network' } }
-    }
-    if (!operationMatches(operation)) return
-    const cancelledRestore = core.cancelState
-    finishOperation(operation)
-    if (!result.ok) {
-      if (result.error.code === 'cancelled') {
-        core.cancelState = undefined
-        if (cancelledRestore) set({ ...cancelledRestore, notice: undefined })
-        return
-      }
-      fail(serviceError(result.error.code), 'files')
-      return
-    }
-    if (result.value.kind === 'archiveMembers') {
+    const value = await request(operation, 'files', (sessionId) =>
+      getDeps().jimaku.prepareFile(sessionId, candidate.candidateId)
+    )
+    if (!value) return
+    if (value.kind === 'archiveMembers') {
       set({
         ...core.state,
         phase: { kind: 'choosingArchiveMember' },
-        archive: copyArchive(result.value),
+        archive: copyArchive(value),
         selectedFile: candidate,
         selectedMember: undefined,
         notice: undefined
       })
       return
     }
-    await applyPrepared(operation, result.value, candidate.candidateId)
+    await applyPrepared(operation, value, candidate.candidateId)
   }
 
   const prepareMember = async (memberId: string): Promise<void> => {
@@ -192,30 +176,13 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
     )
     if (!operation) return
     set({ ...core.state, selectedMember: member, notice: undefined })
-    let result: Awaited<ReturnType<JimakuApi['prepareArchiveMember']>>
-    try {
-      result = await getDeps().jimaku.prepareArchiveMember(
-        operation.sessionId!,
-        core.state.archive.packageId,
-        member.memberId
-      )
-    } catch {
-      result = { ok: false, error: { code: 'network' } }
-    }
-    if (!operationMatches(operation)) return
-    const cancelledRestore = core.cancelState
-    finishOperation(operation)
-    if (!result.ok) {
-      if (result.error.code === 'cancelled') {
-        core.cancelState = undefined
-        if (cancelledRestore) set({ ...cancelledRestore, notice: undefined })
-        return
-      }
-      fail(serviceError(result.error.code), 'files')
-      return
-    }
+    const { packageId } = core.state.archive
+    const value = await request(operation, 'files', (sessionId) =>
+      getDeps().jimaku.prepareArchiveMember(sessionId, packageId, member.memberId)
+    )
+    if (!value) return
     const candidateId = core.state.selectedFile?.candidateId ?? 'archive'
-    await applyPrepared(operation, result.value, `${candidateId}:${member.memberId}`)
+    await applyPrepared(operation, value, `${candidateId}:${member.memberId}`)
   }
 
   return {
@@ -252,9 +219,7 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
       }
       if (!operationMatches(operation)) return
       if (applied.status === 'stale') {
-        const staleRestore = core.cancelState
-        core.cancelState = undefined
-        if (staleRestore) set({ ...staleRestore, notice: undefined })
+        restoreCancelState()
         return
       }
       if (applied.status === 'error') {
