@@ -39,6 +39,12 @@ import {
 import { pathApiFor } from '../platformPath'
 import { isRecord, isPositiveSafeInteger } from '../../shared/guards'
 
+const asRecord = (raw: unknown): Record<string, unknown> => (isRecord(raw) ? raw : {})
+const boolOr = (value: unknown, fallback: boolean): boolean =>
+  typeof value === 'boolean' ? value : fallback
+const stringOr = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback
+
 export interface KnowledgeSettings extends KnowledgeTuning {
   wanikaniTokenEnc: string
 }
@@ -108,7 +114,7 @@ export const defaultSettings: Settings = {
  * covered on either host.
  */
 export function mergeSettings(raw: unknown, options: PathNormalizationOptions = {}): Settings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
 
   const mecabDictId =
     obj.mecabDictId === 'ipadic' || obj.mecabDictId === 'unidic'
@@ -134,9 +140,9 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
 }
 
 function mergeJimakuSettings(raw: unknown, options: PathNormalizationOptions): JimakuSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
   return {
-    apiKeyEnc: typeof obj.apiKeyEnc === 'string' ? obj.apiKeyEnc : defaultJimakuSettings.apiKeyEnc,
+    apiKeyEnc: stringOr(obj.apiKeyEnc, defaultJimakuSettings.apiKeyEnc),
     folderHints: normalizeJimakuFolderHints(obj.folderHints, options)
   }
 }
@@ -287,39 +293,33 @@ function isJimakuTimestamp(value: unknown): value is number {
 }
 
 function mergeTranslationSettings(raw: unknown): TranslationSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
   return {
-    azureSubscriptionKeyEnc:
-      typeof obj.azureSubscriptionKeyEnc === 'string'
-        ? obj.azureSubscriptionKeyEnc
-        : defaultTranslationSettings.azureSubscriptionKeyEnc,
-    azureRegion:
-      typeof obj.azureRegion === 'string'
-        ? obj.azureRegion.trim()
-        : defaultTranslationSettings.azureRegion
+    azureSubscriptionKeyEnc: stringOr(
+      obj.azureSubscriptionKeyEnc,
+      defaultTranslationSettings.azureSubscriptionKeyEnc
+    ),
+    azureRegion: stringOr(obj.azureRegion, defaultTranslationSettings.azureRegion).trim()
   }
 }
 
 function mergeGameOcrSettings(raw: unknown): GameOcrSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
   return {
     captureShortcut: normalizeGameOcrShortcut(obj.captureShortcut)
   }
 }
 
 function mergeUpdateSettings(raw: unknown): UpdateSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
   return {
-    checkAutomatically:
-      typeof obj.checkAutomatically === 'boolean'
-        ? obj.checkAutomatically
-        : defaultUpdateSettings.checkAutomatically
+    checkAutomatically: boolOr(obj.checkAutomatically, defaultUpdateSettings.checkAutomatically)
   }
 }
 
 /** Deep-merges `raw.player` against `DEFAULT_PLAYER_SETTINGS`; never throws. */
 function mergePlayerSettings(raw: unknown): PlayerSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
 
   return {
     startupBehavior: normalizeStartupBehavior(obj.startupBehavior),
@@ -327,53 +327,40 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
     skipSeconds: positiveNumberOr(obj.skipSeconds, DEFAULT_PLAYER_SETTINGS.skipSeconds),
     popupSettings: normalizePopupSettings(obj.popupSettings, DEFAULT_PLAYER_SETTINGS.popupSettings),
     subtitleStyle: normalizeSubtitleStyle(obj.subtitleStyle, DEFAULT_PLAYER_SETTINGS.subtitleStyle),
-    subtitleDragEnabled:
-      typeof obj.subtitleDragEnabled === 'boolean'
-        ? obj.subtitleDragEnabled
-        : DEFAULT_PLAYER_SETTINGS.subtitleDragEnabled,
-    rightClickTogglePause:
-      typeof obj.rightClickTogglePause === 'boolean'
-        ? obj.rightClickTogglePause
-        : DEFAULT_PLAYER_SETTINGS.rightClickTogglePause,
-    autoPlayNext:
-      typeof obj.autoPlayNext === 'boolean'
-        ? obj.autoPlayNext
-        : DEFAULT_PLAYER_SETTINGS.autoPlayNext,
+    subtitleDragEnabled: boolOr(
+      obj.subtitleDragEnabled,
+      DEFAULT_PLAYER_SETTINGS.subtitleDragEnabled
+    ),
+    rightClickTogglePause: boolOr(
+      obj.rightClickTogglePause,
+      DEFAULT_PLAYER_SETTINGS.rightClickTogglePause
+    ),
+    autoPlayNext: boolOr(obj.autoPlayNext, DEFAULT_PLAYER_SETTINGS.autoPlayNext),
     subtitleAutoPauseTiming: normalizeSubtitleAutoPauseTiming(obj.subtitleAutoPauseTiming),
     subtitleAutoPauseScope: normalizeSubtitleAutoPauseScope(obj.subtitleAutoPauseScope),
     subtitleOffsets: mergeOffsetMap(obj.subtitleOffsets),
     folderSubtitleOffsets: mergeOffsetMap(obj.folderSubtitleOffsets),
     audioDelays: mergeOffsetMap(obj.audioDelays),
     appearance: normalizeAppearance(obj.appearance, DEFAULT_PLAYER_SETTINGS.appearance),
-    sidebarOpen:
-      typeof obj.sidebarOpen === 'boolean' ? obj.sidebarOpen : DEFAULT_PLAYER_SETTINGS.sidebarOpen,
-    playlistOpen:
-      typeof obj.playlistOpen === 'boolean'
-        ? obj.playlistOpen
-        : DEFAULT_PLAYER_SETTINGS.playlistOpen,
-    translationEnabled:
-      typeof obj.translationEnabled === 'boolean'
-        ? obj.translationEnabled
-        : DEFAULT_PLAYER_SETTINGS.translationEnabled,
+    sidebarOpen: boolOr(obj.sidebarOpen, DEFAULT_PLAYER_SETTINGS.sidebarOpen),
+    playlistOpen: boolOr(obj.playlistOpen, DEFAULT_PLAYER_SETTINGS.playlistOpen),
+    translationEnabled: boolOr(obj.translationEnabled, DEFAULT_PLAYER_SETTINGS.translationEnabled),
     levelColors: normalizeLevelColors(obj.levelColors),
     screenshotFolder:
       typeof obj.screenshotFolder === 'string' && obj.screenshotFolder.trim() !== ''
         ? obj.screenshotFolder
         : DEFAULT_PLAYER_SETTINGS.screenshotFolder,
-    mpvUserConfig:
-      typeof obj.mpvUserConfig === 'boolean'
-        ? obj.mpvUserConfig
-        : DEFAULT_PLAYER_SETTINGS.mpvUserConfig,
+    mpvUserConfig: boolOr(obj.mpvUserConfig, DEFAULT_PLAYER_SETTINGS.mpvUserConfig),
     mpvExtraArgs: normalizeMpvExtraArgs(obj.mpvExtraArgs),
     videoAdjustments: normalizeVideoAdjustments(
       obj.videoAdjustments,
       DEFAULT_PLAYER_SETTINGS.videoAdjustments
     ),
     audioDevice: normalizeAudioDevice(obj.audioDevice),
-    loudnessNormalization:
-      typeof obj.loudnessNormalization === 'boolean'
-        ? obj.loudnessNormalization
-        : DEFAULT_PLAYER_SETTINGS.loudnessNormalization
+    loudnessNormalization: boolOr(
+      obj.loudnessNormalization,
+      DEFAULT_PLAYER_SETTINGS.loudnessNormalization
+    )
   }
 }
 
@@ -392,21 +379,15 @@ function mergeOffsetMap(raw: unknown): Record<string, number> {
 
 /** Deep-merges `raw.knowledge` against `defaultKnowledgeSettings`; never throws. */
 function mergeKnowledgeSettings(raw: unknown): KnowledgeSettings {
-  const obj = isRecord(raw) ? raw : {}
+  const obj = asRecord(raw)
 
   return {
-    wanikaniTokenEnc:
-      typeof obj.wanikaniTokenEnc === 'string'
-        ? obj.wanikaniTokenEnc
-        : defaultKnowledgeSettings.wanikaniTokenEnc,
+    wanikaniTokenEnc: stringOr(obj.wanikaniTokenEnc, defaultKnowledgeSettings.wanikaniTokenEnc),
     ankiKnownDecks:
       Array.isArray(obj.ankiKnownDecks) && obj.ankiKnownDecks.every((d) => typeof d === 'string')
         ? (obj.ankiKnownDecks as string[])
         : defaultKnowledgeSettings.ankiKnownDecks,
-    ankiKnownField:
-      typeof obj.ankiKnownField === 'string'
-        ? obj.ankiKnownField
-        : defaultKnowledgeSettings.ankiKnownField,
+    ankiKnownField: stringOr(obj.ankiKnownField, defaultKnowledgeSettings.ankiKnownField),
     knownIntervalDays: positiveNumberOr(
       obj.knownIntervalDays,
       defaultKnowledgeSettings.knownIntervalDays
@@ -415,10 +396,7 @@ function mergeKnowledgeSettings(raw: unknown): KnowledgeSettings {
       obj.wellKnownIntervalDays,
       defaultKnowledgeSettings.wellKnownIntervalDays
     ),
-    coloringEnabled:
-      typeof obj.coloringEnabled === 'boolean'
-        ? obj.coloringEnabled
-        : defaultKnowledgeSettings.coloringEnabled,
+    coloringEnabled: boolOr(obj.coloringEnabled, defaultKnowledgeSettings.coloringEnabled),
     staleAfterHours: nonNegativeNumberOr(
       obj.staleAfterHours,
       defaultKnowledgeSettings.staleAfterHours

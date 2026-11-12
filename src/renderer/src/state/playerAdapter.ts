@@ -27,7 +27,7 @@ export function buildPlayerAdapter(
   return {
     setPause: async (paused: boolean) => {
       const result = await resolvePlayer().setPause(paused)
-      dispatch({ type: 'setPaused', value: paused })
+      dispatch({ type: 'set', patch: { paused: paused } })
       return result
     },
     seek: async (seconds: number, absolute?: boolean) => {
@@ -37,18 +37,18 @@ export function buildPlayerAdapter(
     seekWithoutUserNotification,
     setVolume: async (volume: number) => {
       const result = await resolvePlayer().setVolume(volume)
-      dispatch({ type: 'setVolume', value: volume })
+      dispatch({ type: 'set', patch: { volume: volume } })
       return result
     },
     setMuted: async (muted: boolean) => {
       const result = await resolvePlayer().setMuted(muted)
-      dispatch({ type: 'setMuted', value: muted })
+      dispatch({ type: 'set', patch: { muted: muted } })
       return result
     },
     setSpeed: async (speed: number) => {
       const clamped = clampSpeed(speed)
       const result = await resolvePlayer().setSpeed(clamped)
-      dispatch({ type: 'setSpeed', value: clamped })
+      dispatch({ type: 'set', patch: { speed: clamped } })
       return result
     }
   }

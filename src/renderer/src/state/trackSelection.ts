@@ -391,7 +391,7 @@ function applySubtitleOffset(
     })
     return
   }
-  dispatch({ type: 'setSubtitleOffset', value: offsetMs })
+  dispatch({ type: 'set', patch: { subtitleOffsetMs: offsetMs } })
 }
 
 async function persistSubtitleSelection(

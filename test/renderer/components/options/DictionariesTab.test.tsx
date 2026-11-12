@@ -1,3 +1,4 @@
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { describe, it, expect, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DictionariesTab, {
@@ -63,10 +64,11 @@ const THREE_YOMITAN_DICTS: DictInfo[] = [
 function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTab>> = {}): string {
   return renderToStaticMarkup(
     <DictionariesTab
+      settings={{ ...initialPlayerState, popupSettings: DEFAULT_POPUP_SETTINGS }}
+      onChange={noop}
       mecabDicts={IPADIC_ONLY}
       currentMecabDictId="ipadic"
       yomitanDicts={NO_YOMITAN_DICTS}
-      popupSettings={DEFAULT_POPUP_SETTINGS}
       onSelectMecabDict={noop}
       onOpenUserUnidicDir={noop}
       onImportYomitanDict={asyncNoop}
@@ -74,7 +76,6 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTa
       onSetYomitanFallbackOnly={noop}
       onReorderYomitanDicts={noop}
       onRemoveYomitanDict={noop}
-      onChangePopupSettings={noop}
       {...overrides}
     />
   )
@@ -216,7 +217,10 @@ describe('DictionariesTab markup', () => {
   it('renders the Word popup frequency-dict select with a None option plus one per yomitan dict', () => {
     const html = renderTab({
       yomitanDicts: THREE_YOMITAN_DICTS,
-      popupSettings: { ...DEFAULT_POPUP_SETTINGS, maxEntries: 5, maxMeanings: 3 }
+      settings: {
+        ...initialPlayerState,
+        popupSettings: { ...DEFAULT_POPUP_SETTINGS, maxEntries: 5, maxMeanings: 3 }
+      }
     })
     expect(html).toContain('id="popup-freq-dict-select"')
     expect(html).toMatch(/<option value=""[^>]*>None<\/option>/)
@@ -229,7 +233,10 @@ describe('DictionariesTab markup', () => {
 
   it('renders the Word popup sort-order select with the current value selected', () => {
     const html = renderTab({
-      popupSettings: { ...DEFAULT_POPUP_SETTINGS, sortOrder: 'occurrence-based' }
+      settings: {
+        ...initialPlayerState,
+        popupSettings: { ...DEFAULT_POPUP_SETTINGS, sortOrder: 'occurrence-based' }
+      }
     })
     expect(html).toContain('id="popup-sort-order-select"')
     expect(html).toContain('<option value="auto">Auto (dictionary default)</option>')
@@ -268,7 +275,7 @@ describe('DictionariesTab markup', () => {
       onSetYomitanFallbackOnly,
       onReorderYomitanDicts,
       onRemoveYomitanDict,
-      onChangePopupSettings
+      onChange: onChangePopupSettings
     })
     expect(onSelectMecabDict).not.toHaveBeenCalled()
     expect(onImportYomitanDict).not.toHaveBeenCalled()

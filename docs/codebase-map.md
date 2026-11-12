@@ -108,15 +108,12 @@ the assertion passes while describing a path no platform produces.
 
 ### Add persisted settings
 
-Define defaults and normalization in `src/main/services/settings.ts`, preserve
-backward compatibility, expose the change through the settings bridge, and
-cover malformed input and round-tripping.
-
-If the renderer's reducer holds the setting, add its key to
-`SYNCED_SETTING_KEYS` in `state/rendererSettings.ts` and the field to
-`PlayerState`; `state/useSettingsLifecycle.ts` then loads and saves it with no
-further edits. A setting persisted by its own callback instead belongs in that
-module's `EXTERNALLY_PERSISTED_SETTING_KEYS`, naming its owner.
+Add the type/default in `shared/playerSettings.ts`, normalization in
+`main/services/settings.ts`, and a row in its settings test table. For a
+reducer-backed setting, add its key to `SYNCED_SETTING_KEYS` in
+`state/rendererSettings.ts`; its type, initial value, loading, and persistence
+follow automatically. Options tabs use `settings` and `onChange({ field: value })`.
+Keep named reducer actions for transitions that merge or validate data.
 
 ### Add renderer behavior
 

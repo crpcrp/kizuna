@@ -49,7 +49,7 @@ export function cycleAbLoopAction(
 ): AbLoopState {
   const next = cycleAbLoop(current, timeSec)
   void bridge.setAbLoop(next.a, next.b)
-  dispatch({ type: 'setAbLoop', value: next })
+  dispatch({ type: 'set', patch: { abLoopState: next } })
   if (next.a !== null) clearLoopLine()
   return next
 }

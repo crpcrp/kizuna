@@ -123,41 +123,41 @@ describe('buildOptionsMenuProps', () => {
     const input = buildInput()
     const props = buildOptionsMenuProps(input)
 
-    props.onChangeStartupBehavior('video-player')
+    props.onChange({ startupBehavior: 'video-player' })
 
     expect(input.dispatch).toHaveBeenCalledWith({
-      type: 'setStartupBehavior',
-      value: 'video-player'
+      type: 'set',
+      patch: { startupBehavior: 'video-player' }
     })
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
   it('dispatches a reducer-only row without scheduling a settings write', () => {
     const input = buildInput()
-    buildOptionsMenuProps(input).playback.onChangeSkipSeconds(15)
+    buildOptionsMenuProps(input).playback.onChange({ skipSeconds: 15 })
 
-    expect(input.dispatch).toHaveBeenCalledWith({ type: 'setSkipSeconds', value: 15 })
+    expect(input.dispatch).toHaveBeenCalledWith({ type: 'set', patch: { skipSeconds: 15 } })
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
   it('routes auto-pause timing through the reducer lifecycle', () => {
     const input = buildInput()
-    buildOptionsMenuProps(input).playback.onChangeSubtitleAutoPauseTiming('after')
+    buildOptionsMenuProps(input).playback.onChange({ subtitleAutoPauseTiming: 'after' })
 
     expect(input.dispatch).toHaveBeenCalledWith({
-      type: 'setSubtitleAutoPauseTiming',
-      value: 'after'
+      type: 'set',
+      patch: { subtitleAutoPauseTiming: 'after' }
     })
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
   it('routes auto-pause scope through the reducer lifecycle', () => {
     const input = buildInput()
-    buildOptionsMenuProps(input).playback.onChangeSubtitleAutoPauseScope('unknown')
+    buildOptionsMenuProps(input).playback.onChange({ subtitleAutoPauseScope: 'unknown' })
 
     expect(input.dispatch).toHaveBeenCalledWith({
-      type: 'setSubtitleAutoPauseScope',
-      value: 'unknown'
+      type: 'set',
+      patch: { subtitleAutoPauseScope: 'unknown' }
     })
     expect(input.actions.persist).not.toHaveBeenCalled()
   })
@@ -165,10 +165,25 @@ describe('buildOptionsMenuProps', () => {
   it('persists the translation policy row while other rows only dispatch', () => {
     const input = buildInput()
     const props = buildOptionsMenuProps(input)
-    props.subtitles.onChangeTranslationEnabled(true)
+    props.subtitles.onChange({ translationEnabled: true })
 
-    expect(input.dispatch).toHaveBeenCalledWith({ type: 'setTranslationEnabled', value: true })
+    expect(input.dispatch).toHaveBeenCalledWith({
+      type: 'set',
+      patch: { translationEnabled: true }
+    })
     expect(input.actions.persist).toHaveBeenCalledWith({ translationEnabled: true })
+  })
+
+  it('keeps nested edits as merging reducer actions', () => {
+    const input = buildInput()
+    const props = buildOptionsMenuProps(input)
+    props.subtitles.onChange({ subtitleStyle: { fontScale: 1.4 } })
+    props.dictionaries.onChange({ popupSettings: { maxEntries: 8 } })
+    expect(vi.mocked(input.dispatch).mock.calls).toEqual([
+      [{ type: 'setSubtitleStyle', value: { fontScale: 1.4 } }],
+      [{ type: 'setPopupSettings', value: { maxEntries: 8 } }]
+    ])
+    expect(input.actions.persist).not.toHaveBeenCalled()
   })
 
   it('routes each row to its owning feature', () => {

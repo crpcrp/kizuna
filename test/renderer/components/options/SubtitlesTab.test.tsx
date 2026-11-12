@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import SubtitlesTab, {
@@ -16,14 +17,15 @@ function renderTab(
 ): ReturnType<typeof render> {
   return render(
     <SubtitlesTab
+      settings={{
+        ...initialPlayerState,
+        subtitleStyle: DEFAULT_SUBTITLE_STYLE,
+        subtitleDragEnabled: true,
+        translationEnabled: false
+      }}
+      onChange={vi.fn()}
       active
-      subtitleStyle={DEFAULT_SUBTITLE_STYLE}
-      subtitleDragEnabled={true}
-      translationEnabled={false}
       translationSettings={{ hasAzureKey: false, azureRegion: '' }}
-      onChangeSubtitleStyle={vi.fn()}
-      onChangeSubtitleDragEnabled={vi.fn()}
-      onChangeTranslationEnabled={vi.fn()}
       onSaveAzureTranslationKey={vi.fn(async () => true)}
       onSaveAzureTranslationRegion={vi.fn(async () => true)}
       onSaveJimakuApiKey={vi.fn(async () => undefined)}
@@ -278,15 +280,16 @@ describe('SubtitlesTab Jimaku controls', () => {
     const base = { ...configuredStatus }
     const { rerender } = render(
       <SubtitlesTab
+        settings={{
+          ...initialPlayerState,
+          subtitleStyle: DEFAULT_SUBTITLE_STYLE,
+          subtitleDragEnabled: true,
+          translationEnabled: false
+        }}
+        onChange={vi.fn()}
         key="open"
         active
-        subtitleStyle={DEFAULT_SUBTITLE_STYLE}
-        subtitleDragEnabled={true}
-        translationEnabled={false}
         translationSettings={{ hasAzureKey: false, azureRegion: '' }}
-        onChangeSubtitleStyle={vi.fn()}
-        onChangeSubtitleDragEnabled={vi.fn()}
-        onChangeTranslationEnabled={vi.fn()}
         onSaveAzureTranslationKey={vi.fn(async () => true)}
         onSaveAzureTranslationRegion={vi.fn(async () => true)}
         jimakuSettings={base}
@@ -300,15 +303,16 @@ describe('SubtitlesTab Jimaku controls', () => {
     fireEvent.change(input, { target: { value: 'transient' } })
     rerender(
       <SubtitlesTab
+        settings={{
+          ...initialPlayerState,
+          subtitleStyle: DEFAULT_SUBTITLE_STYLE,
+          subtitleDragEnabled: true,
+          translationEnabled: false
+        }}
+        onChange={vi.fn()}
         key="closed"
         active
-        subtitleStyle={DEFAULT_SUBTITLE_STYLE}
-        subtitleDragEnabled={true}
-        translationEnabled={false}
         translationSettings={{ hasAzureKey: false, azureRegion: '' }}
-        onChangeSubtitleStyle={vi.fn()}
-        onChangeSubtitleDragEnabled={vi.fn()}
-        onChangeTranslationEnabled={vi.fn()}
         onSaveAzureTranslationKey={vi.fn(async () => true)}
         onSaveAzureTranslationRegion={vi.fn(async () => true)}
         jimakuSettings={base}

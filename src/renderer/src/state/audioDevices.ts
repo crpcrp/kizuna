@@ -134,7 +134,7 @@ export function useAudioDevices({
         (recovered) => {
           if (refreshVersionRef.current === refreshVersion && recovered) {
             needsUnmuteRef.current = true
-            dispatch({ type: 'setMuted', value: false })
+            dispatch({ type: 'set', patch: { muted: false } })
           }
         },
         () => {
@@ -179,7 +179,7 @@ export function useAudioDevices({
         // later request may have superseded this one while the command was in
         // flight, so stale completions must not update the reducer or flags.
         if (!isCurrent()) return
-        dispatch({ type: 'setAudioDevice', value: name })
+        dispatch({ type: 'set', patch: { audioDevice: name } })
         if (!recoverMute) return
 
         try {
@@ -192,7 +192,7 @@ export function useAudioDevices({
 
         if (!isCurrent()) return
         needsUnmuteRef.current = false
-        dispatch({ type: 'setMuted', value: false })
+        dispatch({ type: 'set', patch: { muted: false } })
       }
 
       void applySelection().finally(() => {

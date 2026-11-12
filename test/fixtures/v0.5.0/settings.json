@@ -1,0 +1,136 @@
+{
+  "mecabDictId": "unidic",
+  "dictOrder": [
+    2,
+    1
+  ],
+  "anki": {
+    "url": "http://127.0.0.1:8765",
+    "apiKey": "",
+    "deckName": "Japanese",
+    "modelName": "Mining",
+    "fieldMap": {
+      "word": "Expression",
+      "reading": "",
+      "definition": "",
+      "sentence": "Sentence",
+      "frequency": "Frequency",
+      "pitchAccent": "Pitch",
+      "jlptLevel": "",
+      "wordAudio": "",
+      "picture": "Screenshot",
+      "sentenceAudio": "Audio"
+    },
+    "tags": [
+      "kizuna"
+    ],
+    "includeWordAudio": false,
+    "duplicatePolicy": "prevent-deck"
+  },
+  "knowledge": {
+    "wanikaniTokenEnc": "",
+    "ankiKnownDecks": [
+      "Core"
+    ],
+    "ankiKnownField": "",
+    "knownIntervalDays": 30,
+    "wellKnownIntervalDays": 90,
+    "coloringEnabled": false,
+    "staleAfterHours": 0
+  },
+  "updates": {
+    "checkAutomatically": false
+  },
+  "player": {
+    "startupBehavior": "video-player",
+    "keyBindings": {
+      "togglePause": "KeyK",
+      "toggleFullscreen": "KeyF",
+      "exitFullscreen": "Escape",
+      "skipBack": "ArrowLeft",
+      "skipForward": "ArrowRight",
+      "speedDown": "ControlLeft+ArrowDown",
+      "speedUp": "ControlLeft+ArrowUp",
+      "speedReset": "Backspace",
+      "replayLine": "KeyR",
+      "prevLine": "Comma",
+      "nextLine": "Period",
+      "loopLine": "KeyL",
+      "abLoop": "ShiftLeft+KeyL",
+      "frameStep": "ShiftLeft+Period",
+      "frameBack": "ShiftLeft+Comma",
+      "prevFile": "KeyP",
+      "nextFile": "KeyN",
+      "prevChapter": "ControlLeft+ArrowLeft",
+      "nextChapter": "ControlLeft+ArrowRight",
+      "screenshot": "KeyS",
+      "miniPlayer": "ControlLeft+KeyM",
+      "subtitleFontScaleUp": "ShiftLeft+MouseWheelUp",
+      "subtitleFontScaleDown": "ShiftLeft+MouseWheelDown"
+    },
+    "skipSeconds": 15,
+    "popupSettings": {
+      "frequencyDictId": 2,
+      "sortOrder": "rank-based",
+      "maxEntries": 6,
+      "maxMeanings": 2
+    },
+    "subtitleStyle": {
+      "fontScale": 1.2,
+      "outlineSizePx": 2,
+      "xPct": 40,
+      "yPct": 75,
+      "backgroundEnabled": false
+    },
+    "subtitleDragEnabled": false,
+    "rightClickTogglePause": false,
+    "autoPlayNext": true,
+    "subtitleAutoPauseTiming": "after",
+    "subtitleAutoPauseScope": "unknown",
+    "subtitleOffsets": {
+      "/videos/a.mkv": 250
+    },
+    "folderSubtitleOffsets": {
+      "/videos": -100
+    },
+    "audioDelays": {
+      "/videos/a.mkv": -75
+    },
+    "appearance": "light",
+    "sidebarOpen": true,
+    "playlistOpen": true,
+    "translationEnabled": true,
+    "levelColors": {
+      "unknown": "#e05656",
+      "known": "#56be78"
+    },
+    "screenshotFolder": "/screenshots",
+    "mpvUserConfig": true,
+    "mpvExtraArgs": [
+      "--hwdec=auto",
+      "--profile=gpu-hq"
+    ],
+    "videoAdjustments": {
+      "brightness": 20,
+      "contrast": -10,
+      "saturation": 5,
+      "gamma": 0,
+      "hue": -30,
+      "rotate": 90,
+      "deinterlace": true
+    },
+    "audioDevice": "wasapi/{abc-123}",
+    "loudnessNormalization": true
+  },
+  "gameOcr": {
+    "captureShortcut": "Alt+O"
+  },
+  "translation": {
+    "azureSubscriptionKeyEnc": "fixture-encrypted-key",
+    "azureRegion": "eastus"
+  },
+  "jimaku": {
+    "apiKeyEnc": "fixture-encrypted-key",
+    "folderHints": {}
+  }
+}

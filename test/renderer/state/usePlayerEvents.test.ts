@@ -112,8 +112,8 @@ describe('usePlayerEvents', () => {
     registry.emit('pause', true)
     expect(input.timePosStore.get()).toBe(12.5)
     expect(input.dispatch).toHaveBeenCalledTimes(2)
-    expect(input.dispatch).toHaveBeenCalledWith({ type: 'duration', value: 90 })
-    expect(input.dispatch).toHaveBeenCalledWith({ type: 'setPaused', value: true })
+    expect(input.dispatch).toHaveBeenCalledWith({ type: 'set', patch: { duration: 90 } })
+    expect(input.dispatch).toHaveBeenCalledWith({ type: 'set', patch: { paused: true } })
   })
 
   it('routes an EOF rising edge to folder auto-advance when autoPlayNext is on and the queue is idle', () => {

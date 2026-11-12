@@ -1,39 +1,20 @@
+import type { SettingsTabProps } from './types'
 import { useEffect, useState } from 'react'
 import { APP_NAME } from '../../../../shared/appInfo'
 import { audioDeviceMenuList, type AudioDevice } from '../../../../shared/audioDevice'
-import {
-  MPV_EXTRA_ARG_MAX_LENGTH,
-  type SubtitleAutoPauseScope,
-  type SubtitleAutoPauseTiming
-} from '../../../../shared/playerSettings'
+import { MPV_EXTRA_ARG_MAX_LENGTH } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 
-export interface PlaybackTabProps {
+export interface PlaybackTabProps extends SettingsTabProps {
   active: boolean
   open: boolean
-  skipSeconds: number
-  rightClickTogglePause: boolean
-  autoPlayNext: boolean
-  subtitleAutoPauseTiming: SubtitleAutoPauseTiming
-  subtitleAutoPauseScope: SubtitleAutoPauseScope
   audioDevices: AudioDevice[]
   selectedAudioDevice: string
   onSelectAudioDevice: (name: string) => void
   audioDeviceSelectionPending: boolean
   loudnessNormalization: boolean
   onToggleLoudnessNorm: () => void
-  screenshotFolder: string | null
-  mpvUserConfig: boolean
-  mpvExtraArgs: string[]
-  onChangeSkipSeconds: (value: number) => void
-  onChangeRightClickTogglePause: (value: boolean) => void
-  onChangeAutoPlayNext: (value: boolean) => void
-  onChangeSubtitleAutoPauseTiming: (value: SubtitleAutoPauseTiming) => void
-  onChangeSubtitleAutoPauseScope: (value: SubtitleAutoPauseScope) => void
-  onChangeScreenshotFolder: (value: string | null) => void
-  onChangeMpvUserConfig: (value: boolean) => void
-  onChangeMpvExtraArgs: (value: string[]) => void
   onOpenMpvConfigDir: () => void
   onAudioDevicesRequest: () => void
   /** False for standalone Options, where mpv has not been initialized. */
@@ -129,34 +110,30 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
 
 /** Playback behavior, audio output, and advanced mpv settings. */
 export default function PlaybackTab({
+  settings,
+  onChange,
   active,
   open,
-  skipSeconds,
-  rightClickTogglePause,
-  autoPlayNext,
-  subtitleAutoPauseTiming,
-  subtitleAutoPauseScope,
   audioDevices,
   selectedAudioDevice,
   onSelectAudioDevice,
   audioDeviceSelectionPending,
   loudnessNormalization,
   onToggleLoudnessNorm,
-  screenshotFolder,
-  mpvUserConfig,
-  mpvExtraArgs,
-  onChangeSkipSeconds,
-  onChangeRightClickTogglePause,
-  onChangeAutoPlayNext,
-  onChangeSubtitleAutoPauseTiming,
-  onChangeSubtitleAutoPauseScope,
-  onChangeScreenshotFolder,
-  onChangeMpvUserConfig,
-  onChangeMpvExtraArgs,
   onOpenMpvConfigDir,
   onAudioDevicesRequest,
   livePlayerAvailable: livePlayerAvailableProp = true
 }: PlaybackTabProps): React.JSX.Element {
+  const {
+    skipSeconds,
+    rightClickTogglePause,
+    autoPlayNext,
+    subtitleAutoPauseTiming,
+    subtitleAutoPauseScope,
+    screenshotFolder,
+    mpvUserConfig,
+    mpvExtraArgs
+  } = settings
   const [screenshotFolderDraft, setScreenshotFolderDraft] = useState<string | null>(null)
   const [mpvExtraArgsDraft, setMpvExtraArgsDraft] = useState<string | null>(null)
   const livePlayerAvailable = livePlayerAvailableProp
@@ -169,13 +146,13 @@ export default function PlaybackTab({
   const commitScreenshotFolder = (): void => {
     if (screenshotFolderDraft === null) return
     const trimmed = screenshotFolderDraft.trim()
-    onChangeScreenshotFolder(trimmed === '' ? null : trimmed)
+    onChange({ screenshotFolder: trimmed === '' ? null : trimmed })
     setScreenshotFolderDraft(null)
   }
 
   const commitMpvExtraArgs = (): void => {
     if (mpvExtraArgsDraft === null) return
-    onChangeMpvExtraArgs(parseMpvExtraArgs(mpvExtraArgsDraft))
+    onChange({ mpvExtraArgs: parseMpvExtraArgs(mpvExtraArgsDraft) })
     setMpvExtraArgsDraft(null)
   }
 
@@ -198,7 +175,7 @@ export default function PlaybackTab({
             value={skipSeconds}
             onChange={(e) => {
               const value = Number(e.target.value)
-              if (Number.isFinite(value) && value > 0) onChangeSkipSeconds(value)
+              if (Number.isFinite(value) && value > 0) onChange({ skipSeconds: value })
             }}
           />
         </div>
@@ -207,14 +184,14 @@ export default function PlaybackTab({
           title="Auto-play next file"
           description="At the end of a file, continue with the next video in the folder; an active playlist takes priority."
           checked={autoPlayNext}
-          onChange={onChangeAutoPlayNext}
+          onChange={(value) => onChange({ autoPlayNext: value })}
         />
         <OptionsToggleRow
           id="right-click-toggle-pause-checkbox"
           title="Right-click toggles play/pause"
           description="Right-clicking the video pauses or resumes instead of opening a menu."
           checked={rightClickTogglePause}
-          onChange={onChangeRightClickTogglePause}
+          onChange={(value) => onChange({ rightClickTogglePause: value })}
         />
         <div className="options-row">
           <label htmlFor="subtitle-auto-pause-timing-select" className="options-row-label">
@@ -229,7 +206,7 @@ export default function PlaybackTab({
             onChange={(e) => {
               const value = e.target.value
               if (value === 'off' || value === 'before' || value === 'after') {
-                onChangeSubtitleAutoPauseTiming(value)
+                onChange({ subtitleAutoPauseTiming: value })
               }
             }}
           >
@@ -251,7 +228,8 @@ export default function PlaybackTab({
             value={subtitleAutoPauseScope}
             onChange={(e) => {
               const value = e.target.value
-              if (value === 'all' || value === 'unknown') onChangeSubtitleAutoPauseScope(value)
+              if (value === 'all' || value === 'unknown')
+                onChange({ subtitleAutoPauseScope: value })
             }}
           >
             <option value="all">All subtitle lines</option>
@@ -329,7 +307,7 @@ export default function PlaybackTab({
             </>
           }
           checked={mpvUserConfig}
-          onChange={onChangeMpvUserConfig}
+          onChange={(value) => onChange({ mpvUserConfig: value })}
         />
         <div className="options-row options-row-stacked">
           <label htmlFor="mpv-extra-args-input" className="options-row-label">

@@ -123,7 +123,10 @@ describe('cycleAbLoopAction', () => {
 
     expect(next).toEqual({ a: 12, b: null })
     expect(bridge.setAbLoop).toHaveBeenCalledWith(12, null)
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAbLoop', value: { a: 12, b: null } })
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'set',
+      patch: { abLoopState: { a: 12, b: null } }
+    })
     expect(clearLoopLine).toHaveBeenCalledTimes(1)
   })
 
@@ -135,7 +138,7 @@ describe('cycleAbLoopAction', () => {
 
     expect(next).toEqual({ a: 10, b: 30 })
     expect(bridge.setAbLoop).toHaveBeenCalledWith(10, 30)
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAbLoop', value: { a: 10, b: 30 } })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { abLoopState: { a: 10, b: 30 } } })
   })
 
   it('re-arms A (never a zero-length loop) on a paused double-press', () => {
@@ -146,7 +149,10 @@ describe('cycleAbLoopAction', () => {
 
     expect(next).toEqual({ a: 12, b: null })
     expect(bridge.setAbLoop).toHaveBeenCalledWith(12, null)
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAbLoop', value: { a: 12, b: null } })
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'set',
+      patch: { abLoopState: { a: 12, b: null } }
+    })
   })
 
   it('does not clear the cue loop when clearing an armed A–B loop', () => {

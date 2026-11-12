@@ -281,7 +281,7 @@ export function usePlaybackWindow({
   // Updates the current subtitle offset immediately and persists it keyed by
   // the current file path, so re-opening the file later re-applies it.
   const handleSubtitleOffsetChange = (valueMs: number): void => {
-    dispatch({ type: 'setSubtitleOffset', value: valueMs })
+    dispatch({ type: 'set', patch: { subtitleOffsetMs: valueMs } })
     if (!state.filePath) return
     if (state.externalSubtitleProvenance) {
       const { contentVersion } = state.externalSubtitleProvenance
@@ -302,7 +302,7 @@ export function usePlaybackWindow({
   // Applies the audio delay immediately and persists it keyed by the current
   // file path, mirroring handleSubtitleOffsetChange.
   const handleAudioDelayChange = (valueMs: number): void => {
-    dispatch({ type: 'setAudioDelay', value: valueMs })
+    dispatch({ type: 'set', patch: { audioDelayMs: valueMs } })
     void bridge.player.setAudioDelay(valueMs)
     if (!state.filePath) return
     audioDelaysRef.current = nextAudioDelays(audioDelaysRef.current, state.filePath, valueMs)
@@ -330,7 +330,7 @@ export function usePlaybackWindow({
 
   const handleToggleLoudnessNorm = (): void => {
     const next = !state.loudnessNormalization
-    dispatch({ type: 'setLoudnessNormalization', value: next })
+    dispatch({ type: 'set', patch: { loudnessNormalization: next } })
     void bridge.player.setLoudnessNorm(next)
   }
 
@@ -345,7 +345,7 @@ export function usePlaybackWindow({
   // lockstep so the per-load re-apply reads the latest value.
   const handleChangeVideoAdjustments = (next: VideoAdjustments): void => {
     videoAdjustmentsRef.current = next
-    dispatch({ type: 'setVideoAdjustments', value: next })
+    dispatch({ type: 'set', patch: { videoAdjustments: next } })
     applyVideoAdjustments(bridge.player, next)
   }
 

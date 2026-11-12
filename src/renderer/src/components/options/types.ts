@@ -1,3 +1,18 @@
+import type { LoadedRendererSettings } from '../../state/rendererSettings'
+
+export type OptionsSettingsPatch = Omit<
+  Partial<LoadedRendererSettings>,
+  'subtitleStyle' | 'popupSettings'
+> & {
+  subtitleStyle?: Partial<LoadedRendererSettings['subtitleStyle']>
+  popupSettings?: Partial<LoadedRendererSettings['popupSettings']>
+}
+
+export interface SettingsTabProps {
+  settings: LoadedRendererSettings
+  onChange: (patch: OptionsSettingsPatch) => void
+}
+
 export type OptionsCategory =
   | 'keybindings'
   | 'startup'

@@ -1,6 +1,19 @@
 import disk from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import {
+  defaultSettings,
+  mergeSettings,
+  selectDict,
+  createSettingsStore,
+  type Settings
+} from '@src/main/services/settings'
+import { createSettingsFile } from '@src/main/services/settingsFile'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
+// Synthetic non-default settings serialized with the v0.5.0 mergeSettings implementation.
+import releasedSettings from '@test/fixtures/v0.5.0/settings.json'
+
 const tempDirs: string[] = []
 function tempDir(): string {
   const dir = disk.mkdtempSync(join(tmpdir(), 'kizuna-'))
@@ -9,121 +22,200 @@ function tempDir(): string {
 }
 afterEach(() => {
   vi.restoreAllMocks()
-  vi.useRealTimers()
   for (const dir of tempDirs.splice(0)) disk.rmSync(dir, { recursive: true, force: true })
 })
-import { afterEach, describe, it, expect, vi } from 'vitest'
-import {
-  defaultSettings,
-  defaultKnowledgeSettings,
-  defaultJimakuSettings,
-  defaultTranslationSettings,
-  mergeSettings,
-  selectDict,
-  createSettingsStore,
-  type Settings
-} from '@src/main/services/settings'
-import { createSettingsFile } from '@src/main/services/settingsFile'
-import { DEFAULT_PLAYER_SETTINGS } from '@src/shared/playerSettings'
-import { defaultAnkiSettings } from '@src/shared/anki'
-import { DEFAULT_GAME_OCR_SETTINGS, DEFAULT_GAME_OCR_SHORTCUT } from '@src/shared/gameOcrSettings'
-import { fakeIo } from '@test/harness/fakeSettingsIo'
 
-describe('mergeSettings', () => {
-  it('returns defaults for undefined/null input', () => {
-    expect(mergeSettings(undefined)).toEqual(defaultSettings)
-    expect(mergeSettings(null)).toEqual(defaultSettings)
+function withField(source: unknown, path: string, value: unknown): Record<string, unknown> {
+  const result = structuredClone(source) as Record<string, unknown>
+  const keys = path.split('.')
+  let target = result
+  for (const key of keys.slice(0, -1)) {
+    target = (target[key] ??= {}) as Record<string, unknown>
+  }
+  target[keys.at(-1)!] = value
+  return result
+}
+
+const malformed = [undefined, null, 42, 'invalid', [], {}]
+const booleanCases = [undefined, null, 'yes', 'no', 0, 1, [], {}]
+const positiveCases = [undefined, null, 'ten', 0, -5, NaN, Infinity]
+const stringCases = [undefined, null, 42, [], {}]
+
+const fields: [string, unknown, unknown[]][] = [
+  ['mecabDictId', 'unidic', malformed],
+  ['dictOrder', [3, 1, 2], [undefined, null, 'nope', ['a', 'b']]],
+  ['translation.azureSubscriptionKeyEnc', 'encrypted-key', stringCases],
+  ['translation.azureRegion', 'eastus', stringCases],
+  ['jimaku.apiKeyEnc', 'encrypted-key', stringCases],
+  ['gameOcr.captureShortcut', 'Alt+O', [...malformed, 'Alt', 'KeyO', 'Ctrl+Shift']],
+  ['updates.checkAutomatically', false, booleanCases],
+  ['knowledge.wanikaniTokenEnc', 'encrypted-token', stringCases],
+  ['knowledge.ankiKnownDecks', ['Japanese', 'Core 2k'], [undefined, null, 'Japanese', [1, 2]]],
+  ['knowledge.ankiKnownField', 'Expression', stringCases],
+  ['knowledge.knownIntervalDays', 30, positiveCases],
+  ['knowledge.wellKnownIntervalDays', 60, positiveCases],
+  ['knowledge.staleAfterHours', 0, [undefined, null, 'never', -1, NaN, Infinity]],
+  ['knowledge.coloringEnabled', false, booleanCases],
+  ['anki.url', 'http://localhost:9999', stringCases],
+  ['anki.apiKey', 'secret', stringCases],
+  ['anki.deckName', 'Japanese', stringCases],
+  ['anki.modelName', 'Basic', stringCases],
+  ['anki.tags', ['kizuna', 'mined'], [undefined, null, 'tag', ['ok', 42]]],
+  ['anki.includeWordAudio', false, booleanCases],
+  ...['prevent-global', 'prevent-deck', 'overwrite', 'allow'].map(
+    (value): [string, unknown, unknown[]] => ['anki.duplicatePolicy', value, malformed]
+  ),
+  ...Object.keys(defaultSettings.anki.fieldMap).map((key): [string, unknown, unknown[]] => [
+    `anki.fieldMap.${key}`,
+    'Field',
+    stringCases
+  ]),
+  ...['splash', 'game-ocr', 'video-player'].map((value): [string, unknown, unknown[]] => [
+    'player.startupBehavior',
+    value,
+    [...malformed, 'ocr', '']
+  ]),
+  ['player.skipSeconds', 10, positiveCases],
+  ['player.keyBindings.togglePause', 'KeyK', [undefined, null, 123, 'Ctrl+']],
+  ['player.keyBindings.skipBack', 'ControlLeft+ArrowLeft', ['AltLeft+ArrowRight']],
+  ['player.popupSettings.maxEntries', 8, [undefined, null, 'eight']],
+  ['player.subtitleStyle.fontScale', 1.5, [undefined, null, 'large']],
+  ...['off', 'before', 'after'].map((value): [string, unknown, unknown[]] => [
+    'player.subtitleAutoPauseTiming',
+    value,
+    [...malformed, 'Before']
+  ]),
+  ...['all', 'unknown'].map((value): [string, unknown, unknown[]] => [
+    'player.subtitleAutoPauseScope',
+    value,
+    [...malformed, 'Unknown']
+  ]),
+  ...['system', 'light', 'dark'].map((value): [string, unknown, unknown[]] => [
+    'player.appearance',
+    value,
+    [...malformed, 'blue']
+  ]),
+  ['player.subtitleDragEnabled', false, booleanCases],
+  ['player.rightClickTogglePause', false, booleanCases],
+  ['player.autoPlayNext', true, booleanCases],
+  ['player.sidebarOpen', true, booleanCases],
+  ['player.playlistOpen', true, booleanCases],
+  ['player.translationEnabled', true, booleanCases],
+  ['player.mpvUserConfig', true, booleanCases],
+  ['player.loudnessNormalization', true, booleanCases],
+  ['player.screenshotFolder', 'E:\\Caps', [...stringCases, '', '   ']],
+  ['player.mpvExtraArgs', ['--hwdec=auto'], [undefined, null, '--hwdec=auto', 42]],
+  ['player.audioDevice', 'coreaudio/1', [...stringCases, '']],
+  ['player.levelColors', { unknown: '#123abc' }, malformed],
+  [
+    'player.videoAdjustments',
+    { ...defaultSettings.player.videoAdjustments, brightness: 20 },
+    malformed
+  ],
+  ...['subtitleOffsets', 'folderSubtitleOffsets', 'audioDelays'].map(
+    (key): [string, unknown, unknown[]] => [
+      `player.${key}`,
+      { '/videos/a.mkv': 250, '/videos/b.mkv': -100 },
+      malformed
+    ]
+  )
+]
+
+describe('settings normalization', () => {
+  it.each([undefined, null, 'not-an-object', 42, [1, 2, 3]])('defaults invalid root %j', (raw) => {
+    expect(mergeSettings(raw)).toEqual(defaultSettings)
   })
+  it.each(['anki', 'knowledge', 'updates', 'player', 'gameOcr', 'translation', 'jimaku'])(
+    'defaults a malformed %s block',
+    (domain) => {
+      for (const value of malformed) {
+        expect(mergeSettings({ [domain]: value })).toEqual(defaultSettings)
+      }
+    }
+  )
+  it.each(fields)(
+    '%s round-trips valid values and defaults malformed ones',
+    (path, valid, invalid) => {
+      const expected = withField(defaultSettings, path, valid)
+      const io = fakeIo(JSON.stringify(withField({}, path, valid)))
+      const store = createSettingsStore(io)
+      expect(store.get()).toEqual(expected)
+      store.set({})
+      expect(createSettingsStore(io).get()).toEqual(expected)
+      for (const value of invalid) {
+        expect(mergeSettings(withField({ mecabDictId: 'unidic' }, path, value))).toEqual(
+          path === 'mecabDictId' ? defaultSettings : { ...defaultSettings, mecabDictId: 'unidic' }
+        )
+      }
+    }
+  )
 
-  it('returns defaults for non-object garbage input', () => {
-    expect(mergeSettings('not-an-object')).toEqual(defaultSettings)
-    expect(mergeSettings(42)).toEqual(defaultSettings)
-    expect(mergeSettings([1, 2, 3])).toEqual({ ...defaultSettings, dictOrder: [] })
-  })
-
-  it('tolerates a partial object, filling missing fields with defaults', () => {
-    expect(mergeSettings({ mecabDictId: 'unidic' })).toEqual({
-      ...defaultSettings,
-      mecabDictId: 'unidic'
-    })
-    expect(mergeSettings({ dictOrder: [3, 1, 2] })).toEqual({
-      ...defaultSettings,
-      dictOrder: [3, 1, 2]
-    })
-  })
-
-  it('falls back to defaults for wrong-typed fields (old/corrupt shape)', () => {
-    expect(mergeSettings({ mecabDictId: 'klingon', dictOrder: ['a', 'b'] })).toEqual(
-      defaultSettings
+  it.each([
+    ['translation.azureRegion', '  eastus  ', 'eastus'],
+    [
+      'player.mpvExtraArgs',
+      ['  --vo=gpu  ', '', 42, '--sub-scale=2'],
+      ['--vo=gpu', '--sub-scale=2']
+    ],
+    [
+      'player.levelColors',
+      { learning: '#E0A83C', wellKnown: '#AABBCC', known: 'nope' },
+      { learning: '#e0a83c', wellKnown: '#aabbcc' }
+    ],
+    [
+      'player.videoAdjustments',
+      { brightness: 500, contrast: 'x', saturation: 10, rotate: 45, deinterlace: 'no' },
+      { ...defaultSettings.player.videoAdjustments, brightness: 100, saturation: 10 }
+    ],
+    ...['subtitleOffsets', 'folderSubtitleOffsets', 'audioDelays'].map((key) => [
+      `player.${key}`,
+      { '/valid': 250, '/bad': 'nope', '/worse': Infinity },
+      { '/valid': 250 }
+    ])
+  ] as [string, unknown, unknown][])('normalizes %s field by field', (path, raw, expected) => {
+    expect(mergeSettings(withField({}, path, raw))).toEqual(
+      withField(defaultSettings, path, expected)
     )
-    expect(mergeSettings({ mecabDictId: 123, dictOrder: 'nope' })).toEqual(defaultSettings)
+  })
+
+  it('loads and rewrites settings emitted by v0.5.0 without changing values', () => {
+    const io = fakeIo(JSON.stringify(releasedSettings))
+    const store = createSettingsStore(io, { platform: 'posix' })
+    expect(store.get()).toEqual(releasedSettings)
+    store.set({})
+    expect(JSON.parse(io.read()!)).toEqual(releasedSettings)
+    expect(createSettingsStore(io, { platform: 'posix' }).get()).toEqual(releasedSettings)
+  })
+
+  it('discards unknown fields while preserving supported settings', () => {
+    const io = fakeIo(
+      JSON.stringify({
+        mediaHistory: { recentFiles: [] },
+        player: {
+          volumeBoostEnabled: true,
+          onlineSubtitleLanguage: 'ja',
+          audioDevice: 'coreaudio/1'
+        },
+        gameOcr: { captureShortcut: 'Alt+O', armed: true },
+        anki: { includeScreenshot: false, fieldMap: { unknown: 'Unknown', word: 'Expression' } }
+      })
+    )
+    const store = createSettingsStore(io)
+    store.set({ dictOrder: [1] })
+    expect(JSON.parse(io.read()!)).toEqual({
+      ...defaultSettings,
+      dictOrder: [1],
+      player: { ...defaultSettings.player, audioDevice: 'coreaudio/1' },
+      gameOcr: { captureShortcut: 'Alt+O' },
+      anki: {
+        ...defaultSettings.anki,
+        fieldMap: { ...defaultSettings.anki.fieldMap, word: 'Expression' }
+      }
+    })
   })
 })
 
-describe('mergeSettings — translation settings', () => {
-  it('defaults the Azure credential block and key', () => {
-    expect(mergeSettings({}).translation).toEqual(defaultTranslationSettings)
-  })
-
-  it('normalizes malformed or missing translation values', () => {
-    expect(mergeSettings({ translation: undefined }).translation).toEqual(
-      defaultTranslationSettings
-    )
-    expect(mergeSettings({ translation: null }).translation).toEqual(defaultTranslationSettings)
-    expect(mergeSettings({ translation: { azureSubscriptionKeyEnc: 42 } }).translation).toEqual(
-      defaultTranslationSettings
-    )
-    expect(
-      mergeSettings({
-        translation: { azureSubscriptionKeyEnc: 'encrypted', azureRegion: '  eastus  ' }
-      }).translation
-    ).toEqual({ azureSubscriptionKeyEnc: 'encrypted', azureRegion: 'eastus' })
-  })
-
-  it('round-trips a valid encrypted value and preserves unrelated settings', () => {
-    const io = fakeIo(undefined)
-    const store = createSettingsStore(io)
-    store.set({ translation: { azureSubscriptionKeyEnc: 'encrypted-key', azureRegion: 'eastus' } })
-    store.set({ mecabDictId: 'unidic' })
-
-    expect(createSettingsStore(io).get().translation).toEqual({
-      azureSubscriptionKeyEnc: 'encrypted-key',
-      azureRegion: 'eastus'
-    })
-    expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
-    expect(createSettingsStore(io).get().player).toEqual(defaultSettings.player)
-    expect(createSettingsStore(io).get().knowledge).toEqual(defaultSettings.knowledge)
-  })
-})
-
-describe('mergeSettings — Jimaku settings', () => {
-  it('defaults the Jimaku credential block and key', () => {
-    expect(mergeSettings({}).jimaku).toEqual(defaultJimakuSettings)
-  })
-
-  it('normalizes malformed and missing encrypted values', () => {
-    expect(mergeSettings({ jimaku: undefined }).jimaku).toEqual(defaultJimakuSettings)
-    expect(mergeSettings({ jimaku: null }).jimaku).toEqual(defaultJimakuSettings)
-    expect(mergeSettings({ jimaku: { apiKeyEnc: 42 } }).jimaku).toEqual(defaultJimakuSettings)
-    expect(mergeSettings({ jimaku: { apiKeyEnc: 'encrypted' } }).jimaku).toEqual({
-      apiKeyEnc: 'encrypted',
-      folderHints: {}
-    })
-  })
-
-  it('preserves the Jimaku block when unrelated settings are updated', () => {
-    const io = fakeIo(undefined)
-    const store = createSettingsStore(io)
-    store.set({ jimaku: { ...store.get().jimaku, apiKeyEnc: 'encrypted-key' } })
-    store.set({ mecabDictId: 'unidic' })
-
-    expect(createSettingsStore(io).get().jimaku).toEqual({
-      apiKeyEnc: 'encrypted-key',
-      folderHints: {}
-    })
-    expect(createSettingsStore(io).get().mecabDictId).toBe('unidic')
-  })
-
+describe('Jimaku folder hints', () => {
   it('normalizes folder hints, drops malformed records, and keeps season keys aligned', () => {
     const valid = {
       entryId: 7,
@@ -171,615 +263,14 @@ describe('mergeSettings — Jimaku settings', () => {
   })
 })
 
-describe('settings — legacy media history', () => {
-  it('drops a legacy mediaHistory key from merged and serialized settings', () => {
-    const legacy = {
-      mecabDictId: 'unidic',
-      mediaHistory: {
-        recentFiles: [{ path: '/media/a.mkv', openedAt: 1 }],
-        playbackByPath: { '/media/a.mkv': { positionSeconds: 42, updatedAt: 2 } }
-      }
-    }
-    expect(mergeSettings(legacy, { platform: 'posix' })).not.toHaveProperty('mediaHistory')
-
-    const io = fakeIo(JSON.stringify(legacy))
-    const store = createSettingsStore(io, { platform: 'posix' })
-    store.set({ dictOrder: [1] })
-
-    const written = JSON.parse(io.read()!) as Record<string, unknown>
-    expect(written).not.toHaveProperty('mediaHistory')
-    expect(written.mecabDictId).toBe('unidic')
-  })
-})
-
-describe('mergeSettings — Game OCR settings', () => {
-  it('defaults to only the capture shortcut and ignores armed state', () => {
-    expect(mergeSettings({}).gameOcr).toEqual(DEFAULT_GAME_OCR_SETTINGS)
-    expect(mergeSettings({ gameOcr: { captureShortcut: 'Alt+O', armed: true } }).gameOcr).toEqual({
-      captureShortcut: 'Alt+O'
-    })
-  })
-
-  it('normalizes malformed shortcuts back to the default', () => {
-    expect(mergeSettings({ gameOcr: { captureShortcut: 'Ctrl+Ctrl+O' } }).gameOcr).toEqual({
-      captureShortcut: DEFAULT_GAME_OCR_SHORTCUT
-    })
-    expect(mergeSettings({ gameOcr: { captureShortcut: 'Alt+F4' } }).gameOcr).toEqual({
-      captureShortcut: 'Alt+F4'
-    })
-  })
-})
-
-describe('mergeSettings — anki/knowledge sub-objects', () => {
-  it('upgrades a v1 file (only mecabDictId + dictOrder) with anki/knowledge/player defaults', () => {
-    expect(mergeSettings({ mecabDictId: 'unidic', dictOrder: [1] })).toEqual({
-      ...defaultSettings,
-      mecabDictId: 'unidic',
-      dictOrder: [1]
-    })
-  })
-
-  it('falls back entirely when anki/knowledge are garbage-typed', () => {
-    const merged = mergeSettings({ anki: 'not-an-object', knowledge: 42 })
-    expect(merged.anki).toEqual(defaultAnkiSettings)
-    expect(merged.knowledge).toEqual(defaultKnowledgeSettings)
-  })
-
-  it('fills a partial fieldMap with defaults for the missing keys', () => {
-    const merged = mergeSettings({ anki: { fieldMap: { word: 'Expression' } } })
-    expect(merged.anki.fieldMap).toEqual({
-      word: 'Expression',
-      reading: '',
-      definition: '',
-      sentence: '',
-      frequency: '',
-      pitchAccent: '',
-      jlptLevel: '',
-      wordAudio: '',
-      picture: '',
-      sentenceAudio: ''
-    })
-  })
-
-  it('drops unknown fieldMap keys and ignores non-string values', () => {
-    const merged = mergeSettings({
-      anki: { fieldMap: { word: 123, bogus: 'x', reading: 'Reading' } }
-    })
-    expect(merged.anki.fieldMap).toEqual({
-      word: '',
-      reading: 'Reading',
-      definition: '',
-      sentence: '',
-      frequency: '',
-      pitchAccent: '',
-      jlptLevel: '',
-      wordAudio: '',
-      picture: '',
-      sentenceAudio: ''
-    })
-  })
-
-  it('keeps a persisted Frequency mapping and rejects a non-string one', () => {
-    const mapped = mergeSettings({ anki: { fieldMap: { frequency: 'Freq' } } })
-    const nonString = mergeSettings({ anki: { fieldMap: { frequency: 7 } } })
-
-    expect(mapped.anki.fieldMap.frequency).toBe('Freq')
-    expect(nonString.anki.fieldMap.frequency).toBe('')
-  })
-
-  it('keeps a persisted Pitch accent mapping and rejects a non-string one', () => {
-    const mapped = mergeSettings({ anki: { fieldMap: { pitchAccent: 'Pitch' } } })
-    const nonString = mergeSettings({ anki: { fieldMap: { pitchAccent: ['1', '3'] } } })
-
-    expect(mapped.anki.fieldMap.pitchAccent).toBe('Pitch')
-    expect(nonString.anki.fieldMap.pitchAccent).toBe('')
-  })
-
-  it('keeps a persisted JLPT mapping and rejects a non-string one', () => {
-    const mapped = mergeSettings({ anki: { fieldMap: { jlptLevel: 'JLPT' } } })
-    const nonString = mergeSettings({ anki: { fieldMap: { jlptLevel: 7 } } })
-
-    expect(mapped.anki.fieldMap.jlptLevel).toBe('JLPT')
-    expect(nonString.anki.fieldMap.jlptLevel).toBe('')
-  })
-
-  it('clamps negative/NaN interval thresholds back to defaults', () => {
-    const merged = mergeSettings({
-      knowledge: { knownIntervalDays: -5, wellKnownIntervalDays: NaN }
-    })
-    expect(merged.knowledge.knownIntervalDays).toBe(defaultKnowledgeSettings.knownIntervalDays)
-    expect(merged.knowledge.wellKnownIntervalDays).toBe(
-      defaultKnowledgeSettings.wellKnownIntervalDays
-    )
-  })
-
-  it('accepts a valid positive interval threshold', () => {
-    const merged = mergeSettings({ knowledge: { knownIntervalDays: 14 } })
-    expect(merged.knowledge.knownIntervalDays).toBe(14)
-  })
-
-  it('treats staleAfterHours: 0 as valid ("never auto-sync"), not a fallback trigger', () => {
-    const merged = mergeSettings({ knowledge: { staleAfterHours: 0 } })
-    expect(merged.knowledge.staleAfterHours).toBe(0)
-  })
-
-  it('clamps a negative staleAfterHours back to the default', () => {
-    const merged = mergeSettings({ knowledge: { staleAfterHours: -1 } })
-    expect(merged.knowledge.staleAfterHours).toBe(defaultKnowledgeSettings.staleAfterHours)
-  })
-
-  it('accepts a valid ankiKnownDecks array of strings', () => {
-    const merged = mergeSettings({ knowledge: { ankiKnownDecks: ['Japanese', 'Core 2k'] } })
-    expect(merged.knowledge.ankiKnownDecks).toEqual(['Japanese', 'Core 2k'])
-  })
-
-  it('falls back ankiKnownDecks to [] when garbage/non-array-of-strings', () => {
-    expect(
-      mergeSettings({ knowledge: { ankiKnownDecks: 'Japanese' } }).knowledge.ankiKnownDecks
-    ).toEqual([])
-    expect(
-      mergeSettings({ knowledge: { ankiKnownDecks: [1, 2] } }).knowledge.ankiKnownDecks
-    ).toEqual([])
-  })
-
-  it('preserves anki.tags/url/deckName/modelName/includeWordAudio when valid', () => {
-    const merged = mergeSettings({
-      anki: {
-        url: 'http://localhost:9999',
-        deckName: 'Japanese',
-        modelName: 'Basic',
-        tags: ['kizuna', 'mined'],
-        includeWordAudio: false
-      }
-    })
-    expect(merged.anki.url).toBe('http://localhost:9999')
-    expect(merged.anki.deckName).toBe('Japanese')
-    expect(merged.anki.modelName).toBe('Basic')
-    expect(merged.anki.tags).toEqual(['kizuna', 'mined'])
-    expect(merged.anki.includeWordAudio).toBe(false)
-  })
-
-  it('falls back tags to default when the array holds non-strings', () => {
-    const merged = mergeSettings({ anki: { tags: ['ok', 42] } })
-    expect(merged.anki.tags).toEqual(defaultAnkiSettings.tags)
-  })
-
-  it('defaults anki.apiKey to empty and preserves a string apiKey', () => {
-    expect(mergeSettings({ anki: {} }).anki.apiKey).toBe('')
-    expect(mergeSettings({ anki: { apiKey: 42 } }).anki.apiKey).toBe('')
-    expect(mergeSettings({ anki: { apiKey: 'secret' } }).anki.apiKey).toBe('secret')
-  })
-})
-
-describe('mergeSettings — player settings block (Options menu persistence)', () => {
-  it('upgrades a file with no player block with player defaults', () => {
-    expect(mergeSettings({ mecabDictId: 'unidic' }).player).toEqual(DEFAULT_PLAYER_SETTINGS)
-  })
-
-  it('falls back entirely when player is garbage-typed', () => {
-    expect(mergeSettings({ player: 'not-an-object' }).player).toEqual(DEFAULT_PLAYER_SETTINGS)
-    expect(mergeSettings({ player: 42 }).player).toEqual(DEFAULT_PLAYER_SETTINGS)
-  })
-
-  it.each(['splash', 'game-ocr', 'video-player'] as const)(
-    'preserves the valid startup behavior %s',
-    (startupBehavior) => {
-      expect(mergeSettings({ player: { startupBehavior } }).player.startupBehavior).toBe(
-        startupBehavior
-      )
-    }
-  )
-
-  it.each([undefined, 'ocr', '', 42, {}, null])(
-    'defaults malformed startup behavior %j to splash',
-    (startupBehavior) => {
-      expect(mergeSettings({ player: { startupBehavior } }).player.startupBehavior).toBe('splash')
-    }
-  )
-
-  it.each(['off', 'before', 'after'] as const)(
-    'preserves valid subtitle auto-pause timing %s',
-    (timing) => {
-      expect(mergeSettings({ player: { subtitleAutoPauseTiming: timing } }).player).toHaveProperty(
-        'subtitleAutoPauseTiming',
-        timing
-      )
-    }
-  )
-
-  it('defaults malformed subtitle auto-pause timing without resetting other settings', () => {
-    const merged = mergeSettings({
-      player: { subtitleAutoPauseTiming: 'Before', skipSeconds: 12 }
-    })
-
-    expect(merged.player.subtitleAutoPauseTiming).toBe('off')
-    expect(merged.player.skipSeconds).toBe(12)
-  })
-
-  it.each(['all', 'unknown'] as const)('preserves valid subtitle auto-pause scope %s', (scope) => {
-    expect(mergeSettings({ player: { subtitleAutoPauseScope: scope } }).player).toHaveProperty(
-      'subtitleAutoPauseScope',
-      scope
-    )
-  })
-
-  it('defaults malformed subtitle auto-pause scope without resetting other settings', () => {
-    const merged = mergeSettings({
-      player: { subtitleAutoPauseScope: 'Unknown', skipSeconds: 12 }
-    })
-
-    expect(merged.player.subtitleAutoPauseScope).toBe('all')
-    expect(merged.player.skipSeconds).toBe(12)
-  })
-
-  it('fills a partial keyBindings with defaults for the missing actions', () => {
-    const merged = mergeSettings({ player: { keyBindings: { togglePause: 'KeyK' } } })
-    expect(merged.player.keyBindings).toEqual({
-      ...DEFAULT_PLAYER_SETTINGS.keyBindings,
-      togglePause: 'KeyK'
-    })
-  })
-
-  it('fills subtitle-line action defaults for legacy keyBindings maps', () => {
-    const legacy = {
-      togglePause: 'Space',
-      toggleFullscreen: 'KeyF',
-      exitFullscreen: 'Escape',
-      skipBack: 'ArrowLeft',
-      skipForward: 'ArrowRight',
-      speedDown: 'ControlLeft+ArrowDown',
-      speedUp: 'ControlLeft+ArrowUp',
-      speedReset: 'Backspace'
-    }
-    const merged = mergeSettings({ player: { keyBindings: legacy } })
-    expect(merged.player.keyBindings.replayLine).toBe(
-      DEFAULT_PLAYER_SETTINGS.keyBindings.replayLine
-    )
-    expect(merged.player.keyBindings.prevLine).toBe(DEFAULT_PLAYER_SETTINGS.keyBindings.prevLine)
-    expect(merged.player.keyBindings.nextLine).toBe(DEFAULT_PLAYER_SETTINGS.keyBindings.nextLine)
-    expect(merged.player.keyBindings.loopLine).toBe(DEFAULT_PLAYER_SETTINGS.keyBindings.loopLine)
-  })
-
-  it('drops non-string keyBinding values', () => {
-    const merged = mergeSettings({ player: { keyBindings: { togglePause: 123 } } })
-    expect(merged.player.keyBindings.togglePause).toBe(
-      DEFAULT_PLAYER_SETTINGS.keyBindings.togglePause
-    )
-  })
-
-  it('keeps a stored modifier chord but drops a malformed one', () => {
-    const merged = mergeSettings({
-      player: {
-        keyBindings: { skipBack: 'ControlLeft+ArrowLeft', skipForward: 'AltLeft+ArrowRight' }
-      }
-    })
-    expect(merged.player.keyBindings.skipBack).toBe('ControlLeft+ArrowLeft')
-    expect(merged.player.keyBindings.skipForward).toBe(
-      DEFAULT_PLAYER_SETTINGS.keyBindings.skipForward
-    )
-  })
-
-  it('falls back to default skipSeconds when the stored value is not a positive finite number', () => {
-    expect(mergeSettings({ player: { skipSeconds: 'ten' } }).player.skipSeconds).toBe(
-      DEFAULT_PLAYER_SETTINGS.skipSeconds
-    )
-    expect(mergeSettings({ player: { skipSeconds: -5 } }).player.skipSeconds).toBe(
-      DEFAULT_PLAYER_SETTINGS.skipSeconds
-    )
-  })
-
-  it('accepts a valid positive skipSeconds', () => {
-    expect(mergeSettings({ player: { skipSeconds: 10 } }).player.skipSeconds).toBe(10)
-  })
-
-  it('normalizes popupSettings/subtitleStyle field-by-field via the shared settings helpers', () => {
-    const merged = mergeSettings({
-      player: {
-        popupSettings: { maxEntries: 8 },
-        subtitleStyle: { fontScale: 1.5 }
-      }
-    })
-    expect(merged.player.popupSettings).toEqual({
-      ...DEFAULT_PLAYER_SETTINGS.popupSettings,
-      maxEntries: 8
-    })
-    expect(merged.player.subtitleStyle).toEqual({
-      ...DEFAULT_PLAYER_SETTINGS.subtitleStyle,
-      fontScale: 1.5
-    })
-  })
-
-  it('round-trips a full player block unchanged when every field is already valid', () => {
-    const player = {
-      startupBehavior: 'video-player' as const,
-      keyBindings: { ...DEFAULT_PLAYER_SETTINGS.keyBindings, skipForward: 'KeyL' },
-      skipSeconds: 15,
-      popupSettings: {
-        frequencyDictId: 2,
-        sortOrder: 'rank-based' as const,
-        maxEntries: 6,
-        maxMeanings: 2
-      },
-      subtitleStyle: {
-        fontScale: 1.2,
-        outlineSizePx: 2,
-        xPct: 40,
-        yPct: 75,
-        backgroundEnabled: false
-      },
-      subtitleDragEnabled: false,
-      rightClickTogglePause: false,
-      autoPlayNext: true,
-      subtitleAutoPauseTiming: 'after' as const,
-      subtitleAutoPauseScope: 'unknown' as const,
-      subtitleOffsets: { '/videos/a.mkv': 250 },
-      folderSubtitleOffsets: { '/videos': -100 },
-      audioDelays: { '/videos/a.mkv': -75 },
-      appearance: 'light' as const,
-      sidebarOpen: true,
-      playlistOpen: true,
-      translationEnabled: true,
-      levelColors: { unknown: '#e05656', known: '#56be78' },
-      screenshotFolder: 'D:\\Shots',
-      mpvUserConfig: true,
-      mpvExtraArgs: ['--hwdec=auto', '--profile=gpu-hq'],
-      videoAdjustments: {
-        brightness: 20,
-        contrast: -10,
-        saturation: 5,
-        gamma: 0,
-        hue: -30,
-        rotate: 90 as const,
-        deinterlace: true
-      },
-      audioDevice: 'wasapi/{abc-123}',
-      loudnessNormalization: true
-    }
-    expect(mergeSettings({ player }).player).toEqual(player)
-  })
-
-  it('defaults audioDevice/normalization and normalizes malformed values', () => {
-    expect(mergeSettings({ player: {} }).player.audioDevice).toBe('auto')
-    expect(mergeSettings({ player: {} }).player.loudnessNormalization).toBe(false)
-    expect(mergeSettings({ player: { audioDevice: 42 } }).player.audioDevice).toBe('auto')
-    expect(mergeSettings({ player: { audioDevice: '' } }).player.audioDevice).toBe('auto')
-    expect(
-      mergeSettings({ player: { loudnessNormalization: 1 } }).player.loudnessNormalization
-    ).toBe(false)
-    for (const volumeBoostEnabled of [false, true]) {
-      const merged = mergeSettings({
-        player: { audioDevice: 'coreaudio/1', volumeBoostEnabled, loudnessNormalization: true }
-      }).player
-      expect(merged.audioDevice).toBe('coreaudio/1')
-      expect('volumeBoostEnabled' in merged).toBe(false)
-      expect(merged.loudnessNormalization).toBe(true)
-    }
-  })
-
-  it('defaults videoAdjustments to neutral and normalizes a malformed block', () => {
-    expect(mergeSettings({ player: {} }).player.videoAdjustments).toEqual(
-      DEFAULT_PLAYER_SETTINGS.videoAdjustments
-    )
-    const merged = mergeSettings({
-      player: {
-        videoAdjustments: {
-          brightness: 500,
-          contrast: 'x',
-          saturation: 10,
-          gamma: 0,
-          hue: 0,
-          rotate: 45,
-          deinterlace: 'no'
-        }
-      }
-    }).player.videoAdjustments
-    expect(merged.brightness).toBe(100)
-    expect(merged.contrast).toBe(0)
-    expect(merged.saturation).toBe(10)
-    expect(merged.rotate).toBe(0)
-    expect(merged.deinterlace).toBe(false)
-  })
-
-  it('defaults mpvUserConfig to false and mpvExtraArgs to [] when absent or malformed', () => {
-    expect(mergeSettings({ player: {} }).player.mpvUserConfig).toBe(false)
-    expect(mergeSettings({ player: {} }).player.mpvExtraArgs).toEqual([])
-    expect(mergeSettings({ player: { mpvUserConfig: 'yes' } }).player.mpvUserConfig).toBe(false)
-    expect(mergeSettings({ player: { mpvExtraArgs: '--hwdec=auto' } }).player.mpvExtraArgs).toEqual(
-      []
-    )
-  })
-
-  it('keeps a valid mpvUserConfig flag and normalizes mpvExtraArgs entries', () => {
-    const merged = mergeSettings({
-      player: { mpvUserConfig: true, mpvExtraArgs: ['  --vo=gpu  ', '', 42, '--sub-scale=2'] }
-    })
-    expect(merged.player.mpvUserConfig).toBe(true)
-    expect(merged.player.mpvExtraArgs).toEqual(['--vo=gpu', '--sub-scale=2'])
-  })
-
-  it('keeps a non-empty screenshotFolder string and defaults everything else to null', () => {
-    expect(
-      mergeSettings({ player: { screenshotFolder: 'E:\\Caps' } }).player.screenshotFolder
-    ).toBe('E:\\Caps')
-    expect(mergeSettings({ player: {} }).player.screenshotFolder).toBeNull()
-    expect(mergeSettings({ player: { screenshotFolder: '' } }).player.screenshotFolder).toBeNull()
-    expect(
-      mergeSettings({ player: { screenshotFolder: '   ' } }).player.screenshotFolder
-    ).toBeNull()
-    expect(mergeSettings({ player: { screenshotFolder: 42 } }).player.screenshotFolder).toBeNull()
-    expect(mergeSettings({ player: { screenshotFolder: null } }).player.screenshotFolder).toBeNull()
-  })
-
-  it('accepts each valid appearance value', () => {
-    expect(mergeSettings({ player: { appearance: 'system' } }).player.appearance).toBe('system')
-    expect(mergeSettings({ player: { appearance: 'light' } }).player.appearance).toBe('light')
-    expect(mergeSettings({ player: { appearance: 'dark' } }).player.appearance).toBe('dark')
-  })
-
-  it('falls back to the default appearance when the stored value is missing or malformed', () => {
-    expect(mergeSettings({ player: {} }).player.appearance).toBe(DEFAULT_PLAYER_SETTINGS.appearance)
-    expect(mergeSettings({ player: { appearance: 'blue' } }).player.appearance).toBe(
-      DEFAULT_PLAYER_SETTINGS.appearance
-    )
-    expect(mergeSettings({ player: { appearance: 42 } }).player.appearance).toBe(
-      DEFAULT_PLAYER_SETTINGS.appearance
-    )
-  })
-
-  it('accepts a valid rightClickTogglePause boolean', () => {
-    expect(
-      mergeSettings({ player: { rightClickTogglePause: false } }).player.rightClickTogglePause
-    ).toBe(false)
-    expect(
-      mergeSettings({ player: { rightClickTogglePause: true } }).player.rightClickTogglePause
-    ).toBe(true)
-  })
-
-  it('falls back to default rightClickTogglePause when the stored value is not a boolean', () => {
-    expect(
-      mergeSettings({ player: { rightClickTogglePause: 'yes' } }).player.rightClickTogglePause
-    ).toBe(DEFAULT_PLAYER_SETTINGS.rightClickTogglePause)
-    expect(mergeSettings({ player: {} }).player.rightClickTogglePause).toBe(
-      DEFAULT_PLAYER_SETTINGS.rightClickTogglePause
-    )
-  })
-
-  it('defaults missing or malformed subtitleDragEnabled to true and preserves false', () => {
-    expect(mergeSettings({ player: {} }).player.subtitleDragEnabled).toBe(true)
-    expect(
-      mergeSettings({ player: { subtitleDragEnabled: 'no' } }).player.subtitleDragEnabled
-    ).toBe(true)
-    expect(
-      mergeSettings({ player: { subtitleDragEnabled: false } }).player.subtitleDragEnabled
-    ).toBe(false)
-  })
-
-  it('defaults sidebarOpen to false and preserves a stored true', () => {
-    expect(mergeSettings({ player: {} }).player.sidebarOpen).toBe(false)
-    expect(mergeSettings({ player: { sidebarOpen: true } }).player.sidebarOpen).toBe(true)
-    expect(mergeSettings({ player: { sidebarOpen: false } }).player.sidebarOpen).toBe(false)
-  })
-
-  it('falls back to default sidebarOpen when the stored value is malformed', () => {
-    expect(mergeSettings({ player: { sidebarOpen: 'yes' } }).player.sidebarOpen).toBe(
-      DEFAULT_PLAYER_SETTINGS.sidebarOpen
-    )
-    expect(mergeSettings({ player: { sidebarOpen: null } }).player.sidebarOpen).toBe(
-      DEFAULT_PLAYER_SETTINGS.sidebarOpen
-    )
-    expect(mergeSettings({ player: { sidebarOpen: 1 } }).player.sidebarOpen).toBe(
-      DEFAULT_PLAYER_SETTINGS.sidebarOpen
-    )
-  })
-
-  it('defaults playlistOpen to false, preserves a stored boolean, and rejects malformed values', () => {
-    expect(mergeSettings({ player: {} }).player.playlistOpen).toBe(false)
-    expect(mergeSettings({ player: { playlistOpen: true } }).player.playlistOpen).toBe(true)
-    expect(mergeSettings({ player: { playlistOpen: 'yes' } }).player.playlistOpen).toBe(
-      DEFAULT_PLAYER_SETTINGS.playlistOpen
-    )
-    expect(mergeSettings({ player: { playlistOpen: null } }).player.playlistOpen).toBe(
-      DEFAULT_PLAYER_SETTINGS.playlistOpen
-    )
-  })
-
-  it('defaults translationEnabled to false, preserves booleans, and rejects malformed values', () => {
-    expect(mergeSettings({ player: {} }).player.translationEnabled).toBe(false)
-    expect(mergeSettings({ player: { translationEnabled: true } }).player.translationEnabled).toBe(
-      true
-    )
-    expect(mergeSettings({ player: { translationEnabled: false } }).player.translationEnabled).toBe(
-      false
-    )
-    expect(mergeSettings({ player: { translationEnabled: 'yes' } }).player.translationEnabled).toBe(
-      false
-    )
-  })
-
-  it('accepts a valid subtitleOffsets map keyed by file path', () => {
-    const merged = mergeSettings({
-      player: { subtitleOffsets: { '/videos/a.mkv': 250, '/videos/b.mkv': -100 } }
-    })
-    expect(merged.player.subtitleOffsets).toEqual({ '/videos/a.mkv': 250, '/videos/b.mkv': -100 })
-  })
-
-  it('falls back to {} when subtitleOffsets is garbage-typed', () => {
-    expect(mergeSettings({ player: { subtitleOffsets: 'nope' } }).player.subtitleOffsets).toEqual(
-      {}
-    )
-    expect(mergeSettings({ player: { subtitleOffsets: [1, 2] } }).player.subtitleOffsets).toEqual(
-      {}
-    )
-  })
-
-  it('drops non-numeric entries from subtitleOffsets but keeps the valid ones', () => {
-    const merged = mergeSettings({
-      player: { subtitleOffsets: { '/videos/a.mkv': 250, '/videos/bad.mkv': 'nope' } }
-    })
-    expect(merged.player.subtitleOffsets).toEqual({ '/videos/a.mkv': 250 })
-  })
-
-  it('accepts a valid folderSubtitleOffsets map, defaulting to {} when absent', () => {
-    const merged = mergeSettings({
-      player: { folderSubtitleOffsets: { '/videos': 250, 'e:\\video': -100 } }
-    })
-    expect(merged.player.folderSubtitleOffsets).toEqual({ '/videos': 250, 'e:\\video': -100 })
-    expect(mergeSettings({}).player.folderSubtitleOffsets).toEqual(
-      DEFAULT_PLAYER_SETTINGS.folderSubtitleOffsets
-    )
-  })
-
-  it('drops malformed folderSubtitleOffsets entries and garbage-typed maps', () => {
-    const merged = mergeSettings({
-      player: { folderSubtitleOffsets: { '/videos': 250, '/bad': 'nope', '/worse': Infinity } }
-    })
-    expect(merged.player.folderSubtitleOffsets).toEqual({ '/videos': 250 })
-    expect(
-      mergeSettings({ player: { folderSubtitleOffsets: 'nope' } }).player.folderSubtitleOffsets
-    ).toEqual({})
-  })
-
-  it('accepts a valid audioDelays map, defaulting to {} when absent', () => {
-    const merged = mergeSettings({
-      player: { audioDelays: { '/videos/a.mkv': 250, '/videos/b.mkv': -100 } }
-    })
-    expect(merged.player.audioDelays).toEqual({ '/videos/a.mkv': 250, '/videos/b.mkv': -100 })
-    expect(mergeSettings({}).player.audioDelays).toEqual(DEFAULT_PLAYER_SETTINGS.audioDelays)
-  })
-
-  it('drops malformed audioDelays entries and rejects garbage maps', () => {
-    const merged = mergeSettings({
-      player: { audioDelays: { '/videos/a.mkv': 250, '/bad': 'nope', '/worse': Infinity } }
-    })
-    expect(merged.player.audioDelays).toEqual({ '/videos/a.mkv': 250 })
-    expect(mergeSettings({ player: { audioDelays: 'nope' } }).player.audioDelays).toEqual({})
-    expect(mergeSettings({ player: { audioDelays: [1, 2] } }).player.audioDelays).toEqual({})
-  })
-
-  it('defaults levelColors to {} and normalizes a stored map', () => {
-    expect(mergeSettings({ player: {} }).player.levelColors).toEqual(
-      DEFAULT_PLAYER_SETTINGS.levelColors
-    )
-    expect(
-      mergeSettings({
-        player: { levelColors: { learning: '#E0A83C', wellKnown: '#AABBCC', known: 'nope' } }
-      }).player.levelColors
-    ).toEqual({ learning: '#e0a83c', wellKnown: '#aabbcc' })
-    expect(mergeSettings({ player: { levelColors: 'nope' } }).player.levelColors).toEqual({})
-  })
-})
-
 describe('selectDict', () => {
-  it('keeps the requested id when it is available', () => {
-    expect(selectDict('unidic', ['ipadic', 'unidic'])).toBe('unidic')
-  })
-
-  it('falls back to ipadic when unidic is unavailable', () => {
-    expect(selectDict('unidic', ['ipadic'])).toBe('ipadic')
-  })
-
-  it('falls back to ipadic when the id is unavailable even if list is empty', () => {
-    expect(selectDict('unidic', [])).toBe('ipadic')
+  it.each([
+    ['ipadic', ['ipadic', 'unidic'], 'ipadic'],
+    ['unidic', ['ipadic', 'unidic'], 'unidic'],
+    ['unidic', ['ipadic'], 'ipadic'],
+    ['ipadic', [], 'ipadic']
+  ] as const)('selects %s from %j', (id, available, expected) => {
+    expect(selectDict(id, [...available])).toBe(expected)
   })
 })
 
@@ -788,41 +279,6 @@ describe('createSettingsStore', () => {
     const store = createSettingsStore(fakeIo(undefined))
     expect(store.get()).toEqual(defaultSettings)
   })
-
-  it('round-trips levelColors across a reopen', () => {
-    const io = fakeIo(undefined)
-    const store = createSettingsStore(io)
-    store.set({
-      player: { ...store.get().player, levelColors: { unknown: '#123abc', wellKnown: '#ffffff' } }
-    })
-
-    expect(createSettingsStore(io).get().player.levelColors).toEqual({
-      unknown: '#123abc',
-      wellKnown: '#ffffff'
-    })
-  })
-
-  it.each(['splash', 'game-ocr', 'video-player'] as const)(
-    'round-trips startup behavior %s across a reopen',
-    (startupBehavior) => {
-      const io = fakeIo(undefined)
-      const store = createSettingsStore(io)
-      store.set({ player: { ...store.get().player, startupBehavior } })
-
-      expect(createSettingsStore(io).get().player.startupBehavior).toBe(startupBehavior)
-    }
-  )
-
-  it.each(['before', 'after'] as const)(
-    'round-trips subtitle auto-pause timing %s across a reopen',
-    (timing) => {
-      const io = fakeIo(undefined)
-      const store = createSettingsStore(io)
-      store.set({ player: { ...store.get().player, subtitleAutoPauseTiming: timing } })
-
-      expect(createSettingsStore(io).get().player.subtitleAutoPauseTiming).toBe(timing)
-    }
-  )
 
   it('parses+merges whatever was persisted at construction', () => {
     const store = createSettingsStore(fakeIo(JSON.stringify({ mecabDictId: 'unidic' })))
@@ -941,61 +397,5 @@ describe('createSettingsFile', () => {
       throw new Error('unlink failed')
     })
     expect(() => createSettingsFile(path).write('next')).toThrow('write failed')
-  })
-})
-
-describe('mergeSettings anki media mappings', () => {
-  it('leaves Picture and Sentence audio unmapped for an older settings file', () => {
-    const merged = mergeSettings({ anki: { deckName: 'Japanese' } })
-
-    expect(merged.anki.fieldMap.picture).toBe('')
-    expect(merged.anki.fieldMap.sentenceAudio).toBe('')
-  })
-
-  it('keeps a persisted Picture and Sentence audio mapping', () => {
-    const merged = mergeSettings({
-      anki: { fieldMap: { picture: 'Screenshot', sentenceAudio: 'SentenceAudio' } }
-    })
-
-    expect(merged.anki.fieldMap.picture).toBe('Screenshot')
-    expect(merged.anki.fieldMap.sentenceAudio).toBe('SentenceAudio')
-  })
-
-  it('falls back to unmapped for malformed persisted values', () => {
-    const merged = mergeSettings({ anki: { fieldMap: { picture: 7, sentenceAudio: 7 } } })
-
-    expect(merged.anki.fieldMap.picture).toBe('')
-    expect(merged.anki.fieldMap.sentenceAudio).toBe('')
-  })
-
-  it('leaves every pre-existing Anki setting untouched while adding the new keys', () => {
-    const persisted = {
-      deckName: 'Japanese',
-      includeWordAudio: false,
-      fieldMap: { word: 'Expression', picture: 'Screenshot' }
-    }
-
-    const merged = mergeSettings({ anki: persisted })
-
-    expect(merged.anki).toMatchObject({ ...persisted, fieldMap: expect.any(Object) })
-    expect(merged.anki.fieldMap.word).toBe('Expression')
-    expect(merged.anki.fieldMap.picture).toBe('Screenshot')
-  })
-})
-
-describe('update settings', () => {
-  it('defaults missing and malformed automatic checks to on', () => {
-    expect(mergeSettings(undefined).updates).toEqual({ checkAutomatically: true })
-    expect(mergeSettings({ updates: { checkAutomatically: 'no' } }).updates).toEqual({
-      checkAutomatically: true
-    })
-  })
-
-  it('persists an explicit off value across reopening', () => {
-    const io = fakeIo(undefined)
-    const store = createSettingsStore(io)
-    store.set({ updates: { checkAutomatically: false } })
-
-    expect(createSettingsStore(io).get().updates).toEqual({ checkAutomatically: false })
   })
 })

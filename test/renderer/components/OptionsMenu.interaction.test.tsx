@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import OptionsMenu, { type OptionsMenuProps } from '@src/renderer/src/components/OptionsMenu'
@@ -13,7 +14,11 @@ function renderMenu(translationEnabled = false, onChangeTranslationEnabled = vi.
   render(
     <OptionsMenu
       {...base}
-      subtitles={{ ...base.subtitles, translationEnabled, onChangeTranslationEnabled }}
+      subtitles={{
+        ...base.subtitles,
+        settings: { ...initialPlayerState, translationEnabled },
+        onChange: onChangeTranslationEnabled
+      }}
     />
   )
 }
@@ -31,7 +36,11 @@ function renderMenuWithScreenshot(
   render(
     <OptionsMenu
       {...base}
-      playback={{ ...base.playback, screenshotFolder, onChangeScreenshotFolder }}
+      playback={{
+        ...base.playback,
+        settings: { ...initialPlayerState, screenshotFolder },
+        onChange: onChangeScreenshotFolder
+      }}
     />
   )
 }
@@ -48,7 +57,7 @@ describe('OptionsMenu screenshot folder', () => {
     fireEvent.change(input, { target: { value: '  E:\\Caps  ' } })
     fireEvent.blur(input)
     // Committed trimmed, not raw.
-    expect(onChangeScreenshotFolder).toHaveBeenCalledWith('E:\\Caps')
+    expect(onChangeScreenshotFolder).toHaveBeenCalledWith({ screenshotFolder: 'E:\\Caps' })
   })
 
   it('commits an emptied field as null (restores the default)', () => {
@@ -59,7 +68,7 @@ describe('OptionsMenu screenshot folder', () => {
     const input = screen.getByLabelText(/^Screenshot folder/) as HTMLInputElement
     fireEvent.change(input, { target: { value: '   ' } })
     fireEvent.blur(input)
-    expect(onChangeScreenshotFolder).toHaveBeenCalledWith(null)
+    expect(onChangeScreenshotFolder).toHaveBeenCalledWith({ screenshotFolder: null })
   })
 
   it('shows the placeholder and empty value when no folder is set', () => {
@@ -88,21 +97,24 @@ describe('OptionsMenu volume boost', () => {
 describe('OptionsMenu mpv config section', () => {
   it('reflects the enable flag and reports checkbox changes', () => {
     const onChangeMpvUserConfig = vi.fn()
-    renderMenuWithMpv({ mpvUserConfig: false, onChangeMpvUserConfig })
+    renderMenuWithMpv({
+      settings: { ...initialPlayerState, mpvUserConfig: false },
+      onChange: onChangeMpvUserConfig
+    })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
     const checkbox = screen.getByLabelText(/Load my mpv config folder/) as HTMLInputElement
     expect(checkbox.checked).toBe(false)
 
     fireEvent.click(checkbox)
-    expect(onChangeMpvUserConfig).toHaveBeenCalledWith(true)
+    expect(onChangeMpvUserConfig).toHaveBeenCalledWith({ mpvUserConfig: true })
   })
 
   it('shows stored extra args one per line and commits parsed args on blur', () => {
     const onChangeMpvExtraArgs = vi.fn()
     renderMenuWithMpv({
-      mpvExtraArgs: ['--hwdec=auto', '--profile=gpu-hq'],
-      onChangeMpvExtraArgs
+      settings: { ...initialPlayerState, mpvExtraArgs: ['--hwdec=auto', '--profile=gpu-hq'] },
+      onChange: onChangeMpvExtraArgs
     })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
@@ -112,12 +124,17 @@ describe('OptionsMenu mpv config section', () => {
     // Blank lines and surrounding whitespace are dropped on commit.
     fireEvent.change(textarea, { target: { value: '  --vo=gpu  \n\n--sub-scale=2\n' } })
     fireEvent.blur(textarea)
-    expect(onChangeMpvExtraArgs).toHaveBeenCalledWith(['--vo=gpu', '--sub-scale=2'])
+    expect(onChangeMpvExtraArgs).toHaveBeenCalledWith({
+      mpvExtraArgs: ['--vo=gpu', '--sub-scale=2']
+    })
   })
 
   it('drops an over-length argument on commit so it matches what main persists', () => {
     const onChangeMpvExtraArgs = vi.fn()
-    renderMenuWithMpv({ mpvExtraArgs: [], onChangeMpvExtraArgs })
+    renderMenuWithMpv({
+      settings: { ...initialPlayerState, mpvExtraArgs: [] },
+      onChange: onChangeMpvExtraArgs
+    })
 
     fireEvent.click(screen.getByRole('tab', { name: 'Playback' }))
     const textarea = screen.getByLabelText(/Extra mpv arguments/) as HTMLTextAreaElement
@@ -126,7 +143,7 @@ describe('OptionsMenu mpv config section', () => {
     fireEvent.blur(textarea)
     // Only the in-range arg survives — the renderer never reports the over-long
     // one as saved.
-    expect(onChangeMpvExtraArgs).toHaveBeenCalledWith(['--hwdec=auto'])
+    expect(onChangeMpvExtraArgs).toHaveBeenCalledWith({ mpvExtraArgs: ['--hwdec=auto'] })
   })
 
   it('opens the mpv config folder when the button is clicked', () => {
@@ -148,8 +165,8 @@ describe('OptionsMenu subtitle auto-pause', () => {
         {...base}
         playback={{
           ...base.playback,
-          subtitleAutoPauseTiming: 'before',
-          onChangeSubtitleAutoPauseTiming
+          settings: { ...initialPlayerState, subtitleAutoPauseTiming: 'before' },
+          onChange: onChangeSubtitleAutoPauseTiming
         }}
       />
     )
@@ -159,7 +176,9 @@ describe('OptionsMenu subtitle auto-pause', () => {
     }) as HTMLSelectElement
     expect(select.value).toBe('before')
     fireEvent.change(select, { target: { value: 'after' } })
-    expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith('after')
+    expect(onChangeSubtitleAutoPauseTiming).toHaveBeenCalledWith({
+      subtitleAutoPauseTiming: 'after'
+    })
   })
 
   it('shows and changes the unknown-word scope independently of timing', () => {
@@ -170,8 +189,8 @@ describe('OptionsMenu subtitle auto-pause', () => {
         {...base}
         playback={{
           ...base.playback,
-          subtitleAutoPauseScope: 'unknown',
-          onChangeSubtitleAutoPauseScope
+          settings: { ...initialPlayerState, subtitleAutoPauseScope: 'unknown' },
+          onChange: onChangeSubtitleAutoPauseScope
         }}
       />
     )
@@ -179,7 +198,7 @@ describe('OptionsMenu subtitle auto-pause', () => {
     const select = screen.getByRole('combobox', { name: /Pause on/ }) as HTMLSelectElement
     expect(select.value).toBe('unknown')
     fireEvent.change(select, { target: { value: 'all' } })
-    expect(onChangeSubtitleAutoPauseScope).toHaveBeenCalledWith('all')
+    expect(onChangeSubtitleAutoPauseScope).toHaveBeenCalledWith({ subtitleAutoPauseScope: 'all' })
   })
 })
 
@@ -197,7 +216,7 @@ describe('OptionsMenu experimental translation', () => {
     expect(screen.getByText(/sent to Microsoft Azure/)).not.toBeNull()
 
     fireEvent.click(checkbox)
-    expect(onChangeTranslationEnabled).toHaveBeenCalledWith(true)
+    expect(onChangeTranslationEnabled).toHaveBeenCalledWith({ translationEnabled: true })
 
     cleanup()
     renderMenu(true, onChangeTranslationEnabled)
@@ -207,7 +226,7 @@ describe('OptionsMenu experimental translation', () => {
         name: 'Enable experimental translation for subtitles and OCR'
       })
     )
-    expect(onChangeTranslationEnabled).toHaveBeenLastCalledWith(false)
+    expect(onChangeTranslationEnabled).toHaveBeenLastCalledWith({ translationEnabled: false })
     expect(screen.getByText(/official Microsoft Azure Translator resource/)).not.toBeNull()
   })
 })
@@ -221,8 +240,11 @@ describe('OptionsMenu subtitle background', () => {
         {...base}
         subtitles={{
           ...base.subtitles,
-          subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false },
-          onChangeSubtitleStyle
+          settings: {
+            ...initialPlayerState,
+            subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, backgroundEnabled: false }
+          },
+          onChange: onChangeSubtitleStyle
         }}
       />
     )
@@ -232,10 +254,14 @@ describe('OptionsMenu subtitle background', () => {
     expect((checkbox as HTMLInputElement).checked).toBe(false)
 
     fireEvent.click(checkbox)
-    expect(onChangeSubtitleStyle).toHaveBeenCalledWith({ backgroundEnabled: true })
+    expect(onChangeSubtitleStyle).toHaveBeenCalledWith({
+      subtitleStyle: { backgroundEnabled: true }
+    })
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
-    expect(onChangeSubtitleStyle).toHaveBeenLastCalledWith(DEFAULT_SUBTITLE_STYLE)
+    expect(onChangeSubtitleStyle).toHaveBeenLastCalledWith({
+      subtitleStyle: DEFAULT_SUBTITLE_STYLE
+    })
   })
 })
 

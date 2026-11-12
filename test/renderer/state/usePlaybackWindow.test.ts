@@ -70,7 +70,10 @@ describe('usePlaybackWindow', () => {
     expect(bridge.player.setAudioDelay).not.toHaveBeenCalled()
     expect(bridge.player.setSpeed).not.toHaveBeenCalled()
     expect(dispatch).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'setSubtitleOffset' })
+      expect.objectContaining({
+        type: 'set',
+        patch: expect.objectContaining({ subtitleOffsetMs: expect.anything() })
+      })
     )
 
     // The settings load fills the refs before it flips `settingsReady`.
@@ -79,8 +82,8 @@ describe('usePlaybackWindow', () => {
     perFileValues.audioDelaysRef.current = nextAudioDelays({}, FILE, -120)
     hook.rerender({ value: { ...input, settingsReady: true } })
 
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setSubtitleOffset', value: 450 })
-    expect(dispatch).toHaveBeenCalledWith({ type: 'setAudioDelay', value: -120 })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { subtitleOffsetMs: 450 } })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'set', patch: { audioDelayMs: -120 } })
     expect(bridge.player.setAudioDelay).toHaveBeenCalledWith(-120)
     expect(bridge.player.setSpeed).toHaveBeenCalledWith(1)
   })
