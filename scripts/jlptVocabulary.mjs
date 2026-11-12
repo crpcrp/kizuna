@@ -1,6 +1,6 @@
 /**
  * Pure transformation helpers for the pinned OpenJLPT vocabulary snapshot.
- * Network access and filesystem writes belong in update-jlpt-vocabulary.mjs.
+ * Network access and filesystem writes belong in update-jlpt.mjs.
  */
 
 export const JLPT_LEVELS = Object.freeze(['N5', 'N4', 'N3', 'N2', 'N1'])
@@ -17,10 +17,11 @@ export const VOCABULARY_SOURCE = Object.freeze({
 const levelOrder = new Map(JLPT_LEVELS.map((level, index) => [level, index]))
 
 /** @param {unknown} value @returns {value is Record<string, unknown>} */
-const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
+export const isRecord = (value) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
 
 /** @param {string} value @returns {string} */
-const normalizeText = (value) => value.normalize('NFC').trim()
+export const normalizeText = (value) => value.normalize('NFC').trim()
 
 /** @param {string} value @param {string} source @returns {unknown} */
 const parseJson = (value, source) => {
@@ -32,7 +33,7 @@ const parseJson = (value, source) => {
 }
 
 /** @param {string} contents @param {string} source @returns {unknown[]} */
-const parseRecords = (contents, source) => {
+export const parseRecords = (contents, source) => {
   const value = parseJson(contents, source)
   if (!Array.isArray(value)) throw new Error(`${source} must contain an array of records`)
   return value
@@ -103,30 +104,31 @@ export function deduplicateAndSortEntries(entries) {
 /**
  * Build the complete deterministic snapshot from one input per JLPT level.
  *
+ * @template Entry
  * @param {{ level: 'N5' | 'N4' | 'N3' | 'N2' | 'N1', contents: string, source?: string }[]} files
- * @returns {{ schemaVersion: 1, source: typeof VOCABULARY_SOURCE, inputRecordCount: number, entries: VocabularyEntry[] }}
+ * @param {(records: unknown[], level: 'N5' | 'N4' | 'N3' | 'N2' | 'N1', source: string) => Entry[]} project
+ * @param {(entries: Entry[]) => Entry[]} deduplicate
+ * @returns {{ schemaVersion: 1, source: typeof VOCABULARY_SOURCE, inputRecordCount: number, entries: Entry[] }}
  */
-export function createVocabularySnapshot(files) {
+export function createSnapshot(files, project, deduplicate) {
   const projected = files.map(({ level, contents, source }) => {
     const input = parseRecords(contents, source ?? level)
-    return {
-      inputRecordCount: input.length,
-      entries: projectVocabularyRecords(input, level, source ?? level)
-    }
+    return { inputRecordCount: input.length, entries: project(input, level, source ?? level) }
   })
-  const inputRecordCount = projected.reduce((total, file) => {
-    return total + file.inputRecordCount
-  }, 0)
   return {
     schemaVersion: 1,
     source: { ...VOCABULARY_SOURCE },
-    inputRecordCount,
-    entries: deduplicateAndSortEntries(projected.flatMap((file) => file.entries))
+    inputRecordCount: projected.reduce((total, file) => total + file.inputRecordCount, 0),
+    entries: deduplicate(projected.flatMap((file) => file.entries))
   }
 }
 
-/** @param {ReturnType<typeof createVocabularySnapshot>} snapshot @returns {string} */
-export function serializeVocabularySnapshot(snapshot) {
+/** @param {Parameters<typeof createSnapshot>[0]} files */
+export const createVocabularySnapshot = (files) =>
+  createSnapshot(files, projectVocabularyRecords, deduplicateAndSortEntries)
+
+/** @param {ReturnType<typeof createSnapshot>} snapshot @returns {string} */
+export function serializeSnapshot(snapshot) {
   const sourceLines = JSON.stringify(snapshot.source, null, 2).split('\n')
   const entries = snapshot.entries.map(
     (entry, index) =>

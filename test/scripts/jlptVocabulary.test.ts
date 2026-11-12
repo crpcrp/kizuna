@@ -5,7 +5,7 @@ import {
   deduplicateAndSortEntries,
   parseVocabularyFile,
   projectVocabularyRecords,
-  serializeVocabularySnapshot
+  serializeSnapshot
 } from '@scripts/jlptVocabulary.mjs'
 
 type VocabularyEntry = import('@scripts/jlptVocabulary.mjs').VocabularyEntry
@@ -95,8 +95,8 @@ describe('createVocabularySnapshot', () => {
       inputRecordCount: 1,
       entries: [['猫', 'ねこ', 'N5']]
     })
-    expect(serializeVocabularySnapshot(snapshot)).not.toContain('meanings')
-    expect(serializeVocabularySnapshot(snapshot)).not.toContain('examples')
+    expect(serializeSnapshot(snapshot)).not.toContain('meanings')
+    expect(serializeSnapshot(snapshot)).not.toContain('examples')
   })
 
   it('produces the same snapshot for the same inputs in any file order', () => {
