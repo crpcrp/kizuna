@@ -15,7 +15,7 @@ import { useBulkMining, type BulkMiningViewModel } from './useBulkMining'
 import { useKnowledgeOptions, type VocabularyKnowledgeOptions } from './useKnowledgeOptions'
 import { useLatestCallback } from './useLatestRef'
 import { useSubtitleReport } from './useSubtitleReport'
-import { useVocabularyCaches } from './useVocabularyCaches'
+import { useVocabularyPipeline } from './useVocabularyPipeline'
 import { useWordPopup, type CardImageDialogViewModel } from './useWordPopup'
 import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
 
@@ -96,7 +96,7 @@ export interface UseVocabularyMiningResult {
 
 /**
  * Composes the renderer's vocabulary and mining lifecycle from the five hooks
- * that own its parts — `useSubtitleReport`, `useVocabularyCaches`,
+ * that own its parts — `useSubtitleReport`, `useVocabularyPipeline`,
  * `useWordPopup`, `useKnowledgeOptions` and `useBulkMining` — plus the two
  * pieces that belong to none of them: the mined-line media source both mining
  * paths share, and the all-subtitles panel's copy and translate actions. The
@@ -134,9 +134,9 @@ export function useVocabularyMining({
 
   const report = useSubtitleReport({ bridge })
 
-  const caches = useVocabularyCaches({
+  const caches = useVocabularyPipeline({
     dispatch,
-    bridge,
+    bridges: bridge,
     cues: state.cues,
     activeCue,
     activeCueKey,

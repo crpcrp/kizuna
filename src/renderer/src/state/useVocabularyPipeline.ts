@@ -1,17 +1,12 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  type Dispatch as ReactDispatch,
-  type RefObject,
-  type SetStateAction
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Cue } from '../../../shared/cue'
 import type { Token } from '../../../shared/token'
-import type { KnowledgeDetails, KnowledgeLevel, SyncStatus } from '../../../shared/knowledge'
+import type { KnowledgeDetails, SyncStatus } from '../../../shared/knowledge'
 import type { PopupSortOrder } from '../../../shared/playerSettings'
-import { type Dispatch, type SubtitleRequestToken } from './mediaSession'
+import { type Dispatch } from './mediaSession'
 import {
+  createVocabularyCaches,
+  type VocabularyCaches,
   type KnowledgeBridge,
   type MecabBatchBridge,
   type MecabBridge,
@@ -21,11 +16,11 @@ import {
   tokenizeAllCues
 } from './tokenization'
 import { type DictLookupBridge } from './wordLookup'
-import type {
-  WholeTrackVocabularyCoordinator,
-  WholeTrackVocabularyResult
+import type { WholeTrackVocabularyResult } from './wholeTrackVocabulary'
+import {
+  createWholeTrackVocabularyCoordinator,
+  wholeTrackVocabularyDependencyKey
 } from './wholeTrackVocabulary'
-import { wholeTrackVocabularyDependencyKey } from './wholeTrackVocabulary'
 import type { VocabularySpan } from './vocabularySpans'
 import type { SubtitleReportController } from './subtitleReportController'
 
@@ -57,15 +52,6 @@ export interface UseVocabularyPipelineInput {
   sortOrder: PopupSortOrder
   dictionarySettings: unknown
   knowledgeEpoch: number
-  tokenCacheRef: RefObject<Map<string, Token[]>>
-  tokenizeTokenRef: RefObject<SubtitleRequestToken>
-  knownLevelsCacheRef: RefObject<Map<string, KnowledgeLevel>>
-  knownLevelsTokenRef: RefObject<SubtitleRequestToken>
-  allCuesTokenRef: RefObject<SubtitleRequestToken>
-  allCuesLevelsTokenRef: RefObject<SubtitleRequestToken>
-  wholeTrackVocabularyRef: RefObject<WholeTrackVocabularyCoordinator>
-  vocabularySpanEpochRef: RefObject<number>
-  setVocabularySpansByCue: ReactDispatch<SetStateAction<Record<string, VocabularySpan[]>>>
   reportController: SubtitleReportController
 }
 
@@ -73,13 +59,11 @@ export interface UseVocabularyPipelineResult {
   /** Prepares (or reuses) the current whole-track vocabulary snapshot — shared by
    * bulk mining, the subtitle report, and their retry actions. */
   prepareWholeTrackVocabulary: () => Promise<WholeTrackVocabularyResult>
+  spansForCue(cueKey: string | undefined): VocabularySpan[] | undefined
+  refs: RefObject<VocabularyCaches>
+  invalidateVocabularySpans(): void
 }
 
-/**
- * Owns the active-cue tokenization, tokenize-all (sidebar), whole-track
- * vocabulary, and subtitle-report recomputation cluster. See
- * `docs/codebase-map.md` for the invariants this preserves.
- */
 export function useVocabularyPipeline({
   dispatch,
   bridges,
@@ -97,17 +81,24 @@ export function useVocabularyPipeline({
   sortOrder,
   dictionarySettings,
   knowledgeEpoch,
-  tokenCacheRef,
-  tokenizeTokenRef,
-  knownLevelsCacheRef,
-  knownLevelsTokenRef,
-  allCuesTokenRef,
-  allCuesLevelsTokenRef,
-  wholeTrackVocabularyRef,
-  vocabularySpanEpochRef,
-  setVocabularySpansByCue,
   reportController
 }: UseVocabularyPipelineInput): UseVocabularyPipelineResult {
+  const refs = useRef(createVocabularyCaches())
+  const wholeTrackVocabulary = useRef(createWholeTrackVocabularyCoordinator())
+  const vocabularySpanEpochRef = useRef(0)
+  const [vocabularySpansByCue, setVocabularySpansByCue] = useState<
+    Record<string, VocabularySpan[]>
+  >({})
+  const invalidateVocabularySpans = useCallback((): void => {
+    wholeTrackVocabulary.current.invalidate()
+    vocabularySpanEpochRef.current++
+    setVocabularySpansByCue({})
+  }, [wholeTrackVocabulary])
+  const spansForCue = useCallback(
+    (key: string | undefined) => (key ? vocabularySpansByCue[key] : undefined),
+    [vocabularySpansByCue]
+  )
+
   const tokenizedSpanCues = useMemo(
     () =>
       cues.flatMap((cue) => {
@@ -146,48 +137,31 @@ export function useVocabularyPipeline({
   // so a late Japanese result cannot repaint the newly selected plain-text track.
   useEffect(() => {
     if (japaneseSubtitleSelected) return
-    tokenizeTokenRef.current.current++
-    knownLevelsTokenRef.current.current++
-    allCuesTokenRef.current.current++
-    allCuesLevelsTokenRef.current.current++
+    refs.current.tokens.active.current++
+    refs.current.tokens.levels.current++
+    refs.current.tokens.allCues.current++
+    refs.current.tokens.allCuesLevels.current++
     dispatch({ type: 'resetTokenization' })
-  }, [
-    japaneseSubtitleSelected,
-    dispatch,
-    tokenizeTokenRef,
-    knownLevelsTokenRef,
-    allCuesTokenRef,
-    allCuesLevelsTokenRef
-  ])
+  }, [japaneseSubtitleSelected, dispatch, refs])
 
-  // Lazily (re)tokenizes the active cue via MeCab — only when the active cue
-  // identity actually changes (activeCueKey in the dep array), never on
-  // every timePos tick. tokenizeActiveCue itself caches by cue key, so
-  // scrubbing back to an already-tokenized cue is a synchronous dispatch.
-  // Chained after it, resolveKnownLevels resolves each token's knowledge
-  // level (used for SubtitleOverlay's coloring) — it
-  // needs tokenizeActiveCue's resolved token list, not state.activeTokens,
-  // since that dispatch hasn't landed yet within this same effect tick.
+  // Tokenize only when the active cue changes, then resolve its knowledge levels.
   useEffect(() => {
     if (!japaneseSubtitleSelected) return
     tokenizeActiveCue(
       bridges.mecab,
       dispatch,
       activeCue,
-      tokenCacheRef.current,
-      tokenizeTokenRef.current
+      refs.current.tokenCache,
+      refs.current.tokens.active
     ).then((tokens) =>
       resolveKnownLevels(
         bridges.knowledge,
         dispatch,
         tokens,
-        knownLevelsCacheRef.current,
-        knownLevelsTokenRef.current
+        refs.current.knownLevelsCache,
+        refs.current.tokens.levels
       )
     )
-    // activeCue is listed for the linter but never re-fires this on its own:
-    // it is the cue object activeCueKey identifies, so it only changes identity
-    // when that key does (or when the whole cue list is replaced).
   }, [
     activeCueKey,
     japaneseSubtitleSelected,
@@ -195,19 +169,10 @@ export function useVocabularyPipeline({
     bridges.mecab,
     bridges.knowledge,
     dispatch,
-    tokenCacheRef,
-    tokenizeTokenRef,
-    knownLevelsCacheRef,
-    knownLevelsTokenRef
+    refs
   ])
 
-  // Lazily tokenizes every cue of the current track (for SubtitleSidebar's
-  // per-word coloring) once the sidebar is open — never while it's closed, so
-  // a viewer who never opens it pays no extra MeCab/knowledge cost. Reuses
-  // tokenCache/knownLevelsCache (shared with tokenizeActiveCue above), so
-  // cues already tokenized while playing aren't re-sent to MeCab. Re-runs
-  // when state.cues changes identity (new track loaded), since cuesLoaded
-  // resets allCueTokens to {}.
+  // The sidebar warms the same caches without cancelling active-cue work.
   useEffect(() => {
     if (!japaneseSubtitleSelected || !sidebarOpen || cues.length === 0) return
     tokenizeAllCues(
@@ -215,10 +180,10 @@ export function useVocabularyPipeline({
       bridges.knowledge,
       dispatch,
       cues,
-      tokenCacheRef.current,
-      knownLevelsCacheRef.current,
-      allCuesTokenRef.current,
-      allCuesLevelsTokenRef.current
+      refs.current.tokenCache,
+      refs.current.knownLevelsCache,
+      refs.current.tokens.allCues,
+      refs.current.tokens.allCuesLevels
     )
   }, [
     sidebarOpen,
@@ -227,37 +192,26 @@ export function useVocabularyPipeline({
     bridges.mecab,
     bridges.knowledge,
     dispatch,
-    tokenCacheRef,
-    knownLevelsCacheRef,
-    allCuesTokenRef,
-    allCuesLevelsTokenRef
+    refs
   ])
 
-  useEffect(() => {
-    wholeTrackVocabularyRef.current.invalidate()
-    vocabularySpanEpochRef.current++
-    setVocabularySpansByCue({})
-  }, [
-    wholeTrackVocabularyKey,
-    wholeTrackVocabularyRef,
-    vocabularySpanEpochRef,
-    setVocabularySpansByCue
-  ])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset projections when the external track/dictionary identity changes.
+  useEffect(invalidateVocabularySpans, [wholeTrackVocabularyKey, invalidateVocabularySpans])
 
   const prepareWholeTrackVocabulary = useCallback(() => {
     if (!japaneseSubtitleSelected || cues.length === 0)
       return Promise.resolve({ kind: 'stale' } as const)
     const epoch = vocabularySpanEpochRef.current
-    return wholeTrackVocabularyRef.current.prepare({
+    return wholeTrackVocabulary.current.prepare({
       mecab: bridges.mecab,
       dict: bridges.dict,
       knowledge: bridges.knowledge,
       dispatch,
       cues,
-      tokenCache: tokenCacheRef.current,
-      knownLevelsCache: knownLevelsCacheRef.current,
-      allCuesToken: allCuesTokenRef.current,
-      allCuesLevelsToken: allCuesLevelsTokenRef.current,
+      tokenCache: refs.current.tokenCache,
+      knownLevelsCache: refs.current.knownLevelsCache,
+      allCuesToken: refs.current.tokens.allCues,
+      allCuesLevelsToken: refs.current.tokens.allCuesLevels,
       frequencyDictId,
       sortOrder,
       epoch: { file: epoch, track: epoch, tokenization: epoch, dictionary: epoch, knowledge: epoch }
@@ -278,11 +232,8 @@ export function useVocabularyPipeline({
     bridges.mecab,
     bridges.dict,
     bridges.knowledge,
-    tokenCacheRef,
-    knownLevelsCacheRef,
-    allCuesTokenRef,
-    allCuesLevelsTokenRef,
-    wholeTrackVocabularyRef,
+    refs,
+    wholeTrackVocabulary,
     vocabularySpanEpochRef
   ])
 
@@ -299,12 +250,6 @@ export function useVocabularyPipeline({
     setVocabularySpansByCue
   ])
 
-  // (Re)computes the subtitle report while its modal is open, sharing
-  // tokenCache/knownLevelsCache/allCuesToken with the sidebar effect above
-  // (see tokenizeAllCues). Keyed on state.cues and the Japanese-track flag
-  // so switching files or subtitle tracks while the modal is open
-  // recomputes automatically; the controller's own request token makes the
-  // latest call win over a stale in-flight one.
   useEffect(() => {
     if (!reportOpen) return
     void reportController.open({
@@ -313,5 +258,5 @@ export function useVocabularyPipeline({
     })
   }, [reportOpen, prepareWholeTrackVocabulary, bridges.knowledge, reportController])
 
-  return { prepareWholeTrackVocabulary }
+  return { prepareWholeTrackVocabulary, spansForCue, refs, invalidateVocabularySpans }
 }

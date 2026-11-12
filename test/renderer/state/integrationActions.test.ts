@@ -19,6 +19,7 @@ import {
   syncKnowledgeAndRefresh
 } from '@src/renderer/src/state/integrationActions'
 import type { OptionsDataController } from '@src/renderer/src/state/optionsData'
+import { createVocabularyCaches } from '@src/renderer/src/state/tokenization'
 import type { PlayerAction } from '@src/renderer/src/state/playerState'
 
 function fakeOptionsData(): OptionsDataController & { load: ReturnType<typeof vi.fn> } {
@@ -87,11 +88,7 @@ describe('selectMecabDict', () => {
       activeCue: undefined,
       cues: [],
       sidebarOpen: false,
-      tokenCache: new Map(),
-      knownLevelsCache: new Map(),
-      activeToken: { current: 0 },
-      allCuesToken: { current: 0 },
-      allCuesLevelsToken: { current: 0 },
+      caches: createVocabularyCaches(),
       optionsData,
       id: 'unidic'
     })
