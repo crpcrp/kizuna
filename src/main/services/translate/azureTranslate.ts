@@ -1,5 +1,6 @@
 import type { HttpFetch, HttpRequest } from '../http'
 import type { Translator } from './translator'
+import { isRecord } from '../../../shared/guards'
 
 export const MAX_AZURE_TRANSLATE_CHARS = 50_000
 
@@ -25,7 +26,7 @@ export function parseAzureTranslateResponse(raw: unknown): string {
   }
 
   const firstResult = raw[0]
-  if (typeof firstResult !== 'object' || firstResult === null || Array.isArray(firstResult)) {
+  if (!isRecord(firstResult)) {
     throw new Error(UNEXPECTED_RESPONSE_MESSAGE)
   }
 

@@ -257,7 +257,7 @@ export function normalizeApiKey(value: unknown): string {
 }
 
 function sanitizeError(value: unknown): JimakuError {
-  const object = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const object = isRecord(value) ? value : {}
   const code = isJimakuErrorCode(object.code) ? object.code : 'network'
   if (code === 'rateLimited' && typeof object.retryAt === 'string') {
     const retryAt = object.retryAt

@@ -1,3 +1,4 @@
+import { isRecord } from './guards'
 // Safe, renderer-neutral representation of Yomitan structured glossary content.
 
 export type GlossaryNode = string | GlossaryElement
@@ -119,7 +120,7 @@ const SAFE_STYLE_PROPERTIES = new Set([
 ])
 
 function safeStyle(style: unknown): Record<string, string> {
-  if (!style || typeof style !== 'object' || Array.isArray(style)) return {}
+  if (!isRecord(style)) return {}
   const normalized: Record<string, string> = {}
   for (const [property, value] of Object.entries(style)) {
     if (
@@ -135,7 +136,7 @@ function safeStyle(style: unknown): Record<string, string> {
 }
 
 function safeData(data: unknown): Record<string, string> {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return {}
+  if (!isRecord(data)) return {}
   const normalized: Record<string, string> = {}
   for (const [key, value] of Object.entries(data)) {
     if (/^[A-Za-z][A-Za-z0-9_-]*$/.test(key) && typeof value === 'string') normalized[key] = value

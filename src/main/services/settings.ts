@@ -108,7 +108,7 @@ export const defaultSettings: Settings = {
  * covered on either host.
  */
 export function mergeSettings(raw: unknown, options: PathNormalizationOptions = {}): Settings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
 
   const mecabDictId =
     obj.mecabDictId === 'ipadic' || obj.mecabDictId === 'unidic'
@@ -134,7 +134,7 @@ export function mergeSettings(raw: unknown, options: PathNormalizationOptions = 
 }
 
 function mergeJimakuSettings(raw: unknown, options: PathNormalizationOptions): JimakuSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
   return {
     apiKeyEnc: typeof obj.apiKeyEnc === 'string' ? obj.apiKeyEnc : defaultJimakuSettings.apiKeyEnc,
     folderHints: normalizeJimakuFolderHints(obj.folderHints, options)
@@ -287,7 +287,7 @@ function isJimakuTimestamp(value: unknown): value is number {
 }
 
 function mergeTranslationSettings(raw: unknown): TranslationSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
   return {
     azureSubscriptionKeyEnc:
       typeof obj.azureSubscriptionKeyEnc === 'string'
@@ -301,14 +301,14 @@ function mergeTranslationSettings(raw: unknown): TranslationSettings {
 }
 
 function mergeGameOcrSettings(raw: unknown): GameOcrSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
   return {
     captureShortcut: normalizeGameOcrShortcut(obj.captureShortcut)
   }
 }
 
 function mergeUpdateSettings(raw: unknown): UpdateSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
   return {
     checkAutomatically:
       typeof obj.checkAutomatically === 'boolean'
@@ -319,7 +319,7 @@ function mergeUpdateSettings(raw: unknown): UpdateSettings {
 
 /** Deep-merges `raw.player` against `DEFAULT_PLAYER_SETTINGS`; never throws. */
 function mergePlayerSettings(raw: unknown): PlayerSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
 
   return {
     startupBehavior: normalizeStartupBehavior(obj.startupBehavior),
@@ -382,7 +382,7 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
  * wholesale, so one corrupted entry doesn't discard every other file's stored
  * offset. Serves `subtitleOffsets`, `folderSubtitleOffsets`, and `audioDelays`. */
 function mergeOffsetMap(raw: unknown): Record<string, number> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  if (!isRecord(raw)) return {}
   const result: Record<string, number> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     if (typeof value === 'number' && Number.isFinite(value)) result[key] = value
@@ -392,7 +392,7 @@ function mergeOffsetMap(raw: unknown): Record<string, number> {
 
 /** Deep-merges `raw.knowledge` against `defaultKnowledgeSettings`; never throws. */
 function mergeKnowledgeSettings(raw: unknown): KnowledgeSettings {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = isRecord(raw) ? raw : {}
 
   return {
     wanikaniTokenEnc:

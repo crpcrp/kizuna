@@ -3,6 +3,7 @@ import type { JimakuSubtitleExportRequest, JimakuTitleSearchRequest } from '../s
 import { normalizeJimakuSubtitleProvenance } from '../shared/mediaHistory'
 import type { IpcMainHandleLike } from './ipc'
 import type { JimakuService } from './services/jimaku/service'
+import { isRecord } from '../shared/guards'
 
 export interface JimakuBridgeEvent {
   sender: unknown
@@ -86,7 +87,7 @@ export function registerJimakuBridge<E extends JimakuBridgeEvent>(
 }
 
 function titleRequest(value: unknown): JimakuTitleSearchRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error('Invalid Jimaku title search request.')
   }
   const request = value as Record<string, unknown>
@@ -138,7 +139,7 @@ function requiredPositiveInteger(value: unknown): number {
 }
 
 function exportRequest(value: unknown): JimakuSubtitleExportRequest {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new Error('Invalid Jimaku export request.')
   }
   const request = value as Record<string, unknown>

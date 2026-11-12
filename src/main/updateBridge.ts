@@ -3,6 +3,7 @@ import type { UpdateCheckOrigin, UpdateSettings, UpdateState } from '../shared/u
 import type { IpcMainHandleLike } from './ipc'
 import type { UpdateService } from './updateService'
 import type { SettingsStore } from './services/settings'
+import { isRecord } from '../shared/guards'
 
 export interface UpdateBridgeEvent {
   sender: unknown
@@ -34,7 +35,7 @@ export function registerUpdateBridge<E extends UpdateBridgeEvent>(
   })
   ipc.handle(UPDATE_CHANNELS.setSettings, (event, value): UpdateSettings => {
     allowed(event)
-    const patch = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+    const patch = isRecord(value) ? value : {}
     const current = settings.get().updates
     return settings.set({
       updates: {
