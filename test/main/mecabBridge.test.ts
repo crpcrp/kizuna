@@ -1,139 +1,36 @@
 import { describe, it, expect, vi } from 'vitest'
-import { registerMecabBridge, type MecabServiceLike } from '@src/main/mecabBridge'
+import {
+  registerMecabBridge,
+  type MecabServiceLike,
+  createMecabService,
+  mapWithConcurrency
+} from '@src/main/mecabBridge'
 import { MECAB_CHANNELS } from '@src/shared/ipcChannels'
 import type { Token } from '@src/shared/token'
 import type { McDict } from '@src/shared/mecab'
-import {
-  expectUntouched,
-  fakeIpc,
-  invokeRejection,
-  type FakeEvent
-} from '@test/harness/fakeIpcMain'
+import { expectUntouched, fakeIpc, invokeRejection } from '@test/harness/fakeIpcMain'
 import { makeToken } from '@test/harness/tokenFixtures'
+import { createSettingsStore } from '@src/main/services/settings'
+import type { MecabConfig } from '@src/main/services/mecab/runner'
+import { fakeIo } from '@test/harness/fakeSettingsIo'
+import { deferred } from '@test/harness/deferred'
 
 const sampleToken: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const sampleDicts: McDict[] = [
   { id: 'ipadic', label: 'IPADIC', dicdir: '/ipadic', flavor: 'ipadic', installed: true }
 ]
 
-/** Fake mecab service: records calls. */
+/** Fake mecab service for the malformed-input cases. */
 function fakeService() {
-  const calls: Record<string, unknown[]> = {}
   const service: MecabServiceLike = {
-    tokenize: vi.fn(async (text: string) => {
-      calls.tokenize = [text]
-      return [sampleToken]
-    }),
-    tokenizeBatch: vi.fn(async (texts: string[]) => {
-      calls.tokenizeBatch = [texts]
-      return texts.map(() => [sampleToken])
-    }),
-    listDicts: vi.fn(() => {
-      calls.listDicts = []
-      return sampleDicts
-    }),
-    selectDict: vi.fn((id: string): 'ipadic' | 'unidic' => {
-      calls.selectDict = [id]
-      return 'ipadic'
-    }),
-    currentDict: vi.fn((): 'ipadic' | 'unidic' => {
-      calls.currentDict = []
-      return 'ipadic'
-    })
+    tokenize: vi.fn(async () => [sampleToken]),
+    tokenizeBatch: vi.fn(async (texts: string[]) => texts.map(() => [sampleToken])),
+    listDicts: vi.fn(() => sampleDicts),
+    selectDict: vi.fn((): 'ipadic' | 'unidic' => 'ipadic'),
+    currentDict: vi.fn((): 'ipadic' | 'unidic' => 'ipadic')
   }
-  return { service, calls }
+  return { service }
 }
-
-describe('registerMecabBridge', () => {
-  const event: FakeEvent = { senderId: 1 }
-
-  it('registers every command channel', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        MECAB_CHANNELS.tokenize,
-        MECAB_CHANNELS.tokenizeBatch,
-        MECAB_CHANNELS.listDicts,
-        MECAB_CHANNELS.selectDict,
-        MECAB_CHANNELS.currentDict,
-        MECAB_CHANNELS.openUserUnidicDir
-      ].sort()
-    )
-  })
-
-  it('forwards tokenize to service.tokenize and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    const result = await handlers.get(MECAB_CHANNELS.tokenize)!(event, '猫が魚を食べます。')
-
-    expect(service.tokenize).toHaveBeenCalledWith('猫が魚を食べます。')
-    expect(calls.tokenize).toEqual(['猫が魚を食べます。'])
-    expect(result).toEqual([sampleToken])
-  })
-
-  it('forwards tokenizeBatch to service.tokenizeBatch and returns its result', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    const texts = ['猫が魚を食べます。', '犬が走る。']
-    const result = await handlers.get(MECAB_CHANNELS.tokenizeBatch)!(event, texts)
-
-    expect(service.tokenizeBatch).toHaveBeenCalledWith(texts)
-    expect(calls.tokenizeBatch).toEqual([texts])
-    expect(result).toEqual([[sampleToken], [sampleToken]])
-  })
-
-  it('forwards listDicts to service.listDicts and returns its result', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    const result = handlers.get(MECAB_CHANNELS.listDicts)!(event)
-
-    expect(service.listDicts).toHaveBeenCalled()
-    expect(result).toEqual(sampleDicts)
-  })
-
-  it('forwards selectDict to service.selectDict with the given id and returns its result', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    const result = handlers.get(MECAB_CHANNELS.selectDict)!(event, 'unidic')
-
-    expect(service.selectDict).toHaveBeenCalledWith('unidic')
-    expect(calls.selectDict).toEqual(['unidic'])
-    expect(result).toBe('ipadic')
-  })
-
-  it('forwards currentDict to service.currentDict and returns its result', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service, calls } = fakeService()
-    registerMecabBridge(ipc, service)
-
-    const result = handlers.get(MECAB_CHANNELS.currentDict)!(event)
-
-    expect(service.currentDict).toHaveBeenCalled()
-    expect(calls.currentDict).toEqual([])
-    expect(result).toBe('ipadic')
-  })
-
-  it('forwards openUserUnidicDir to the injected folder opener', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { service } = fakeService()
-    const openUserUnidicDir = vi.fn(async () => 'open-error')
-    registerMecabBridge(ipc, service, { openUserUnidicDir })
-
-    await expect(handlers.get(MECAB_CHANNELS.openUserUnidicDir)!(event)).resolves.toBe('open-error')
-    expect(openUserUnidicDir).toHaveBeenCalledTimes(1)
-  })
-})
 
 describe('registerMecabBridge malformed requests', () => {
   it.each([
@@ -150,5 +47,317 @@ describe('registerMecabBridge malformed requests', () => {
 
     expect(err).toEqual(new Error(`Invalid ${channel} request.`))
     expectUntouched(service)
+  })
+})
+
+const IPADIC_DIR = 'C:\\resources\\mecab\\ipadic'
+const UNIDIC_DIR = 'C:\\resources\\mecab\\unidic'
+const USER_UNIDIC_DIR = 'C:\\Users\\me\\AppData\\Roaming\\Kizuna\\mecab\\unidic'
+
+function fakeTokenizeFn() {
+  const calls: Array<{ cfg: MecabConfig; text: string }> = []
+  const tokenizeFn = vi.fn(async (cfg: MecabConfig, text: string) => {
+    calls.push({ cfg, text })
+    return [sampleToken]
+  })
+  return { tokenizeFn, calls }
+}
+
+describe('createMecabService', () => {
+  it('tokenize uses the currently-selected dict (default ipadic)', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'C:\\resources\\mecab\\mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    const tokens = await service.tokenize('猫が魚を食べます。')
+
+    expect(calls).toEqual([
+      {
+        cfg: { mecabPath: 'C:\\resources\\mecab\\mecab.exe', dicdir: IPADIC_DIR, flavor: 'ipadic' },
+        text: '猫が魚を食べます。'
+      }
+    ])
+    expect(tokens).toEqual([sampleToken])
+  })
+
+  it('tokenizeBatch tokenizes each text against the selected dict, in order', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'C:\\resources\\mecab\\mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    const result = await service.tokenizeBatch(['一', '二', '三'])
+
+    expect(calls.map((c) => c.text)).toEqual(['一', '二', '三'])
+    expect(calls.every((c) => c.cfg.dicdir === IPADIC_DIR)).toBe(true)
+    expect(result).toEqual([[sampleToken], [sampleToken], [sampleToken]])
+  })
+
+  it('tokenizeBatch returns an empty array for no texts (no tokenize calls)', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(await service.tokenizeBatch([])).toEqual([])
+    expect(calls).toEqual([])
+  })
+
+  it('tokenize uses unidic after selectDict switches to it', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    service.selectDict('unidic')
+    await service.tokenize('text')
+
+    expect(calls[0].cfg).toEqual({ mecabPath: 'mecab.exe', dicdir: UNIDIC_DIR, flavor: 'unidic' })
+  })
+
+  it('tokenize prefers the persistent user UniDic over the bundled copy', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(JSON.stringify({ mecabDictId: 'unidic' })))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: {
+        ipadicDir: IPADIC_DIR,
+        unidicDir: UNIDIC_DIR,
+        userUnidicDir: USER_UNIDIC_DIR
+      },
+      exists: (path) => path === IPADIC_DIR || path === UNIDIC_DIR || path === USER_UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    await service.tokenize('text')
+
+    expect(calls[0].cfg).toEqual({
+      mecabPath: 'mecab.exe',
+      dicdir: USER_UNIDIC_DIR,
+      flavor: 'unidic'
+    })
+  })
+
+  it('listDicts lists both dicts, flagging the absent unidic as not installed', () => {
+    const { tokenizeFn } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(service.listDicts()).toEqual([
+      { id: 'ipadic', label: 'IPADIC', dicdir: IPADIC_DIR, flavor: 'ipadic', installed: true },
+      { id: 'unidic', label: 'UniDic', dicdir: UNIDIC_DIR, flavor: 'unidic', installed: false }
+    ])
+  })
+
+  it('selectDict persists the choice via the settings store', () => {
+    const { tokenizeFn } = fakeTokenizeFn()
+    const io = fakeIo(undefined)
+    const settings = createSettingsStore(io)
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    const resolved = service.selectDict('unidic')
+
+    expect(resolved).toBe('unidic')
+    expect(settings.get().mecabDictId).toBe('unidic')
+    // reopening reads the persisted choice
+    const reopened = createSettingsStore(io)
+    expect(reopened.get().mecabDictId).toBe('unidic')
+  })
+
+  it('selectDict falls back to ipadic when the requested dict is unavailable', () => {
+    const { tokenizeFn } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR }, // no unidicDir at all
+      exists: (p) => p === IPADIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    const resolved = service.selectDict('unidic')
+
+    expect(resolved).toBe('ipadic')
+    expect(settings.get().mecabDictId).toBe('ipadic')
+  })
+
+  it('never tokenizes with a missing unidic: selecting it is refused and ipadic stays active', async () => {
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      // unidicDir is configured but not on disk — listDicts still shows it.
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(service.selectDict('unidic')).toBe('ipadic')
+    await service.tokenize('text')
+
+    expect(calls[0].cfg).toEqual({ mecabPath: 'mecab.exe', dicdir: IPADIC_DIR, flavor: 'ipadic' })
+  })
+
+  it('currentDict returns the id persisted in the settings store', () => {
+    const { tokenizeFn } = fakeTokenizeFn()
+    const settings = createSettingsStore(fakeIo(undefined))
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, unidicDir: UNIDIC_DIR },
+      exists: (p) => p === IPADIC_DIR || p === UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    service.selectDict('unidic')
+
+    expect(service.currentDict()).toBe('unidic')
+  })
+
+  it('currentDict falls back to the first available dict when the persisted id is unavailable', () => {
+    const { tokenizeFn } = fakeTokenizeFn()
+    // Settings already has 'unidic' persisted from a previous run, but this
+    // run's dictPaths has no unidicDir installed.
+    const io = fakeIo(JSON.stringify({ mecabDictId: 'unidic' }))
+    const settings = createSettingsStore(io)
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR },
+      exists: (p) => p === IPADIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(service.currentDict()).toBe('ipadic')
+  })
+
+  it('keeps a selected persistent UniDic after reopening the settings store', async () => {
+    const io = fakeIo(JSON.stringify({ mecabDictId: 'unidic' }))
+    const settings = createSettingsStore(io)
+    const { tokenizeFn, calls } = fakeTokenizeFn()
+    const service = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      exists: (path) => path === IPADIC_DIR || path === USER_UNIDIC_DIR,
+      settings,
+      tokenizeFn
+    })
+
+    expect(service.currentDict()).toBe('unidic')
+    const reopened = createSettingsStore(io)
+    const reopenedService = createMecabService({
+      mecabPath: 'mecab.exe',
+      dictPaths: { ipadicDir: IPADIC_DIR, userUnidicDir: USER_UNIDIC_DIR },
+      exists: (path) => path === IPADIC_DIR || path === USER_UNIDIC_DIR,
+      settings: reopened,
+      tokenizeFn
+    })
+
+    expect(reopenedService.currentDict()).toBe('unidic')
+    await reopenedService.tokenize('text')
+    expect(calls.at(-1)?.cfg.dicdir).toBe(USER_UNIDIC_DIR)
+  })
+})
+
+describe('mapWithConcurrency', () => {
+  it('never starts more tasks than the concurrency limit', async () => {
+    const tasks = [deferred<number>(), deferred<number>(), deferred<number>()]
+    let active = 0
+    let maximumActive = 0
+
+    const batch = mapWithConcurrency(tasks, 2, (task) => {
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      return task.promise.finally(() => {
+        active -= 1
+      })
+    })
+    await Promise.resolve()
+
+    expect(maximumActive).toBe(2)
+    tasks[0].resolve(0)
+    await Promise.resolve()
+    expect(maximumActive).toBe(2)
+    tasks[1].resolve(1)
+    tasks[2].resolve(2)
+    await expect(batch).resolves.toEqual([0, 1, 2])
+  })
+
+  it('returns results in input order when tasks finish out of order', async () => {
+    const tasks = [deferred<string>(), deferred<string>(), deferred<string>()]
+    const batch = mapWithConcurrency(tasks, 2, (task) => task.promise)
+    await Promise.resolve()
+
+    tasks[1].resolve('second')
+    await Promise.resolve()
+    tasks[2].resolve('third')
+    tasks[0].resolve('first')
+
+    await expect(batch).resolves.toEqual(['first', 'second', 'third'])
+  })
+
+  it('returns immediately without scheduling work for empty input', async () => {
+    let scheduled = 0
+
+    await expect(
+      mapWithConcurrency<string, string>([], 2, async (value) => {
+        scheduled += 1
+        return value
+      })
+    ).resolves.toEqual([])
+
+    expect(scheduled).toBe(0)
+  })
+
+  it('rejects with the original error and does not schedule more tasks', async () => {
+    const tasks = [deferred<number>(), deferred<number>(), deferred<number>()]
+    const started: number[] = []
+    const expectedError = new Error('MeCab failed')
+    const batch = mapWithConcurrency(tasks, 2, (task, index) => {
+      started.push(index)
+      return task.promise
+    })
+    await Promise.resolve()
+
+    tasks[0].reject(expectedError)
+    await expect(batch).rejects.toBe(expectedError)
+    expect(started).toEqual([0, 1])
+
+    tasks[1].resolve(1)
   })
 })

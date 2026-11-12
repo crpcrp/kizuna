@@ -14,87 +14,33 @@ import {
   type FakeEvent
 } from '@test/harness/fakeIpcMain'
 
-/** Fake mpv controller: records calls and captures observe callbacks. */
+/** Fake mpv controller: captures observe callbacks. */
 function fakeController() {
-  const calls: Record<string, unknown[]> = {}
   let timePosCb: ((v: unknown) => void) | undefined
   let pathCb: ((v: unknown) => void) | undefined
   let durationCb: ((v: unknown) => void) | undefined
   let pauseCb: ((v: unknown) => void) | undefined
   let eofCb: ((v: unknown) => void) | undefined
+  const done = () => vi.fn(async () => undefined)
   const controller: PlayerControllerLike = {
-    loadFile: vi.fn(async (path: string) => {
-      calls.loadFile = [path]
-      return undefined
-    }),
-    setPause: vi.fn(async (paused: boolean) => {
-      calls.setPause = [paused]
-      return undefined
-    }),
-    seek: vi.fn(async (seconds: number, absolute?: boolean) => {
-      calls.seek = [seconds, absolute]
-      return undefined
-    }),
-    setVolume: vi.fn(async (volume: number) => {
-      calls.setVolume = [volume]
-      return undefined
-    }),
-    setSpeed: vi.fn(async (speed: number) => {
-      calls.setSpeed = [speed]
-      return undefined
-    }),
-    setMuted: vi.fn(async (muted: boolean) => {
-      calls.setMuted = [muted]
-      return undefined
-    }),
-    setAudioDelay: vi.fn(async (delayMs: number) => {
-      calls.setAudioDelay = [delayMs]
-      return undefined
-    }),
-    setAudioTrack: vi.fn(async (aid: number) => {
-      calls.setAudioTrack = [aid]
-      return undefined
-    }),
-    getAudioDevices: vi.fn(async () => {
-      calls.getAudioDevices = []
-      return [{ name: 'auto', description: 'Autoselect device' }]
-    }),
-    setAudioDevice: vi.fn(async (name: string) => {
-      calls.setAudioDevice = [name]
-      return undefined
-    }),
-    setLoudnessNormalization: vi.fn(async (on: boolean) => {
-      calls.setLoudnessNormalization = [on]
-      return undefined
-    }),
-    setAbLoop: vi.fn(async (a: number | null, b: number | null) => {
-      calls.setAbLoop = [a, b]
-      return undefined
-    }),
-    setVideoMargins: vi.fn(async (top: number, bottom: number, right?: number, left?: number) => {
-      calls.setVideoMargins = [top, bottom, right, left]
-      return undefined
-    }),
-    setVideoAdjustment: vi.fn(async (name: string, value: number) => {
-      calls[`setVideoAdjustment:${name}`] = [value]
-      return undefined
-    }),
-    setVideoRotate: vi.fn(async (deg: number) => {
-      calls.setVideoRotate = [deg]
-      return undefined
-    }),
-    setDeinterlace: vi.fn(async (on: boolean) => {
-      calls.setDeinterlace = [on]
-      return undefined
-    }),
-    frameStep: vi.fn(async () => {
-      calls.frameStep = []
-      return undefined
-    }),
-    frameBackStep: vi.fn(async () => {
-      calls.frameBackStep = []
-      return undefined
-    }),
+    loadFile: done(),
+    setPause: done(),
+    seek: done(),
+    setVolume: done(),
+    setSpeed: done(),
+    setMuted: done(),
+    setAudioDelay: done(),
+    setAudioTrack: done(),
+    getAudioDevices: vi.fn(async () => [{ name: 'auto', description: 'Autoselect device' }]),
+    setAudioDevice: done(),
+    setLoudnessNormalization: done(),
+    setAbLoop: done(),
+    setVideoMargins: done(),
+    setVideoAdjustment: done(),
+    setVideoRotate: done(),
+    setDeinterlace: done(),
+    frameStep: done(),
+    frameBackStep: done(),
     observeTimePos: vi.fn(async (cb) => {
       timePosCb = cb
       return 1
@@ -118,7 +64,6 @@ function fakeController() {
   }
   return {
     controller,
-    calls,
     fireTimePos: (v: unknown) => timePosCb?.(v),
     firePath: (v: unknown) => pathCb?.(v),
     fireDuration: (v: unknown) => durationCb?.(v),
@@ -142,43 +87,15 @@ function fakeHistory(): PlayerHistoryObserver {
 describe('registerPlayerBridge', () => {
   const event: FakeEvent = { senderId: 7 }
 
-  it('registers every command channel', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        PLAYER_CHANNELS.load,
-        PLAYER_CHANNELS.setPause,
-        PLAYER_CHANNELS.seek,
-        PLAYER_CHANNELS.setVolume,
-        PLAYER_CHANNELS.setSpeed,
-        PLAYER_CHANNELS.setMuted,
-        PLAYER_CHANNELS.setAudioDelay,
-        PLAYER_CHANNELS.setAudioTrack,
-        PLAYER_CHANNELS.getAudioDevices,
-        PLAYER_CHANNELS.setAudioDevice,
-        PLAYER_CHANNELS.setLoudnessNorm,
-        PLAYER_CHANNELS.setAbLoop,
-        PLAYER_CHANNELS.setVideoMargins,
-        PLAYER_CHANNELS.setVideoAdjustments,
-        PLAYER_CHANNELS.frameStep,
-        PLAYER_CHANNELS.frameBackStep
-      ].sort()
-    )
-  })
-
   it('records a recent only after a successful load', async () => {
     const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
+    const { controller } = fakeController()
     const history = fakeHistory()
     registerPlayerBridge(ipc, controller, vi.fn(), history)
     let resolveLoad!: () => void
     vi.mocked(controller.loadFile).mockImplementationOnce(
-      (path) =>
+      () =>
         new Promise<void>((resolve) => {
-          calls.loadFile = [path]
           resolveLoad = resolve
         })
     )
@@ -189,7 +106,6 @@ describe('registerPlayerBridge', () => {
     await loading
 
     expect(controller.loadFile).toHaveBeenCalledWith('/tmp/video.mp4')
-    expect(calls.loadFile).toEqual(['/tmp/video.mp4'])
     expect(history.recordOpened).toHaveBeenCalledWith('/tmp/video.mp4')
   })
 
@@ -223,13 +139,12 @@ describe('registerPlayerBridge', () => {
 
   it('suspends history tracking before loadFile starts, so early events during the load cannot land on the outgoing file', async () => {
     const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
+    const { controller } = fakeController()
     const history = fakeHistory()
     registerPlayerBridge(ipc, controller, vi.fn(), history)
     const order: string[] = []
     vi.mocked(history.beginLoad).mockImplementation(() => order.push('beginLoad'))
-    vi.mocked(controller.loadFile).mockImplementationOnce(async (path) => {
-      calls.loadFile = [path]
+    vi.mocked(controller.loadFile).mockImplementationOnce(async () => {
       order.push('loadFile')
     })
     vi.mocked(history.recordOpened).mockImplementation(() => order.push('recordOpened'))
@@ -268,66 +183,6 @@ describe('registerPlayerBridge', () => {
     expect(history.abortLoad).not.toHaveBeenCalled()
   })
 
-  it('forwards setPause to controller.setPause', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setPause)!(event, true)
-
-    expect(controller.setPause).toHaveBeenCalledWith(true)
-  })
-
-  it('forwards seek with the exact args, including absolute flag', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.seek)!(event, 42, true)
-
-    expect(controller.seek).toHaveBeenCalledWith(42, true)
-  })
-
-  it('forwards setVolume to controller.setVolume', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setVolume)!(event, 55)
-
-    expect(controller.setVolume).toHaveBeenCalledWith(55)
-  })
-
-  it('forwards setMuted to controller.setMuted', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setMuted)!(event, true)
-
-    expect(controller.setMuted).toHaveBeenCalledWith(true)
-  })
-
-  it('forwards setAudioDelay to controller.setAudioDelay', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setAudioDelay)!(event, 250)
-
-    expect(controller.setAudioDelay).toHaveBeenCalledWith(250)
-  })
-
-  it('forwards setAudioTrack to controller.setAudioTrack', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setAudioTrack)!(event, 3)
-
-    expect(controller.setAudioTrack).toHaveBeenCalledWith(3)
-  })
-
   it('rejects URL schemes before controller or history access', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
@@ -350,41 +205,9 @@ describe('registerPlayerBridge', () => {
     expect(history.beginLoad).not.toHaveBeenCalled()
   })
 
-  it('forwards setAbLoop endpoints to controller.setAbLoop', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setAbLoop)!(event, 12, 30)
-    handlers.get(PLAYER_CHANNELS.setAbLoop)!(event, null, null)
-
-    expect(controller.setAbLoop).toHaveBeenNthCalledWith(1, 12, 30)
-    expect(controller.setAbLoop).toHaveBeenNthCalledWith(2, null, null)
-  })
-
-  it('forwards setVideoMargins to controller.setVideoMargins', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setVideoMargins)!(event, 0.1, 0.08)
-
-    expect(controller.setVideoMargins).toHaveBeenCalledWith(0.1, 0.08, undefined, undefined)
-  })
-
-  it('forwards setVideoMargins with right and left ratios when given', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.setVideoMargins)!(event, 0.1, 0.08, 0.2, 0.15)
-
-    expect(controller.setVideoMargins).toHaveBeenCalledWith(0.1, 0.08, 0.2, 0.15)
-  })
-
   it('fans one setVideoAdjustments call out to the equalizer, rotate and deinterlace setters', async () => {
     const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
+    const { controller } = fakeController()
     registerPlayerBridge(ipc, controller, vi.fn())
 
     await handlers.get(PLAYER_CHANNELS.setVideoAdjustments)!(event, {
@@ -398,40 +221,15 @@ describe('registerPlayerBridge', () => {
     })
 
     expect(controller.setVideoAdjustment).toHaveBeenCalledTimes(5)
-    expect(calls['setVideoAdjustment:brightness']).toEqual([10])
-    expect(calls['setVideoAdjustment:contrast']).toEqual([-20])
-    expect(calls['setVideoAdjustment:saturation']).toEqual([30])
-    expect(calls['setVideoAdjustment:gamma']).toEqual([-5])
-    expect(calls['setVideoAdjustment:hue']).toEqual([15])
+    expect(vi.mocked(controller.setVideoAdjustment).mock.calls).toEqual([
+      ['brightness', 10],
+      ['contrast', -20],
+      ['saturation', 30],
+      ['gamma', -5],
+      ['hue', 15]
+    ])
     expect(controller.setVideoRotate).toHaveBeenCalledWith(90)
     expect(controller.setDeinterlace).toHaveBeenCalledWith(true)
-  })
-
-  it('forwards frameStep and frameBackStep to the controller', () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    handlers.get(PLAYER_CHANNELS.frameStep)!(event)
-    handlers.get(PLAYER_CHANNELS.frameBackStep)!(event)
-
-    expect(controller.frameStep).toHaveBeenCalledTimes(1)
-    expect(controller.frameBackStep).toHaveBeenCalledTimes(1)
-  })
-
-  it('forwards the audio device/normalization channels to the controller', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller, calls } = fakeController()
-    registerPlayerBridge(ipc, controller, vi.fn())
-
-    const devices = await handlers.get(PLAYER_CHANNELS.getAudioDevices)!(event)
-    expect(devices).toEqual([{ name: 'auto', description: 'Autoselect device' }])
-
-    await handlers.get(PLAYER_CHANNELS.setAudioDevice)!(event, 'wasapi/{abc}')
-    expect(calls.setAudioDevice).toEqual(['wasapi/{abc}'])
-
-    await handlers.get(PLAYER_CHANNELS.setLoudnessNorm)!(event, true)
-    expect(calls.setLoudnessNormalization).toEqual([true])
   })
 
   it('does not register the screenshot channel without a screenshot service', () => {
@@ -440,18 +238,6 @@ describe('registerPlayerBridge', () => {
     registerPlayerBridge(ipc, controller, vi.fn())
 
     expect(handlers.has(PLAYER_CHANNELS.screenshot)).toBe(false)
-  })
-
-  it('forwards screenshot to the service and resolves the saved path', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    const screenshots = { capture: vi.fn(async () => '/pics/ep1-0-00-05.png') }
-    registerPlayerBridge(ipc, controller, vi.fn(), undefined, undefined, screenshots)
-
-    const saved = await handlers.get(PLAYER_CHANNELS.screenshot)!(event, '/v/ep1.mkv', 5)
-
-    expect(screenshots.capture).toHaveBeenCalledWith('/v/ep1.mkv', 5)
-    expect(saved).toBe('/pics/ep1-0-00-05.png')
   })
 
   it('rejects a screenshot with a sanitized message, hiding the raw error', async () => {
@@ -492,25 +278,6 @@ describe('registerPlayerBridge', () => {
     expect(handlers.has(PLAYER_CHANNELS.captureFrame)).toBe(false)
   })
 
-  it('resolves captureFrame with the service’s base64 PNG data', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    const frames = { captureFrameData: vi.fn(async () => 'iVBORw0KGgo=') }
-    registerPlayerBridge(
-      ipc,
-      controller,
-      vi.fn(),
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      frames
-    )
-
-    expect(await handlers.get(PLAYER_CHANNELS.captureFrame)!(event)).toBe('iVBORw0KGgo=')
-    expect(frames.captureFrameData).toHaveBeenCalledTimes(1)
-  })
-
   it('resolves captureFrame with null on failure so a mine is never blocked', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
@@ -547,17 +314,6 @@ describe('registerPlayerBridge', () => {
     expect(calls).toEqual(['history', 'renderer'])
   })
 
-  it('forwards mpv path observations to history for load-transition attribution', () => {
-    const { ipc } = fakeIpc()
-    const { controller, firePath } = fakeController()
-    const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
-
-    firePath('/tmp/video.mp4')
-
-    expect(history.observePath).toHaveBeenCalledWith('/tmp/video.mp4')
-  })
-
   it('forwards boolean pause observations to the renderer, ignoring non-booleans', () => {
     const { ipc } = fakeIpc()
     const { controller, firePause } = fakeController()
@@ -588,17 +344,6 @@ describe('registerPlayerBridge', () => {
     firePause(true)
     fireEof(true)
     expect(history.flush).toHaveBeenCalledTimes(2)
-  })
-
-  it('forwards eof-reached values to the renderer', () => {
-    const { ipc } = fakeIpc()
-    const { controller, fireEof } = fakeController()
-    const send = vi.fn()
-    registerPlayerBridge(ipc, controller, send)
-
-    fireEof(true)
-
-    expect(send).toHaveBeenCalledWith(PLAYER_CHANNELS.eofReached, true)
   })
 
   it('forwards every duration value to history and the renderer', () => {

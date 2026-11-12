@@ -11,30 +11,6 @@ const PUBLIC_SETTINGS: PublicTranslationSettings = {
 }
 
 describe('registerTranslationSettingsBridge', () => {
-  it('registers and delegates get/set settings', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const event: FakeEvent = { senderId: 1 }
-    const service = {
-      getSettings: vi.fn(() => PUBLIC_SETTINGS),
-      setSettings: vi.fn(() => PUBLIC_SETTINGS)
-    }
-    registerTranslationSettingsBridge(ipc, service)
-
-    expect(handlers.get(TRANSLATE_CHANNELS.getSettings)!(event)).toEqual(PUBLIC_SETTINGS)
-    expect(
-      handlers.get(TRANSLATE_CHANNELS.setSettings)!(event, {
-        azureSubscriptionKey: 'test-azure-key',
-        azureRegion: 'westeurope'
-      })
-    ).toEqual(PUBLIC_SETTINGS)
-
-    expect(service.getSettings).toHaveBeenCalledOnce()
-    expect(service.setSettings).toHaveBeenCalledWith({
-      azureSubscriptionKey: 'test-azure-key',
-      azureRegion: 'westeurope'
-    })
-  })
-
   it.each([null, [], { azureSubscriptionKey: 42 }, { azureRegion: 42 }, { unexpected: 'value' }])(
     'rejects malformed setSettings payload %j without leaking it',
     (payload) => {

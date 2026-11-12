@@ -74,8 +74,10 @@ Runtime type guards (`isRecord`, `isFiniteNumber`, …) live in
    are `unknown`; narrow each with `expect(guard, channel)` from
    `src/main/ipcValidation.ts` before delegating.
 4. Expose the smallest required method from `src/preload/index.ts`.
-5. Add bridge and service tests, including a malformed-input case
-   (`invokeRejection` and `expectUntouched` in `test/harness/fakeIpcMain.ts`).
+5. Test the service, one malformed-input case per new guard shape
+   (`invokeRejection` and `expectUntouched` in `test/harness/fakeIpcMain.ts`),
+   and any logic the bridge owns (sender scoping, cancellation, progress pushes,
+   error mapping). Do not add a test that a handler forwards its arguments.
 
 ### Add an external boundary
 

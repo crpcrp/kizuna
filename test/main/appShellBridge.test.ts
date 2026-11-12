@@ -16,42 +16,20 @@ function fakeCoordinator(): AppShellCoordinator {
 }
 
 describe('registerAppShellBridge', () => {
-  it('registers commands, forwards calls, and validates the sender', async () => {
+  it('rejects calls from an unknown window', () => {
     const allowedSender = { id: 1 }
     const { ipc, handlers, listeners } = fakeIpc<{ sender: unknown }>({
       sender: allowedSender
     })
     const coordinator = fakeCoordinator()
-
     registerAppShellBridge(ipc, coordinator, (sender) => sender === allowedSender)
 
-    expect([...handlers.keys()].sort()).toEqual(
-      [
-        APP_SHELL_CHANNELS.getSurface,
-        APP_SHELL_CHANNELS.showSplash,
-        APP_SHELL_CHANNELS.showPlayer,
-        APP_SHELL_CHANNELS.showOptions,
-        APP_SHELL_CHANNELS.dismissOptions
-      ].sort()
-    )
-    expect([...listeners.keys()]).toEqual([APP_SHELL_CHANNELS.quit])
-    expect(handlers.get(APP_SHELL_CHANNELS.getSurface)!({ sender: allowedSender })).toBe('splash')
-    await handlers.get(APP_SHELL_CHANNELS.showSplash)!({ sender: allowedSender })
-    await handlers.get(APP_SHELL_CHANNELS.showPlayer)!({ sender: allowedSender })
-    await handlers.get(APP_SHELL_CHANNELS.showOptions)!({ sender: allowedSender })
-    await handlers.get(APP_SHELL_CHANNELS.dismissOptions)!({ sender: allowedSender })
-    listeners.get(APP_SHELL_CHANNELS.quit)!({ sender: allowedSender })
-
-    expect(coordinator.showPlayer).toHaveBeenCalledOnce()
-    expect(coordinator.showSplash).toHaveBeenCalledOnce()
-    expect(coordinator.showOptions).toHaveBeenCalledOnce()
-    expect(coordinator.dismissOptions).toHaveBeenCalledOnce()
-    expect(coordinator.quit).toHaveBeenCalledOnce()
     expect(() => handlers.get(APP_SHELL_CHANNELS.getSurface)!({ sender: { id: 2 } })).toThrow(
       'unknown window'
     )
     expect(() => listeners.get(APP_SHELL_CHANNELS.quit)!({ sender: { id: 2 } })).toThrow(
       'unknown window'
     )
+    expect(coordinator.quit).not.toHaveBeenCalled()
   })
 })
