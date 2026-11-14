@@ -27,6 +27,39 @@ function span(overrides: Partial<VocabularySpan> = {}): VocabularySpan {
 }
 
 describe('deriveVocabularyUnits', () => {
+  it.each([
+    ['empty membership', { memberTokenOffsets: [] }],
+    ['missing member', { memberTokenOffsets: [0, 2] }],
+    ['different cue', { cueKey: 'cue-2' }]
+  ] satisfies [string, Partial<VocabularySpan>][])(
+    'ignores a span with %s and retains the ordinary tokens',
+    (_name, invalid) => {
+      const tokens = [token({ surface: '神' }), token({ surface: '様', startOffset: 1 })]
+      const units = deriveVocabularyUnits([{ cueKey: 'cue-1', tokens, spans: [span(invalid)] }], {})
+      expect(units.map(({ key, count, tokenCount }) => ({ key, count, tokenCount }))).toEqual([
+        { key: '神', count: 1, tokenCount: 1 },
+        { key: '様', count: 1, tokenCount: 1 }
+      ])
+    }
+  )
+
+  it('accepts a single-member projection without absorbing an uncovered token', () => {
+    const units = deriveVocabularyUnits(
+      [
+        {
+          cueKey: 'cue-1',
+          tokens: [token({ surface: '神' }), token({ surface: '様', startOffset: 1 })],
+          spans: [span({ memberTokenOffsets: [0], endOffset: 1 })]
+        }
+      ],
+      {}
+    )
+    expect(units.map(({ key, count, tokenCount }) => ({ key, count, tokenCount }))).toEqual([
+      { key: '神様', count: 1, tokenCount: 1 },
+      { key: '様', count: 1, tokenCount: 1 }
+    ])
+  })
+
   it('skips symbols, including a symbol-only span', () => {
     const symbol = token({ surface: '。', lemma: '。', pos: '記号' })
     const units = deriveVocabularyUnits(
