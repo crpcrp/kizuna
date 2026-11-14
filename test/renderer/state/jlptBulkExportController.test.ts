@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import { defaultAnkiSettings } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
@@ -18,16 +19,6 @@ function item(expression: string, overrides: Partial<JlptExportItem> = {}): Jlpt
     frequency: null,
     ...overrides
   }
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
 }
 
 function source(items: JlptExportItem[] = [item('一')]): JlptBulkExportSource {

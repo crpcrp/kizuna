@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import type { Cue } from '@src/shared/cue'
 import type { Token } from '@src/shared/token'
@@ -13,16 +14,6 @@ const cue: Cue = { start: 0, end: 1, text: '猫' }
 const otherCue: Cue = { start: 1, end: 2, text: '犬' }
 const oldTokens: Token[] = [makeToken({ surface: '猫', reading: 'ネコ', lemma: 'old' })]
 const newTokens: Token[] = [makeToken({ surface: '猫', reading: 'ねこ', lemma: 'new' })]
-
-function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
-  let resolve!: (value: T) => void
-  return {
-    promise: new Promise<T>((done) => {
-      resolve = done
-    }),
-    resolve
-  }
-}
 
 describe('invalidateTokenizationForDictionaryChange', () => {
   it('clears tokens and ignores a late active-cue result from the previous dictionary', async () => {

@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import type { KnowledgeLevel } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
@@ -15,16 +16,6 @@ const sidebarToken: Token = makeToken({ surface: 'sidebar', pos: 'noun' })
 const syncedStatus = {
   wanikani: { lastSyncAt: null, count: 1, configured: true, outcome: 'synced' as const },
   anki: { lastSyncAt: null, count: 0, configured: false }
-}
-
-function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
-  let resolve!: (value: T) => void
-  return {
-    promise: new Promise<T>((done) => {
-      resolve = done
-    }),
-    resolve
-  }
 }
 
 describe('syncAndRefreshKnowledge', () => {

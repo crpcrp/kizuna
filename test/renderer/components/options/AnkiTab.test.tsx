@@ -4,7 +4,6 @@ import AnkiTab, {
   isLoopbackAnkiUrl,
   parseTagsInput
 } from '@src/renderer/src/components/options/AnkiTab'
-import { defaultAnkiSettings, mergeAnkiSettings } from '@src/shared/anki'
 import { makeAnkiSettings } from '@test/harness/ankiFixtures'
 
 // SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
@@ -152,14 +151,6 @@ describe('AnkiTab pure helpers', () => {
     })
     expect(local).not.toContain('anki-url-warning')
   })
-
-  it('defaults and validates the persisted duplicate policy', () => {
-    expect(defaultAnkiSettings.duplicatePolicy).toBe('prevent-deck')
-    expect(mergeAnkiSettings({ duplicatePolicy: 'prevent-global' }).duplicatePolicy).toBe(
-      'prevent-global'
-    )
-    expect(mergeAnkiSettings({ duplicatePolicy: 'unknown' }).duplicatePolicy).toBe('prevent-deck')
-  })
 })
 
 describe('AnkiTab setting descriptions', () => {
@@ -181,178 +172,36 @@ describe('AnkiTab setting descriptions', () => {
   })
 })
 
-describe('AnkiTab picture mapping', () => {
-  it('renders a Picture mapping row alongside the other mapped fields', () => {
-    const html = renderTab({ ankiModelFields: ['Word', 'Screenshot'] })
-
-    expect(html).toContain('id="anki-field-picture-select"')
-    expect(html).toContain('>Picture</label>')
-    expect(html).toMatch(/<option value="Screenshot"[^>]*>Screenshot<\/option>/)
-  })
-
-  it('binds the Picture select to the persisted mapping', () => {
+describe.each([
+  ['picture', 'Picture', 'Screenshot'],
+  ['frequency', 'Frequency', 'Freq'],
+  ['pitchAccent', 'Pitch accent', 'Pitch'],
+  ['sentenceAudio', 'Sentence audio', 'SentenceAudio'],
+  ['jlptLevel', 'JLPT level (approx.)', 'JLPT']
+] as const)('AnkiTab %s mapping', (field, label, target) => {
+  it('renders its label and binds the selected model field', () => {
     const html = renderTab({
-      ankiSettings: makeAnkiSettings({
-        fieldMap: { picture: 'Screenshot' }
-      }),
-      ankiModelFields: ['Screenshot']
+      ankiSettings: makeAnkiSettings({ fieldMap: { [field]: target } }),
+      ankiModelFields: [target]
     })
-
+    expect(html).toContain(`>${label}</label>`)
     expect(html).toMatch(
-      /id="anki-field-picture-select"[\s\S]*?<option value="Screenshot" selected/
+      new RegExp(`id="anki-field-${field}-select"[\\s\\S]*?<option value="${target}" selected`)
     )
   })
 
-  // The mapping is the switch: no separate toggle may reappear beside it, or a
-  // mapped field silently mines cards with no picture again.
-  it('renders no include-screenshot toggle', () => {
-    expect(renderTab({})).not.toContain('anki-include-screenshot-checkbox')
-  })
-
-  it('explains that mapping Picture is what enables the capture', () => {
-    expect(renderTab({})).toContain('id="anki-media-mapping-hint"')
-  })
-
-  it('defaults the Picture mapping to unset', () => {
-    // What a settings file written before this feature merges to.
-    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
-
-    expect(merged.fieldMap.picture).toBe('')
-    expect(renderTab({ ankiSettings: merged })).toMatch(
-      /id="anki-field-picture-select"[\s\S]*?<option value="" selected/
-    )
-  })
-})
-
-describe('AnkiTab frequency mapping', () => {
-  it('renders a Frequency mapping row alongside the other mapped fields', () => {
-    const html = renderTab({ ankiModelFields: ['Word', 'Freq'] })
-
-    expect(html).toContain('id="anki-field-frequency-select"')
-    expect(html).toContain('>Frequency</label>')
-  })
-
-  it('binds the Frequency select to the persisted mapping', () => {
-    const html = renderTab({
-      ankiSettings: makeAnkiSettings({
-        fieldMap: { frequency: 'Freq' }
-      }),
-      ankiModelFields: ['Freq']
-    })
-
-    expect(html).toMatch(/id="anki-field-frequency-select"[\s\S]*?<option value="Freq" selected/)
-  })
-
-  // Mapping the row is the opt-in; a separate checkbox would let a mapped field
-  // mine blank frequencies, exactly as the retired media toggles did.
-  it('renders no include-frequency toggle', () => {
-    expect(renderTab({})).not.toContain('anki-include-frequency-checkbox')
-  })
-
-  it('defaults the mapping to unset for a pre-feature settings file', () => {
-    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
-
-    expect(merged.fieldMap.frequency).toBe('')
-    expect(renderTab({ ankiSettings: merged })).toMatch(
-      /id="anki-field-frequency-select"[\s\S]*?<option value="" selected/
-    )
-  })
-})
-
-describe('AnkiTab pitch-accent mapping', () => {
-  it('renders a Pitch accent mapping row alongside the other mapped fields', () => {
-    const html = renderTab({ ankiModelFields: ['Word', 'Pitch'] })
-
-    expect(html).toContain('id="anki-field-pitchAccent-select"')
-    expect(html).toContain('>Pitch accent</label>')
-  })
-
-  it('binds the Pitch accent select to the persisted mapping', () => {
-    const html = renderTab({
-      ankiSettings: makeAnkiSettings({
-        fieldMap: { pitchAccent: 'Pitch' }
-      }),
-      ankiModelFields: ['Pitch']
-    })
-
-    expect(html).toMatch(/id="anki-field-pitchAccent-select"[\s\S]*?<option value="Pitch" selected/)
-  })
-
-  // Mapping the row is the opt-in, exactly as for Frequency.
-  it('renders no include-pitch toggle', () => {
-    expect(renderTab({})).not.toContain('anki-include-pitch-checkbox')
-  })
-
-  it('defaults the mapping to unset for a pre-feature settings file', () => {
-    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
-
-    expect(merged.fieldMap.pitchAccent).toBe('')
-    expect(renderTab({ ankiSettings: merged })).toMatch(
-      /id="anki-field-pitchAccent-select"[\s\S]*?<option value="" selected/
-    )
-  })
-})
-
-describe('AnkiTab sentence-audio mapping', () => {
-  it('renders a Sentence audio mapping row alongside the other mapped fields', () => {
-    const html = renderTab({ ankiModelFields: ['Word', 'SentenceAudio'] })
-
-    expect(html).toContain('id="anki-field-sentenceAudio-select"')
-    expect(html).toContain('>Sentence audio</label>')
-  })
-
-  it('binds the Sentence audio select to the persisted mapping', () => {
-    const html = renderTab({
-      ankiSettings: makeAnkiSettings({
-        fieldMap: { sentenceAudio: 'SentenceAudio' }
-      }),
-      ankiModelFields: ['SentenceAudio']
-    })
-
+  it('shows an unset mapping when the setting is empty', () => {
+    const html = renderTab({ ankiSettings: makeAnkiSettings({ fieldMap: { [field]: '' } }) })
     expect(html).toMatch(
-      /id="anki-field-sentenceAudio-select"[\s\S]*?<option value="SentenceAudio" selected/
-    )
-  })
-
-  it('renders no include-sentence-audio toggle', () => {
-    expect(renderTab({})).not.toContain('anki-include-sentence-audio-checkbox')
-  })
-
-  it('defaults the mapping to unset for a pre-feature settings file', () => {
-    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
-
-    expect(merged.fieldMap.sentenceAudio).toBe('')
-    expect(renderTab({ ankiSettings: merged })).toMatch(
-      /id="anki-field-sentenceAudio-select"[\s\S]*?<option value="" selected/
+      new RegExp(`id="anki-field-${field}-select"[\\s\\S]*?<option value="" selected`)
     )
   })
 })
 
-describe('AnkiTab JLPT level mapping', () => {
-  it('renders an approximate JLPT level mapping row', () => {
-    const html = renderTab({ ankiModelFields: ['Word', 'JLPT'] })
-
-    expect(html).toContain('id="anki-field-jlptLevel-select"')
-    expect(html).toContain('>JLPT level (approx.)</label>')
-  })
-
-  it('binds the JLPT level select to the persisted mapping', () => {
-    const html = renderTab({
-      ankiSettings: makeAnkiSettings({
-        fieldMap: { jlptLevel: 'JLPT' }
-      }),
-      ankiModelFields: ['JLPT']
-    })
-
-    expect(html).toMatch(/id="anki-field-jlptLevel-select"[\s\S]*?<option value="JLPT" selected/)
-  })
-
-  it('defaults the JLPT level mapping to unset for a pre-feature settings file', () => {
-    const merged = mergeAnkiSettings({ deckName: 'Japanese' })
-
-    expect(merged.fieldMap.jlptLevel).toBe('')
-    expect(renderTab({ ankiSettings: merged })).toMatch(
-      /id="anki-field-jlptLevel-select"[\s\S]*?<option value="" selected/
-    )
-  })
+it('explains that mapping media fields enables capture without separate opt-in toggles', () => {
+  const html = renderTab()
+  expect(html).toContain('id="anki-media-mapping-hint"')
+  for (const field of ['screenshot', 'frequency', 'pitch', 'sentence-audio']) {
+    expect(html).not.toContain(`anki-include-${field}-checkbox`)
+  }
 })

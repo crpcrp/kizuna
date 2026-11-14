@@ -122,14 +122,16 @@ describe('selectSubtitle', () => {
     const bridge = makeBridge()
     const dispatch = vi.fn()
 
-    const warning = await selectSubtitle(bridge, dispatch, '/video.mkv', subTrack)
+    const cache = new Map<number, Cue[]>()
+    const warning = await selectSubtitle(bridge, dispatch, '/video.mkv', subTrack, undefined, cache)
+    expect(cache.get(2)).toEqual(cues)
 
-    expect(bridge.media.loadSubtitle).toHaveBeenCalledWith('/video.mkv', 2)
+    expect(bridge.media.loadSubtitle).toHaveBeenCalledExactlyOnceWith('/video.mkv', 2)
     expect(dispatch.mock.calls).toEqual([
       [{ type: 'cuesLoaded', cues }],
       [{ type: 'selectSubtitle', id: 2 }]
     ])
-    expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith('/video.mkv', {
+    expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledExactlyOnceWith('/video.mkv', {
       mode: 'track',
       track: { id: 2, codec: 'ass' }
     })
@@ -149,18 +151,6 @@ describe('selectSubtitle', () => {
     ])
     expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith('/video.mkv', { mode: 'off' })
     expect(warning).toBeUndefined()
-  })
-
-  it('cache miss: calls loadSubtitle, populates the cache, and persists the descriptor', async () => {
-    const bridge = makeBridge()
-    const dispatch = vi.fn()
-    const cache = new Map<number, Cue[]>()
-
-    await selectSubtitle(bridge, dispatch, '/video.mkv', subTrack, undefined, cache)
-
-    expect(bridge.media.loadSubtitle).toHaveBeenCalledTimes(1)
-    expect(cache.get(2)).toEqual(cues)
-    expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledTimes(1)
   })
 
   it('cache hit: does not call loadSubtitle again, dispatches the cached cues, and still persists', async () => {
@@ -219,6 +209,10 @@ describe('selectSubtitle', () => {
     const staleWarning = await call1
 
     expect(staleWarning).toBeUndefined()
+    expect(dispatch.mock.calls).toEqual([
+      [{ type: 'cuesLoaded', cues: [{ start: 0, end: 1, text: 'new' }] }],
+      [{ type: 'selectSubtitle', id: 3 }]
+    ])
     expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledTimes(1)
     expect(bridge.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith('/video.mkv', {
       mode: 'track',
@@ -618,32 +612,6 @@ describe('loadSubtitleFromPicker', () => {
  * which of two concurrent async calls "finishes" first. */
 
 describe('subtitle request racing (shared token)', () => {
-  it('selectSubtitle: an older request resolving after a newer one does not clobber it', async () => {
-    const first = deferred<import('@src/shared/cue').Cue[]>()
-    const second = deferred<import('@src/shared/cue').Cue[]>()
-    const loadSubtitle = vi
-      .fn()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-    const bridge = makeBridge({ media: { loadSubtitle } })
-    const dispatch = vi.fn()
-    const token: SubtitleRequestToken = { current: 0 }
-
-    const call1 = selectSubtitle(bridge, dispatch, '/video.mkv', subTrack, token)
-    const call2 = selectSubtitle(bridge, dispatch, '/video.mkv', subTrack3, token)
-
-    // Second (newer) request resolves first; first (older, stale) resolves after.
-    second.resolve([{ start: 0, end: 1, text: 'new' }])
-    await call2
-    first.resolve([{ start: 0, end: 1, text: 'stale' }])
-    await call1
-
-    expect(dispatch.mock.calls).toEqual([
-      [{ type: 'cuesLoaded', cues: [{ start: 0, end: 1, text: 'new' }] }],
-      [{ type: 'selectSubtitle', id: 3 }]
-    ])
-  })
-
   it('openAndLoad: a manual pick started before the auto-default load resolves wins', async () => {
     const autoDefault = deferred<Cue[]>()
     const manualPick = deferred<Cue[]>()

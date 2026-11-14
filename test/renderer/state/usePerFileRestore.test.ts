@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,14 +7,6 @@ import {
   usePerFileRestore,
   type UsePerFileRestoreInput
 } from '@src/renderer/src/state/usePerFileRestore'
-
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
-    resolve = res
-  })
-  return { promise, resolve }
-}
 
 function setup(filePath = '/one.mkv') {
   const dimensions = deferred<{ width: number; height: number } | undefined>()

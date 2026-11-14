@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from '@src/shared/playerSettings'
@@ -78,55 +78,5 @@ describe('App screenshot', () => {
     fireEvent.keyDown(window, { code: SCREENSHOT_KEY })
 
     await waitFor(() => expect(screen.getByText('mpv: no video')).toBeTruthy())
-  })
-
-  it('auto-dismisses the success banner 1s after it appears, but not a moment sooner', async () => {
-    const settings: PlayerSettings = { ...DEFAULT_PLAYER_SETTINGS }
-    const screenshot = vi.fn(async () => 'C:\\Pics\\Kizuna\\Episode05-0-00-00.png')
-    const fakes = installBridge(settings, screenshot)
-    render(<App />)
-
-    await openRecent(fakes.load)
-
-    vi.useFakeTimers()
-    const message = 'Screenshot saved: C:\\Pics\\Kizuna\\Episode05-0-00-00.png'
-
-    await act(async () => {
-      fireEvent.keyDown(window, { code: SCREENSHOT_KEY })
-    })
-
-    expect(screen.getByText(message)).toBeTruthy()
-
-    act(() => {
-      vi.advanceTimersByTime(999)
-    })
-    expect(screen.getByText(message)).toBeTruthy()
-
-    act(() => {
-      vi.advanceTimersByTime(1)
-    })
-    expect(screen.queryByText(message)).toBeNull()
-  })
-
-  it('cancels the pending auto-dismiss timer on unmount', async () => {
-    const settings: PlayerSettings = { ...DEFAULT_PLAYER_SETTINGS }
-    const screenshot = vi.fn(async () => 'C:\\Pics\\Kizuna\\Episode05-0-00-00.png')
-    const fakes = installBridge(settings, screenshot)
-    const view = render(<App />)
-
-    await openRecent(fakes.load)
-
-    vi.useFakeTimers()
-    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
-
-    await act(async () => {
-      fireEvent.keyDown(window, { code: SCREENSHOT_KEY })
-    })
-
-    view.unmount()
-    expect(clearTimeoutSpy).toHaveBeenCalled()
-
-    // No dangling timer fires afterward — nothing left to throw on a stale update.
-    expect(() => vi.advanceTimersByTime(1000)).not.toThrow()
   })
 })

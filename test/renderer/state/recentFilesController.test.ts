@@ -1,3 +1,4 @@
+import { deferred, type Deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createRecentFilesController,
@@ -13,22 +14,6 @@ import type { FileAvailability } from '@src/shared/preloadApi'
 const audioTrack: Track = { id: 1, kind: 'audio', codec: 'aac' }
 const subtitleTrack: Track = { id: 2, kind: 'subtitle', codec: 'ass' }
 const recent = (path: string, openedAt = 1): RecentMediaFile => ({ path, openedAt })
-
-interface Deferred<T> {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (err: unknown) => void
-}
-
-function deferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  let reject!: (err: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
 
 /** Fake `BannerTimer` whose handles fire only via explicit `run` — and never
  * after `clear`, mirroring real setTimeout/clearTimeout — so the controller's

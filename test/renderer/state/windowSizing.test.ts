@@ -26,6 +26,24 @@ describe('windowSizing', () => {
     ).toEqual({ width: 1280, height: 440 })
   })
 
+  it.each([
+    [0.5, 960, 540],
+    [1, 1920, 1080],
+    [2, 3840, 2160]
+  ])('preserves a %s scale when side panels open', (scale, width, height) => {
+    expect(
+      videoScaleWindowSize(
+        { width: 1920, height: 1080 },
+        scale,
+        0,
+        0,
+        { width: 7680, height: 4320 },
+        320,
+        360
+      )
+    ).toEqual({ width: width + 680, height })
+  })
+
   it('clamps oversized scale targets to the screen', () => {
     expect(
       videoScaleWindowSize(

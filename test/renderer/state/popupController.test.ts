@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createHoverDebouncer,
@@ -27,16 +28,6 @@ const openInput = (t: Token) => ({
   cueTokens: [t],
   sentence: t.surface
 })
-
-function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
-  let resolve!: (value: T) => void
-  return {
-    promise: new Promise((done) => {
-      resolve = done
-    }),
-    resolve
-  }
-}
 
 function fakeDict(resultsByTerm: Record<string, LookupResult[]>) {
   return { lookup: vi.fn((lemma: string) => Promise.resolve(resultsByTerm[lemma] ?? [])) }

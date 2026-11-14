@@ -131,19 +131,6 @@ afterEach(() => {
 })
 
 describe('App video-scale window sizing across panel toggles', () => {
-  it('grows the window by the subtitle panel width instead of shrinking the video', async () => {
-    const fakes = installBridge()
-    await renderReady(fakes)
-
-    pickVideoScale('200%')
-    // No panel open yet: the plain 200% size (bar heights are 0 in happy-dom).
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(3840, 2160))
-
-    toggleSubtitleSidebar()
-
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(3840 + SIDEBAR_WIDTH, 2160))
-  })
-
   it('adds the playlist width too, and shrinks back as each panel closes', async () => {
     const fakes = installBridge()
     await renderReady(fakes)
@@ -162,41 +149,6 @@ describe('App video-scale window sizing across panel toggles', () => {
     toggleSubtitleSidebar()
     await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(3840, 2160))
   })
-
-  it('applies the same growth to a non-200% preset', async () => {
-    const fakes = installBridge()
-    await renderReady(fakes)
-
-    pickVideoScale('50%')
-    toggleSubtitleSidebar()
-
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(960 + SIDEBAR_WIDTH, 540))
-  })
-
-  it('keeps a 100% preset intact across a panel toggle', async () => {
-    const fakes = installBridge()
-    await renderReady(fakes)
-
-    pickVideoScale('Original size (100%)')
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(1920, 1080))
-
-    toggleSubtitleSidebar()
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(1920 + SIDEBAR_WIDTH, 1080))
-  })
-
-  it('clamps to the work area when the video plus panels no longer fit', async () => {
-    const fakes = installBridge()
-    // A work area only as wide as the bare 200% video: the panel cannot be
-    // paid for by the window, so the clamped size is the only case where the
-    // rendered video legitimately shrinks.
-    await renderReady(fakes, { availWidth: 3840, availHeight: 2160 })
-
-    pickVideoScale('200%')
-    toggleSubtitleSidebar()
-
-    // 4200x2160 scaled by 3840/4200 to fit the width.
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(3840, 1975))
-  })
 })
 
 // The default/unmodified size is a size worth preserving too: the sidebar takes
@@ -204,42 +156,6 @@ describe('App video-scale window sizing across panel toggles', () => {
 // mean "let the picture shrink". The baseline is the window box measured before
 // the transition, never a fabricated percentage of the native resolution.
 describe('App default-size preservation across panel toggles', () => {
-  it('grows and shrinks the window around the subtitle panel with no preset picked', async () => {
-    const fakes = installBridge()
-    await renderReady(fakes)
-
-    toggleSubtitleSidebar()
-    await waitFor(() =>
-      expect(fakes.setSize).toHaveBeenLastCalledWith(
-        WINDOW.innerWidth + SIDEBAR_WIDTH,
-        WINDOW.innerHeight
-      )
-    )
-
-    toggleSubtitleSidebar()
-    await waitFor(() =>
-      expect(fakes.setSize).toHaveBeenLastCalledWith(WINDOW.innerWidth, WINDOW.innerHeight)
-    )
-  })
-
-  it('does the same for the playlist panel', async () => {
-    const fakes = installBridge()
-    await renderReady(fakes)
-
-    togglePlaylistSidebar()
-    await waitFor(() =>
-      expect(fakes.setSize).toHaveBeenLastCalledWith(
-        WINDOW.innerWidth + PLAYLIST_WIDTH,
-        WINDOW.innerHeight
-      )
-    )
-
-    togglePlaylistSidebar()
-    await waitFor(() =>
-      expect(fakes.setSize).toHaveBeenLastCalledWith(WINDOW.innerWidth, WINDOW.innerHeight)
-    )
-  })
-
   it('accounts for both panels, adding and removing only the one that toggled', async () => {
     const fakes = installBridge()
     await renderReady(fakes)
@@ -294,18 +210,6 @@ describe('App default-size preservation across panel toggles', () => {
         WINDOW.innerHeight
       )
     )
-  })
-
-  it('clamps the compensated window to the work area', async () => {
-    const fakes = installBridge()
-    // Barely wider than the default window: there is no room to pay for the
-    // panel, so the clamp is the one case that legitimately shrinks the picture.
-    await renderReady(fakes, { availWidth: 1400, availHeight: WINDOW.innerHeight })
-
-    toggleSubtitleSidebar()
-
-    // 1640x720 scaled by 1400/1640 to fit the width.
-    await waitFor(() => expect(fakes.setSize).toHaveBeenLastCalledWith(1400, 615))
   })
 
   it('rebases a panel opened before video dimensions become available', async () => {
