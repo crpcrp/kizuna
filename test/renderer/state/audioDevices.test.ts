@@ -1,107 +1,10 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import {
-  refreshAudioDevice,
-  applySelectedAudioDevice,
-  recoverAudioDeviceMute,
-  useAudioDevices
-} from '@src/renderer/src/state/audioDevices'
+import { useAudioDevices } from '@src/renderer/src/state/audioDevices'
 import { deferred } from '../../harness/deferred'
 
 afterEach(cleanup)
-
-describe('audio-device recovery', () => {
-  function fakePlayer(devices: { name: string; description: string }[]) {
-    const calls: string[] = []
-    return {
-      calls,
-      player: {
-        getAudioDevices: vi.fn(async () => devices),
-        setAudioDevice: vi.fn(async (name: string) => {
-          calls.push(`device:${name}`)
-        }),
-        setMuted: vi.fn(async (muted: boolean) => {
-          calls.push(`muted:${muted}`)
-        })
-      }
-    }
-  }
-
-  it('falls back to auto and unmutes when a saved device disappears', async () => {
-    const { calls, player } = fakePlayer([{ name: 'auto', description: 'Autoselect device' }])
-    const onDevices = vi.fn()
-
-    await expect(refreshAudioDevice('wasapi/gone', player, onDevices, false)).resolves.toBe(true)
-
-    expect(onDevices).toHaveBeenCalledWith([{ name: 'auto', description: 'Autoselect device' }])
-    expect(calls).toEqual(['device:auto', 'muted:false'])
-  })
-
-  it('does not touch mpv when the saved device remains available on refresh', async () => {
-    const devices = [
-      { name: 'auto', description: 'Autoselect device' },
-      { name: 'wasapi/live', description: 'Speakers' }
-    ]
-    const { calls, player } = fakePlayer(devices)
-
-    await expect(refreshAudioDevice('wasapi/live', player, vi.fn(), false)).resolves.toBe(false)
-
-    expect(calls).toEqual([])
-  })
-
-  it('reapplies an available saved device after a new mpv load', async () => {
-    const { calls, player } = fakePlayer([
-      { name: 'auto', description: 'Autoselect device' },
-      { name: 'wasapi/live', description: 'Speakers' }
-    ])
-
-    await expect(refreshAudioDevice('wasapi/live', player, vi.fn(), true)).resolves.toBe(false)
-
-    expect(calls).toEqual(['device:wasapi/live'])
-  })
-
-  it('unmutes only a selection made after fallback recovery', async () => {
-    const { calls, player } = fakePlayer([])
-
-    await applySelectedAudioDevice('wasapi/live', player)
-    await recoverAudioDeviceMute(player)
-    await applySelectedAudioDevice('auto', player)
-
-    expect(calls).toEqual(['device:wasapi/live', 'muted:false', 'device:auto'])
-  })
-
-  it('does not let a stale refresh overwrite a later device selection', async () => {
-    const listedDevices = deferred<{ name: string; description: string }[]>()
-    const calls: string[] = []
-    const player = {
-      getAudioDevices: vi.fn(() => listedDevices.promise),
-      setAudioDevice: vi.fn(async (name: string) => {
-        calls.push(`device:${name}`)
-      }),
-      setMuted: vi.fn(async (muted: boolean) => {
-        calls.push(`muted:${muted}`)
-      })
-    }
-    let refreshCurrent = true
-    const onDevices = vi.fn()
-
-    const pendingRefresh = refreshAudioDevice(
-      'wasapi/gone',
-      player,
-      onDevices,
-      false,
-      () => refreshCurrent
-    )
-    refreshCurrent = false
-    await applySelectedAudioDevice('wasapi/live', player)
-    listedDevices.resolve([{ name: 'auto', description: 'Autoselect device' }])
-
-    await expect(pendingRefresh).resolves.toBe(false)
-    expect(calls).toEqual(['device:wasapi/live'])
-    expect(onDevices).not.toHaveBeenCalled()
-  })
-})
 
 describe('useAudioDevices', () => {
   function setup(

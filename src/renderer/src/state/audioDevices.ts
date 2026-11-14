@@ -30,7 +30,7 @@ export interface AudioDevicePlayer {
  * `reapplyStored` is used after a new mpv load, where an available preference
  * must be sent again even though it did not change during the refresh.
  */
-export async function refreshAudioDevice(
+async function refreshAudioDevice(
   stored: string,
   player: AudioDevicePlayer,
   onDevices: (devices: AudioDevice[]) => void,
@@ -55,7 +55,7 @@ export async function refreshAudioDevice(
 }
 
 /** Applies a user-selected output. */
-export async function applySelectedAudioDevice(
+async function applySelectedAudioDevice(
   name: string,
   player: Pick<AudioDevicePlayer, 'setAudioDevice'>
 ): Promise<void> {
@@ -63,9 +63,7 @@ export async function applySelectedAudioDevice(
 }
 
 /** Restores sound after a device was selected following fallback recovery. */
-export async function recoverAudioDeviceMute(
-  player: Pick<AudioDevicePlayer, 'setMuted'>
-): Promise<void> {
+async function recoverAudioDeviceMute(player: Pick<AudioDevicePlayer, 'setMuted'>): Promise<void> {
   await player.setMuted(false)
 }
 

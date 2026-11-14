@@ -8,7 +8,6 @@ import {
   type PlayerSettings
 } from '@src/shared/playerSettings'
 import {
-  SYNCED_SETTING_KEYS,
   rendererSettingsPatch,
   selectLoadedRendererSettings,
   selectRendererSettings,
@@ -58,8 +57,8 @@ describe('rendererSettings', () => {
 
     const selected = selectRendererSettings(loaded)
 
-    expect(Object.keys(selected).sort()).toEqual([...SYNCED_SETTING_KEYS].sort())
-    for (const key of SYNCED_SETTING_KEYS) expect(selected[key]).toBe(loaded[key])
+    expect(Object.keys(selected).sort()).toEqual(Object.keys(CHANGED_SETTINGS).sort())
+    expect(selected).toEqual(CHANGED_SETTINGS)
   })
 
   it('carries translationEnabled in the reducer payload despite owning its writes elsewhere', () => {
@@ -71,7 +70,7 @@ describe('rendererSettings', () => {
     })
   })
 
-  describe.each(SYNCED_SETTING_KEYS)('%s', (key) => {
+  describe.each(Object.keys(CHANGED_SETTINGS) as (keyof RendererSettings)[])('%s', (key) => {
     it('is patched, alone, when it changes', () => {
       const next = { ...DEFAULT_PLAYER_SETTINGS, [key]: CHANGED_SETTINGS[key] }
 

@@ -16,7 +16,7 @@ export interface PreviewTimer {
 }
 
 /** Production timer bound to the browser's `setTimeout`/`clearTimeout`. */
-export const browserPreviewTimer: PreviewTimer = {
+const browserPreviewTimer: PreviewTimer = {
   set: (callback, delayMs) => window.setTimeout(callback, delayMs),
   clear: (handle) => window.clearTimeout(handle as number)
 }

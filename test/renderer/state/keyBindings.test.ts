@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   createModifierTracker,
   describeKeyBinding,
-  describeKeyCode,
   eventKeyBinding,
   findKeyBindingConflicts,
   isEditableTarget,
   keyToAction,
-  wheelDirection,
   wheelEventKeyBinding,
   type KeyChord
 } from '@src/renderer/src/state/keyBindings'
@@ -114,18 +112,23 @@ describe('eventKeyBinding', () => {
   })
 })
 
-describe('wheelDirection', () => {
-  it('maps vertical and Shift-translated horizontal axes to up/down', () => {
-    expect(wheelDirection(-40, 0)).toBe(-1)
-    expect(wheelDirection(40, 0)).toBe(1)
-    expect(wheelDirection(0, -40)).toBe(-1)
-    expect(wheelDirection(0, 40)).toBe(1)
-    expect(wheelDirection(0, 0)).toBe(0)
-    expect(wheelDirection(Number.NaN, 0)).toBe(0)
-  })
-})
-
 describe('wheelEventKeyBinding', () => {
+  it('ignores a non-finite wheel delta', () => {
+    expect(
+      wheelEventKeyBinding(
+        {
+          deltaX: 0,
+          deltaY: Number.NaN,
+          ctrlKey: false,
+          shiftKey: false,
+          altKey: false,
+          metaKey: false
+        },
+        new Set()
+      )
+    ).toBeNull()
+  })
+
   const noModifiers: ReadonlySet<string> = new Set()
 
   function chord(overrides: Partial<Parameters<typeof wheelEventKeyBinding>[0]> = {}) {
@@ -216,14 +219,14 @@ describe('createModifierTracker', () => {
 
 describe('key binding labels', () => {
   it('describes common, alphanumeric, and unknown codes', () => {
-    expect(describeKeyCode('Space')).toBe('Space')
-    expect(describeKeyCode('Escape')).toBe('Esc')
-    expect(describeKeyCode('ArrowLeft')).toBe('←')
-    expect(describeKeyCode('KeyF')).toBe('F')
-    expect(describeKeyCode('Digit5')).toBe('5')
-    expect(describeKeyCode('F11')).toBe('F11')
-    expect(describeKeyCode(MOUSE_WHEEL_UP_BINDING_CODE)).toBe('mouse wheel up')
-    expect(describeKeyCode(MOUSE_WHEEL_DOWN_BINDING_CODE)).toBe('mouse wheel down')
+    expect(describeKeyBinding('Space')).toBe('Space')
+    expect(describeKeyBinding('Escape')).toBe('Esc')
+    expect(describeKeyBinding('ArrowLeft')).toBe('←')
+    expect(describeKeyBinding('KeyF')).toBe('F')
+    expect(describeKeyBinding('Digit5')).toBe('5')
+    expect(describeKeyBinding('F11')).toBe('F11')
+    expect(describeKeyBinding(MOUSE_WHEEL_UP_BINDING_CODE)).toBe('mouse wheel up')
+    expect(describeKeyBinding(MOUSE_WHEEL_DOWN_BINDING_CODE)).toBe('mouse wheel down')
   })
 
   it('includes modifier labels in chords', () => {

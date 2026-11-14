@@ -28,10 +28,10 @@ export interface Rect {
  * click without a drag produces a degenerate rectangle; below this the crop
  * action stays disabled and the user takes the full frame instead.
  */
-export const MIN_CROP_DISPLAY_PX = 8
+const MIN_CROP_DISPLAY_PX = 8
 
 /** Longest allowed edge for JPEGs attached to mined Anki cards. */
-export const CARD_IMAGE_MAX_DIMENSION_PX = 1280
+const CARD_IMAGE_MAX_DIMENSION_PX = 1280
 
 /**
  * Fits an integer pixel size within `maxDimension` without upscaling. The
@@ -137,7 +137,7 @@ export interface CanvasLike {
 }
 
 /** JPEG quality for mined pictures — visually clean at a fraction of PNG's size. */
-export const CARD_IMAGE_JPEG_QUALITY = 0.85
+const CARD_IMAGE_JPEG_QUALITY = 0.85
 
 /**
  * Draws `rect` (natural pixels) of `image` into `canvas` and returns the result

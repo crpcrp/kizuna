@@ -4,8 +4,7 @@ import {
   eofAction,
   performFileNavigation,
   performKeyAction,
-  performMediaKey,
-  shouldAutoAdvance
+  performMediaKey
 } from '@src/renderer/src/state/keyActions'
 
 describe('performKeyAction', () => {
@@ -277,25 +276,20 @@ describe('performFileNavigation', () => {
   })
 })
 
-describe('shouldAutoAdvance', () => {
-  it('only advances on a guarded false-to-true EOF edge', () => {
-    expect(shouldAutoAdvance(false, true, true, false, '/show/ep1.mkv')).toBe(true)
-    expect(shouldAutoAdvance(true, true, true, false, '/show/ep1.mkv')).toBe(false)
-    expect(shouldAutoAdvance(false, false, true, false, '/show/ep1.mkv')).toBe(false)
-    expect(shouldAutoAdvance(false, true, false, false, '/show/ep1.mkv')).toBe(false)
-    expect(shouldAutoAdvance(false, true, true, true, '/show/ep1.mkv')).toBe(false)
-    expect(shouldAutoAdvance(false, true, true, false, undefined)).toBe(false)
-  })
-
-  it('suppresses folder auto-advance while a playlist is active', () => {
-    // Same guarded edge that advances above, but the queue owns "what's next".
-    expect(shouldAutoAdvance(false, true, true, false, '/show/ep1.mkv', true)).toBe(false)
-    // An inactive playlist leaves folder auto-advance behaving exactly as before.
-    expect(shouldAutoAdvance(false, true, true, false, '/show/ep1.mkv', false)).toBe(true)
-  })
-})
-
 describe('eofAction', () => {
+  it.each([
+    [true, true, true, false, '/show/ep1.mkv'],
+    [false, false, true, false, '/show/ep1.mkv'],
+    [false, true, false, false, '/show/ep1.mkv'],
+    [false, true, true, true, '/show/ep1.mkv'],
+    [false, true, true, false, undefined]
+  ] as const)(
+    'does not advance the folder without a safe EOF edge (%j)',
+    (prevEof, eof, autoPlayNext, mediaOpening, filePath) => {
+      expect(eofAction(prevEof, eof, autoPlayNext, mediaOpening, filePath, false)).toBe('none')
+    }
+  )
+
   it('lets the queue handle EOF regardless of autoPlayNext', () => {
     // Queue driving on a rising edge → 'playlist' even with autoPlayNext off.
     expect(eofAction(false, true, false, false, '/show/ep1.mkv', true)).toBe('playlist')

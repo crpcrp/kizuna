@@ -12,7 +12,7 @@ import type { TimePosStore } from './timePosStore'
 import { useLatestRef } from './useLatestRef'
 
 /** Keeps an automatically paused completed subtitle visible by about 10 ms. */
-export const AUTO_PAUSE_END_INSET_SECONDS = 0.01
+const AUTO_PAUSE_END_INSET_SECONDS = 0.01
 const UNKNOWN_WORD_AUTO_PAUSE_ERROR = 'Could not prepare unknown-word auto-pause.'
 const USER_SEEK_TARGET_TOLERANCE_SECONDS = 0.25
 const USER_SEEK_JUMP_THRESHOLD_SECONDS = 1

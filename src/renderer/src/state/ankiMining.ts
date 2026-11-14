@@ -20,7 +20,7 @@ const SENTENCE_AUDIO_PAD_SEC = 0.25
 
 /** Hard ceiling on one mined clip, guarding against a pathological cue that
  * spans minutes of the file. */
-export const SENTENCE_AUDIO_MAX_SEC = 60
+const SENTENCE_AUDIO_MAX_SEC = 60
 
 /**
  * Pure: converts a subtitle cue into the media-clock window its audio should be

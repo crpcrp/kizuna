@@ -5,7 +5,7 @@ import {
 } from '../../../shared/playerSettings'
 
 /** Theme variables each level color override controls (see theme.css). */
-export const LEVEL_COLOR_VARS: Record<UnderlineLevel, string[]> = {
+const LEVEL_COLOR_VARS: Record<UnderlineLevel, string[]> = {
   unknown: ['--level-unknown'],
   inDeck: ['--level-in-deck'],
   learning: ['--level-learning'],

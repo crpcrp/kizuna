@@ -118,7 +118,7 @@ export const initialPlayerState: PlayerState = {
 }
 
 /** Id of the first audio track in `tracks`, else undefined. */
-export function defaultAudioId(tracks: Track[]): number | undefined {
+function defaultAudioId(tracks: Track[]): number | undefined {
   return tracks.find((t) => t.kind === 'audio')?.id
 }
 
@@ -173,7 +173,7 @@ export type PlayerAction =
   | { type: 'setSubtitleStyle'; value: Partial<SubtitleStyleSettings> }
 
 /** True when two whole-track snapshots contain the same cue keys and token arrays. */
-export function sameCueTokenSnapshot(
+function sameCueTokenSnapshot(
   current: Record<string, Token[]>,
   next: Record<string, Token[]>
 ): boolean {

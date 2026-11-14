@@ -93,7 +93,7 @@ export interface WheelChord {
 
 /** Maps a wheel gesture to one vertical direction, regardless of axis.
  * `-1` is wheel up, `1` is wheel down, `0` is a wheel event to ignore. */
-export function wheelDirection(deltaY: number, deltaX: number): -1 | 0 | 1 {
+function wheelDirection(deltaY: number, deltaX: number): -1 | 0 | 1 {
   const axis = Number.isFinite(deltaY) && deltaY !== 0 ? deltaY : deltaX
   if (!Number.isFinite(axis) || axis === 0) return 0
   return axis < 0 ? -1 : 1
@@ -175,7 +175,7 @@ export function createModifierTracker(): ModifierTracker {
   }
 }
 
-export function describeKeyCode(code: string): string {
+function describeKeyCode(code: string): string {
   const named: Record<string, string> = {
     Space: 'Space',
     Escape: 'Esc',

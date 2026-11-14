@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   applyLevelColors,
   DEFAULT_LEVEL_COLOR_HEX,
-  LEVEL_COLOR_VARS,
   type LevelColorStyle
 } from '@src/renderer/src/util/levelColors'
 import { UNDERLINE_LEVELS } from '@src/shared/playerSettings'
@@ -26,9 +25,8 @@ function fakeStyle(): LevelColorStyle & {
   }
 }
 
-describe('LEVEL_COLOR_VARS / DEFAULT_LEVEL_COLOR_HEX', () => {
+describe('DEFAULT_LEVEL_COLOR_HEX', () => {
   it('cover exactly the underline levels', () => {
-    expect(Object.keys(LEVEL_COLOR_VARS).sort()).toEqual([...UNDERLINE_LEVELS].sort())
     expect(Object.keys(DEFAULT_LEVEL_COLOR_HEX).sort()).toEqual([...UNDERLINE_LEVELS].sort())
     for (const level of UNDERLINE_LEVELS) {
       expect(DEFAULT_LEVEL_COLOR_HEX[level]).toMatch(/^#[0-9a-f]{6}$/)

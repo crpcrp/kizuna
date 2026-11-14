@@ -1,11 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   applyVideoAdjustments,
-  cycleAbLoop,
   cycleAbLoopAction,
   frameStepAction
 } from '@src/renderer/src/state/playbackCommands'
-import {} from '@test/harness/playerActionFakes'
 
 describe('frameStepAction', () => {
   function makeBridge() {
@@ -78,42 +76,16 @@ describe('frameStepAction', () => {
   })
 })
 
-describe('cycleAbLoop', () => {
-  it('cycles no-loop → A set → B set → cleared', () => {
-    const empty = { a: null, b: null }
-    const aSet = cycleAbLoop(empty, 12)
-    expect(aSet).toEqual({ a: 12, b: null })
-
-    const bSet = cycleAbLoop(aSet, 30)
-    expect(bSet).toEqual({ a: 12, b: 30 })
-
-    expect(cycleAbLoop(bSet, 45)).toEqual({ a: null, b: null })
-  })
-
-  it('swaps the endpoints when B lands before A so the stored pair keeps a <= b', () => {
-    const aSet = cycleAbLoop({ a: null, b: null }, 30)
-    expect(aSet).toEqual({ a: 30, b: null })
-    // User seeked back before A, then pressed the key: B (10) precedes A (30).
-    expect(cycleAbLoop(aSet, 10)).toEqual({ a: 10, b: 30 })
-  })
-
-  it('clamps a negative playback time to 0', () => {
-    expect(cycleAbLoop({ a: null, b: null }, -4)).toEqual({ a: 0, b: null })
-  })
-
-  it('keeps A armed instead of storing a zero-length loop when B equals A (paused double-press)', () => {
-    const aSet = cycleAbLoop({ a: null, b: null }, 12)
-    expect(aSet).toEqual({ a: 12, b: null })
-    // Paused: the second press reports the same time. A zero-length { a: 12,
-    // b: 12 } would violate the a < b invariant, so A stays armed.
-    const stillArmed = cycleAbLoop(aSet, 12)
-    expect(stillArmed).toEqual({ a: 12, b: null })
-    // A later press at a different time then closes a valid range.
-    expect(cycleAbLoop(stillArmed, 40)).toEqual({ a: 12, b: 40 })
-  })
-})
-
 describe('cycleAbLoopAction', () => {
+  it('clamps a negative playback time before sending the loop to mpv', () => {
+    const bridge = { setAbLoop: vi.fn().mockResolvedValue(undefined) }
+    expect(cycleAbLoopAction(bridge, vi.fn(), { a: null, b: null }, -4, vi.fn())).toEqual({
+      a: 0,
+      b: null
+    })
+    expect(bridge.setAbLoop).toHaveBeenCalledWith(0, null)
+  })
+
   it('sends the normalized pair to mpv, stores it, and clears the cue loop when engaging', () => {
     const bridge = { setAbLoop: vi.fn().mockResolvedValue(undefined) }
     const dispatch = vi.fn()
@@ -128,6 +100,8 @@ describe('cycleAbLoopAction', () => {
       patch: { abLoopState: { a: 12, b: null } }
     })
     expect(clearLoopLine).toHaveBeenCalledTimes(1)
+    expect(cycleAbLoopAction(bridge, dispatch, next, 30, clearLoopLine)).toEqual({ a: 12, b: 30 })
+    expect(bridge.setAbLoop).toHaveBeenLastCalledWith(12, 30)
   })
 
   it('swaps a B-before-A press before sending it to mpv and state', () => {

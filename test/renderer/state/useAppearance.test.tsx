@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { resolveTheme, useAppearance } from '@src/renderer/src/state/useAppearance'
+import { useAppearance } from '@src/renderer/src/state/useAppearance'
 import type { Appearance } from '@src/shared/playerSettings'
 
 afterEach(() => {
@@ -9,12 +9,20 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('resolves explicit and system appearances', () => {
-  expect(resolveTheme('light', true)).toBe('light')
-  expect(resolveTheme('dark', false)).toBe('dark')
-  expect(resolveTheme('system', true)).toBe('dark')
-  expect(resolveTheme('system', false)).toBe('light')
-})
+it.each([
+  ['light', true, 'light'],
+  ['dark', false, 'dark']
+] as const)(
+  'applies explicit %s appearance regardless of the system',
+  (appearance, matches, theme) => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => ({ matches }))
+    )
+    renderHook(() => useAppearance({ appearance, levelColors: {} }))
+    expect(document.documentElement.dataset.theme).toBe(theme)
+  }
+)
 
 it('follows system changes and cleans up on mode changes and unmount', () => {
   const query = new EventTarget() as MediaQueryList

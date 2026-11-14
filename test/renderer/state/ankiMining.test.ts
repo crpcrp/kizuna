@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  SENTENCE_AUDIO_MAX_SEC,
   addTokenToAnki,
   checkAnkiExisting,
   mineMediaContext,
@@ -134,7 +133,7 @@ describe('sentenceAudioWindow', () => {
 
   it('caps the clip at 60 seconds from the clamped start', () => {
     const window = sentenceAudioWindow({ start: 10, end: 300 }, 0)
-    expect(window).toEqual({ startSec: 9.75, endSec: 9.75 + SENTENCE_AUDIO_MAX_SEC })
+    expect(window).toEqual({ startSec: 9.75, endSec: 9.75 + 60 })
   })
 
   it('returns null for inverted or non-finite timing', () => {

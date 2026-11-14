@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-export const FULLSCREEN_CURSOR_HIDE_DELAY_MS = 5000
+const FULLSCREEN_CURSOR_HIDE_DELAY_MS = 5000
 
 export function useFullscreenCursor(fullscreen: boolean): boolean {
   const [hidden, setHidden] = useState(false)

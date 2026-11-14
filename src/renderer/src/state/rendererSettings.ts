@@ -12,7 +12,7 @@ import type { PlayerSettings } from '../../../shared/playerSettings'
  * be a `PlayerState` field of the same type, which `useSettingsLifecycle`'s
  * `settings` input enforces at the call site in `App.tsx`.
  */
-export const SYNCED_SETTING_KEYS = [
+const SYNCED_SETTING_KEYS = [
   'keyBindings',
   'startupBehavior',
   'skipSeconds',

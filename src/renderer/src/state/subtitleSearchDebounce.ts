@@ -3,7 +3,7 @@ export interface SearchTimer {
   clear(handle: unknown): void
 }
 
-export const browserSearchTimer: SearchTimer = {
+const browserSearchTimer: SearchTimer = {
   set: (callback, delayMs) => window.setTimeout(callback, delayMs),
   clear: (handle) => window.clearTimeout(handle as number)
 }

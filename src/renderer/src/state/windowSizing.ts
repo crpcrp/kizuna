@@ -5,7 +5,7 @@ export interface WindowSize {
   height: number
 }
 
-export function computeVideoWindowSize(
+function computeVideoWindowSize(
   video: { width: number; height: number },
   scale: number,
   topBarHeight: number,
@@ -19,7 +19,7 @@ export function computeVideoWindowSize(
   }
 }
 
-export function clampWindowSize(size: WindowSize, maxWidth: number, maxHeight: number): WindowSize {
+function clampWindowSize(size: WindowSize, maxWidth: number, maxHeight: number): WindowSize {
   if (size.width <= maxWidth && size.height <= maxHeight) return size
   const scale = Math.min(maxWidth / size.width, maxHeight / size.height)
   return { width: Math.round(size.width * scale), height: Math.round(size.height * scale) }
