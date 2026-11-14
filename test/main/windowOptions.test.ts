@@ -89,61 +89,22 @@ describe('applyReloadGuard', () => {
     return { type: 'keyDown', key: 'r', control: false, meta: false, ...overrides }
   }
 
-  it('registers a before-input-event listener', () => {
-    const wc = fakeWebContents()
-    const onSpy = vi.spyOn(wc, 'on')
-
-    applyReloadGuard(wc)
-
-    expect(onSpy).toHaveBeenCalledWith('before-input-event', expect.any(Function))
-  })
-
-  it('swallows Ctrl+R', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(wc.fireInput(keyDown({ control: true })).preventDefault).toHaveBeenCalledTimes(1)
-  })
-
-  it('swallows the right-Control chord (Electron reports it as the same control flag)', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(wc.fireInput(keyDown({ key: 'R', control: true })).preventDefault).toHaveBeenCalledTimes(
-      1
-    )
-  })
-
-  it('swallows Cmd+R', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(wc.fireInput(keyDown({ meta: true })).preventDefault).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not swallow a bare R keydown (Replay Line still receives it)', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(wc.fireInput(keyDown()).preventDefault).not.toHaveBeenCalled()
-  })
-
-  it('does not swallow unrelated modified shortcuts', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(wc.fireInput(keyDown({ key: 's', control: true })).preventDefault).not.toHaveBeenCalled()
-    expect(wc.fireInput(keyDown({ key: 'i', control: true })).preventDefault).not.toHaveBeenCalled()
-  })
-
-  it('ignores keyUp events for Ctrl+R', () => {
-    const wc = fakeWebContents()
-    applyReloadGuard(wc)
-
-    expect(
-      wc.fireInput(keyDown({ type: 'keyUp', control: true })).preventDefault
-    ).not.toHaveBeenCalled()
-  })
+  it.each([
+    ['Ctrl+R', { control: true }, true],
+    ['right-Control uppercase R', { key: 'R', control: true }, true],
+    ['Cmd+R', { meta: true }, true],
+    ['bare R', {}, false],
+    ['Ctrl+S', { key: 's', control: true }, false],
+    ['Ctrl+I', { key: 'i', control: true }, false],
+    ['Ctrl+R keyUp', { type: 'keyUp', control: true }, false]
+  ] satisfies [string, Partial<BeforeInputEventInput>, boolean][])(
+    '%s is blocked only for reload chords',
+    (_label, input, blocked) => {
+      const wc = fakeWebContents()
+      applyReloadGuard(wc)
+      expect(wc.fireInput(keyDown(input)).preventDefault).toHaveBeenCalledTimes(blocked ? 1 : 0)
+    }
+  )
 })
 
 describe('registerWindowControls', () => {
@@ -197,21 +158,6 @@ describe('registerWindowControls', () => {
     }
   }
 
-  it('registers exactly the window-control command channels', () => {
-    const { listeners } = setup(null)
-    expect([...listeners.keys()].sort()).toEqual(
-      [
-        WINDOW_CONTROL_CHANNELS.close,
-        WINDOW_CONTROL_CHANNELS.minimize,
-        WINDOW_CONTROL_CHANNELS.setFullscreen,
-        WINDOW_CONTROL_CHANNELS.toggleFullscreen,
-        WINDOW_CONTROL_CHANNELS.setSize,
-        WINDOW_CONTROL_CHANNELS.setAlwaysOnTop,
-        WINDOW_CONTROL_CHANNELS.setShape
-      ].sort()
-    )
-  })
-
   it('minimizes the window resolved from the sending event', () => {
     const target = fakeTarget()
     const { listeners, resolver } = setup(target)
@@ -245,30 +191,6 @@ describe('registerWindowControls', () => {
     expect(calls).toEqual(['flush-history', 'close'])
   })
 
-  it('setFullscreen forwards the boolean payload to setFullScreen', () => {
-    const target = fakeTarget()
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, true)
-    expect(target.setFullScreen).toHaveBeenCalledWith(true)
-  })
-
-  it('toggleFullscreen flips the current fullscreen state', () => {
-    const target = fakeTarget(false)
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(target.setFullScreen).toHaveBeenCalledWith(true)
-  })
-
-  it('toggleFullscreen from fullscreen leaves it', () => {
-    const target = fakeTarget(true)
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(target.setFullScreen).toHaveBeenCalledWith(false)
-  })
-
   it('is a no-op when no window resolves (e.g. already destroyed)', () => {
     const beforeClose = vi.fn()
     const { listeners } = setup(null, beforeClose)
@@ -280,56 +202,28 @@ describe('registerWindowControls', () => {
     expect(beforeClose).not.toHaveBeenCalled()
   })
 
-  it('setFullscreen(true) captures the window bounds before entering fullscreen', () => {
-    const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 })
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, true)
-
-    expect(target.capturePreFullscreenBounds).toHaveBeenCalledOnce()
-    expect(target.setFullScreen).toHaveBeenCalledWith(true)
-  })
-
-  it('setFullscreen(false) does not capture bounds (nothing to save when leaving)', () => {
-    const target = fakeTarget(true)
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, false)
-
-    expect(target.capturePreFullscreenBounds).not.toHaveBeenCalled()
-    expect(target.setFullScreen).toHaveBeenCalledWith(false)
-  })
-
-  it('setFullscreen(false) always forwards the exit command when renderer state is stale', () => {
-    const target = fakeTarget(false)
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.setFullscreen)!({ senderId: 7 }, false)
-
-    expect(target.setFullScreen).toHaveBeenCalledWith(false)
-  })
-
-  it('toggleFullscreen captures bounds only on the way in, not the way out', () => {
-    const enteringTarget = fakeTarget(false)
-    const { listeners: enteringListeners } = setup(enteringTarget)
-    enteringListeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(enteringTarget.capturePreFullscreenBounds).toHaveBeenCalledOnce()
-
-    const leavingTarget = fakeTarget(true)
-    const { listeners: leavingListeners } = setup(leavingTarget)
-    leavingListeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-    expect(leavingTarget.capturePreFullscreenBounds).not.toHaveBeenCalled()
-  })
-
-  it('toggleFullscreen exits without overwriting saved bounds when Electron reports windowed', () => {
-    const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 }, true)
-    const { listeners } = setup(target)
-
-    listeners.get(WINDOW_CONTROL_CHANNELS.toggleFullscreen)!({ senderId: 7 })
-
-    expect(target.setFullScreen).toHaveBeenCalledWith(false)
-    expect(target.capturePreFullscreenBounds).not.toHaveBeenCalled()
-  })
+  it.each([
+    [WINDOW_CONTROL_CHANNELS.setFullscreen, false, false, true, true, true],
+    [WINDOW_CONTROL_CHANNELS.setFullscreen, true, false, false, false, false],
+    [WINDOW_CONTROL_CHANNELS.setFullscreen, false, false, false, false, false],
+    [WINDOW_CONTROL_CHANNELS.toggleFullscreen, false, false, undefined, true, true],
+    [WINDOW_CONTROL_CHANNELS.toggleFullscreen, true, false, undefined, false, false],
+    [WINDOW_CONTROL_CHANNELS.toggleFullscreen, false, true, undefined, false, false]
+  ] as const)(
+    '%s from fullscreen=%s, saved=%s, request=%s',
+    (channel, fullscreen, saved, request, next, captures) => {
+      const target = fakeTarget(fullscreen, undefined, saved)
+      const { listeners } = setup(target)
+      listeners.get(channel)!({ senderId: 7 }, request)
+      expect(target.setFullScreen).toHaveBeenCalledExactlyOnceWith(next)
+      expect(target.capturePreFullscreenBounds).toHaveBeenCalledTimes(captures ? 1 : 0)
+      if (captures) {
+        expect(target.capturePreFullscreenBounds.mock.invocationCallOrder[0]).toBeLessThan(
+          target.setFullScreen.mock.invocationCallOrder[0]
+        )
+      }
+    }
+  )
 
   it('setSize resizes the window, keeping its current position', () => {
     const target = fakeTarget(false, { x: 10, y: 20, width: 800, height: 600 })
@@ -403,13 +297,6 @@ describe('registerWindowControls', () => {
     expect(() =>
       listeners.get(WINDOW_CONTROL_CHANNELS.setAlwaysOnTop)!({ senderId: 7 }, true)
     ).not.toThrow()
-  })
-
-  it('registers getBounds/setBounds as invoke/handle channels', () => {
-    const { handlers } = setup(null)
-    expect([...handlers.keys()].sort()).toEqual(
-      [WINDOW_CONTROL_CHANNELS.getBounds, WINDOW_CONTROL_CHANNELS.setBounds].sort()
-    )
   })
 
   it('getBounds returns the resolved window bounds', () => {

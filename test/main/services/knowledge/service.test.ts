@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, it, expect, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { createKnowledgeService } from '@src/main/services/knowledge/service'
@@ -25,16 +26,6 @@ import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import type { JlptVocabularySnapshot } from '@src/main/services/jlpt/classifier'
 import type { JlptKanjiSnapshot } from '@src/main/services/jlpt/kanji'
 import type { JlptLevel } from '@src/shared/jlpt'
-
-function deferred(): { promise: Promise<void>; resolve(): void } {
-  let resolve!: () => void
-  return {
-    promise: new Promise<void>((done) => {
-      resolve = done
-    }),
-    resolve
-  }
-}
 
 /** Dispatches by URL: WaniKani-shaped URLs go to `wk`, the AnkiConnect URL goes to `anki`. */
 function combinedFetch(wk: FakeHttp, anki: FakeAnkiConnect): HttpFetch {
