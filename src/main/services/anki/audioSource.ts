@@ -2,14 +2,14 @@
 // AnkiConnect to fetch; Kizuna itself never downloads the file (see
 // docs/binaries.md §8).
 
-export const JPOD101_BASE = 'https://assets.languagepod101.com/dictionary/japanese/audiomp3.php'
+const JPOD101_BASE = 'https://assets.languagepod101.com/dictionary/japanese/audiomp3.php'
 /** MD5 of JPod101's "no recording" placeholder mp3 — see docs/binaries.md §8. */
-export const JPOD101_NO_AUDIO_MD5 = '7e2c2f954ef6051373ba916f000168dc'
+const JPOD101_NO_AUDIO_MD5 = '7e2c2f954ef6051373ba916f000168dc'
 
 /** Characters that could let a headword escape Anki's media folder as a path. */
 const PATH_HOSTILE = /[/\\:*?"<>|\s]+/g
 
-export function jpod101AudioUrl(expression: string, reading?: string): string {
+function jpod101AudioUrl(expression: string, reading?: string): string {
   const params = new URLSearchParams({ kanji: expression })
   if (reading) {
     params.set('kana', reading)
@@ -17,7 +17,7 @@ export function jpod101AudioUrl(expression: string, reading?: string): string {
   return `${JPOD101_BASE}?${params.toString()}`
 }
 
-export function audioFilename(expression: string, reading?: string): string {
+function audioFilename(expression: string, reading?: string): string {
   const parts = [sanitize(expression)]
   if (reading) {
     parts.push(sanitize(reading))

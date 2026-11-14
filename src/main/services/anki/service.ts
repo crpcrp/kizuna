@@ -71,7 +71,7 @@ function changedNewNoteFields(note: AnkiNote): string[] {
   return [...Object.keys(note.fields), ...(note.tags.length > 0 ? ['tags'] : [])]
 }
 
-export const JLPT_LEVEL_FIELD = 'JLPT Level'
+const JLPT_LEVEL_FIELD = 'JLPT Level'
 const JLPT_WORD_MEANING_ANCHOR = '{{Word Meaning}}'
 const JLPT_MARKER_START = '<!-- kizuna-jlpt-level:start -->'
 const JLPT_MARKER_END = '<!-- kizuna-jlpt-level:end -->'

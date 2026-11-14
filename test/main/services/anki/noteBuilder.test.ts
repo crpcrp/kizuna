@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { boldTarget, buildNote, formatAnkiFurigana } from '@src/main/services/anki/noteBuilder'
-import { JPOD101_NO_AUDIO_MD5 } from '@src/main/services/anki/audioSource'
 import type { AnkiSettings } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
 import type { LookupResult } from '@src/shared/dictionary'
@@ -138,7 +137,7 @@ describe('buildNote', () => {
         {
           url: expect.stringContaining('kanji=%E9%A3%9F%E3%81%B9%E3%82%8B'),
           filename: 'kizuna_食べる_たべる.mp3',
-          skipHash: JPOD101_NO_AUDIO_MD5,
+          skipHash: '7e2c2f954ef6051373ba916f000168dc',
           fields: ['WordAudio']
         }
       ]

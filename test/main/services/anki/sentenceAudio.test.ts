@@ -1,47 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
-import {
-  buildFfmpegAudioClipArgs,
-  createSentenceAudioService,
-  MIN_SENTENCE_CLIP_SECONDS
-} from '@src/main/services/anki/sentenceAudio'
+import { createSentenceAudioService } from '@src/main/services/anki/sentenceAudio'
 import type { MineMediaContext } from '@src/shared/anki'
 
 function mediaAt(path: string): MineMediaContext {
   return { path, audioStreamIndex: 2, startSec: 12.5, endSec: 15.25 }
 }
-
-describe('buildFfmpegAudioClipArgs', () => {
-  it('builds the exact MP3 clip argv, seeking before -i and mapping the absolute stream', () => {
-    expect(
-      buildFfmpegAudioClipArgs('C:\\videos\\ep1.mkv', 2, 12.5, 15.25, 'C:\\tmp\\clip.mp3')
-    ).toEqual([
-      '-v',
-      'error',
-      '-y',
-      '-ss',
-      '12.500',
-      '-to',
-      '15.250',
-      '-i',
-      'C:\\videos\\ep1.mkv',
-      '-map',
-      '0:2',
-      '-vn',
-      '-c:a',
-      'libmp3lame',
-      '-q:a',
-      '4',
-      'C:\\tmp\\clip.mp3'
-    ])
-  })
-
-  it('formats seconds at fixed precision so the same window yields the same argv', () => {
-    const args = buildFfmpegAudioClipArgs('/v/a.mkv', 0, 0.1 + 0.2, 1, '/tmp/c.mp3')
-    expect(args[4]).toBe('0.300')
-    expect(args[6]).toBe('1.000')
-  })
-})
 
 // The clip's temp path is platform-shaped, so the service is exercised against
 // both targets on either host, each with its own tmp dir and ffmpeg location.
@@ -92,11 +56,37 @@ describe.each(PATH_PLATFORMS)(
       expect(calls.exec).toEqual([
         {
           ffmpegPath,
-          args: buildFfmpegAudioClipArgs(mediaPath, 2, 12.5, 15.25, clipPath)
+          args: [
+            '-v',
+            'error',
+            '-y',
+            '-ss',
+            '12.500',
+            '-to',
+            '15.250',
+            '-i',
+            mediaPath,
+            '-map',
+            '0:2',
+            '-vn',
+            '-c:a',
+            'libmp3lame',
+            '-q:a',
+            '4',
+            clipPath
+          ]
         }
       ])
       expect(calls.read).toEqual([clipPath])
       expect(calls.removed).toEqual([clipPath])
+    })
+
+    it('rounds clip times to milliseconds at the process boundary', async () => {
+      const { calls, service } = deps()
+
+      await service.extract({ ...media, startSec: 0.1 + 0.2, endSec: 1 })
+
+      expect(calls.exec[0].args.slice(3, 7)).toEqual(['-ss', '0.300', '-to', '1.000'])
     })
 
     it('resolves null and still deletes the temp file when ffmpeg fails', async () => {
@@ -114,12 +104,14 @@ describe.each(PATH_PLATFORMS)(
         exec: async () => {},
         fs: {
           readBase64: () => Promise.reject(new Error('ENOENT')),
-          remove: async () => {}
+          remove: async (path) => {
+            calls.removed.push(path)
+          }
         }
       })
 
       expect(await service.extract(media)).toBeNull()
-      expect(calls.removed).toEqual([])
+      expect(calls.removed).toEqual([clipPath])
     })
 
     it('does not turn a failed cleanup into a failed extraction', async () => {
@@ -139,7 +131,7 @@ describe.each(PATH_PLATFORMS)(
       expect(
         await service.extract({
           ...media,
-          endSec: media.startSec + MIN_SENTENCE_CLIP_SECONDS / 2
+          endSec: media.startSec + 0.05
         })
       ).toBeNull()
       expect(calls.exec).toEqual([])

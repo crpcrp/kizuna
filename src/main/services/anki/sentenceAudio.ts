@@ -16,7 +16,7 @@ import { isRemoteUrl } from '../../../shared/mediaFileTypes'
  * Shortest window worth encoding. Anything below this is either a malformed
  * cue or a clip too short to hear, and is rejected before ffmpeg runs.
  */
-export const MIN_SENTENCE_CLIP_SECONDS = 0.1
+const MIN_SENTENCE_CLIP_SECONDS = 0.1
 
 /** Fixed-precision seconds, so the same window always produces the same argv. */
 function seconds(value: number): string {
@@ -37,7 +37,7 @@ function seconds(value: number): string {
  * the output; `-vn` drops any video, and `-q:a 4` is LAME's VBR quality
  * (bundled ffmpeg must therefore carry `libmp3lame` — see docs/binaries.md).
  */
-export function buildFfmpegAudioClipArgs(
+function buildFfmpegAudioClipArgs(
   inputPath: string,
   streamIndex: number,
   startSec: number,

@@ -1,68 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import {
-  buildRequest,
-  parseResponse,
-  createAnkiClient,
-  AnkiConnectError,
-  ANKI_CONNECT_VERSION,
-  ANKI_REQUEST_TIMEOUT_MS
-} from '@src/main/services/anki/ankiConnect'
+import { createAnkiClient } from '@src/main/services/anki/ankiConnect'
 import type { AnkiNote } from '@src/main/services/anki/noteBuilder'
-import type { HttpFetch } from '@src/main/services/http'
+import { fakeHttp } from '@test/harness/fakeHttp'
 import { fakeAnkiConnect } from '@test/harness/fakeAnkiConnect'
-
-describe('buildRequest', () => {
-  it('omits params when none are given', () => {
-    expect(JSON.parse(buildRequest('version'))).toEqual({
-      action: 'version',
-      version: ANKI_CONNECT_VERSION
-    })
-  })
-
-  it('includes params when given', () => {
-    expect(JSON.parse(buildRequest('deckNames', { foo: 1 }))).toEqual({
-      action: 'deckNames',
-      version: ANKI_CONNECT_VERSION,
-      params: { foo: 1 }
-    })
-  })
-
-  it('adds a top-level key when an api key is given', () => {
-    expect(JSON.parse(buildRequest('version', undefined, 'secret'))).toEqual({
-      action: 'version',
-      version: ANKI_CONNECT_VERSION,
-      key: 'secret'
-    })
-  })
-
-  it('omits the key for an empty or undefined api key', () => {
-    expect(JSON.parse(buildRequest('version', undefined, ''))).not.toHaveProperty('key')
-    expect(JSON.parse(buildRequest('version'))).not.toHaveProperty('key')
-  })
-})
-
-describe('parseResponse', () => {
-  it('returns result on success', () => {
-    expect(parseResponse({ result: 6, error: null })).toBe(6)
-  })
-
-  it('throws AnkiConnectError carrying the error string', () => {
-    expect(() => parseResponse({ result: null, error: 'deck was not found' })).toThrow(
-      AnkiConnectError
-    )
-    try {
-      parseResponse({ result: null, error: 'deck was not found' })
-    } catch (err) {
-      expect((err as Error).message).toBe('deck was not found')
-    }
-  })
-
-  it('throws AnkiConnectError on a malformed body', () => {
-    expect(() => parseResponse(null)).toThrow(AnkiConnectError)
-    expect(() => parseResponse('not json')).toThrow(AnkiConnectError)
-    expect(() => parseResponse({})).toThrow(AnkiConnectError)
-  })
-})
 
 const sampleNote: AnkiNote = {
   deckName: 'Japanese',
@@ -119,74 +59,48 @@ describe('createAnkiClient', () => {
     )
   })
 
-  it('sends the configured api key as a top-level key on every request', async () => {
-    const bodies: string[] = []
-    const capturingFetch: HttpFetch = async (_url, init) => {
-      bodies.push(init?.body ?? '{}')
-      return {
-        status: 200,
-        ok: true,
-        headers: { get: () => null },
-        body: (async function* () {})(),
-        json: async () => ({ result: 6, error: null }),
-        text: async () => ''
-      }
+  it.each([undefined, '', 'secret'])(
+    'posts the protocol envelope with API key %j',
+    async (apiKey) => {
+      const url = 'http://127.0.0.1:8765'
+      const http = fakeHttp({ [url]: { json: { result: 6, error: null } } })
+      const client = createAnkiClient({ url, fetch: http.fetch, apiKey })
+
+      expect(await client.version()).toBe(6)
+      expect(http.calls).toEqual([
+        {
+          url,
+          init: {
+            method: 'POST',
+            body: expect.any(String),
+            timeoutMs: 60_000
+          }
+        }
+      ])
+      expect(JSON.parse(http.calls[0].init!.body!)).toEqual({
+        action: 'version',
+        version: 6,
+        ...(apiKey ? { key: apiKey } : {})
+      })
     }
-    const client = createAnkiClient({
-      url: 'http://127.0.0.1:8765',
-      fetch: capturingFetch,
-      apiKey: 'secret'
-    })
-
-    await client.version()
-
-    expect(JSON.parse(bodies[0]).key).toBe('secret')
-  })
+  )
 
   it('sends the configured api key on the multi request and every nested action', async () => {
-    const bodies: string[] = []
-    const capturingFetch: HttpFetch = async (_url, init) => {
-      bodies.push(init?.body ?? '{}')
-      return {
-        status: 200,
-        ok: true,
-        headers: { get: () => null },
-        body: (async function* () {})(),
-        json: async () => ({ result: [[], []], error: null }),
-        text: async () => ''
-      }
-    }
-    const client = createAnkiClient({
-      url: 'http://127.0.0.1:8765',
-      fetch: capturingFetch,
-      apiKey: 'secret'
-    })
+    const url = 'http://127.0.0.1:8765'
+    const http = fakeHttp({ [url]: { json: { result: [[], []], error: null } } })
+    const client = createAnkiClient({ url, fetch: http.fetch, apiKey: 'secret' })
 
     await client.multi<number[]>([
       { action: 'findCards', params: { query: 'Word:"cat"' } },
       { action: 'findCards', params: { query: 'Word:"dog"' } }
     ])
 
-    const body = JSON.parse(bodies[0])
+    const body = JSON.parse(http.calls[0].init!.body!)
     expect(body.key).toBe('secret')
     expect(body.params.actions).toEqual([
       { action: 'findCards', params: { query: 'Word:"cat"' }, key: 'secret' },
       { action: 'findCards', params: { query: 'Word:"dog"' }, key: 'secret' }
     ])
-  })
-
-  it('sends no key when apiKey is unset', async () => {
-    const anki = fakeAnkiConnect({ version: { result: 6 } })
-    const bodies: string[] = []
-    const capturingFetch: HttpFetch = async (url, init) => {
-      bodies.push(init?.body ?? '{}')
-      return anki.fetch(url, init)
-    }
-    const client = createAnkiClient({ url: anki.url, fetch: capturingFetch })
-
-    await client.version()
-
-    expect(JSON.parse(bodies[0])).not.toHaveProperty('key')
   })
 
   it('deckNames() and modelNames() post their actions and return results', async () => {
@@ -260,13 +174,18 @@ describe('createAnkiClient', () => {
   })
 
   it('addNote() posts the note and returns the new note id', async () => {
-    const anki = fakeAnkiConnect({ addNote: { result: 12345 } })
-    const client = createAnkiClient({ url: anki.url, fetch: anki.fetch })
+    const url = 'http://127.0.0.1:8765'
+    const http = fakeHttp({ [url]: { json: { result: 12345, error: null } } })
+    const client = createAnkiClient({ url, fetch: http.fetch })
 
     const id = await client.addNote(sampleNote)
 
     expect(id).toBe(12345)
-    expect(anki.calls).toEqual([{ action: 'addNote', params: { note: sampleNote } }])
+    expect(JSON.parse(http.calls[0].init!.body!)).toEqual({
+      action: 'addNote',
+      version: 6,
+      params: { note: sampleNote }
+    })
   })
 
   it('findCards() and cardsInfo() post their actions and return results', async () => {
@@ -377,35 +296,25 @@ describe('createAnkiClient', () => {
     )
   })
 
-  it('maps a rejected fetch (Anki not running) to a distinguishable AnkiConnectError', async () => {
+  it.each([null, 'not json', {}, { result: 6 }, { error: null }])(
+    'rejects a malformed response envelope: %j',
+    async (json) => {
+      const url = 'http://127.0.0.1:8765'
+      const http = fakeHttp({ [url]: { json } })
+      const client = createAnkiClient({ url, fetch: http.fetch })
+
+      await expect(client.version()).rejects.toThrow('AnkiConnect: malformed response')
+    }
+  )
+
+  it('maps a refused connection to a user-facing hint', async () => {
     const refusingFetch = async (): Promise<never> => {
       throw new Error('ECONNREFUSED')
     }
     const client = createAnkiClient({ url: 'http://127.0.0.1:8765', fetch: refusingFetch })
 
     await expect(client.version()).rejects.toThrow('Is Anki running?')
-    await expect(client.version()).rejects.toBeInstanceOf(AnkiConnectError)
   })
-  it('sends every request with the AnkiConnect timeout', async () => {
-    let timeoutMs: number | undefined
-    const capturingFetch: HttpFetch = async (_url, init) => {
-      timeoutMs = init?.timeoutMs
-      return {
-        status: 200,
-        ok: true,
-        headers: { get: () => null },
-        body: (async function* () {})(),
-        json: async () => ({ result: 6, error: null }),
-        text: async () => ''
-      }
-    }
-    const client = createAnkiClient({ url: 'http://127.0.0.1:8765', fetch: capturingFetch })
-
-    await client.version()
-
-    expect(timeoutMs).toBe(ANKI_REQUEST_TIMEOUT_MS)
-  })
-
   it('maps a timed-out request to a dialog hint', async () => {
     const timingOutFetch = async (): Promise<never> => {
       throw Object.assign(new Error('t'), { name: 'TimeoutError' })
@@ -415,6 +324,5 @@ describe('createAnkiClient', () => {
     await expect(client.version()).rejects.toThrow(
       'AnkiConnect did not respond. Close any open Anki dialogs and try again.'
     )
-    await expect(client.version()).rejects.toBeInstanceOf(AnkiConnectError)
   })
 })
