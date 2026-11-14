@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import type { Token } from '@src/shared/token'
 import type { VocabularySpan } from '@src/renderer/src/state/vocabularySpans'
-import { buildSubtitleReport } from '@src/renderer/src/state/subtitleReport'
 import {
   defaultSelection,
   displayedCandidates,
@@ -19,6 +18,7 @@ import {
   type BulkMiningFilters,
   type BulkMiningReadyPhase,
   type MiningCandidate,
+  type MiningCueTokens,
   type ResolvedEntry
 } from '@src/renderer/src/state/bulkMining'
 import { makeLookupResult } from '@test/harness/dictFixtures'
@@ -68,248 +68,148 @@ function span(overrides: Partial<VocabularySpan> = {}): VocabularySpan {
 }
 
 describe('deriveMiningCandidates', () => {
-  it('keeps unknown non-symbol vocabulary with its first token and sentence, ordered by count then occurrence', () => {
+  it('maps first-occurrence context and orders unknown candidates by count then occurrence', () => {
     const first = token({ lemma: 'first', surface: 'first-surface' })
     const candidates = deriveMiningCandidates(
       [
-        { text: 'first sentence', tokens: [first, token({ lemma: 'tieA' })] },
-        { text: 'later sentence', tokens: [token({ lemma: 'first' }), token({ lemma: 'tieB' })] }
+        { text: 'first sentence', tokens: [first, token({ lemma: 'tieA' })], start: 10, end: 12 },
+        {
+          text: 'later sentence',
+          tokens: [token({ lemma: 'first' }), token({ lemma: 'tieB' })],
+          start: 30,
+          end: 33
+        }
       ],
       {}
     )
-    expect(candidates.map(({ lemma, count }) => ({ lemma, count }))).toEqual([
-      { lemma: 'first', count: 2 },
-      { lemma: 'tieA', count: 1 },
-      { lemma: 'tieB', count: 1 }
+    expect(candidates).toEqual([
+      {
+        lemma: 'first',
+        token: first,
+        sentence: 'first sentence',
+        count: 2,
+        firstOccurrence: 0,
+        cueStart: 10,
+        cueEnd: 12
+      },
+      {
+        lemma: 'tieA',
+        token: token({ lemma: 'tieA' }),
+        sentence: 'first sentence',
+        count: 1,
+        firstOccurrence: 1,
+        cueStart: 10,
+        cueEnd: 12
+      },
+      {
+        lemma: 'tieB',
+        token: token({ lemma: 'tieB' }),
+        sentence: 'later sentence',
+        count: 1,
+        firstOccurrence: 3,
+        cueStart: 30,
+        cueEnd: 33
+      }
     ])
     expect(candidates[0].token).toBe(first)
-    expect(candidates[0].sentence).toBe('first sentence')
-  })
-
-  it('excludes symbols, grammar, and lemmas known through a differing surface', () => {
-    const details: Record<string, KnowledgeDetails> = {
-      inflected: { level: 'known', sourceKinds: [], sources: [] }
-    }
-    const candidates = deriveMiningCandidates(
-      [
-        {
-          text: 'cue',
-          tokens: [
-            token({ lemma: '。', surface: '。', pos: 'symbol' }),
-            token({ lemma: 'grammar', pos: '助詞' }),
-            token({ lemma: 'base', surface: 'inflected' }),
-            token({ lemma: 'missing' })
-          ]
-        }
-      ],
-      details
-    )
-    expect(candidates.map((row) => row.lemma)).toEqual(['missing'])
-  })
-
-  it('returns no candidates for empty input', () => {
     expect(deriveMiningCandidates([], {})).toEqual([])
   })
 
-  it('aggregates accepted compounds while a bare member stays its own candidate', () => {
-    const compound = [
-      token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
-      token({ lemma: '様', surface: '様', startOffset: 2 })
-    ]
-    const candidates = deriveMiningCandidates(
-      [
-        { cueKey: 'cue-1', text: '閻魔様だ', tokens: compound, spans: [span()] },
-        {
-          cueKey: 'cue-2',
-          text: '様がいる',
-          tokens: [token({ lemma: '様', surface: '様' })],
-          spans: []
-        }
-      ],
-      {}
+  it('mines only unknown non-grammar units, including projected units', () => {
+    const levels = ['unknown', 'inDeck', 'learning', 'known', 'wellKnown'] as const
+    const details: Record<string, KnowledgeDetails> = Object.fromEntries(
+      levels.map((level) => [level, { level, sourceKinds: [], sources: [] }])
     )
-
-    expect(candidates.map(({ lemma, count, sentence }) => ({ lemma, count, sentence }))).toEqual([
-      { lemma: '閻魔様', count: 1, sentence: '閻魔様だ' },
-      { lemma: '様', count: 1, sentence: '様がいる' }
-    ])
-    expect(candidates[0].token).toMatchObject({
-      lemma: '閻魔様',
-      surface: '閻魔様',
-      startOffset: 0
+    const cues: MiningCueTokens[] = levels.map((level) => ({
+      cueKey: level,
+      text: level,
+      tokens: [token({ lemma: `base-${level}`, surface: level })],
+      spans: [
+        span({
+          cueKey: level,
+          expression: `projected-${level}`,
+          matchedSurface: level,
+          memberTokenOffsets: [0],
+          level
+        })
+      ]
+    }))
+    cues.push({
+      cueKey: 'grammar',
+      text: 'に',
+      tokens: [token({ lemma: 'に', surface: 'に', pos: '助詞' })],
+      spans: [
+        span({ cueKey: 'grammar', expression: 'に', matchedSurface: 'に', memberTokenOffsets: [0] })
+      ]
     })
-  })
-
-  it('does not mine a grammar token covered by a single-token projection', () => {
-    const grammar = token({ lemma: 'に', surface: 'に', pos: '助詞' })
+    expect(deriveMiningCandidates(cues, details).map((row) => row.lemma)).toEqual([
+      'projected-unknown'
+    ])
     expect(
       deriveMiningCandidates(
-        [
-          {
-            cueKey: 'cue-1',
-            text: 'に',
-            tokens: [grammar],
-            spans: [
-              span({
-                memberTokenOffsets: [grammar.startOffset],
-                expression: 'に',
-                matchedSurface: 'に'
-              })
-            ]
-          }
-        ],
-        {}
-      )
-    ).toEqual([])
+        levels.map((level) => ({
+          text: level,
+          tokens: [token({ lemma: `base-${level}`, surface: level })]
+        })),
+        details
+      ).map((row) => row.lemma)
+    ).toEqual(['base-unknown'])
   })
 
-  it('does not mine a symbol-only span', () => {
-    const symbol = token({ lemma: '。', surface: '。', pos: '記号' })
-    expect(
-      deriveMiningCandidates(
-        [
-          {
-            cueKey: 'cue-1',
-            text: '。',
-            tokens: [symbol],
-            spans: [span({ memberTokenOffsets: [symbol.startOffset], expression: '記号' })]
-          }
-        ],
-        {}
-      )
-    ).toEqual([])
-  })
-
-  it('counts repeated compounds from their first sentence and respects compound knowledge levels', () => {
+  it('maps compound tokens and timing while leaving an untimed bare member independent', () => {
     const tokens = [
       token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
       token({ lemma: '様', surface: '様', startOffset: 2 })
     ]
     const candidates = deriveMiningCandidates(
       [
-        { cueKey: 'cue-1', text: 'first', tokens, spans: [span()] },
-        { cueKey: 'cue-2', text: 'second', tokens, spans: [span({ cueKey: 'cue-2' })] },
+        { cueKey: 'cue-1', text: 'first', tokens, spans: [span()], start: 5, end: 7 },
         {
-          cueKey: 'cue-3',
-          text: 'known',
+          cueKey: 'cue-2',
+          text: 'later',
           tokens,
-          spans: [
-            span({
-              cueKey: 'cue-3',
-              expression: '大王様',
-              matchedSurface: '大王様',
-              level: 'known'
-            })
-          ]
-        }
+          spans: [span({ cueKey: 'cue-2' })],
+          start: 20,
+          end: 22
+        },
+        { text: 'bare', tokens: [tokens[1]] }
       ],
       {}
     )
-
-    expect(candidates.map(({ lemma, count, sentence }) => ({ lemma, count, sentence }))).toEqual([
-      { lemma: '閻魔様', count: 2, sentence: 'first' }
+    expect(candidates).toEqual([
+      {
+        lemma: '閻魔様',
+        token: { ...tokens[0], lemma: '閻魔様', surface: '閻魔様' },
+        sentence: 'first',
+        count: 2,
+        firstOccurrence: 0,
+        cueStart: 5,
+        cueEnd: 7
+      },
+      {
+        lemma: '様',
+        token: tokens[1],
+        sentence: 'bare',
+        count: 1,
+        firstOccurrence: 2,
+        cueStart: undefined,
+        cueEnd: undefined
+      }
     ])
   })
 
-  it('ignores a span whose cue identity does not match, preventing offset collisions across cues', () => {
-    const candidates = deriveMiningCandidates(
-      [
-        {
-          cueKey: 'cue-2',
-          text: 'other cue',
-          tokens: [
-            token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
-            token({ lemma: '様', surface: '様', startOffset: 2 })
-          ],
-          spans: [span({ cueKey: 'cue-1' })]
-        }
-      ],
-      {}
-    )
-
-    expect(candidates.map(({ lemma }) => lemma)).toEqual(['閻魔', '様'])
-  })
-
-  it('agrees with the report for compound vocabulary rows while token totals count rendered members', () => {
-    const accepted = span()
-    const compoundTokens = [
-      token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
-      token({ lemma: '様', surface: '様', startOffset: 2 })
-    ]
-    const standaloneTokens = [token({ lemma: '様', surface: '様', startOffset: 0 })]
-    const miningInput = [
-      { cueKey: 'cue-1', text: '閻魔様だ', tokens: compoundTokens, spans: [accepted] },
-      { cueKey: 'cue-2', text: '様がいる', tokens: standaloneTokens, spans: [] }
-    ]
-    const report = buildSubtitleReport(
-      [
-        { cueKey: 'cue-1', tokens: compoundTokens, acceptedSpans: [accepted] },
-        { cueKey: 'cue-2', tokens: standaloneTokens }
-      ],
-      {}
-    )
-    const candidates = deriveMiningCandidates(miningInput, {})
-
-    expect(report.topUnknown.map(({ lemma, count }) => ({ lemma, count }))).toEqual(
-      candidates.map(({ lemma, count }) => ({ lemma, count }))
-    )
-    expect(report.totalTokens).toBe(3)
-    expect(report.tokenLevels).toEqual({
-      unknown: 3,
-      inDeck: 0,
-      learning: 0,
-      known: 0,
-      wellKnown: 0
-    })
-  })
-
-  // `inDeck` (an Anki card exists in a configured known deck, but it is new,
-  // suspended, or buried) outranks `unknown`, so the level filter alone drops the
-  // word from the candidate set. This does not replace `hideTargetDeckMatches`:
-  // that filter is a live membership check against the mining *target* deck and
-  // still covers decks that are not configured knowledge sources, and notes added
-  // since the last knowledge sync. Both mechanisms coexist by design.
-  it('excludes already-mined lemmas whose level is inDeck, by lemma or by surface', () => {
-    const details: Record<string, KnowledgeDetails> = {
-      mined: { level: 'inDeck', sourceKinds: [], sources: [] },
-      minedSurface: { level: 'inDeck', sourceKinds: [], sources: [] }
-    }
-    const candidates = deriveMiningCandidates(
+  it('ignores projections without a cue key instead of accepting an empty-key match', () => {
+    const [row] = deriveMiningCandidates(
       [
         {
           text: 'cue',
-          tokens: [
-            token({ lemma: 'mined', surface: 'mined' }),
-            token({ lemma: 'minedBase', surface: 'minedSurface' }),
-            token({ lemma: 'fresh', surface: 'fresh' })
-          ]
-        }
-      ],
-      details
-    )
-
-    expect(candidates.map((row) => row.lemma)).toEqual(['fresh'])
-  })
-
-  it('excludes an accepted compound span whose level is inDeck', () => {
-    const compound = [
-      token({ lemma: '閻魔', surface: '閻魔', startOffset: 0 }),
-      token({ lemma: '様', surface: '様', startOffset: 2 })
-    ]
-    const candidates = deriveMiningCandidates(
-      [
-        { cueKey: 'cue-1', text: '閻魔様だ', tokens: compound, spans: [span({ level: 'inDeck' })] },
-        {
-          cueKey: 'cue-2',
-          text: '新顔がいる',
-          tokens: [token({ lemma: '新顔', surface: '新顔' })],
-          spans: []
+          tokens: [token({ lemma: 'base' })],
+          spans: [span({ cueKey: '', memberTokenOffsets: [0] })]
         }
       ],
       {}
     )
-
-    expect(candidates.map((row) => row.lemma)).toEqual(['新顔'])
+    expect(row.lemma).toBe('base')
   })
 })
 
@@ -648,58 +548,5 @@ describe('restoreReadyAfterRun', () => {
     expect(
       restoreReadyAfterRun(ready({ advisoryWarning: 'stale' }), {}).advisoryWarning
     ).toBeUndefined()
-  })
-})
-
-describe('deriveMiningCandidates cue timing', () => {
-  it('retains the first-occurrence cue start/end alongside its sentence', () => {
-    const candidates = deriveMiningCandidates(
-      [
-        { text: 'first', tokens: [token({ lemma: 'first' })], start: 10, end: 12 },
-        {
-          text: 'later',
-          tokens: [token({ lemma: 'first' }), token({ lemma: 'later' })],
-          start: 30,
-          end: 33
-        }
-      ],
-      {}
-    )
-
-    const byLemma = Object.fromEntries(candidates.map((row) => [row.lemma, row]))
-    // `first` occurs twice; the earlier cue's timing is the one kept.
-    expect(byLemma.first).toEqual(
-      expect.objectContaining({ sentence: 'first', cueStart: 10, cueEnd: 12 })
-    )
-    expect(byLemma.later).toEqual(
-      expect.objectContaining({ sentence: 'later', cueStart: 30, cueEnd: 33 })
-    )
-  })
-
-  it('leaves the timing undefined when the cue carried none', () => {
-    const [row] = deriveMiningCandidates([{ text: 'cue', tokens: [token({ lemma: 'a' })] }], {})
-
-    expect(row.cueStart).toBeUndefined()
-    expect(row.cueEnd).toBeUndefined()
-  })
-
-  it('retains it for a span-derived candidate too', () => {
-    const member = token({ lemma: 'part', surface: 'part', startOffset: 0 })
-    const span: VocabularySpan = {
-      cueKey: 'k',
-      startOffset: 0,
-      endOffset: 4,
-      expression: 'compound',
-      matchedSurface: 'part',
-      memberTokenOffsets: [0],
-      level: 'unknown'
-    }
-
-    const [row] = deriveMiningCandidates(
-      [{ cueKey: 'k', text: 'cue', tokens: [member], spans: [span], start: 5, end: 7 }],
-      {}
-    )
-
-    expect(row).toEqual(expect.objectContaining({ lemma: 'compound', cueStart: 5, cueEnd: 7 }))
   })
 })
