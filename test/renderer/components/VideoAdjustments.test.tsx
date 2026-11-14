@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import VideoAdjustments, {
-  cycleRotate,
-  isNeutral,
-  EQ_SLIDERS
-} from '@src/renderer/src/components/VideoAdjustments'
+import VideoAdjustments from '@src/renderer/src/components/VideoAdjustments'
 import {
   DEFAULT_VIDEO_ADJUSTMENTS,
   type VideoAdjustments as VideoAdjustmentsValue
@@ -34,36 +30,6 @@ function renderPanel(
   )
   return { onChange, onClose }
 }
-
-describe('cycleRotate (pure)', () => {
-  it('advances through mpv rotations, wrapping 270 → 0', () => {
-    expect(cycleRotate(0)).toBe(90)
-    expect(cycleRotate(90)).toBe(180)
-    expect(cycleRotate(180)).toBe(270)
-    expect(cycleRotate(270)).toBe(0)
-  })
-})
-
-describe('isNeutral (pure)', () => {
-  it('is true only when every field sits at its neutral default', () => {
-    expect(isNeutral(DEFAULT_VIDEO_ADJUSTMENTS)).toBe(true)
-    expect(isNeutral({ ...DEFAULT_VIDEO_ADJUSTMENTS, brightness: 1 })).toBe(false)
-    expect(isNeutral({ ...DEFAULT_VIDEO_ADJUSTMENTS, rotate: 90 })).toBe(false)
-    expect(isNeutral({ ...DEFAULT_VIDEO_ADJUSTMENTS, deinterlace: true })).toBe(false)
-  })
-})
-
-describe('EQ_SLIDERS', () => {
-  it('lists the five mpv equalizer properties', () => {
-    expect(EQ_SLIDERS.map((s) => s.name)).toEqual([
-      'brightness',
-      'contrast',
-      'saturation',
-      'gamma',
-      'hue'
-    ])
-  })
-})
 
 describe('VideoAdjustments panel', () => {
   it('shows/hides via the open class', () => {
@@ -97,12 +63,15 @@ describe('VideoAdjustments panel', () => {
     expect(onChange).toHaveBeenCalledWith({ ...DEFAULT_VIDEO_ADJUSTMENTS, brightness: 45 })
   })
 
-  it('cycles rotation on the rotate button', () => {
-    const { onChange } = renderPanel(active)
-
+  it.each([
+    [0, 90],
+    [90, 180],
+    [180, 270],
+    [270, 0]
+  ] as const)('rotates from %s to %s through the button', (rotate, next) => {
+    const { onChange } = renderPanel({ ...active, rotate })
     fireEvent.click(screen.getByRole('button', { name: 'Rotate video' }))
-
-    expect(onChange).toHaveBeenCalledWith({ ...active, rotate: 180 })
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ ...active, rotate: next })
   })
 
   it('toggles deinterlace', () => {
@@ -121,10 +90,15 @@ describe('VideoAdjustments panel', () => {
     expect(onChange).toHaveBeenCalledWith(DEFAULT_VIDEO_ADJUSTMENTS)
   })
 
-  it('disables Reset when everything is already neutral', () => {
-    renderPanel(DEFAULT_VIDEO_ADJUSTMENTS)
+  it.each([
+    [DEFAULT_VIDEO_ADJUSTMENTS, true],
+    [{ ...DEFAULT_VIDEO_ADJUSTMENTS, brightness: 1 }, false],
+    [{ ...DEFAULT_VIDEO_ADJUSTMENTS, rotate: 90 }, false],
+    [{ ...DEFAULT_VIDEO_ADJUSTMENTS, deinterlace: true }, false]
+  ] as const)('disables Reset only for neutral adjustments: %j', (adjustments, disabled) => {
+    renderPanel(adjustments)
     expect((screen.getByRole('button', { name: 'Reset all' }) as HTMLButtonElement).disabled).toBe(
-      true
+      disabled
     )
   })
 

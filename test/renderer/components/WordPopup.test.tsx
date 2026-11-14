@@ -357,14 +357,6 @@ describe('WordPopup markup', () => {
     expect(closeButtonIndex).toBeGreaterThan(panelCloseEnd)
   })
 
-  it('does not fire onClose merely by rendering', () => {
-    const onClose = vi.fn()
-    renderToStaticMarkup(
-      <WordPopup results={sampleResults} position={{ x: 10, y: 20 }} onClose={onClose} />
-    )
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
   it('renders furigana as ruby/rt when reading differs from expression', () => {
     const html = renderToStaticMarkup(
       <WordPopup

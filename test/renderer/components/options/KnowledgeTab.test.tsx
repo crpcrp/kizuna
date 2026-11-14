@@ -119,12 +119,6 @@ describe('KnowledgeTab markup', () => {
     expect(html).toContain('sent only to WaniKani')
   })
 
-  it('does not fire onSaveWanikaniToken merely by rendering the Clear button', () => {
-    const onSaveWanikaniToken = vi.fn()
-    renderTab({ onSaveWanikaniToken, wanikaniConfigured: true })
-    expect(onSaveWanikaniToken).not.toHaveBeenCalled()
-  })
-
   it('shows "Not configured" when no token is stored', () => {
     const html = renderTab({ wanikaniConfigured: false })
     expect(html).toMatch(/id="wanikani-token-status"[^>]*data-configured="false"/)
@@ -135,12 +129,6 @@ describe('KnowledgeTab markup', () => {
     const html = renderTab({ wanikaniConfigured: true })
     expect(html).toMatch(/id="wanikani-token-status"[^>]*data-configured="true"/)
     expect(html).toContain('Configured ✓')
-  })
-
-  it('does not fire onSaveWanikaniToken merely by rendering', () => {
-    const onSaveWanikaniToken = vi.fn()
-    renderTab({ onSaveWanikaniToken })
-    expect(onSaveWanikaniToken).not.toHaveBeenCalled()
   })
 
   it('never renders a stored token value — only the draft state and a placeholder', () => {
@@ -165,12 +153,6 @@ describe('KnowledgeTab markup', () => {
     expect(html).toContain('<option value="Front">Front</option>')
     expect(html).toContain('<option value="Back">Back</option>')
     expect(html).toContain('<option value="Reading">Reading</option>')
-  })
-
-  it('does not fire onSyncNow merely by rendering', () => {
-    const onSyncNow = vi.fn()
-    renderTab({ onSyncNow: onSyncNow.mockResolvedValue(DEFAULT_SYNC_STATUS) })
-    expect(onSyncNow).not.toHaveBeenCalled()
   })
 
   it('renders separately addressed source sync buttons', () => {

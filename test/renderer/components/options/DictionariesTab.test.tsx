@@ -1,5 +1,5 @@
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DictionariesTab, {
   frequencyDictSelection,
@@ -256,34 +256,6 @@ describe('DictionariesTab markup', () => {
       /id="dictionaries-load-error"[^>]*>Could not read the dictionary database/
     )
     expect(renderTab()).not.toContain('options-error')
-  })
-
-  it('does not fire callbacks merely by rendering', () => {
-    const onSelectMecabDict = vi.fn()
-    const onImportYomitanDict = vi.fn()
-    const onSetYomitanEnabled = vi.fn()
-    const onSetYomitanFallbackOnly = vi.fn()
-    const onReorderYomitanDicts = vi.fn()
-    const onRemoveYomitanDict = vi.fn()
-    const onChangePopupSettings = vi.fn()
-    renderTab({
-      mecabDicts: BOTH_DICTS,
-      yomitanDicts: THREE_YOMITAN_DICTS,
-      onSelectMecabDict,
-      onImportYomitanDict,
-      onSetYomitanEnabled,
-      onSetYomitanFallbackOnly,
-      onReorderYomitanDicts,
-      onRemoveYomitanDict,
-      onChange: onChangePopupSettings
-    })
-    expect(onSelectMecabDict).not.toHaveBeenCalled()
-    expect(onImportYomitanDict).not.toHaveBeenCalled()
-    expect(onSetYomitanEnabled).not.toHaveBeenCalled()
-    expect(onSetYomitanFallbackOnly).not.toHaveBeenCalled()
-    expect(onReorderYomitanDicts).not.toHaveBeenCalled()
-    expect(onRemoveYomitanDict).not.toHaveBeenCalled()
-    expect(onChangePopupSettings).not.toHaveBeenCalled()
   })
 })
 

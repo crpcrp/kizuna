@@ -1,14 +1,10 @@
-import { describe, it, expect } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { isValidElement, type ReactElement, type ReactNode } from 'react'
-import SubtitleReport, { ReportBody } from '@src/renderer/src/components/SubtitleReport'
+import SubtitleReport from '@src/renderer/src/components/SubtitleReport'
 import type { SubtitleReportPhase } from '@src/renderer/src/state/subtitleReportController'
 import type { SubtitleReport as Report } from '@src/renderer/src/state/subtitleReport'
-
-// SSR-only render (no jsdom, no testing-library) per AGENTS.md testing policy —
-// same pattern as OptionsMenu/SubtitleSidebar. The Escape-keydown listener and
-// backdrop-click handler are client-only effects/handlers this environment
-// can't exercise; they were covered by manual QA during feature delivery instead.
 
 function emptyLevels(): Report['tokenLevels'] {
   return { unknown: 0, inDeck: 0, learning: 0, known: 0, wellKnown: 0 }
@@ -27,21 +23,7 @@ function makeReport(overrides: Partial<Report> = {}): Report {
   }
 }
 
-function findElement(
-  node: ReactNode,
-  predicate: (element: ReactElement) => boolean
-): ReactElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findElement(child, predicate)
-      if (found) return found
-    }
-    return null
-  }
-  if (!isValidElement(node)) return null
-  if (predicate(node)) return node
-  return findElement((node.props as { children?: ReactNode }).children, predicate)
-}
+afterEach(cleanup)
 
 describe('SubtitleReport closed state', () => {
   it('lacks the open class and generating state when closed and idle', () => {
@@ -115,24 +97,18 @@ describe('SubtitleReport phase markers', () => {
     expect(html).toContain('knowledge DB unavailable')
   })
 
-  it('forwards Retry from an error without opening another surface', () => {
-    let retries = 0
-    const body = ReportBody({
-      open: true,
-      phase: { kind: 'error', message: 'knowledge DB unavailable' },
-      onRetry: () => {
-        retries++
-      }
-    })
-    const retry = findElement(
-      body,
-      (element) =>
-        element.type === 'button' &&
-        (element.props as { children?: ReactNode }).children === 'Retry'
+  it('forwards Retry from the error dialog', () => {
+    const onRetry = vi.fn()
+    render(
+      <SubtitleReport
+        open
+        phase={{ kind: 'error', message: 'knowledge DB unavailable' }}
+        onClose={vi.fn()}
+        onRetry={onRetry}
+      />
     )
-    expect(retry).not.toBeNull()
-    ;(retry!.props as { onClick: () => void }).onClick()
-    expect(retries).toBe(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(onRetry).toHaveBeenCalledOnce()
   })
 })
 

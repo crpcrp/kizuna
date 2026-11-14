@@ -17,7 +17,7 @@ import {
 // `open`, the same pattern as MenuBar/OptionsMenu.
 
 /** The five equalizer sliders, in display order, with their labels. */
-export const EQ_SLIDERS: { name: VideoEqProperty; label: string }[] = [
+const EQ_SLIDERS: { name: VideoEqProperty; label: string }[] = [
   { name: 'brightness', label: 'Brightness' },
   { name: 'contrast', label: 'Contrast' },
   { name: 'saturation', label: 'Saturation' },
@@ -26,13 +26,13 @@ export const EQ_SLIDERS: { name: VideoEqProperty; label: string }[] = [
 ]
 
 /** Advances rotation to the next of mpv's four values, wrapping 270 → 0. */
-export function cycleRotate(current: VideoRotate): VideoRotate {
+function cycleRotate(current: VideoRotate): VideoRotate {
   const index = VIDEO_ROTATE_VALUES.indexOf(current)
   return VIDEO_ROTATE_VALUES[(index + 1) % VIDEO_ROTATE_VALUES.length]
 }
 
 /** True when nothing is set away from its neutral default (drives Reset's disabled state). */
-export function isNeutral(adjustments: VideoAdjustmentsValue): boolean {
+function isNeutral(adjustments: VideoAdjustmentsValue): boolean {
   return (
     EQ_SLIDERS.every(({ name }) => adjustments[name] === 0) &&
     adjustments.rotate === 0 &&
@@ -40,7 +40,7 @@ export function isNeutral(adjustments: VideoAdjustmentsValue): boolean {
   )
 }
 
-export interface VideoAdjustmentsProps {
+interface VideoAdjustmentsProps {
   open: boolean
   adjustments: VideoAdjustmentsValue
   /** Receives the full next block on any slider/rotate/deinterlace/reset change. */

@@ -11,12 +11,12 @@ import type { RepeatMode } from '../state/playlist'
 // choices through callbacks, so it stays a pure render of its props.
 
 /** The three repeat modes in the order the footer button cycles through them. */
-export function nextRepeatMode(mode: RepeatMode): RepeatMode {
+function nextRepeatMode(mode: RepeatMode): RepeatMode {
   return mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off'
 }
 
 /** Footer label for the current repeat mode. */
-export function repeatLabel(mode: RepeatMode): string {
+function repeatLabel(mode: RepeatMode): string {
   return mode === 'off' ? 'Repeat: off' : mode === 'all' ? 'Repeat: all' : 'Repeat: one'
 }
 
@@ -27,11 +27,11 @@ export function repeatLabel(mode: RepeatMode): string {
  * decide it owns playback (`playlistController.isPlaybackCurrent`), which the
  * folder auto-advance path depends on.
  */
-export function listedEntries(entries: string[]): string[] {
+function listedEntries(entries: string[]): string[] {
   return entries.length > 1 ? entries : []
 }
 
-export interface PlaylistSidebarProps {
+interface PlaylistSidebarProps {
   entries: string[]
   /** Index of the entry currently playing, or -1 when none. */
   currentIndex: number

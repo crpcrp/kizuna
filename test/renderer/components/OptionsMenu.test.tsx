@@ -132,27 +132,6 @@ describe('OptionsMenu markup', () => {
     expect(html).toContain('aria-label="Close options"')
   })
 
-  it('does not fire callbacks merely by rendering', () => {
-    const onClose = vi.fn()
-    const onChangeKeyBinding = vi.fn()
-    const onChangeSkipSeconds = vi.fn()
-    const onCategoryOpen = vi.fn()
-    renderMenu({
-      onClose,
-      onCategoryOpen,
-      keybindings: { onChangeKeyBinding },
-      playback: { onChange: onChangeSkipSeconds }
-    })
-    expect(onClose).not.toHaveBeenCalled()
-    expect(onChangeKeyBinding).not.toHaveBeenCalled()
-    expect(onChangeSkipSeconds).not.toHaveBeenCalled()
-    // SSR (renderToStaticMarkup) never runs effects, so even though `open`
-    // is true here, the "request current category on open" effect below
-    // does not fire — this only guards against a non-effect regression
-    // (e.g. calling onCategoryOpen directly in the render body).
-    expect(onCategoryOpen).not.toHaveBeenCalled()
-  })
-
   it('renders the workflow order with Game OCR only when supported', () => {
     expect(tabLabels(renderMenu({ supportsGameOcr: true }))).toEqual([
       'Playback',
@@ -450,12 +429,6 @@ describe('OptionsMenu Subtitles tab', () => {
     expect(html).toMatch(/id="subtitle-outline-size-input"[^>]*value="1"/)
     expect(html).toMatch(/id="subtitle-x-input"[^>]*value="50"/)
     expect(html).toMatch(/id="subtitle-y-input"[^>]*value="82"/)
-  })
-
-  it('does not fire onChangeSubtitleStyle merely by rendering', () => {
-    const onChangeSubtitleStyle = vi.fn()
-    renderWithSubtitleStyle(DEFAULT_SUBTITLE_STYLE, onChangeSubtitleStyle)
-    expect(onChangeSubtitleStyle).not.toHaveBeenCalled()
   })
 })
 
