@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, it, expect, vi } from 'vitest'
 import {
   registerPlayerBridge,
@@ -87,26 +88,36 @@ function fakeHistory(): PlayerHistoryObserver {
 describe('registerPlayerBridge', () => {
   const event: FakeEvent = { senderId: 7 }
 
-  it('records a recent only after a successful load', async () => {
+  it('publishes a successful load only after mpv completes, with history suspended first', async () => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
     const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
-    let resolveLoad!: () => void
-    vi.mocked(controller.loadFile).mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveLoad = resolve
-        })
-    )
+    const powerSave = { update: vi.fn() }
+    const systemMedia = { update: vi.fn() }
+    const gate = deferred<void>()
+    vi.mocked(controller.loadFile).mockReturnValueOnce(gate.promise)
+    registerPlayerBridge(ipc, controller, vi.fn(), history, powerSave, undefined, systemMedia)
 
-    const loading = handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>
+    const loading = handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4')
+    expect(history.beginLoad).toHaveBeenCalledOnce()
+    expect(vi.mocked(history.beginLoad).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(controller.loadFile).mock.invocationCallOrder[0]
+    )
     expect(history.recordOpened).not.toHaveBeenCalled()
-    resolveLoad()
+    expect(powerSave.update).not.toHaveBeenCalled()
+    expect(systemMedia.update).not.toHaveBeenCalled()
+    gate.resolve()
     await loading
 
     expect(controller.loadFile).toHaveBeenCalledWith('/tmp/video.mp4')
     expect(history.recordOpened).toHaveBeenCalledWith('/tmp/video.mp4')
+    expect(powerSave.update).toHaveBeenLastCalledWith(true)
+    expect(systemMedia.update).toHaveBeenLastCalledWith({
+      fileLoaded: true,
+      paused: false,
+      timePos: 0,
+      duration: 0
+    })
   })
 
   it('resolves the load when recording the recent fails', async () => {
@@ -125,62 +136,38 @@ describe('registerPlayerBridge', () => {
     warn.mockRestore()
   })
 
-  it('does not record a recent when loading rejects', async () => {
+  it.each([
+    { failure: new Error('mpv IPC: not connected'), idle: false },
+    { failure: new MpvLoadError('mpv could not load the file'), idle: true }
+  ])('handles a failed replacement load (idle=$idle)', async ({ failure, idle }) => {
     const { ipc, handlers } = fakeIpc()
     const { controller } = fakeController()
-    const failure = new Error('mpv failed')
+    const history = fakeHistory()
+    const powerSave = { update: vi.fn() }
+    const systemMedia = { update: vi.fn() }
+    registerPlayerBridge(ipc, controller, vi.fn(), history, powerSave, undefined, systemMedia)
+    await handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/first.mkv')
+    vi.clearAllMocks()
     vi.mocked(controller.loadFile).mockRejectedValueOnce(failure)
-    const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
 
-    await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4')).rejects.toBe(failure)
-    expect(history.recordOpened).not.toHaveBeenCalled()
-  })
-
-  it('suspends history tracking before loadFile starts, so early events during the load cannot land on the outgoing file', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
-    const order: string[] = []
-    vi.mocked(history.beginLoad).mockImplementation(() => order.push('beginLoad'))
-    vi.mocked(controller.loadFile).mockImplementationOnce(async () => {
-      order.push('loadFile')
-    })
-    vi.mocked(history.recordOpened).mockImplementation(() => order.push('recordOpened'))
-
-    await handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/b.mkv')
-
-    expect(order).toEqual(['beginLoad', 'loadFile', 'recordOpened'])
-  })
-
-  it('resumes history tracking on the still-playing file when the load command is rejected outright', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    const failure = new Error('mpv IPC: not connected')
-    vi.mocked(controller.loadFile).mockRejectedValueOnce(failure)
-    const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
-
-    await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/b.mkv')).rejects.toBe(failure)
-
-    expect(history.beginLoad).toHaveBeenCalledTimes(1)
-    expect(history.abortLoad).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not resume history tracking when mpv drops to idle after a failed load', async () => {
-    const { ipc, handlers } = fakeIpc()
-    const { controller } = fakeController()
-    vi.mocked(controller.loadFile).mockRejectedValueOnce(
-      new MpvLoadError('mpv could not load the file')
+    await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/broken.mkv')).rejects.toBe(
+      failure
     )
-    const history = fakeHistory()
-    registerPlayerBridge(ipc, controller, vi.fn(), history)
-
-    await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/b.mkv')).rejects.toThrow()
-
-    expect(history.beginLoad).toHaveBeenCalledTimes(1)
-    expect(history.abortLoad).not.toHaveBeenCalled()
+    expect(history.beginLoad).toHaveBeenCalledOnce()
+    expect(history.recordOpened).not.toHaveBeenCalled()
+    expect(history.abortLoad).toHaveBeenCalledTimes(idle ? 0 : 1)
+    if (idle) {
+      expect(powerSave.update).toHaveBeenCalledExactlyOnceWith(false)
+      expect(systemMedia.update).toHaveBeenCalledExactlyOnceWith({
+        fileLoaded: false,
+        paused: false,
+        timePos: 0,
+        duration: 0
+      })
+    } else {
+      expect(powerSave.update).not.toHaveBeenCalled()
+      expect(systemMedia.update).not.toHaveBeenCalled()
+    }
   })
 
   it('rejects URL schemes before controller or history access', async () => {
@@ -362,189 +349,42 @@ describe('registerPlayerBridge', () => {
     expect(calls).toEqual(['history', 'renderer'])
   })
 
-  it('updates power save only after load succeeds and pause observations change playback state', async () => {
+  it('feeds playback observations to power-save and system-media surfaces', async () => {
     const { ipc, handlers } = fakeIpc()
-    const { controller, firePause } = fakeController()
+    const { controller, firePause, fireTimePos, fireDuration } = fakeController()
     const powerSave = { update: vi.fn() }
-    registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
+    const systemMedia = { update: vi.fn() }
+    registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave, undefined, systemMedia)
 
     firePause(false)
-    expect(powerSave.update).toHaveBeenCalledWith(false)
-
+    expect(powerSave.update).toHaveBeenLastCalledWith(false)
     await handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4')
     expect(powerSave.update).toHaveBeenLastCalledWith(true)
-
+    fireDuration(120)
+    fireTimePos(30)
     firePause(true)
     expect(powerSave.update).toHaveBeenLastCalledWith(false)
-    firePause('not-boolean')
-    expect(powerSave.update).toHaveBeenCalledTimes(3)
-  })
-
-  describe('power-save wiring', () => {
-    function fakePowerSave() {
-      return { update: vi.fn() }
-    }
-
-    it('holds the blocker once a file has loaded and stays unpaused', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-
-      expect(powerSave.update).toHaveBeenLastCalledWith(true)
+    expect(systemMedia.update).toHaveBeenLastCalledWith({
+      fileLoaded: true,
+      paused: true,
+      timePos: 30,
+      duration: 120
     })
-
-    it('releases the blocker when mpv reports paused, and re-holds on unpause', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller, firePause } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-      firePause(true)
-      expect(powerSave.update).toHaveBeenLastCalledWith(false)
-
-      firePause(false)
-      expect(powerSave.update).toHaveBeenLastCalledWith(true)
+    firePause(false)
+    expect(powerSave.update).toHaveBeenLastCalledWith(true)
+    expect(systemMedia.update).toHaveBeenLastCalledWith({
+      fileLoaded: true,
+      paused: false,
+      timePos: 30,
+      duration: 120
     })
-
-    it('ignores a non-boolean pause observation', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller, firePause } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-      powerSave.update.mockClear()
-
-      firePause('yes' as unknown as boolean)
-
-      expect(powerSave.update).not.toHaveBeenCalled()
-    })
-
-    it('never calls update before a file has loaded', () => {
-      const { ipc } = fakeIpc()
-      const { controller, firePause } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      firePause(false)
-
-      expect(powerSave.update).toHaveBeenLastCalledWith(false)
-    })
-
-    it('releases the blocker when a later load fails with mpv dropping to idle', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/first.mkv') as Promise<unknown>)
-      expect(powerSave.update).toHaveBeenLastCalledWith(true)
-
-      // An MpvLoadError means the file failed to load and mpv is now idle.
-      vi.mocked(controller.loadFile).mockRejectedValueOnce(
-        new MpvLoadError('mpv could not load the file (error)')
-      )
-      await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/broken.mkv')).rejects.toThrow(
-        'mpv could not load the file (error)'
-      )
-      expect(powerSave.update).toHaveBeenLastCalledWith(false)
-    })
-
-    it('keeps the blocker when a load command rejects while a file is still playing', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller } = fakeController()
-      const powerSave = fakePowerSave()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, powerSave)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/first.mkv') as Promise<unknown>)
-      expect(powerSave.update).toHaveBeenLastCalledWith(true)
-      powerSave.update.mockClear()
-
-      // A plain command-send rejection (not an MpvLoadError): mpv never dropped
-      // the currently playing file, so the blocker must stay held.
-      vi.mocked(controller.loadFile).mockRejectedValueOnce(new Error('mpv IPC: not connected'))
-      await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/broken.mkv')).rejects.toThrow(
-        'mpv IPC: not connected'
-      )
-      expect(powerSave.update).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('system-media wiring', () => {
-    function fakeSystemMedia() {
-      return { update: vi.fn() }
-    }
-
-    it('reports a loaded, unpaused snapshot once a file has loaded', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller } = fakeController()
-      const systemMedia = fakeSystemMedia()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, undefined, undefined, systemMedia)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-
-      expect(systemMedia.update).toHaveBeenLastCalledWith({
-        fileLoaded: true,
-        paused: false,
-        timePos: 0,
-        duration: 0
-      })
-    })
-
-    it('reports fileLoaded=false when a later load fails with mpv dropping to idle', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller } = fakeController()
-      const systemMedia = fakeSystemMedia()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, undefined, undefined, systemMedia)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/first.mkv') as Promise<unknown>)
-      vi.mocked(controller.loadFile).mockRejectedValueOnce(new MpvLoadError('load failed'))
-      await expect(handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/broken.mkv')).rejects.toThrow()
-
-      expect(systemMedia.update).toHaveBeenLastCalledWith({
-        fileLoaded: false,
-        paused: false,
-        timePos: 0,
-        duration: 0
-      })
-    })
-
-    it('feeds time-pos, duration and pause observations into the snapshot', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller, fireTimePos, fireDuration, firePause } = fakeController()
-      const systemMedia = fakeSystemMedia()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, undefined, undefined, systemMedia)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-      fireDuration(120)
-      fireTimePos(30)
-      firePause(true)
-
-      expect(systemMedia.update).toHaveBeenLastCalledWith({
-        fileLoaded: true,
-        paused: true,
-        timePos: 30,
-        duration: 120
-      })
-    })
-
-    it('ignores non-numeric time-pos/duration observations for the snapshot', async () => {
-      const { ipc, handlers } = fakeIpc()
-      const { controller, fireTimePos, fireDuration } = fakeController()
-      const systemMedia = fakeSystemMedia()
-      registerPlayerBridge(ipc, controller, vi.fn(), undefined, undefined, undefined, systemMedia)
-
-      await (handlers.get(PLAYER_CHANNELS.load)!(event, '/tmp/video.mp4') as Promise<unknown>)
-      fireTimePos(15)
-      systemMedia.update.mockClear()
-      fireDuration('invalid')
-
-      expect(systemMedia.update).not.toHaveBeenCalled()
-    })
+    powerSave.update.mockClear()
+    systemMedia.update.mockClear()
+    firePause('yes')
+    fireDuration('invalid')
+    fireTimePos('invalid')
+    expect(powerSave.update).not.toHaveBeenCalled()
+    expect(systemMedia.update).not.toHaveBeenCalled()
   })
 })
 

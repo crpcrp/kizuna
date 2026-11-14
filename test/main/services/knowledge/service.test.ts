@@ -1,5 +1,5 @@
 import { deferred } from '@test/harness/deferred'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { createKnowledgeService } from '@src/main/services/knowledge/service'
 import { createSettingsStore } from '@src/main/services/settings'
@@ -87,6 +87,8 @@ beforeEach(() => {
   initSchema(db)
 })
 
+afterEach(() => db.close())
+
 function asKnowledgeDb(d: Database.Database): KnowledgeDb {
   return d as unknown as KnowledgeDb
 }
@@ -105,70 +107,50 @@ function kanjiSnapshot(entries: Array<[string, JlptLevel, number | null]>): Jlpt
   }
 }
 
+function serviceWith(overrides: Partial<Parameters<typeof createKnowledgeService>[0]> = {}) {
+  return createKnowledgeService({
+    db: asKnowledgeDb(db),
+    settings: createSettingsStore(fakeIo()),
+    secrets: reversingCodec,
+    fetch: fakeHttp({}).fetch,
+    ...overrides
+  })
+}
+
 describe('createKnowledgeService', () => {
   it('getSettings reports defaults with hasWanikaniToken: false', async () => {
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: reversingCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const service = serviceWith({ settings })
 
     expect(await service.getSettings()).toEqual(makePublicKnowledgeSettings())
   })
 
   it('getSettings surfaces encryptionAvailable from the codec', async () => {
     const settings = createSettingsStore(fakeIo())
-    const encrypting = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: reversingCodec, // isAvailable() === true
-      fetch: fakeHttp({}).fetch
-    })
+    const encrypting = serviceWith({ settings })
     expect((await encrypting.getSettings()).encryptionAvailable).toBe(true)
 
-    const plaintext = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec, // isAvailable() === false (no OS secure store)
-      fetch: fakeHttp({}).fetch
-    })
+    const plaintext = serviceWith({ settings, secrets: identityCodec })
     expect((await plaintext.getSettings()).encryptionAvailable).toBe(false)
   })
 
   it('setSettings encrypts a plaintext wanikaniToken and never returns it', async () => {
     const io = fakeIo()
     const settings = createSettingsStore(io)
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: reversingCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const service = serviceWith({ settings })
 
     const result = await service.setSettings({ wanikaniToken: 'my-secret-token' })
 
     expect(result.hasWanikaniToken).toBe(true)
     expect(settings.get().knowledge.wanikaniTokenEnc).not.toBe('my-secret-token')
 
-    const reopened = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings: createSettingsStore(io),
-      secrets: reversingCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const reopened = serviceWith({ settings: createSettingsStore(io) })
     expect((await reopened.getSettings()).hasWanikaniToken).toBe(true)
   })
 
   it('setSettings updates non-token fields and leaves the token untouched when omitted', async () => {
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const service = serviceWith({ settings, secrets: identityCodec })
 
     await service.setSettings({ wanikaniToken: 'tok' })
     const result = await service.setSettings({
@@ -184,108 +166,49 @@ describe('createKnowledgeService', () => {
     expect(settings.get().knowledge.wanikaniTokenEnc).toBe('tok')
   })
 
-  it('setSettings re-saving the identical wanikani token keeps rows and sync state', async () => {
-    const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
-    await service.setSettings({ wanikaniToken: 'tok' })
-    replaceSource(
-      asKnowledgeDb(db),
-      'wanikani',
-      [{ source: 'wanikani', lemma: '猫', reading: '', level: 'known' }],
-      't0'
-    )
-    setSyncState(asKnowledgeDb(db), 'wanikani', '2026-07-09T00:00:00.000Z')
+  it.each([
+    { label: 'same token', patch: { wanikaniToken: 'tok' }, purged: false, configured: true },
+    {
+      label: 'different token',
+      patch: { wanikaniToken: 'new-tok' },
+      purged: true,
+      configured: true
+    },
+    { label: 'cleared token', patch: { wanikaniToken: '' }, purged: true, configured: false },
+    {
+      label: 'omitted token',
+      patch: { ankiKnownDecks: ['Japanese'] },
+      purged: false,
+      configured: true
+    }
+  ])(
+    'preserves or invalidates only WaniKani data for $label',
+    async ({ patch, purged, configured }) => {
+      const service = serviceWith({ secrets: identityCodec })
+      await service.setSettings({ wanikaniToken: 'tok' })
+      const syncedAt = '2026-07-09T00:00:00.000Z'
+      for (const source of ['wanikani', 'anki'] as const) {
+        replaceSource(
+          asKnowledgeDb(db),
+          source,
+          [{ source, lemma: source === 'anki' ? '犬' : '猫', reading: '', level: 'known' }],
+          't0'
+        )
+        setSyncState(asKnowledgeDb(db), source, syncedAt)
+      }
 
-    await service.setSettings({ wanikaniToken: 'tok' })
+      const result = await service.setSettings(patch)
 
-    expect(countBySource(asKnowledgeDb(db))).toEqual({ wanikani: 1 })
-    expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({
-      lastSyncAt: '2026-07-09T00:00:00.000Z'
-    })
-  })
-
-  it('setSettings with a different wanikani token purges wanikani rows and sync state, leaving anki untouched', async () => {
-    const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
-    await service.setSettings({ wanikaniToken: 'old-tok' })
-    replaceSource(
-      asKnowledgeDb(db),
-      'wanikani',
-      [{ source: 'wanikani', lemma: '猫', reading: '', level: 'known' }],
-      't0'
-    )
-    replaceSource(
-      asKnowledgeDb(db),
-      'anki',
-      [{ source: 'anki', lemma: '犬', reading: '', level: 'known' }],
-      't0'
-    )
-    setSyncState(asKnowledgeDb(db), 'wanikani', '2026-07-09T00:00:00.000Z')
-    setSyncState(asKnowledgeDb(db), 'anki', '2026-07-09T00:00:00.000Z')
-
-    await service.setSettings({ wanikaniToken: 'new-tok' })
-
-    expect(countBySource(asKnowledgeDb(db))).toEqual({ anki: 1 })
-    expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({ lastSyncAt: null })
-    expect(getSyncState(asKnowledgeDb(db), 'anki')).toEqual({
-      lastSyncAt: '2026-07-09T00:00:00.000Z'
-    })
-  })
-
-  it('setSettings clearing the wanikani token (empty string) purges like a change', async () => {
-    const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
-    await service.setSettings({ wanikaniToken: 'tok' })
-    replaceSource(
-      asKnowledgeDb(db),
-      'wanikani',
-      [{ source: 'wanikani', lemma: '猫', reading: '', level: 'known' }],
-      't0'
-    )
-    setSyncState(asKnowledgeDb(db), 'wanikani', '2026-07-09T00:00:00.000Z')
-
-    const result = await service.setSettings({ wanikaniToken: '' })
-
-    expect(result.hasWanikaniToken).toBe(false)
-    expect(countBySource(asKnowledgeDb(db))).toEqual({})
-    expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({ lastSyncAt: null })
-  })
-
-  it('setSettings without a wanikaniToken key never purges', async () => {
-    const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
-    await service.setSettings({ wanikaniToken: 'tok' })
-    replaceSource(
-      asKnowledgeDb(db),
-      'wanikani',
-      [{ source: 'wanikani', lemma: '猫', reading: '', level: 'known' }],
-      't0'
-    )
-
-    await service.setSettings({ ankiKnownDecks: ['Japanese'] })
-
-    expect(countBySource(asKnowledgeDb(db))).toEqual({ wanikani: 1 })
-  })
+      expect(result.hasWanikaniToken).toBe(configured)
+      expect(countBySource(asKnowledgeDb(db))).toEqual(
+        purged ? { anki: 1 } : { wanikani: 1, anki: 1 }
+      )
+      expect(getSyncState(asKnowledgeDb(db), 'wanikani')).toEqual({
+        lastSyncAt: purged ? null : syncedAt
+      })
+      expect(getSyncState(asKnowledgeDb(db), 'anki')).toEqual({ lastSyncAt: syncedAt })
+    }
+  )
 
   it('levelsFor reads through to the knowledge DB', async () => {
     replaceSource(
@@ -295,12 +218,7 @@ describe('createKnowledgeService', () => {
       't0'
     )
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const service = serviceWith({ settings, secrets: identityCodec })
 
     expect(await service.levelsFor(['猫', '犬'])).toEqual({ 猫: 'known' })
   })
@@ -320,12 +238,7 @@ describe('createKnowledgeService', () => {
       ],
       't0'
     )
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings: createSettingsStore(fakeIo()),
-      secrets: identityCodec,
-      fetch: fakeHttp({}).fetch
-    })
+    const service = serviceWith({ settings: createSettingsStore(fakeIo()), secrets: identityCodec })
 
     expect(await service.detailsFor(['word'])).toEqual({
       word: {
@@ -350,8 +263,7 @@ describe('createKnowledgeService', () => {
       entries: [['猫', 'ねこ', 'N5']]
     }
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: http.fetch,
@@ -370,8 +282,7 @@ describe('createKnowledgeService', () => {
 
   it('jlptUnknownItems returns current unknown candidates without external calls', async () => {
     const http = fakeHttp({})
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
       fetch: http.fetch,
@@ -443,11 +354,10 @@ describe('createKnowledgeService', () => {
       },
       transaction: db.transaction.bind(db)
     } as unknown as KnowledgeDb
-    const service = createKnowledgeService({
+    const service = serviceWith({
       db: wrappedDb,
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
-      fetch: fakeHttp({}).fetch,
       jlptSnapshot: {
         schemaVersion: 1,
         source: {
@@ -473,11 +383,9 @@ describe('createKnowledgeService', () => {
   it('jlptUnknownItems returns safe typed errors for corrupt data and database failures', async () => {
     const validKanji = kanjiSnapshot([])
     const settings = createSettingsStore(fakeIo())
-    const corrupt = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const corrupt = serviceWith({
       settings,
       secrets: identityCodec,
-      fetch: fakeHttp({}).fetch,
       jlptSnapshot: {
         schemaVersion: 2,
         source: {
@@ -501,11 +409,10 @@ describe('createKnowledgeService', () => {
         throw new Error('secret database details')
       }
     } as unknown as KnowledgeDb
-    const failing = createKnowledgeService({
+    const failing = serviceWith({
       db: failingDb,
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
-      fetch: fakeHttp({}).fetch,
       jlptSnapshot: {
         schemaVersion: 1,
         source: {
@@ -536,8 +443,7 @@ describe('createKnowledgeService', () => {
     })
     const anki = fakeAnkiConnect({ findCards: { error: 'deck not found' } })
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -561,8 +467,7 @@ describe('createKnowledgeService', () => {
     const wk = fakeHttp({})
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki)
@@ -597,8 +502,7 @@ describe('createKnowledgeService', () => {
     })
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -630,8 +534,7 @@ describe('createKnowledgeService', () => {
       throw new Error(`unexpected URL: ${url}`)
     }
     const anki = fakeAnkiConnect({})
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
       fetch: async (url, init) =>
@@ -684,8 +587,7 @@ describe('createKnowledgeService', () => {
         )
       throw new Error(`unexpected URL: ${url}`)
     }
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
       fetch,
@@ -719,8 +621,7 @@ describe('createKnowledgeService', () => {
         )
       throw new Error(`unexpected URL: ${url}`)
     }
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
       fetch,
@@ -750,8 +651,7 @@ describe('createKnowledgeService', () => {
     })
     const anki = fakeAnkiConnect({ findCards: { result: [] } })
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -778,8 +678,7 @@ describe('createKnowledgeService', () => {
     const wk = fakeHttp({})
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki)
@@ -811,8 +710,7 @@ describe('createKnowledgeService', () => {
     })
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -842,8 +740,7 @@ describe('createKnowledgeService', () => {
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
     let nowMs = Date.parse('2026-07-09T00:00:00Z')
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -870,8 +767,7 @@ describe('createKnowledgeService', () => {
     const anki = fakeAnkiConnect({ findCards: { result: [] } })
     const settings = createSettingsStore(fakeIo())
     const now = () => Date.parse('2026-07-09T00:00:00Z')
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -895,8 +791,7 @@ describe('createKnowledgeService', () => {
     )
     const wk = fakeHttp({})
     const anki = fakeAnkiConnect({})
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings: createSettingsStore(fakeIo()),
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki),
@@ -927,12 +822,7 @@ describe('createKnowledgeService', () => {
       return combinedFetch(wk, anki)(url, init)
     }
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
-      settings,
-      secrets: identityCodec,
-      fetch
-    })
+    const service = serviceWith({ settings, secrets: identityCodec, fetch })
     await service.setSettings({ ankiKnownDecks: ['First'], ankiKnownField: 'Word' })
 
     const initial = service.sync('anki')
@@ -951,8 +841,7 @@ describe('createKnowledgeService', () => {
     const wk = fakeHttp({ [ASSIGNMENTS_URL]: { status: 401 } })
     const anki = fakeAnkiConnect({})
     const settings = createSettingsStore(fakeIo())
-    const service = createKnowledgeService({
-      db: asKnowledgeDb(db),
+    const service = serviceWith({
       settings,
       secrets: identityCodec,
       fetch: combinedFetch(wk, anki)

@@ -136,15 +136,19 @@ function makeWindowFactory(): {
   }
 }
 
+function windowSet(platform: 'linux' | 'win32') {
+  const factory = makeWindowFactory()
+  const windows = createAppWindowSet({
+    platform,
+    preloadPath: 'preload.js',
+    createWindow: factory.createWindow
+  })
+  return { factory, windows }
+}
+
 describe('createAppWindowSet', () => {
   it('keeps Windows as one transparent renderer/mpv window', () => {
-    const factory = makeWindowFactory()
-
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
 
     expect(factory.created).toHaveLength(1)
     expect(windows.videoHost).toBe(windows.uiOverlay)
@@ -165,13 +169,7 @@ describe('createAppWindowSet', () => {
   })
 
   it('creates a Linux opaque host and transparent child overlay with identical initial bounds', () => {
-    const factory = makeWindowFactory()
-
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     expect(factory.created).toHaveLength(2)
@@ -198,12 +196,7 @@ describe('createAppWindowSet', () => {
 
 describe('Linux window pair presentation and shutdown', () => {
   it('maps only the video host when preparing the player', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     preparePlayerAppWindowSet(windows)
@@ -214,12 +207,7 @@ describe('Linux window pair presentation and shutdown', () => {
 
   it('presents only the Linux renderer overlay for splash', () => {
     const callbacks: Array<() => void> = []
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     presentOverlayAppWindowSet(
@@ -239,12 +227,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('hides the Linux video host when showing a non-player surface', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     showOverlayAppWindowSet(windows)
@@ -255,12 +238,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('keeps the hidden host at player bounds while compacting the splash overlay', async () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const original = { ...host.bounds }
     const presentation = createSurfacePresentation(windows, {
@@ -287,12 +265,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('restores normal bounds before showing standalone Options', async () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const original = { ...host.bounds }
     const order: string[] = []
@@ -319,12 +292,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('uses centered normal fallback bounds for first-launch Options', async () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
     const window = factory.created[0]
     const presentation = createSurfacePresentation(windows, {
       getDisplayMatching: vi.fn(() => ({
@@ -338,12 +306,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('leaves fullscreen before applying first-launch Options bounds', async () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
     const window = factory.created[0]
     windows.coordinator.setFullScreen(true)
     const presentation = createSurfacePresentation(windows, {
@@ -359,12 +322,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('leaves fullscreen before applying compact splash bounds', async () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
     const window = factory.created[0]
     windows.coordinator.setFullScreen(true)
     const presentation = createSurfacePresentation(windows, {
@@ -380,12 +338,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('keeps the Windows single-window surface visible', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
 
     showOverlayAppWindowSet(windows)
 
@@ -394,12 +347,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('keeps Windows operations on its single BrowserWindow', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
     const window = factory.created[0]
 
     windows.coordinator.setBounds({ x: 50, y: 60, width: 900, height: 700 })
@@ -416,12 +364,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('applies one explicit bounds request to both Linux windows', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const bounds = { x: 100, y: 120, width: 1024, height: 768 }
 
@@ -434,12 +377,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('shapes only the Linux renderer overlay', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const rects = [{ x: 0, y: 0, width: 1280, height: 64 }]
 
@@ -450,12 +388,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('does not shape the proven single-window Windows composition', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
 
     windows.coordinator.setShape([{ x: 0, y: 0, width: 100, height: 100 }])
 
@@ -571,12 +504,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('resolves renderer IPC to the pair and tolerates either side being destroyed', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     expect(windows.controlsFor(overlay as unknown as BrowserWindow)).toBe(windows.coordinator)
@@ -589,12 +517,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('minimizes, restores, and focuses the pair as one app', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
 
     windows.coordinator.minimize()
@@ -651,12 +574,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('coordinates fullscreen on the host and restores the paired rectangle once', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const original = { x: 30, y: 40, width: 1280, height: 720 }
     const changes: boolean[] = []
@@ -704,12 +622,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('keeps the original bounds across a rapid fullscreen exit and re-entry', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const original = { ...host.bounds }
     host.setFullScreen.mockImplementation((value: boolean) => {
@@ -733,12 +646,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('raises both sides for mini-player and never leaves only one side elevated', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     const bounds = { x: 1400, y: 700, width: 520, height: 362 }
 
@@ -752,12 +660,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('raises the host, places the overlay directly above it, and focuses it last', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const order: string[] = []
     const overlay = factory.created[1]
     const host = factory.created[0]
@@ -781,117 +684,51 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
   })
 
-  it('presents when did-finish-load fires without ready-to-show', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
+  it.each(['ready-to-show', 'did-finish-load', 'timeout'] as const)(
+    'presents once when %s wins, ignoring all later readiness triggers',
+    (trigger) => {
+      const { factory, windows } = windowSet('linux')
+      const [host, overlay] = factory.created
+      const callbacks: Array<() => void> = []
+      const timerHandle = {}
+      const clearTimeoutFn = vi.fn()
+      presentAppWindowSet(
+        windows,
+        undefined,
+        (callback, delayMs) => {
+          expect(delayMs).toBe(2000)
+          callbacks.push(callback)
+          return timerHandle
+        },
+        clearTimeoutFn
+      )
+      expect(callbacks).toHaveLength(1)
+      expect(host.show).not.toHaveBeenCalled()
+      expect(overlay.show).not.toHaveBeenCalled()
 
-    presentAppWindowSet(windows)
-    overlay.emitDidFinishLoad()
+      if (trigger === 'ready-to-show') overlay.emit('ready-to-show')
+      else if (trigger === 'did-finish-load') overlay.emitDidFinishLoad()
+      else callbacks[0]()
 
-    expect(host.show).toHaveBeenCalledTimes(1)
-    expect(overlay.show).toHaveBeenCalledTimes(1)
-  })
+      expect(host.show).toHaveBeenCalledOnce()
+      expect(overlay.show).toHaveBeenCalledOnce()
+      if (trigger === 'timeout') expect(clearTimeoutFn).not.toHaveBeenCalled()
+      else expect(clearTimeoutFn).toHaveBeenCalledExactlyOnceWith(timerHandle)
 
-  it('presents when only the fallback timeout fires', () => {
-    const callbacks: Array<() => void> = []
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
-    const clearTimeoutFn = vi.fn()
-
-    presentAppWindowSet(
-      windows,
-      undefined,
-      (callback, delayMs) => {
-        expect(delayMs).toBe(2000)
-        callbacks.push(callback)
-        return callback
-      },
-      clearTimeoutFn
-    )
-
-    expect(callbacks).toHaveLength(1)
-    expect(host.show).not.toHaveBeenCalled()
-    expect(overlay.show).not.toHaveBeenCalled()
-
-    callbacks[0]()
-
-    expect(host.show).toHaveBeenCalledTimes(1)
-    expect(overlay.show).toHaveBeenCalledTimes(1)
-    expect(clearTimeoutFn).not.toHaveBeenCalled()
-  })
-
-  it('presents exactly once when several readiness triggers fire', () => {
-    const callbacks: Array<() => void> = []
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
-
-    presentAppWindowSet(
-      windows,
-      undefined,
-      (callback) => {
-        callbacks.push(callback)
-        return callback
-      },
-      vi.fn()
-    )
-
-    overlay.emit('ready-to-show')
-    overlay.emitDidFinishLoad()
-    callbacks[0]()
-
-    expect(host.show).toHaveBeenCalledTimes(1)
-    expect(overlay.show).toHaveBeenCalledTimes(1)
-    expect(host.moveTop).toHaveBeenCalledTimes(1)
-    expect(overlay.moveAbove).toHaveBeenCalledWith(host.getMediaSourceId())
-    expect(overlay.focus).toHaveBeenCalledTimes(1)
-  })
-
-  it('clears the pending fallback timer after presentation', () => {
-    const timerHandle = {}
-    const clearTimeoutFn = vi.fn()
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const overlay = factory.created[1]
-
-    presentAppWindowSet(
-      windows,
-      undefined,
-      vi.fn(() => timerHandle),
-      clearTimeoutFn
-    )
-    overlay.emit('ready-to-show')
-
-    expect(clearTimeoutFn).toHaveBeenCalledTimes(1)
-    expect(clearTimeoutFn).toHaveBeenCalledWith(timerHandle)
-  })
+      overlay.emit('ready-to-show')
+      overlay.emitDidFinishLoad()
+      callbacks[0]()
+      expect(host.show).toHaveBeenCalledOnce()
+      expect(overlay.show).toHaveBeenCalledOnce()
+      expect(host.moveTop).toHaveBeenCalledOnce()
+      expect(overlay.moveAbove).toHaveBeenCalledExactlyOnceWith(host.getMediaSourceId())
+      expect(overlay.focus).toHaveBeenCalledOnce()
+    }
+  )
 
   it('does not show either window when both are already destroyed', () => {
     const callbacks: Array<() => void> = []
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('linux')
     const [host, overlay] = factory.created
     host.destroyed = true
     overlay.destroyed = true
@@ -914,12 +751,7 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('keeps Windows presentation a no-op without scheduling a timer', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'win32',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory, windows } = windowSet('win32')
     const setTimeoutFn = vi.fn((_callback: () => void, _delayMs: number) => undefined)
 
     presentAppWindowSet(windows, undefined, setTimeoutFn, vi.fn())
@@ -928,58 +760,20 @@ describe('Linux window pair presentation and shutdown', () => {
     expect(factory.created[0].show).not.toHaveBeenCalled()
   })
 
-  it('closes the other window exactly once when either side closes', () => {
-    const factory = makeWindowFactory()
-    void createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
-
-    overlay.close()
-
-    expect(host.close).toHaveBeenCalledTimes(1)
-    expect(overlay.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes the overlay when the host closes first', () => {
-    const factory = makeWindowFactory()
-    void createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
-
-    host.close()
-
-    expect(host.close).toHaveBeenCalledTimes(1)
-    expect(overlay.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes both windows through the bounded pair close operation', () => {
-    const factory = makeWindowFactory()
-    const windows = createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
-    const [host, overlay] = factory.created
-
-    windows.close()
-
-    expect(host.close).toHaveBeenCalledTimes(1)
-    expect(overlay.close).toHaveBeenCalledTimes(1)
-  })
+  it.each(['host', 'overlay', 'pair'] as const)(
+    'closes both windows exactly once through %s',
+    (initiator) => {
+      const { factory, windows } = windowSet('linux')
+      const [host, overlay] = factory.created
+      const target = { host, overlay, pair: windows }[initiator]
+      target.close()
+      expect(host.close).toHaveBeenCalledOnce()
+      expect(overlay.close).toHaveBeenCalledOnce()
+    }
+  )
 
   it('closes an orphaned overlay when the host is destroyed unexpectedly', () => {
-    const factory = makeWindowFactory()
-    void createAppWindowSet({
-      platform: 'linux',
-      preloadPath: 'preload.js',
-      createWindow: factory.createWindow
-    })
+    const { factory } = windowSet('linux')
     const [host, overlay] = factory.created
 
     host.destroyed = true
