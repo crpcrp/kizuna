@@ -1,23 +1,10 @@
+import { deferred } from '@test/harness/deferred'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAppLifecycleCoordinator,
   type PreventableQuitEvent,
   type QuitHandler
 } from '@src/main/appLifecycle'
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T | PromiseLike<T>) => void
-  reject: (reason?: unknown) => void
-} {
-  let resolve!: (value: T | PromiseLike<T>) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
 
 async function flushMicrotasks(): Promise<void> {
   await Promise.resolve()
