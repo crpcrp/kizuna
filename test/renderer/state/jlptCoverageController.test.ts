@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import {
   createJlptCoverageController,
@@ -51,20 +52,6 @@ function readyReport(): JlptCoverageReportReady {
       wanikani: { configured: false, syncing: false, lastSuccessfulSyncAt: null }
     }
   }
-}
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(error: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
 }
 
 async function settle(): Promise<void> {

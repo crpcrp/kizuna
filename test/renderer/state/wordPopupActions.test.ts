@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import { createWordPopupActions } from '@src/renderer/src/state/wordPopupActions'
 import type { Token } from '@src/shared/token'
@@ -14,23 +15,6 @@ const result = (expression: string): LookupResult =>
     glossary: expression,
     dictTitle: 'Test'
   })
-
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(error: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  return {
-    promise: new Promise((res, rej) => {
-      resolve = res
-      reject = rej
-    }),
-    resolve,
-    reject
-  }
-}
 
 function setup() {
   const showPopup = vi.fn()
