@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { findExistingQuery } from '@src/main/services/anki/search'
-import { createAnkiService, JLPT_LEVEL_FIELD } from '@src/main/services/anki/service'
+import { createAnkiService } from '@src/main/services/anki/service'
 import type { AnkiModelTemplates } from '@src/main/services/anki/ankiConnect'
 import { createSettingsStore } from '@src/main/services/settings'
 import {
@@ -130,7 +130,7 @@ describe('createAnkiService', () => {
     let updatedTemplates: AnkiModelTemplates | undefined
     const anki = fakeAnkiConnect({
       modelFieldNames: () => ({
-        result: fieldReads++ === 0 ? ['Word'] : ['Word', JLPT_LEVEL_FIELD]
+        result: fieldReads++ === 0 ? ['Word'] : ['Word', 'JLPT Level']
       }),
       modelTemplates: () => ({ result: updatedTemplates ?? initialTemplates }),
       modelFieldAdd: { result: null },
@@ -179,7 +179,7 @@ describe('createAnkiService', () => {
       }
     }
     const anki = fakeAnkiConnect({
-      modelFieldNames: { result: [JLPT_LEVEL_FIELD] },
+      modelFieldNames: { result: ['JLPT Level'] },
       modelTemplates: { result: templates }
     })
     const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
@@ -249,7 +249,7 @@ describe('createAnkiService', () => {
     let fieldReads = 0
     const anki = fakeAnkiConnect({
       modelFieldNames: () => ({
-        result: fieldReads++ === 0 ? ['Word'] : ['Word', JLPT_LEVEL_FIELD]
+        result: fieldReads++ === 0 ? ['Word'] : ['Word', 'JLPT Level']
       }),
       modelTemplates: { result: { 'Card 1': { Front: '{{Word}}', Back: '{{Word Meaning}}' } } },
       modelFieldAdd: { result: null },

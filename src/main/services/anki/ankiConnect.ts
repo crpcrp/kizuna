@@ -5,8 +5,8 @@ import type { AnkiMediaAttachment } from './audioSource'
 import type { AnkiNote } from './noteBuilder'
 import { isRecord } from '../../../shared/guards'
 
-export const ANKI_CONNECT_VERSION = 6
-export const ANKI_REQUEST_TIMEOUT_MS = 60_000
+const ANKI_CONNECT_VERSION = 6
+const ANKI_REQUEST_TIMEOUT_MS = 60_000
 
 /**
  * JSON body for one AnkiConnect request: `{ action, version, params }`, plus a
@@ -14,12 +14,12 @@ export const ANKI_REQUEST_TIMEOUT_MS = 60_000
  * the request root (sibling to `action`/`version`/`params`), not from `params`.
  * An empty/undefined `apiKey` is omitted so unauthenticated setups are unchanged.
  */
-export function buildRequest(action: string, params?: unknown, apiKey?: string): string {
+function buildRequest(action: string, params?: unknown, apiKey?: string): string {
   const key = apiKey ? apiKey : undefined
   return JSON.stringify({ action, version: ANKI_CONNECT_VERSION, params, key })
 }
 
-export class AnkiConnectError extends Error {}
+class AnkiConnectError extends Error {}
 
 function isResponseEnvelope(
   raw: unknown
@@ -33,7 +33,7 @@ function isResponseEnvelope(
  * status. Throws `AnkiConnectError` on a non-null `error` or a body that
  * doesn't look like an AnkiConnect envelope at all.
  */
-export function parseResponse(raw: unknown): unknown {
+function parseResponse(raw: unknown): unknown {
   if (!isResponseEnvelope(raw)) {
     throw new AnkiConnectError('AnkiConnect: malformed response')
   }
