@@ -4,13 +4,13 @@ import { APP_NAME } from '../../../shared/appInfo'
 // Custom title bar for the frameless window. The bar itself is a drag region;
 // the buttons opt out so clicks reach them instead of dragging the window.
 
-export interface WindowControls {
+interface WindowControls {
   minimize: () => void
   close: () => void
   setFullscreen: (flag: boolean) => void
 }
 
-export interface WindowChromeProps {
+interface WindowChromeProps {
   /** Injectable for tests; defaults to the preload bridge at click time. */
   controls?: WindowControls
   /** Whether the window is currently fullscreen; shows the "Window" restore button when true. */
@@ -20,7 +20,7 @@ export interface WindowChromeProps {
 }
 
 /** Formats the chrome title for the loaded media, or the app name before a file loads. */
-export function chromeTitle(filePath?: string): string {
+function chromeTitle(filePath?: string): string {
   if (!filePath) return APP_NAME
   const basename = filePath.split(/[\\/]/).pop()
   return basename ? `${APP_NAME} - ${basename}` : APP_NAME
@@ -30,22 +30,22 @@ export function chromeTitle(filePath?: string): string {
  * Picks the injected controls or falls back to the preload bridge.
  * Resolved lazily (at click time) so SSR tests never need `window`.
  */
-export function resolveControls(controls?: WindowControls): WindowControls {
+function resolveControls(controls?: WindowControls): WindowControls {
   return controls ?? window.kizuna.windowControls
 }
 
 /** Minimize-button handler. */
-export function minimizeWindow(controls?: WindowControls): void {
+function minimizeWindow(controls?: WindowControls): void {
   resolveControls(controls).minimize()
 }
 
 /** Close-button handler. */
-export function closeWindow(controls?: WindowControls): void {
+function closeWindow(controls?: WindowControls): void {
   resolveControls(controls).close()
 }
 
 /** Window-button handler: exits fullscreen, restoring the pre-fullscreen size (see windowPair.ts's restorePreFullscreenBounds). */
-export function restoreWindow(controls?: WindowControls): void {
+function restoreWindow(controls?: WindowControls): void {
   resolveControls(controls).setFullscreen(false)
 }
 

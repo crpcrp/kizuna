@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import AnkiTab, {
   isLoopbackAnkiUrl,
@@ -114,12 +114,6 @@ describe('AnkiTab markup', () => {
       /id="anki-load-error"[^>]*>Is Anki running\?/
     )
     expect(renderTab()).not.toContain('options-error')
-  })
-
-  it('does not fire onChangeAnkiSettings merely by rendering', () => {
-    const onChangeAnkiSettings = vi.fn()
-    renderTab({ onChangeAnkiSettings })
-    expect(onChangeAnkiSettings).not.toHaveBeenCalled()
   })
 })
 

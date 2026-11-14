@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import PlaylistSidebar, {
-  listedEntries,
-  nextRepeatMode,
-  repeatLabel
-} from '@src/renderer/src/components/PlaylistSidebar'
+import PlaylistSidebar from '@src/renderer/src/components/PlaylistSidebar'
 
 const entries = ['/media/ep1.mkv', '/media/ep2.mkv', '/media/ep3.mkv']
 
@@ -28,28 +24,6 @@ function renderSidebar(overrides: Partial<React.ComponentProps<typeof PlaylistSi
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-})
-
-describe('nextRepeatMode / repeatLabel', () => {
-  it('cycles off → all → one → off', () => {
-    expect(nextRepeatMode('off')).toBe('all')
-    expect(nextRepeatMode('all')).toBe('one')
-    expect(nextRepeatMode('one')).toBe('off')
-  })
-
-  it('labels each mode', () => {
-    expect(repeatLabel('off')).toBe('Repeat: off')
-    expect(repeatLabel('all')).toBe('Repeat: all')
-    expect(repeatLabel('one')).toBe('Repeat: one')
-  })
-})
-
-describe('listedEntries', () => {
-  it('hides queues of zero or one entry and lists longer ones', () => {
-    expect(listedEntries([])).toEqual([])
-    expect(listedEntries(['/a.mkv'])).toEqual([])
-    expect(listedEntries(['/a.mkv', '/b.mkv'])).toEqual(['/a.mkv', '/b.mkv'])
-  })
 })
 
 describe('PlaylistSidebar', () => {
@@ -114,12 +88,23 @@ describe('PlaylistSidebar', () => {
     expect(props.onMove).not.toHaveBeenCalled()
   })
 
-  it('cycles repeat and toggles shuffle from the footer', () => {
-    const { props } = renderSidebar({ repeat: 'all', shuffle: false })
-    fireEvent.click(screen.getByRole('button', { name: 'Cycle repeat mode' }))
-    expect(props.onSetRepeat).toHaveBeenCalledWith('one')
+  it.each([
+    ['off', 'all'],
+    ['all', 'one'],
+    ['one', 'off']
+  ] as const)('shows repeat %s and requests %s on click', (repeat, next) => {
+    const { props } = renderSidebar({ repeat })
+    const button = screen.getByRole('button', { name: 'Cycle repeat mode' })
+    expect(button.textContent).toBe(`Repeat: ${repeat}`)
+    expect(button.getAttribute('aria-pressed')).toBe(String(repeat !== 'off'))
+    fireEvent.click(button)
+    expect(props.onSetRepeat).toHaveBeenCalledExactlyOnceWith(next)
+  })
+
+  it('toggles shuffle from the footer', () => {
+    const { props } = renderSidebar()
     fireEvent.click(screen.getByRole('button', { name: 'Toggle shuffle' }))
-    expect(props.onToggleShuffle).toHaveBeenCalled()
+    expect(props.onToggleShuffle).toHaveBeenCalledOnce()
   })
 
   it('reflects shuffle-on as a pressed footer button', () => {

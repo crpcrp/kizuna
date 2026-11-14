@@ -190,7 +190,7 @@ function LoadingBody(): React.JSX.Element {
   )
 }
 
-export function ReportBody({
+function ReportBody({
   open,
   phase,
   onRetry
