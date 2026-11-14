@@ -20,7 +20,7 @@ import { isRecord } from '../../../shared/guards'
 
 const JIMAKU_MAX_API_KEY_LENGTH = 4096
 /** A harmless, fixed read-only query used only to verify authentication. */
-export const JIMAKU_CONNECTION_TEST_QUERY = 'Kizuna'
+const JIMAKU_CONNECTION_TEST_QUERY = 'Kizuna'
 
 const INVALID_API_KEY = 'Invalid Jimaku API key.'
 const INVALID_MEDIA_PATH = 'Invalid Jimaku media path.'

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  createStartupProbe,
-  STARTUP_MILESTONES,
-  STARTUP_PROBE_READY_LINE,
-  startupProbeMilestoneLine
-} from '@src/main/startupProbe'
+import { createStartupProbe } from '@src/main/startupProbe'
+
+const milestones = ['window', 'mpv', 'renderer'] as const
 
 function makeProbe(enabled = true) {
   const lines: string[] = []
@@ -23,11 +20,13 @@ describe('createStartupProbe', () => {
   it('reports each milestone and becomes ready once all are reached', () => {
     const { probe, lines, readyCount } = makeProbe()
 
-    for (const milestone of STARTUP_MILESTONES) probe.mark(milestone)
+    for (const milestone of milestones) probe.mark(milestone)
 
     expect(lines).toEqual([
-      ...STARTUP_MILESTONES.map(startupProbeMilestoneLine),
-      STARTUP_PROBE_READY_LINE
+      'kizuna-startup-probe: reached window',
+      'kizuna-startup-probe: reached mpv',
+      'kizuna-startup-probe: reached renderer',
+      'kizuna-startup-probe: ready'
     ])
     expect(readyCount()).toBe(1)
   })
@@ -38,14 +37,14 @@ describe('createStartupProbe', () => {
     probe.mark('window')
     probe.mark('window')
 
-    expect(lines).toEqual([startupProbeMilestoneLine('window')])
+    expect(lines).toEqual(['kizuna-startup-probe: reached window'])
     expect(readyCount()).toBe(0)
   })
 
   it('does nothing when disabled', () => {
     const { probe, lines, readyCount } = makeProbe(false)
 
-    for (const milestone of STARTUP_MILESTONES) probe.mark(milestone)
+    for (const milestone of milestones) probe.mark(milestone)
 
     expect(lines).toEqual([])
     expect(readyCount()).toBe(0)

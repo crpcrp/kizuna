@@ -31,10 +31,7 @@ export interface AppIdentityTarget {
  * and Windows would otherwise silently virtualize the writes. This also keeps
  * user data out of the uninstaller's path and survives reinstalls.
  */
-export function userDataDir(
-  appDataRoot: string,
-  platform: NodeJS.Platform = process.platform
-): string {
+function userDataDir(appDataRoot: string, platform: NodeJS.Platform = process.platform): string {
   return pathApiFor(platform).join(appDataRoot, USER_DATA_DIR_NAME)
 }
 

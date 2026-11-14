@@ -3,7 +3,7 @@ export interface GameOcrSettings {
   captureShortcut: string
 }
 
-export const DEFAULT_GAME_OCR_SHORTCUT = 'Ctrl+Shift+O'
+const DEFAULT_GAME_OCR_SHORTCUT = 'Ctrl+Shift+O'
 
 export const DEFAULT_GAME_OCR_SETTINGS: GameOcrSettings = {
   captureShortcut: DEFAULT_GAME_OCR_SHORTCUT

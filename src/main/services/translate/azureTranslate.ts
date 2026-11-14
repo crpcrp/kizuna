@@ -2,7 +2,7 @@ import type { HttpFetch, HttpRequest } from '../http'
 import type { Translator } from './translator'
 import { isRecord } from '../../../shared/guards'
 
-export const MAX_AZURE_TRANSLATE_CHARS = 50_000
+const MAX_AZURE_TRANSLATE_CHARS = 50_000
 
 const AZURE_TRANSLATE_ENDPOINT = 'https://api.cognitive.microsofttranslator.com/translate'
 const UNEXPECTED_RESPONSE_MESSAGE = 'Translation returned an unexpected response.'

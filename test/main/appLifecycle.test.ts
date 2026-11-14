@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createAppLifecycleCoordinator,
-  SHUTDOWN_TIMEOUT_MS,
   type PreventableQuitEvent,
   type QuitHandler
 } from '@src/main/appLifecycle'
@@ -148,7 +147,7 @@ describe('handleBeforeQuit', () => {
     const event = quitEvent()
 
     fixture.handler(event)
-    await vi.advanceTimersByTimeAsync(SHUTDOWN_TIMEOUT_MS)
+    await vi.advanceTimersByTimeAsync(2_000)
 
     expect(fixture.controller.dispose).toHaveBeenCalledOnce()
     expect(appQuit).toHaveBeenCalledOnce()

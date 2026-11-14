@@ -6,10 +6,7 @@ import {
   resolveDetectionSideLength,
   serializePpOcrRequest,
   validatePpOcrRequest,
-  PP_OCR_MAX_DETECTION_SIDE_LENGTH,
-  PP_OCR_MAX_IMAGE_BASE64_BYTES,
-  PP_OCR_MIN_DETECTION_SIDE_LENGTH,
-  PP_OCR_RECOGNITION_WIDTH
+  PP_OCR_MAX_IMAGE_BASE64_BYTES
 } from '@src/main/services/ocr/ppOcrProtocol'
 
 const metadata = { sessionId: 3, captureId: 7, imageSize: { width: 640, height: 480 } }
@@ -47,7 +44,7 @@ describe('buildPpOcrWorkerArgs', () => {
       '--det-side-len',
       '4096',
       '--rec-width',
-      String(PP_OCR_RECOGNITION_WIDTH)
+      String(480)
     ])
   })
 
@@ -75,16 +72,16 @@ describe('resolveDetectionSideLength', () => {
   })
 
   it('keeps a floor, so a small window still gets a usable detection tensor', () => {
-    expect(resolveDetectionSideLength([640, 480])).toBe(PP_OCR_MIN_DETECTION_SIDE_LENGTH)
+    expect(resolveDetectionSideLength([640, 480])).toBe(960)
   })
 
   it('never exceeds what the worker accepts', () => {
-    expect(resolveDetectionSideLength([7680, 4320])).toBe(PP_OCR_MAX_DETECTION_SIDE_LENGTH)
+    expect(resolveDetectionSideLength([7680, 4320])).toBe(4096)
   })
 
   it('ignores unusable sides rather than producing NaN', () => {
     expect(resolveDetectionSideLength([Number.NaN, 0, -1, 1920])).toBe(1920)
-    expect(resolveDetectionSideLength([])).toBe(PP_OCR_MIN_DETECTION_SIDE_LENGTH)
+    expect(resolveDetectionSideLength([])).toBe(960)
   })
 })
 

@@ -1,8 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createJimakuSettingsService,
-  JIMAKU_CONNECTION_TEST_QUERY
-} from '@src/main/services/jimaku/settings'
+import { createJimakuSettingsService } from '@src/main/services/jimaku/settings'
 import type { JimakuClient } from '@src/main/services/jimaku/client'
 import { createSettingsStore } from '@src/main/services/settings'
 import { identityCodec } from '@src/main/services/secrets'
@@ -135,7 +132,7 @@ describe('createJimakuSettingsService', () => {
     })
     expect(client.searchEntries).toHaveBeenCalledOnce()
     expect(client.searchEntries).toHaveBeenCalledWith(
-      { query: JIMAKU_CONNECTION_TEST_QUERY, anime: true },
+      { query: 'Kizuna', anime: true },
       expect.any(AbortSignal)
     )
   })

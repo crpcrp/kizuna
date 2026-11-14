@@ -4,7 +4,7 @@ import type { IpcMainLike } from './ipc'
 import { expect } from './ipcValidation'
 import type { Translator } from './services/translate/translator'
 
-export const TRANSLATE_TIMEOUT_MS = 10_000
+const TRANSLATE_TIMEOUT_MS = 10_000
 
 interface TranslateEvent {
   sender: { id: number; once(event: 'destroyed', listener: () => void): void }

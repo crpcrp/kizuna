@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
-import {
-  applyAppIdentity,
-  screenshotsDir,
-  userDataDir,
-  type AppIdentityTarget
-} from '@src/main/appIdentity'
+import { applyAppIdentity, screenshotsDir, type AppIdentityTarget } from '@src/main/appIdentity'
 import { APP_ID, PRODUCT_NAME, USER_DATA_DIR_NAME } from '@src/shared/appIdentity'
 
 /** Records what the real Electron `app` would have been told. */
@@ -39,10 +34,6 @@ function fakeApp(paths: Record<string, string>): AppIdentityTarget & {
 describe.each(PATH_PLATFORMS)(
   'app identity paths on $label',
   ({ platform, path, appDataDir: appData, picturesDir: pictures }) => {
-    it('places the data directory under the per-user profile, not the install folder', () => {
-      expect(userDataDir(appData, platform)).toBe(path.join(appData, USER_DATA_DIR_NAME))
-    })
-
     it('defaults screenshots to <Pictures>/<product name>', () => {
       expect(screenshotsDir(pictures, platform)).toBe(path.join(pictures, PRODUCT_NAME))
     })
@@ -70,9 +61,3 @@ describe.each(PATH_PLATFORMS)(
     })
   }
 )
-
-describe('userDataDir', () => {
-  it('names the directory from the identity configuration', () => {
-    expect(userDataDir('/root', 'linux')).toBe(`/root/${USER_DATA_DIR_NAME}`)
-  })
-})

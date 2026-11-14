@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   startMpvWithConfig,
-  MPV_CONFIG_ERROR_MESSAGE,
   type MpvStartOptions,
   type StartMpvWithConfigDeps
 } from '@src/main/mpvStartup'
@@ -95,7 +94,9 @@ describe('startMpvWithConfig', () => {
       extraArgs: ['--vo=gpu']
     })
     expect(warn).toHaveBeenCalledTimes(1)
-    expect(reportConfigError).toHaveBeenCalledWith(MPV_CONFIG_ERROR_MESSAGE)
+    expect(reportConfigError).toHaveBeenCalledWith(
+      'Your mpv config failed to load, so mpv started with it disabled. Check mpv.conf in the mpv config folder.'
+    )
   })
 
   it('with config disabled and a failing start: rethrows without retrying or reporting', async () => {

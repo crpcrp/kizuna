@@ -18,7 +18,7 @@ import {
   FAKE_ANKI_CONNECT_URL,
   type FakeAnkiConnect
 } from '@test/harness/fakeAnkiConnect'
-import { WANIKANI_BASE } from '@src/main/services/wanikani/client'
+
 import type { HttpFetch } from '@src/main/services/http'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
@@ -39,7 +39,7 @@ function deferred(): { promise: Promise<void>; resolve(): void } {
 /** Dispatches by URL: WaniKani-shaped URLs go to `wk`, the AnkiConnect URL goes to `anki`. */
 function combinedFetch(wk: FakeHttp, anki: FakeAnkiConnect): HttpFetch {
   return async (url, init) => {
-    if (url.startsWith(WANIKANI_BASE)) return wk.fetch(url, init)
+    if (url.startsWith('https://api.wanikani.com/v2/')) return wk.fetch(url, init)
     if (url === anki.url) return anki.fetch(url, init)
     throw new Error(`combinedFetch: unexpected url ${url}`)
   }
@@ -86,8 +86,8 @@ function jsonResponse(json: unknown) {
   }
 }
 
-const ASSIGNMENTS_URL = `${WANIKANI_BASE}assignments?started=true&subject_types=vocabulary%2Ckana_vocabulary&per_page=500`
-const SUBJECTS_URL = `${WANIKANI_BASE}subjects?ids=1&per_page=1000`
+const ASSIGNMENTS_URL = `${'https://api.wanikani.com/v2/'}assignments?started=true&subject_types=vocabulary%2Ckana_vocabulary&per_page=500`
+const SUBJECTS_URL = `${'https://api.wanikani.com/v2/'}subjects?ids=1&per_page=1000`
 
 let db: Database.Database
 
@@ -669,7 +669,7 @@ describe('createKnowledgeService', () => {
 
   it('queues a new-token sync and rejects the old token data', async () => {
     const releaseOld = deferred()
-    const subjectsUrl2 = `${WANIKANI_BASE}subjects?ids=2&per_page=1000`
+    const subjectsUrl2 = `${'https://api.wanikani.com/v2/'}subjects?ids=2&per_page=1000`
     const fetch: HttpFetch = async (url, init) => {
       const token = init?.headers?.Authorization
       if (url === ASSIGNMENTS_URL) {

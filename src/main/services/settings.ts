@@ -71,16 +71,16 @@ export interface Settings {
   jimaku: JimakuSettings
 }
 
-export const defaultKnowledgeSettings: KnowledgeSettings = {
+const defaultKnowledgeSettings: KnowledgeSettings = {
   wanikaniTokenEnc: '',
   ...DEFAULT_KNOWLEDGE_TUNING
 }
 
-export const defaultUpdateSettings: UpdateSettings = {
+const defaultUpdateSettings: UpdateSettings = {
   checkAutomatically: true
 }
 
-export const defaultTranslationSettings: TranslationSettings = {
+const defaultTranslationSettings: TranslationSettings = {
   azureSubscriptionKeyEnc: '',
   azureRegion: ''
 }
@@ -176,7 +176,7 @@ export function jimakuFolderHintKey(
 }
 
 /** Normalizes persisted folder hints; each malformed record is dropped alone. */
-export function normalizeJimakuFolderHints(
+function normalizeJimakuFolderHints(
   raw: unknown,
   options: PathNormalizationOptions = {}
 ): Record<string, JimakuFolderHint> {

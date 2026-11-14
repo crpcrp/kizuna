@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_OCR_CONFIDENCE_CUTOFF,
-  MAX_OCR_CLIP_OVERFLOW,
   MAX_OCR_IDENTIFIER,
   MAX_OCR_IMAGE_DIMENSION,
   MAX_OCR_REGION_COUNT,
-  MAX_OCR_REGION_ID_LENGTH,
   MAX_OCR_TEXT_LENGTH,
   normalizeOcrResult
 } from '@src/shared/ocr'
@@ -102,7 +99,7 @@ describe('normalizeOcrResult', () => {
             id: 'weak',
             text: '低信頼',
             bounds: { x: 4, y: 1, width: 2, height: 2 },
-            confidence: DEFAULT_OCR_CONFIDENCE_CUTOFF - 0.01
+            confidence: 0.5 - 0.01
           }
         ]
       })
@@ -184,7 +181,7 @@ describe('normalizeOcrResult', () => {
             {
               id: 'too-far',
               text: 'too far',
-              bounds: { x: -(MAX_OCR_CLIP_OVERFLOW + 1), y: 1, width: 20, height: 2 },
+              bounds: { x: -(2 + 1), y: 1, width: 20, height: 2 },
               confidence: 0.9
             }
           ]
@@ -283,7 +280,7 @@ describe('normalizeOcrResult', () => {
     expect(
       normalizeOcrResult(
         validResult({
-          regions: [{ ...baseRegion, id: 'x'.repeat(MAX_OCR_REGION_ID_LENGTH + 1) }]
+          regions: [{ ...baseRegion, id: 'x'.repeat(128 + 1) }]
         })
       ).ok
     ).toBe(false)
@@ -301,7 +298,7 @@ describe('normalizeOcrResult', () => {
 
     const result = normalizeOcrResult(
       validResult({
-        regions: [{ ...baseRegion, confidence: DEFAULT_OCR_CONFIDENCE_CUTOFF }]
+        regions: [{ ...baseRegion, confidence: 0.5 }]
       })
     )
     expect(result.ok && result.value.regions).toHaveLength(1)

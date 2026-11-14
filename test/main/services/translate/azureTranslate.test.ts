@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   azureTranslateUrl,
   createAzureTranslator,
-  MAX_AZURE_TRANSLATE_CHARS,
   parseAzureTranslateResponse
 } from '@src/main/services/translate/azureTranslate'
 import { fakeHttp } from '@test/harness/fakeHttp'
@@ -176,7 +175,7 @@ describe('createAzureTranslator', () => {
   )
 
   it('accepts exactly 50,000 Unicode code points and preserves astral characters', async () => {
-    const text = ASTRAL.repeat(MAX_AZURE_TRANSLATE_CHARS)
+    const text = ASTRAL.repeat(50_000)
     const http = fakeHttp({ [AZURE_URL]: { json: [{ translations: [{ text: 'ok' }] }] } })
 
     await expect(
@@ -188,13 +187,13 @@ describe('createAzureTranslator', () => {
     const body = JSON.parse(http.calls[0].init?.body ?? '') as Array<{ Text: string }>
     expect(body).toHaveLength(1)
     expect(body[0].Text).toBe(text)
-    expect([...body[0].Text]).toHaveLength(MAX_AZURE_TRANSLATE_CHARS)
+    expect([...body[0].Text]).toHaveLength(50_000)
     expect(body[0].Text).not.toMatch(/\p{Surrogate}/u)
   })
 
   it('rejects 50,001 Unicode code points without truncating or calling HTTP', async () => {
     const http = fakeHttp({})
-    const text = `a${ASTRAL.repeat(MAX_AZURE_TRANSLATE_CHARS)}`
+    const text = `a${ASTRAL.repeat(50_000)}`
 
     await expect(
       createAzureTranslator({ fetch: http.fetch, getSubscriptionKey: () => AZURE_KEY }).translate(

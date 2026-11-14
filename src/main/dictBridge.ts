@@ -39,7 +39,7 @@ export function resolveImportWorkerPath(
  * usefully exceed the uncompressed total the unzip step already caps, so the
  * same bound rejects an oversized file before it is read into memory.
  */
-export const MAX_DICT_ZIP_BYTES = MAX_UNZIP_TOTAL_BYTES
+const MAX_DICT_ZIP_BYTES = MAX_UNZIP_TOTAL_BYTES
 
 /**
  * Validates a renderer-supplied dictionary path before main or the worker

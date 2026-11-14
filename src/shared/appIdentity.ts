@@ -33,10 +33,9 @@ export interface AppIdentity {
   vendorRepositoryUrl: string
 }
 
-export const APP_IDENTITY: AppIdentity = identity
+const APP_IDENTITY: AppIdentity = identity
 
 export const PRODUCT_NAME = APP_IDENTITY.productName
-export const EXECUTABLE_NAME = APP_IDENTITY.executableName
 export const APP_ID = APP_IDENTITY.appId
 export const USER_DATA_DIR_NAME = APP_IDENTITY.userDataDirName
 export const COPYRIGHT = APP_IDENTITY.copyright

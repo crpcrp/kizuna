@@ -18,7 +18,7 @@ export interface QuittableController {
 }
 
 /** Maximum time to wait for asynchronous shutdown work before forcing teardown. */
-export const SHUTDOWN_TIMEOUT_MS = 2_000
+const SHUTDOWN_TIMEOUT_MS = 2_000
 
 interface QuitCoordinatorDeps {
   defaultSession: FlushableSession

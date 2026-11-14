@@ -1,14 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import {
-  attachPairCloseHandlers,
   createAppWindowSet,
   loadRendererWindow,
   preparePlayerAppWindowSet,
   presentAppWindowSet,
   presentOverlayAppWindowSet,
   showOverlayAppWindowSet,
-  syncInitialWindowBounds,
   type WindowCloseEvent
 } from '@src/main/windowPair'
 import { createSurfacePresentation } from '@src/main/surfacePresentation'
@@ -24,7 +22,7 @@ type WindowEvent =
   | 'leave-full-screen'
 
 class FakeWindow {
-  readonly listeners = new Map<WindowEvent, Set<() => void>>()
+  readonly listeners = new Map<WindowEvent, Set<(event?: WindowCloseEvent) => void>>()
   readonly close = vi.fn(() => {
     this.emit('close')
     this.destroyed = true
@@ -80,8 +78,8 @@ class FakeWindow {
 
   constructor(readonly options: BrowserWindowConstructorOptions) {}
 
-  on(event: WindowEvent, listener: () => void): void {
-    const listeners = this.listeners.get(event) ?? new Set<() => void>()
+  on(event: WindowEvent, listener: (event?: WindowCloseEvent) => void): void {
+    const listeners = this.listeners.get(event) ?? new Set<(event?: WindowCloseEvent) => void>()
     listeners.add(listener)
     this.listeners.set(event, listeners)
   }
@@ -94,8 +92,8 @@ class FakeWindow {
     this.on(event, onceListener)
   }
 
-  emit(event: WindowEvent): void {
-    for (const listener of [...(this.listeners.get(event) ?? [])]) listener()
+  emit(event: WindowEvent, value?: WindowCloseEvent): void {
+    for (const listener of [...(this.listeners.get(event) ?? [])]) listener(value)
   }
 
   emitDidFinishLoad(): void {
@@ -614,25 +612,15 @@ describe('Linux window pair presentation and shutdown', () => {
   })
 
   it('lets a close guard keep an armed app window in the background', () => {
-    type EventName = 'close' | 'closed'
-    type Listener = (event?: WindowCloseEvent) => void
-    const makeCloseable = () => {
-      const listeners = new Map<EventName, Listener[]>()
-      return {
-        close: vi.fn(),
-        isDestroyed: () => false,
-        on(event: EventName, listener: Listener) {
-          listeners.set(event, [...(listeners.get(event) ?? []), listener])
-        },
-        emit(event: EventName, value?: WindowCloseEvent) {
-          for (const listener of listeners.get(event) ?? []) listener(value)
-        }
-      }
-    }
-    const videoHost = makeCloseable()
-    const uiOverlay = makeCloseable()
+    const factory = makeWindowFactory()
     const guard = vi.fn(() => false)
-    attachPairCloseHandlers(videoHost, uiOverlay, guard)
+    createAppWindowSet({
+      platform: 'linux',
+      preloadPath: 'preload.js',
+      createWindow: factory.createWindow,
+      closeGuard: guard
+    })
+    const [videoHost, uiOverlay] = factory.created
     const event = { preventDefault: vi.fn() }
 
     videoHost.emit('close', event)
@@ -998,19 +986,6 @@ describe('Linux window pair presentation and shutdown', () => {
     host.emit('closed')
 
     expect(overlay.close).toHaveBeenCalledTimes(1)
-  })
-
-  it('copies content bounds directly between windows', () => {
-    const host = {
-      getContentBounds: vi.fn(() => ({ x: 1, y: 2, width: 3, height: 4 })),
-      setContentBounds: vi.fn()
-    }
-    const overlay = { setContentBounds: vi.fn(), getContentBounds: vi.fn() }
-
-    syncInitialWindowBounds(host, overlay)
-
-    expect(host.getContentBounds).toHaveBeenCalledTimes(1)
-    expect(overlay.setContentBounds).toHaveBeenCalledWith({ x: 1, y: 2, width: 3, height: 4 })
   })
 })
 

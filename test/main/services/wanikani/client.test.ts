@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  createWaniKaniClient,
-  WaniKaniAuthError,
-  WANIKANI_BASE,
-  WANIKANI_REVISION,
-  WANIKANI_REQUEST_TIMEOUT_MS
-} from '@src/main/services/wanikani/client'
+import { createWaniKaniClient, WaniKaniAuthError } from '@src/main/services/wanikani/client'
 import { fakeHttp } from '@test/harness/fakeHttp'
 
 async function collect(iterable: AsyncIterable<unknown[]>): Promise<unknown[]> {
@@ -16,9 +10,9 @@ async function collect(iterable: AsyncIterable<unknown[]>): Promise<unknown[]> {
 
 describe('createWaniKaniClient', () => {
   it('follows pages.next_url across a two-page collection', async () => {
-    const page2Url = `${WANIKANI_BASE}assignments?page_after_id=100`
+    const page2Url = `${'https://api.wanikani.com/v2/'}assignments?page_after_id=100`
     const http = fakeHttp({
-      [`${WANIKANI_BASE}assignments`]: {
+      [`${'https://api.wanikani.com/v2/'}assignments`]: {
         json: { pages: { next_url: page2Url, per_page: 500 }, total_count: 2, data: ['a'] }
       },
       [page2Url]: {
@@ -35,7 +29,7 @@ describe('createWaniKaniClient', () => {
 
   it('rejects a cross-origin next_url before sending its authenticated request', async () => {
     const http = fakeHttp({
-      [`${WANIKANI_BASE}assignments`]: {
+      [`${'https://api.wanikani.com/v2/'}assignments`]: {
         json: {
           pages: {
             next_url: 'https://attacker.example/assignments?page_after_id=100',
@@ -55,21 +49,21 @@ describe('createWaniKaniClient', () => {
   })
 
   it('maps a request timeout to an actionable error', async () => {
-    const url = `${WANIKANI_BASE}assignments`
+    const url = `${'https://api.wanikani.com/v2/'}assignments`
     const http = fakeHttp({
       [url]: { error: Object.assign(new Error('t'), { name: 'TimeoutError' }) }
     })
     const client = createWaniKaniClient({ token: 'tok', fetch: http.fetch })
 
     await expect(collect(client.collection('assignments'))).rejects.toThrow(
-      `WaniKani request timed out after ${WANIKANI_REQUEST_TIMEOUT_MS}ms`
+      `WaniKani request timed out after ${15_000}ms`
     )
-    expect(http.calls[0]?.init?.timeoutMs).toBe(WANIKANI_REQUEST_TIMEOUT_MS)
+    expect(http.calls[0]?.init?.timeoutMs).toBe(15_000)
   })
 
   it('sends Authorization and Wanikani-Revision headers on every request', async () => {
     const http = fakeHttp({
-      [`${WANIKANI_BASE}assignments`]: {
+      [`${'https://api.wanikani.com/v2/'}assignments`]: {
         json: { pages: { next_url: null, per_page: 500 }, total_count: 0, data: [] }
       }
     })
@@ -79,12 +73,12 @@ describe('createWaniKaniClient', () => {
 
     expect(http.calls[0].init?.headers).toEqual({
       Authorization: 'Bearer secret-token',
-      'Wanikani-Revision': WANIKANI_REVISION
+      'Wanikani-Revision': '20170710'
     })
   })
 
   it('retries once after a 429, sleeping until the RateLimit-Reset epoch', async () => {
-    const url = `${WANIKANI_BASE}assignments`
+    const url = `${'https://api.wanikani.com/v2/'}assignments`
     const http = fakeHttp({
       [url]: [
         { status: 429, headers: { 'RateLimit-Reset': '60' } },
@@ -109,7 +103,7 @@ describe('createWaniKaniClient', () => {
   })
 
   it('throws WaniKaniAuthError on a 401', async () => {
-    const http = fakeHttp({ [`${WANIKANI_BASE}assignments`]: { status: 401 } })
+    const http = fakeHttp({ [`${'https://api.wanikani.com/v2/'}assignments`]: { status: 401 } })
     const client = createWaniKaniClient({ token: 'bad-token', fetch: http.fetch })
 
     await expect(collect(client.collection('assignments'))).rejects.toBeInstanceOf(
@@ -118,14 +112,14 @@ describe('createWaniKaniClient', () => {
   })
 
   it('rejects a 500 with an HTTP error naming the status', async () => {
-    const http = fakeHttp({ [`${WANIKANI_BASE}assignments`]: { status: 500 } })
+    const http = fakeHttp({ [`${'https://api.wanikani.com/v2/'}assignments`]: { status: 500 } })
     const client = createWaniKaniClient({ token: 'tok', fetch: http.fetch })
 
     await expect(collect(client.collection('assignments'))).rejects.toThrow(/500/)
   })
 
   it('rejects when the single 429 retry is also a 429, without retrying again', async () => {
-    const url = `${WANIKANI_BASE}assignments`
+    const url = `${'https://api.wanikani.com/v2/'}assignments`
     const http = fakeHttp({
       [url]: [
         { status: 429, headers: { 'RateLimit-Reset': '60' } },
@@ -149,7 +143,7 @@ describe('createWaniKaniClient', () => {
 
   it('encodes query params onto the initial request URL', async () => {
     const http = fakeHttp({
-      [`${WANIKANI_BASE}assignments?started=true&subject_types=vocabulary`]: {
+      [`${'https://api.wanikani.com/v2/'}assignments?started=true&subject_types=vocabulary`]: {
         json: { pages: { next_url: null, per_page: 500 }, total_count: 0, data: [] }
       }
     })
@@ -160,7 +154,7 @@ describe('createWaniKaniClient', () => {
     )
 
     expect(http.calls[0].url).toBe(
-      `${WANIKANI_BASE}assignments?started=true&subject_types=vocabulary`
+      `${'https://api.wanikani.com/v2/'}assignments?started=true&subject_types=vocabulary`
     )
   })
 })

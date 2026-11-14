@@ -15,10 +15,10 @@ import { isRecord, isPositiveSafeInteger, isNonNegativeSafeInteger } from '../..
 import { fail, ok } from './result'
 
 export const JIMAKU_API_ORIGIN = 'https://jimaku.cc'
-export const JIMAKU_API_BASE = `${JIMAKU_API_ORIGIN}/api`
-export const JIMAKU_REQUEST_TIMEOUT_MS = 15_000
+const JIMAKU_API_BASE = `${JIMAKU_API_ORIGIN}/api`
+const JIMAKU_REQUEST_TIMEOUT_MS = 15_000
 export const JIMAKU_MAX_QUERY_LENGTH = 200
-export const JIMAKU_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
+const JIMAKU_MAX_RESPONSE_BYTES = 10 * 1024 * 1024
 
 const JIMAKU_RATE_LIMIT_FALLBACK_MS = 60_000
 

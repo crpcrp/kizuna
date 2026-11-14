@@ -6,7 +6,7 @@ import type { JimakuDownloadResult, JimakuSubtitleFormat } from './downloadStore
 import { fail, ok } from './result'
 
 export const JIMAKU_DOWNLOAD_ORIGIN = JIMAKU_API_ORIGIN
-export const JIMAKU_DOWNLOAD_TIMEOUT_MS = 60_000
+const JIMAKU_DOWNLOAD_TIMEOUT_MS = 60_000
 const JIMAKU_MAX_REDIRECTS = 3
 export type JimakuManagedFormat = JimakuSubtitleFormat | 'zip'
 

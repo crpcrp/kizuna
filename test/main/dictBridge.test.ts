@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
-  MAX_DICT_ZIP_BYTES,
   registerDictBridge,
   resolveImportWorkerPath,
   type DictServiceLike,
@@ -109,7 +108,7 @@ describe('registerDictBridge', () => {
       'a file over the size cap',
       () => {
         const big = writeTemp('big.zip')
-        truncateSync(big, MAX_DICT_ZIP_BYTES + 1)
+        truncateSync(big, 2 * 1024 * 1024 * 1024 + 1)
         return big
       },
       'too large'

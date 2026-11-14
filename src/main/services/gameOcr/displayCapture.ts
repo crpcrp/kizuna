@@ -80,7 +80,7 @@ const DISPLAY_CAPTURE_ERROR_MESSAGES: Record<DisplayCaptureErrorCode, string> = 
   'image-too-large': 'The display exceeds the safe capture limit.'
 }
 
-export class DisplayCaptureError extends Error {
+class DisplayCaptureError extends Error {
   readonly code: DisplayCaptureErrorCode
 
   constructor(code: DisplayCaptureErrorCode, message?: string, cause?: unknown) {
@@ -96,7 +96,7 @@ export interface DisplaySourcesDependencies {
 }
 
 /** Returns the physical pixel dimensions of one Electron display. */
-export function displayCaptureImageSize(
+function displayCaptureImageSize(
   display: Pick<DisplayCaptureDisplay, 'bounds' | 'scaleFactor'>
 ): OcrImageSize {
   return {

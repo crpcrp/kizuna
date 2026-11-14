@@ -14,14 +14,13 @@ export type { MediaKeyCommand }
  * The accelerators registered while a file is loaded, each mapped to the command
  * pushed when it fires. Order is fixed so tests can assert it deterministically.
  */
-export const MEDIA_KEY_BINDINGS: ReadonlyArray<
-  readonly [accelerator: string, command: MediaKeyCommand]
-> = [
-  ['MediaPlayPause', 'playPause'],
-  ['MediaNextTrack', 'next'],
-  ['MediaPreviousTrack', 'prev'],
-  ['MediaStop', 'stop']
-]
+const MEDIA_KEY_BINDINGS: ReadonlyArray<readonly [accelerator: string, command: MediaKeyCommand]> =
+  [
+    ['MediaPlayPause', 'playPause'],
+    ['MediaNextTrack', 'next'],
+    ['MediaPreviousTrack', 'prev'],
+    ['MediaStop', 'stop']
+  ]
 
 /** The slice of Electron's globalShortcut this service needs. */
 export interface GlobalShortcutLike {

@@ -2,13 +2,13 @@
 // receive an inert probe; the smoke runner owns the timeout and diagnostics.
 
 export const STARTUP_PROBE_ENV = 'KIZUNA_STARTUP_PROBE'
-export const STARTUP_MILESTONES = ['window', 'mpv', 'renderer'] as const
+const STARTUP_MILESTONES = ['window', 'mpv', 'renderer'] as const
 export type StartupMilestone = (typeof STARTUP_MILESTONES)[number]
 
-export const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
-export const STARTUP_PROBE_READY_LINE = `${STARTUP_PROBE_PREFIX}: ready`
+const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
+const STARTUP_PROBE_READY_LINE = `${STARTUP_PROBE_PREFIX}: ready`
 
-export function startupProbeMilestoneLine(milestone: StartupMilestone): string {
+function startupProbeMilestoneLine(milestone: StartupMilestone): string {
   return `${STARTUP_PROBE_PREFIX}: reached ${milestone}`
 }
 

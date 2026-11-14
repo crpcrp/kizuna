@@ -25,8 +25,8 @@ import {
 const STARTUP_TIMEOUT_MS = 15_000
 const RECOGNITION_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 2_000
-export const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
-export const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
+const PP_OCR_MAX_STDOUT_BYTES = 8 * 1024 * 1024
+const PP_OCR_MAX_STDERR_BYTES = 64 * 1024
 
 export interface PpOcrWorkerOptions {
   limits?: Partial<typeof DEFAULT_TIMEOUTS>
