@@ -62,7 +62,7 @@ export interface SubtitleSidebarProps {
  * the button mounts), so the currently-playing subtitle is visible right
  * when the panel opens — SubtitleSidebar unmounts/remounts on every
  * App.tsx sidebarOpen toggle, so "mounts" and "opens" are the same event. */
-export function scrollRowIntoView(el: HTMLElement | null): void {
+function scrollRowIntoView(el: HTMLElement | null): void {
   el?.scrollIntoView({ block: 'center' })
 }
 
@@ -72,7 +72,7 @@ export function scrollRowIntoView(el: HTMLElement | null): void {
  * which always calls `stopPropagation()` regardless of this result — that
  * part keeps every keystroke, including plain letters and Space, from
  * reaching App.tsx's window-level keybinding handler). */
-export function searchKeyAction(
+function searchKeyAction(
   key: string,
   shiftKey: boolean,
   searchActive: boolean
@@ -88,11 +88,7 @@ export function searchKeyAction(
 /** Pure: the search row's live counter text — '' while the query is blank
  * (nothing to count), '0/0' when the query has no matches, else 1-based
  * "current/total". */
-export function matchCounterText(
-  query: string,
-  currentIndex: number,
-  totalMatches: number
-): string {
+function matchCounterText(query: string, currentIndex: number, totalMatches: number): string {
   if (query.trim().length === 0) return ''
   if (totalMatches === 0) return '0/0'
   return `${currentIndex + 1}/${totalMatches}`
@@ -145,7 +141,7 @@ function clipSegments(
  * available) or as knowledge-colored token spans (tokens available), with
  * `matches`/`currentMatch` (already filtered to this cue) wrapped in
  * `<mark>`. Exported for direct testing, same as `scrollRowIntoView`. */
-export function CueRowContent({
+function CueRowContent({
   cue,
   rowTokens,
   levels,
@@ -189,7 +185,7 @@ export function CueRowContent({
  * from `SubtitleSidebar` (which owns the search state and calls hooks) so it
  * can be invoked directly in tests; the list renders the memoized
  * `SidebarRow`. */
-export function SidebarRowView({
+function SidebarRowView({
   cue,
   isActive,
   rowTokens,

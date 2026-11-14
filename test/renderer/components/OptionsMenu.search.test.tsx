@@ -154,3 +154,28 @@ describe('OptionsMenu setting search', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('OptionsMenu search catalog', () => {
+  it('finds features in their owning categories through the real catalog', () => {
+    render(<OptionsMenu {...baseOptionsMenuProps()} supportsGameOcr />)
+    for (const [query, label] of [
+      ['loudness', 'Normalize loudness'],
+      ['screenshot', 'Screenshot folder'],
+      ['theme', 'Theme'],
+      ['skip', 'Skip back/ahead seconds'],
+      ['a-b', 'A–B loop'],
+      ['onnx', 'PP-OCR / ONNX Runtime status'],
+      ['capture shortcut', 'Game OCR capture shortcut'],
+      ['startup', 'When Kizuna starts'],
+      ['splash', 'When Kizuna starts'],
+      ['Game OCR', 'When Kizuna starts'],
+      ['video player', 'When Kizuna starts']
+    ]) {
+      fireEvent.change(searchBox(), { target: { value: query } })
+      const matches = screen
+        .getAllByRole('option')
+        .filter((option) => option.textContent?.includes(label))
+      expect(matches, query).toHaveLength(1)
+    }
+  })
+})

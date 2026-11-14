@@ -3,14 +3,14 @@ import type { Appearance, LevelColors, UnderlineLevel } from '../../../../shared
 import { DEFAULT_LEVEL_COLOR_HEX } from '../../util/levelColors'
 import type { SettingEntry } from './types'
 
-export const APPEARANCE_ROWS: { value: Appearance; label: string; description: string }[] = [
+const APPEARANCE_ROWS: { value: Appearance; label: string; description: string }[] = [
   { value: 'system', label: 'System', description: 'Follow the operating system theme' },
   { value: 'light', label: 'Light', description: 'Always use the light theme' },
   { value: 'dark', label: 'Dark', description: 'Always use the dark theme' }
 ]
 
 /** Knowledge levels with configurable subtitle underline/report colors. */
-export const UNDERLINE_COLOR_ROWS: { level: UnderlineLevel; label: string }[] = [
+const UNDERLINE_COLOR_ROWS: { level: UnderlineLevel; label: string }[] = [
   { level: 'unknown', label: 'Unknown' },
   { level: 'inDeck', label: 'In deck' },
   { level: 'learning', label: 'Learning' },
@@ -41,7 +41,7 @@ export interface AppearanceTabProps extends SettingsTabProps {
   onChangeLevelColor: (level: UnderlineLevel, color: string | null) => void
 }
 
-export function UnderlineColorRows({
+function UnderlineColorRows({
   levelColors,
   onChangeLevelColor
 }: Pick<AppearanceTabProps, 'levelColors' | 'onChangeLevelColor'>): React.JSX.Element {

@@ -14,17 +14,17 @@ import OptionsToggleRow from './OptionsToggleRow'
  * them would turn every optional add-on into an apparent defect. `unknown` is
  * the pre-load state — the tab renders before its IPC round-trip resolves, and
  * claiming either "Ready" or "Missing" then would be a guess. */
-export type SetupState = 'ready' | 'missing' | 'unconfigured' | 'unknown'
+type SetupState = 'ready' | 'missing' | 'unconfigured' | 'unknown'
 
 /** Display label per state; also the badge text. */
-export const SETUP_STATE_LABELS: Record<SetupState, string> = {
+const SETUP_STATE_LABELS: Record<SetupState, string> = {
   ready: 'Ready',
   missing: 'Missing',
   unconfigured: 'Not configured',
   unknown: 'Checking…'
 }
 
-export interface SetupRow {
+interface SetupRow {
   /** Stable key + DOM id suffix. */
   id: string
   name: string
@@ -38,7 +38,7 @@ export interface SetupRow {
   goTo?: OptionsCategory
 }
 
-export interface SetupRowsInput {
+interface SetupRowsInput {
   /** Live setup signals; undefined until the 'setup' domain has loaded. */
   setup: SetupData | undefined
   mecabDicts: McDict[]
@@ -58,7 +58,7 @@ function binaryState(present: boolean | undefined): SetupState {
 
 /** Ready/Missing for one MeCab dictionary, or unknown while the dictionaries
  * domain is still loading (the list is empty then, not "all missing"). */
-export function mecabDictRow(dicts: McDict[], id: 'ipadic' | 'unidic'): SetupState {
+function mecabDictRow(dicts: McDict[], id: 'ipadic' | 'unidic'): SetupState {
   const dict = dicts.find((d) => d.id === id)
   if (dict === undefined) return 'unknown'
   return dict.installed ? 'ready' : 'missing'
@@ -66,7 +66,7 @@ export function mecabDictRow(dicts: McDict[], id: 'ipadic' | 'unidic'): SetupSta
 
 /** "3 enabled" / "None enabled" — counts only the dictionaries that actually
  * take part in lookups, since a disabled dictionary contributes nothing. */
-export function describeYomitan(dicts: DictInfo[]): { state: SetupState; note: string } {
+function describeYomitan(dicts: DictInfo[]): { state: SetupState; note: string } {
   const enabled = dicts.filter((d) => d.enabled).length
   if (enabled === 0) {
     return {
@@ -86,7 +86,7 @@ export function describeYomitan(dicts: DictInfo[]): { state: SetupState; note: s
 /** Connected / Not connected from the last ping, keeping AnkiConnect's own
  * error text when it gave one — "Not connected" alone tells the user nothing
  * about whether Anki is closed or the URL is wrong. */
-export function describeAnki(ping: SetupData['anki'] | undefined): {
+function describeAnki(ping: SetupData['anki'] | undefined): {
   state: SetupState
   note: string
 } {
@@ -104,7 +104,7 @@ export function describeAnki(ping: SetupData['anki'] | undefined): {
 }
 
 /** Configured + last sync, or an explicit "no token yet". */
-export function describeWanikani(
+function describeWanikani(
   configured: boolean,
   syncStatus: SyncStatus,
   nowMs: number
@@ -127,7 +127,7 @@ export function describeWanikani(
  * the rendering below has no branching of its own and the mapping is testable
  * without a DOM.
  */
-export function buildSetupRows({
+function buildSetupRows({
   setup,
   mecabDicts,
   yomitanDicts,

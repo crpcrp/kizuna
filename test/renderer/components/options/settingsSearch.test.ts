@@ -3,7 +3,6 @@ import {
   matchSettings,
   type SettingEntry
 } from '@src/renderer/src/components/options/settingsSearch'
-import { SETTING_ENTRIES } from '@src/renderer/src/components/OptionsMenu'
 
 const entries: SettingEntry[] = [
   { id: 'a', label: 'Normalize loudness', category: 'playback', keywords: ['volume', 'audio'] },
@@ -36,53 +35,5 @@ describe('matchSettings', () => {
 
   it('preserves input order for a query that hits several entries', () => {
     expect(matchSettings('o', entries).map((e) => e.id)).toEqual(['a', 'b', 'c'])
-  })
-})
-
-describe('SETTING_ENTRIES', () => {
-  it('finds the settings the acceptance criteria name, in the right tab', () => {
-    const found = (query: string): { label: string; category: string }[] =>
-      matchSettings(query, SETTING_ENTRIES).map((e) => ({ label: e.label, category: e.category }))
-
-    expect(found('loudness')).toContainEqual({ label: 'Normalize loudness', category: 'playback' })
-    expect(found('screenshot')).toContainEqual({
-      label: 'Screenshot folder',
-      category: 'playback'
-    })
-    expect(found('theme')).toContainEqual({ label: 'Theme', category: 'appearance' })
-    expect(found('skip')).toContainEqual({
-      label: 'Skip back/ahead seconds',
-      category: 'playback'
-    })
-    expect(found('a-b')).toContainEqual({ label: 'A–B loop', category: 'keybindings' })
-    expect(found('onnx')).toContainEqual({
-      label: 'PP-OCR / ONNX Runtime status',
-      category: 'gameOcr'
-    })
-    expect(found('capture shortcut')).toContainEqual({
-      label: 'Game OCR capture shortcut',
-      category: 'gameOcr'
-    })
-    expect(found('startup')).toContainEqual({
-      label: 'When Kizuna starts',
-      category: 'startup'
-    })
-    expect(found('splash')).toContainEqual({
-      label: 'When Kizuna starts',
-      category: 'startup'
-    })
-    expect(found('Game OCR')).toContainEqual({
-      label: 'When Kizuna starts',
-      category: 'startup'
-    })
-    expect(found('video player')).toContainEqual({
-      label: 'When Kizuna starts',
-      category: 'startup'
-    })
-  })
-
-  it('has unique entry ids', () => {
-    const ids = SETTING_ENTRIES.map((e) => e.id)
-    expect(new Set(ids).size).toBe(ids.length)
   })
 })

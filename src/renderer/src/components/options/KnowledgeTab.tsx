@@ -13,7 +13,7 @@ import type { SettingEntry } from './types'
  * checkbox's new checked state, leaving every other entry untouched (the
  * regression this guards against: a naive rebuild-from-scratch would drop
  * decks that aren't in the currently-rendered `ankiDeckNames` list). */
-export function toggleDeck(decks: string[], deck: string, checked: boolean): string[] {
+function toggleDeck(decks: string[], deck: string, checked: boolean): string[] {
   if (checked) return decks.includes(deck) ? decks : [...decks, deck]
   return decks.filter((d) => d !== deck)
 }
@@ -38,7 +38,7 @@ export function formatLastSynced(lastSyncAt: string | null, nowMs: number): stri
 }
 
 /** Gives the most recent explicit source-sync outcome a concise, accessible label. */
-export function formatSyncOutcome(status: SourceStatus, nowMs: number): string | null {
+function formatSyncOutcome(status: SourceStatus, nowMs: number): string | null {
   switch (status.outcome) {
     case 'synced':
       return 'Sync complete'
@@ -65,7 +65,7 @@ export function formatSyncOutcome(status: SourceStatus, nowMs: number): string |
  * warning on every first open, and a failed load would leave it up for good.
  * The unknown state therefore claims nothing about encryption; only the
  * always-true facts (stored locally, sent to WaniKani) are stated. */
-export function describeTokenStorage(encryptionAvailable: boolean | undefined): string {
+function describeTokenStorage(encryptionAvailable: boolean | undefined): string {
   if (encryptionAvailable === undefined) {
     return 'It is stored locally and sent only to WaniKani over HTTPS to sync your progress.'
   }
@@ -86,7 +86,7 @@ type SourceStateSetter<T> = (
 ) => void
 
 /** Runs one source independently, exposing its in-flight and final outcome to the tab. */
-export async function runSourceSync(
+async function runSourceSync(
   source: KnowledgeSource,
   onSyncNow: (source: KnowledgeSource) => Promise<SyncStatus>,
   setSyncing: SourceStateSetter<boolean>,

@@ -156,3 +156,26 @@ describe('InteractiveText', () => {
     expect(onClick).toHaveBeenCalledWith(token, event)
   })
 })
+
+describe('InteractiveText projection edges', () => {
+  it('preserves consecutive display breaks between analysis tokens', () => {
+    const html = renderToStaticMarkup(
+      <InteractiveText
+        id="blank-lines"
+        text={'a\n\nc'}
+        tokens={[makeToken({ surface: 'a' }), makeToken({ surface: 'c', startOffset: 1 })]}
+      />
+    )
+    expect(html).toContain('>a</span><br/><br/><span data-token="">c</span>')
+  })
+  it('drops an out-of-range token without throwing', () => {
+    const html = renderToStaticMarkup(
+      <InteractiveText
+        id="stale"
+        text="猫"
+        tokens={[makeToken({ surface: '可愛い', startOffset: 8 })]}
+      />
+    )
+    expect(html).not.toContain('data-token=')
+  })
+})

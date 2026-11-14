@@ -57,7 +57,7 @@ export interface OptionsMenuProps {
 
 /** The complete search index is assembled here, while each entry list stays
  * beside the tab that renders its setting. */
-export const SETTING_ENTRIES: SettingEntry[] = [
+const SETTING_ENTRIES: SettingEntry[] = [
   ...KEYBINDINGS_SETTING_ENTRIES,
   ...PLAYBACK_SETTING_ENTRIES,
   ...APPEARANCE_SETTING_ENTRIES,

@@ -45,7 +45,7 @@ export interface InteractiveTextProps extends InteractiveText {
 }
 
 /** One visible piece of a token: the whole token unless a line break splits it. */
-export interface TokenFragment {
+interface TokenFragment {
   /** Visible text of this piece, sliced from the display text. */
   text: string
   /** Where the piece starts in the display text, for caller-side highlighting. */
@@ -55,7 +55,7 @@ export interface TokenFragment {
   fragmentCount: number
 }
 
-export type TokenSpanItem =
+type TokenSpanItem =
   | ({ type: 'token'; token: Token } & TokenFragment)
   | { type: 'break' }
   | { type: 'text'; text: string; displayStartOffset: number }
@@ -69,7 +69,7 @@ export type TokenSpanItem =
  * gaps come from the display text rather than from token surfaces, so
  * whitespace omitted by MeCab remains visible without becoming a token.
  */
-export function tokenSpans(
+function tokenSpans(
   text: string,
   tokens: Token[],
   projection: TextProjection = displayTextProjection(text)

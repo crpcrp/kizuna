@@ -1,18 +1,14 @@
-import { describe, it, expect, vi } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { deferred } from '@test/harness/deferred'
 import { renderToStaticMarkup } from 'react-dom/server'
 import KnowledgeTab, {
-  toggleDeck,
   parseIntervalDaysInput,
-  formatLastSynced,
-  formatSyncOutcome,
-  runSourceSync,
-  describeTokenStorage
+  formatLastSynced
 } from '@src/renderer/src/components/options/KnowledgeTab'
 import type { SyncStatus } from '@src/shared/knowledge'
 import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
-
-// SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
-// policy — same pattern OptionsMenu.test.tsx uses.
 
 function noop(): void {}
 
@@ -38,31 +34,6 @@ function renderTab(overrides: Partial<React.ComponentProps<typeof KnowledgeTab>>
     />
   )
 }
-
-describe('describeTokenStorage', () => {
-  it('claims OS-secure-store encryption only when it is actually available', () => {
-    expect(describeTokenStorage(true)).toContain("operating system's secure store")
-    expect(describeTokenStorage(true)).not.toContain('unencrypted')
-  })
-
-  it('warns plainly when there is no secure store', () => {
-    expect(describeTokenStorage(false)).toContain('saved unencrypted')
-    expect(describeTokenStorage(false)).not.toContain("operating system's secure store")
-  })
-
-  it('asserts nothing about encryption when availability is unknown', () => {
-    const unknown = describeTokenStorage(undefined)
-    expect(unknown).not.toMatch(/unencrypted|secure store|encrypted/)
-    expect(unknown).toContain('stored locally')
-  })
-
-  it('discloses the WaniKani transmission in every state', () => {
-    for (const state of [true, false, undefined]) {
-      expect(describeTokenStorage(state)).toContain('sent only to WaniKani over HTTPS')
-      expect(describeTokenStorage(state)).not.toContain('never leaves this device')
-    }
-  })
-})
 
 describe('KnowledgeTab markup', () => {
   it('renders a WaniKani section', () => {
@@ -215,18 +186,6 @@ describe('KnowledgeTab markup', () => {
 })
 
 describe('KnowledgeTab pure helpers', () => {
-  it('toggleDeck adds the deck when checked and it is missing', () => {
-    expect(toggleDeck(['A'], 'B', true)).toEqual(['A', 'B'])
-  })
-
-  it('toggleDeck is a no-op when checked and already present', () => {
-    expect(toggleDeck(['A', 'B'], 'B', true)).toEqual(['A', 'B'])
-  })
-
-  it('toggleDeck removes only the named deck when unchecked, keeping the rest', () => {
-    expect(toggleDeck(['A', 'B', 'C'], 'B', false)).toEqual(['A', 'C'])
-  })
-
   it('parseIntervalDaysInput accepts finite values >= 1 and rejects everything else', () => {
     expect(parseIntervalDaysInput('21')).toBe(21)
     expect(parseIntervalDaysInput('1')).toBe(1)
@@ -254,58 +213,6 @@ describe('KnowledgeTab pure helpers', () => {
     const now = Date.parse('2026-07-10T12:00:00Z')
     expect(formatLastSynced(new Date(now - 3 * 3600_000).toISOString(), now)).toBe('3h ago')
   })
-
-  it('formats sync outcomes without concealing cooldown or error states', () => {
-    const now = Date.parse('2026-07-10T12:00:00Z')
-    expect(
-      formatSyncOutcome({ lastSyncAt: null, count: 0, configured: true, outcome: 'synced' }, now)
-    ).toBe('Sync complete')
-    expect(
-      formatSyncOutcome(
-        {
-          lastSyncAt: null,
-          count: 0,
-          configured: true,
-          outcome: 'cooldown',
-          retryAt: '2026-07-10T12:30:00Z'
-        },
-        now
-      )
-    ).toBe('Sync available in 30m')
-    expect(
-      formatSyncOutcome(
-        { lastSyncAt: null, count: 0, configured: true, outcome: 'error', error: 'offline' },
-        now
-      )
-    ).toBe('Sync failed: offline')
-  })
-
-  it('runs only the selected source and records its independent lifecycle', async () => {
-    let syncing: Partial<Record<'wanikani' | 'anki', boolean>> = {}
-    let outcomes: Partial<Record<'wanikani' | 'anki', SyncStatus['wanikani']>> = {}
-    const onSyncNow = vi.fn().mockResolvedValue({
-      wanikani: {
-        lastSyncAt: '2026-07-10T12:00:00Z',
-        count: 5,
-        configured: true,
-        outcome: 'synced'
-      },
-      anki: DEFAULT_SYNC_STATUS.anki
-    } satisfies SyncStatus)
-    const setSyncing = (updater: (current: typeof syncing) => typeof syncing): void => {
-      syncing = updater(syncing)
-    }
-    const setOutcomes = (updater: (current: typeof outcomes) => typeof outcomes): void => {
-      outcomes = updater(outcomes)
-    }
-
-    await runSourceSync('wanikani', onSyncNow, setSyncing, setOutcomes)
-
-    expect(onSyncNow).toHaveBeenCalledExactlyOnceWith('wanikani')
-    expect(syncing).toEqual({ wanikani: false })
-    expect(outcomes.wanikani?.outcome).toBe('synced')
-    expect(outcomes.anki).toBeUndefined()
-  })
 })
 
 describe('KnowledgeTab setting descriptions', () => {
@@ -314,5 +221,76 @@ describe('KnowledgeTab setting descriptions', () => {
     expect(html).toContain('Cards whose review interval reaches this many days count as known.')
     expect(html).toContain('count as well known')
     expect(html).toContain('those words get no underline')
+  })
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+
+describe('KnowledgeTab controls', () => {
+  function renderControls(overrides: Partial<React.ComponentProps<typeof KnowledgeTab>> = {}) {
+    return render(
+      <KnowledgeTab
+        wanikaniConfigured={false}
+        onSaveWanikaniToken={vi.fn()}
+        ankiDeckNames={['A', 'B']}
+        ankiModelFields={[]}
+        knowledgeSettings={DEFAULT_KNOWLEDGE_SETTINGS}
+        onChangeKnowledgeSettings={vi.fn()}
+        syncStatus={DEFAULT_SYNC_STATUS}
+        onSyncNow={vi.fn(async () => DEFAULT_SYNC_STATUS)}
+        {...overrides}
+      />
+    )
+  }
+  it('adds and removes selected decks while retaining decks outside the rendered list', () => {
+    const onChangeKnowledgeSettings = vi.fn()
+    renderControls({
+      knowledgeSettings: { ...DEFAULT_KNOWLEDGE_SETTINGS, ankiKnownDecks: ['A', 'Hidden'] },
+      onChangeKnowledgeSettings
+    })
+    fireEvent.click(screen.getByLabelText('Use B as a known-words source'))
+    expect(onChangeKnowledgeSettings).toHaveBeenLastCalledWith({
+      ankiKnownDecks: ['A', 'Hidden', 'B']
+    })
+    fireEvent.click(screen.getByLabelText('Use A as a known-words source'))
+    expect(onChangeKnowledgeSettings).toHaveBeenLastCalledWith({ ankiKnownDecks: ['Hidden'] })
+  })
+  it('tracks source sync independently and renders its completion', async () => {
+    const pending = deferred<SyncStatus>()
+    const onSyncNow = vi.fn(() => pending.promise)
+    renderControls({ onSyncNow })
+    fireEvent.click(screen.getByRole('button', { name: 'Sync WaniKani' }))
+    expect(onSyncNow).toHaveBeenCalledExactlyOnceWith('wanikani')
+    expect(
+      (screen.getByRole('button', { name: 'Syncing WaniKani…' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    expect((screen.getByRole('button', { name: 'Sync Anki' }) as HTMLButtonElement).disabled).toBe(
+      false
+    )
+    pending.resolve({
+      ...DEFAULT_SYNC_STATUS,
+      wanikani: { ...DEFAULT_SYNC_STATUS.wanikani, outcome: 'synced' }
+    })
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Sync complete'))
+    expect(
+      (screen.getByRole('button', { name: 'Sync WaniKani' }) as HTMLButtonElement).disabled
+    ).toBe(false)
+  })
+  it.each([
+    [{ outcome: 'cooldown', retryAt: '2026-07-10T12:30:00Z' }, 'Sync available in 30m'],
+    [{ outcome: 'error', error: 'offline' }, 'Sync failed: offline'],
+    [{ outcome: 'unconfigured' }, 'Sync unavailable: source is not configured']
+  ] as const)('renders source outcomes from its public status', (outcome, message) => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-10T12:00:00Z'))
+    renderControls({
+      syncStatus: {
+        ...DEFAULT_SYNC_STATUS,
+        wanikani: { ...DEFAULT_SYNC_STATUS.wanikani, ...outcome }
+      }
+    })
+    expect(screen.getByRole('status').textContent).toBe(message)
   })
 })

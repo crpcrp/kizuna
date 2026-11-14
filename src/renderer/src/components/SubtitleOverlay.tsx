@@ -8,8 +8,6 @@ import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import InteractiveText from './InteractiveText'
 
-export { tokenSpans, type TokenSpanItem } from './InteractiveText'
-
 // Presentational overlay: shows the cue the caller resolved as active at the
 // current playback time (App looks it up, so playback ticks that stay inside
 // one cue never reach this component). Derived from props — no internal state; dragging is
@@ -70,7 +68,7 @@ const BASE_SUBTITLE_FONT_REM = 1.1
 const SUBTITLE_FONT_FAMILY = '"Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif'
 
 /** Pure: turns SubtitleStyleSettings into the inline style for #subtitle's box. */
-export function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSProperties {
+function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSProperties {
   // Rounded to avoid floating-point artifacts (e.g. 1.1 * 1.5 === 1.6500000000000001) in the CSS value.
   const fontRem = Math.round(BASE_SUBTITLE_FONT_REM * style.fontScale * 1000) / 1000
   return {
