@@ -2,11 +2,11 @@
 
 export const MAX_RECENT_FILES = 5
 /** Maximum persisted resume/track state entries, to bound settings size and flush work. */
-export const MAX_PLAYBACK_ENTRIES = 500
+const MAX_PLAYBACK_ENTRIES = 500
 /** Maximum recently-used downloaded subtitle versions kept per video. */
 export const MAX_SUBTITLE_VERSION_OFFSETS = 20
-export const MIN_RESUME_SECONDS = 10
-export const END_RESTART_WINDOW_SECONDS = 30
+const MIN_RESUME_SECONDS = 10
+const END_RESTART_WINDOW_SECONDS = 30
 /** Safety-net save interval while playing; pause, EOF, file switches and quit save immediately. */
 export const HISTORY_FLUSH_DELAY_MS = 30_000
 
@@ -209,7 +209,7 @@ export function prunePlaybackHistory(
   return Object.fromEntries(retained)
 }
 
-export function normalizeRecentFiles(
+function normalizeRecentFiles(
   raw: unknown,
   options: PathNormalizationOptions = {}
 ): RecentMediaFile[] {

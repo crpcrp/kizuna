@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createMediaHistoryService, type MediaHistoryTimers } from '@src/main/services/mediaHistory'
-import {
-  MAX_PLAYBACK_ENTRIES,
-  normalizeMediaHistory,
-  type MediaHistory
-} from '@src/shared/mediaHistory'
+import { normalizeMediaHistory, type MediaHistory } from '@src/shared/mediaHistory'
 import type { MediaHistoryStore } from '@src/main/services/mediaHistoryStore'
 
 const paths = { platform: 'posix' as const, cwd: '/media' }
@@ -215,7 +211,7 @@ describe('createMediaHistoryService', () => {
     // value (below both), yet survives because the just-mutated entry is
     // protected from pruning.
     const playbackByPath = Object.fromEntries(
-      Array.from({ length: MAX_PLAYBACK_ENTRIES }, (_, index) => [
+      Array.from({ length: 500 }, (_, index) => [
         `/media/${index}.mkv`,
         { positionSeconds: index, updatedAt: index === 0 ? 0 : index === 1 ? 500 : 1_000 }
       ])

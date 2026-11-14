@@ -34,7 +34,7 @@ export type PlayerKeyAction =
  * solely by tracking the modifier's own keydown/keyup (see
  * `createModifierTracker` in the renderer's `keyBindings` module).
  */
-export const MODIFIER_CODES = ['ControlLeft', 'ShiftLeft'] as const
+const MODIFIER_CODES = ['ControlLeft', 'ShiftLeft'] as const
 
 export type KeyModifier = (typeof MODIFIER_CODES)[number]
 
@@ -90,7 +90,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
  * or multi-modifier chord, or a modifier bound on its own (which could never
  * fire, since a lone modifier press produces no binding).
  */
-export function normalizeKeyBinding(raw: unknown): KeyBinding | null {
+function normalizeKeyBinding(raw: unknown): KeyBinding | null {
   if (typeof raw !== 'string') return null
   const parts = raw.split('+')
   if (parts.length > 2) return null
@@ -182,7 +182,7 @@ export interface SubtitleStyleSettings {
 
 export type SubtitleAutoPauseTiming = 'off' | 'before' | 'after'
 
-export const DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING: SubtitleAutoPauseTiming = 'off'
+const DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING: SubtitleAutoPauseTiming = 'off'
 
 export function normalizeSubtitleAutoPauseTiming(raw: unknown): SubtitleAutoPauseTiming {
   return raw === 'off' || raw === 'before' || raw === 'after'
@@ -192,7 +192,7 @@ export function normalizeSubtitleAutoPauseTiming(raw: unknown): SubtitleAutoPaus
 
 export type SubtitleAutoPauseScope = 'all' | 'unknown'
 
-export const DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE: SubtitleAutoPauseScope = 'all'
+const DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE: SubtitleAutoPauseScope = 'all'
 
 export function normalizeSubtitleAutoPauseScope(raw: unknown): SubtitleAutoPauseScope {
   return raw === 'all' || raw === 'unknown' ? raw : DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE
@@ -386,7 +386,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
 }
 
 /** Max length of a stored `audioDevice` name; a longer value is untrusted junk. */
-export const AUDIO_DEVICE_NAME_MAX_LENGTH = 256
+const AUDIO_DEVICE_NAME_MAX_LENGTH = 256
 
 /**
  * Validates a stored `audioDevice`: a non-empty string ≤`AUDIO_DEVICE_NAME_MAX_LENGTH`

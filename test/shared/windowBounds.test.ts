@@ -1,19 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import {
-  MINI_PLAYER_VIDEO_HEIGHT,
-  MINI_PLAYER_WIDTH,
-  isWindowBounds,
-  miniPlayerBounds,
-  type WindowBounds
-} from '@src/shared/windowBounds'
+import { isWindowBounds, miniPlayerBounds, type WindowBounds } from '@src/shared/windowBounds'
 
 describe('miniPlayerBounds', () => {
   const workArea: WindowBounds = { x: 0, y: 0, width: 1920, height: 1040 }
 
   it('flushes a 480×(270+bar) window to the work area bottom-right corner', () => {
     const bounds = miniPlayerBounds(workArea, 32, 60)
-    expect(bounds.width).toBe(MINI_PLAYER_WIDTH)
-    expect(bounds.height).toBe(MINI_PLAYER_VIDEO_HEIGHT + 32 + 60)
+    expect(bounds.width).toBe(480)
+    expect(bounds.height).toBe(270 + 32 + 60)
     // right edge and bottom edge align with the work area's far corner.
     expect(bounds.x + bounds.width).toBe(workArea.x + workArea.width)
     expect(bounds.y + bounds.height).toBe(workArea.y + workArea.height)
@@ -23,23 +17,21 @@ describe('miniPlayerBounds', () => {
     const inset: WindowBounds = { x: 100, y: 50, width: 1280, height: 700 }
     const bounds = miniPlayerBounds(inset, 32, 40)
     expect(bounds).toEqual({
-      x: 100 + 1280 - MINI_PLAYER_WIDTH,
-      y: 50 + 700 - (MINI_PLAYER_VIDEO_HEIGHT + 32 + 40),
-      width: MINI_PLAYER_WIDTH,
-      height: MINI_PLAYER_VIDEO_HEIGHT + 32 + 40
+      x: 100 + 1280 - 480,
+      y: 50 + 700 - (270 + 32 + 40),
+      width: 480,
+      height: 270 + 32 + 40
     })
   })
 
   it('clamps a non-finite or negative bar height to zero', () => {
-    expect(miniPlayerBounds(workArea, Number.NaN, Number.NEGATIVE_INFINITY).height).toBe(
-      MINI_PLAYER_VIDEO_HEIGHT
-    )
-    expect(miniPlayerBounds(workArea, -20, -1).height).toBe(MINI_PLAYER_VIDEO_HEIGHT)
+    expect(miniPlayerBounds(workArea, Number.NaN, Number.NEGATIVE_INFINITY).height).toBe(270)
+    expect(miniPlayerBounds(workArea, -20, -1).height).toBe(270)
   })
 
   it('rounds a fractional bar height and origin', () => {
     const bounds = miniPlayerBounds({ x: 0.4, y: 0.6, width: 1000, height: 800 }, 32.2, 60.7)
-    expect(bounds.height).toBe(MINI_PLAYER_VIDEO_HEIGHT + 32 + 61)
+    expect(bounds.height).toBe(270 + 32 + 61)
     expect(Number.isInteger(bounds.x)).toBe(true)
     expect(Number.isInteger(bounds.y)).toBe(true)
   })

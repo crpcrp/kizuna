@@ -1,12 +1,12 @@
 import type { WindowBounds } from './windowBounds'
 
 /** The compact native content size used by the startup chooser. */
-export const SPLASH_SURFACE_WIDTH = 640
-export const SPLASH_SURFACE_HEIGHT = 360
+const SPLASH_SURFACE_WIDTH = 640
+const SPLASH_SURFACE_HEIGHT = 360
 
 /** The default windowed size used by the player and standalone Options. */
-export const APPLICATION_SURFACE_WIDTH = 1280
-export const APPLICATION_SURFACE_HEIGHT = 720
+const APPLICATION_SURFACE_WIDTH = 1280
+const APPLICATION_SURFACE_HEIGHT = 720
 
 /**
  * Centers a surface in a display work area, shrinking it when the work area is

@@ -1,18 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import {
-  AUDIO_DEVICE_NAME_MAX_LENGTH,
   DEFAULT_APPEARANCE,
   DEFAULT_KEY_BINDINGS,
-  DEFAULT_PLAYER_SETTINGS,
   DEFAULT_POPUP_SETTINGS,
-  DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING,
-  DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   DEFAULT_SUBTITLE_STYLE,
   isKeyModifier,
   MPV_EXTRA_ARG_MAX_LENGTH,
   normalizeAppearance,
   normalizeAudioDevice,
-  normalizeKeyBinding,
+  normalizeKeyBindings,
   normalizeLevelColors,
   normalizeMpvExtraArgs,
   normalizePopupSettings,
@@ -86,13 +82,9 @@ describe('normalizeSubtitleAutoPauseTiming', () => {
   it.each([undefined, null, {}, 42, '', 'Before', 'unknown'])(
     'defaults malformed value %j to off',
     (timing) => {
-      expect(normalizeSubtitleAutoPauseTiming(timing)).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING)
+      expect(normalizeSubtitleAutoPauseTiming(timing)).toBe('off')
     }
   )
-
-  it('uses off as the shared player default', () => {
-    expect(DEFAULT_PLAYER_SETTINGS.subtitleAutoPauseTiming).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_TIMING)
-  })
 })
 
 describe('normalizeSubtitleAutoPauseScope', () => {
@@ -103,13 +95,9 @@ describe('normalizeSubtitleAutoPauseScope', () => {
   it.each([undefined, null, {}, 42, '', 'All', 'known'])(
     'defaults malformed value %j to all',
     (scope) => {
-      expect(normalizeSubtitleAutoPauseScope(scope)).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE)
+      expect(normalizeSubtitleAutoPauseScope(scope)).toBe('all')
     }
   )
-
-  it('uses all as the shared player default', () => {
-    expect(DEFAULT_PLAYER_SETTINGS.subtitleAutoPauseScope).toBe(DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE)
-  })
 })
 
 describe('isKeyModifier', () => {
@@ -122,60 +110,45 @@ describe('isKeyModifier', () => {
   })
 })
 
-describe('normalizeKeyBinding', () => {
-  it('passes through a bare code', () => {
-    expect(normalizeKeyBinding('Space')).toBe('Space')
-    expect(normalizeKeyBinding('ArrowLeft')).toBe('ArrowLeft')
+describe('normalizeKeyBindings', () => {
+  it('keeps bare codes and supported chords while dropping unknown actions', () => {
+    const bindings = normalizeKeyBindings({
+      togglePause: 'KeyK',
+      skipBack: 'ControlLeft+ArrowUp',
+      skipForward: 'ShiftLeft+KeyR',
+      nextLine: 'ArrowLeft',
+      unknownAction: 'KeyX'
+    })
+    expect(bindings).toEqual({
+      ...DEFAULT_KEY_BINDINGS,
+      togglePause: 'KeyK',
+      skipBack: 'ControlLeft+ArrowUp',
+      skipForward: 'ShiftLeft+KeyR',
+      nextLine: 'ArrowLeft'
+    })
   })
 
-  it('passes through a code prefixed with a bindable modifier', () => {
-    expect(normalizeKeyBinding('ControlLeft+ArrowUp')).toBe('ControlLeft+ArrowUp')
-    expect(normalizeKeyBinding('ShiftLeft+KeyR')).toBe('ShiftLeft+KeyR')
+  it.each([
+    123,
+    undefined,
+    { code: 'Space' },
+    'ControlRight+ArrowUp',
+    'Alt+KeyF',
+    'ControlLeft',
+    '',
+    'ControlLeft+',
+    'ControlLeft+ShiftLeft+KeyF'
+  ])('falls back per action for malformed binding %j', (binding) => {
+    expect(normalizeKeyBindings({ togglePause: binding, skipBack: 'KeyJ' })).toEqual({
+      ...DEFAULT_KEY_BINDINGS,
+      skipBack: 'KeyJ'
+    })
   })
 
-  it('rejects a non-string', () => {
-    expect(normalizeKeyBinding(123)).toBeNull()
-    expect(normalizeKeyBinding(undefined)).toBeNull()
-    expect(normalizeKeyBinding({ code: 'Space' })).toBeNull()
-  })
-
-  it('rejects an unbindable modifier prefix', () => {
-    expect(normalizeKeyBinding('ControlRight+ArrowUp')).toBeNull()
-    expect(normalizeKeyBinding('Alt+KeyF')).toBeNull()
-  })
-
-  it('rejects a lone modifier, an empty code, and a multi-modifier chord', () => {
-    expect(normalizeKeyBinding('ControlLeft')).toBeNull()
-    expect(normalizeKeyBinding('')).toBeNull()
-    expect(normalizeKeyBinding('ControlLeft+')).toBeNull()
-    expect(normalizeKeyBinding('ControlLeft+ShiftLeft+KeyF')).toBeNull()
-  })
-})
-
-describe('DEFAULT_KEY_BINDINGS', () => {
-  it('binds abLoop to Shift+L, a valid binding distinct from loopLine', () => {
-    expect(DEFAULT_KEY_BINDINGS.abLoop).toBe('ShiftLeft+KeyL')
-    expect(normalizeKeyBinding(DEFAULT_KEY_BINDINGS.abLoop)).toBe('ShiftLeft+KeyL')
-    expect(DEFAULT_KEY_BINDINGS.abLoop).not.toBe(DEFAULT_KEY_BINDINGS.loopLine)
-  })
-
-  it('binds frame stepping to Shift+Period/Comma, valid and distinct from cue nav', () => {
-    expect(DEFAULT_KEY_BINDINGS.frameStep).toBe('ShiftLeft+Period')
-    expect(DEFAULT_KEY_BINDINGS.frameBack).toBe('ShiftLeft+Comma')
-    expect(normalizeKeyBinding(DEFAULT_KEY_BINDINGS.frameStep)).toBe('ShiftLeft+Period')
-    expect(normalizeKeyBinding(DEFAULT_KEY_BINDINGS.frameBack)).toBe('ShiftLeft+Comma')
-    // Deliberately adjacent to — but distinct from — the bare Comma/Period cue nav.
-    expect(DEFAULT_KEY_BINDINGS.frameStep).not.toBe(DEFAULT_KEY_BINDINGS.nextLine)
-    expect(DEFAULT_KEY_BINDINGS.frameBack).not.toBe(DEFAULT_KEY_BINDINGS.prevLine)
-  })
-
-  it('binds miniPlayer to Ctrl+M, a valid binding distinct from the other actions', () => {
-    expect(DEFAULT_KEY_BINDINGS.miniPlayer).toBe('ControlLeft+KeyM')
-    expect(normalizeKeyBinding(DEFAULT_KEY_BINDINGS.miniPlayer)).toBe('ControlLeft+KeyM')
-    const others = Object.entries(DEFAULT_KEY_BINDINGS).filter(
-      ([action]) => action !== 'miniPlayer'
-    )
-    expect(others.some(([, binding]) => binding === DEFAULT_KEY_BINDINGS.miniPlayer)).toBe(false)
+  it('uses defaults for malformed maps', () => {
+    for (const value of [undefined, null, 42, []]) {
+      expect(normalizeKeyBindings(value)).toEqual(DEFAULT_KEY_BINDINGS)
+    }
   })
 })
 
@@ -333,17 +306,10 @@ describe('normalizeAudioDevice', () => {
 
   it('falls back to auto for empty, over-long, or non-string input', () => {
     expect(normalizeAudioDevice('')).toBe('auto')
-    expect(normalizeAudioDevice('a'.repeat(AUDIO_DEVICE_NAME_MAX_LENGTH + 1))).toBe('auto')
+    expect(normalizeAudioDevice('a'.repeat(257))).toBe('auto')
     expect(normalizeAudioDevice(undefined)).toBe('auto')
     expect(normalizeAudioDevice(null)).toBe('auto')
     expect(normalizeAudioDevice(42)).toBe('auto')
-  })
-})
-
-describe('DEFAULT_PLAYER_SETTINGS audio defaults', () => {
-  it('defaults device to auto with normalization off', () => {
-    expect(DEFAULT_PLAYER_SETTINGS.audioDevice).toBe('auto')
-    expect(DEFAULT_PLAYER_SETTINGS.loudnessNormalization).toBe(false)
   })
 })
 

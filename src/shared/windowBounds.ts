@@ -24,8 +24,8 @@ export type SetWindowBoundsRequest =
   | { mode: 'miniPlayer'; topBarHeight: number; bottomBarHeight: number }
 
 /** Mini-player video area (px). Height gains both visible chrome bars. */
-export const MINI_PLAYER_WIDTH = 480
-export const MINI_PLAYER_VIDEO_HEIGHT = 270
+const MINI_PLAYER_WIDTH = 480
+const MINI_PLAYER_VIDEO_HEIGHT = 270
 
 /**
  * Pure: the mini-player window rectangle, flushed to the bottom-right corner of
