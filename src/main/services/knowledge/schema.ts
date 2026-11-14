@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS sync_state (
 )`
 
 /** All DDL statements, in dependency order (tables before their indexes). */
-export const SCHEMA_STATEMENTS = [
+const SCHEMA_STATEMENTS = [
   CREATE_KNOWN_WORDS_TABLE,
   CREATE_SYNC_STATE_TABLE,
   CREATE_KNOWN_LEMMA_INDEX

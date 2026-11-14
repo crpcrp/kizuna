@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
   createSubtitleService,
-  subtitleTempPath,
   type ReadBinaryFile,
   type RemoveFile,
   type SubtitleServiceDeps
@@ -10,68 +9,11 @@ import {
 import type { FfmpegExec } from '@src/main/media/ffmpeg'
 import type { ReadTextFile } from '@src/main/media/subtitleLoader'
 
-// Both platform variants run on either host: the media basename must be taken
-// with the separators the input path actually uses, so a Windows media path is
-// asserted against Windows rules even on a POSIX runner (and vice versa).
-describe.each(PATH_PLATFORMS)(
-  'subtitleTempPath on $label',
-  ({ platform, path, mediaDir, tempDir }) => {
-    const media = path.join(mediaDir, 'episode01.mkv')
-    const tempFile = (name: string): string => path.join(tempDir, name)
-
-    // A pinned token keeps these assertions deterministic; production omits it so
-    // the suffix is crypto-random (see the non-guessable-component test below).
-    it('builds a .ass path including the stream index and token', () => {
-      expect(subtitleTempPath(tempDir, media, 2, 'ass', 'deadbeef', platform)).toBe(
-        tempFile('kizuna-sub-episode01.mkv-2-deadbeef.ass')
-      )
-    })
-
-    it('builds a .srt path including the stream index and token', () => {
-      expect(subtitleTempPath(tempDir, media, 5, 'srt', 'deadbeef', platform)).toBe(
-        tempFile('kizuna-sub-episode01.mkv-5-deadbeef.srt')
-      )
-    })
-
-    it('is deterministic when the token is pinned', () => {
-      expect(subtitleTempPath(tempDir, media, 3, 'ass', 'deadbeef', platform)).toBe(
-        subtitleTempPath(tempDir, media, 3, 'ass', 'deadbeef', platform)
-      )
-    })
-
-    it('differs by stream index for the same input file', () => {
-      expect(subtitleTempPath(tempDir, media, 1, 'ass', 'deadbeef', platform)).not.toBe(
-        subtitleTempPath(tempDir, media, 2, 'ass', 'deadbeef', platform)
-      )
-    })
-
-    it('uses the basename of the input path, not the full path', () => {
-      const deep = path.join(mediaDir, 'some', 'deep', 'path', 'episode01.mkv')
-
-      expect(subtitleTempPath(tempDir, deep, 0, 'srt', 'deadbeef', platform)).toBe(
-        tempFile('kizuna-sub-episode01.mkv-0-deadbeef.srt')
-      )
-    })
-
-    it('appends an unguessable random component when no token is given', () => {
-      const a = subtitleTempPath(tempDir, media, 2, 'ass', undefined, platform)
-      const b = subtitleTempPath(tempDir, media, 2, 'ass', undefined, platform)
-      // Same inputs, different paths: the suffix is random, not derived from the
-      // media filename, so it cannot be predicted for a pre-created symlink.
-      expect(a).not.toBe(b)
-      expect(a).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
-      expect(b).toMatch(/kizuna-sub-episode01\.mkv-2-[0-9a-f]{16,}\.ass$/)
-    })
-  }
-)
-
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n'
 const ASS =
   '[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n' +
   'Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,こんばんは\n'
 
-// Extraction/parse behavior does not depend on path semantics, so these pin one
-// target; `subtitleTempPath` above covers both path shapes.
 function createService(overrides: Partial<SubtitleServiceDeps> = {}) {
   return createSubtitleService({
     ffmpegPath: 'ffmpeg',
@@ -84,6 +26,34 @@ function createService(overrides: Partial<SubtitleServiceDeps> = {}) {
     ...overrides
   })
 }
+
+describe.each(PATH_PLATFORMS)(
+  'subtitle extraction on $label',
+  ({ platform, path, mediaDir, tempDir }) => {
+    it('extracts to distinct, unpredictable ASS paths using only the media basename', async () => {
+      const execFfmpeg = vi.fn<FfmpegExec>().mockResolvedValue(undefined)
+      const readText = vi.fn<ReadTextFile>().mockResolvedValue(ASS)
+      const removeFile = vi.fn<RemoveFile>().mockResolvedValue(undefined)
+      const service = createService({ platform, tmpDir: tempDir, execFfmpeg, readText, removeFile })
+      const media = path.join(mediaDir, 'deep', 'episode01.mkv')
+      await Promise.all([
+        service.loadSubtitle(media, 2),
+        service.loadSubtitle(media, 2),
+        service.loadSubtitle(media, 5)
+      ])
+      const outputs = execFfmpeg.mock.calls.map(([, args]) => args.at(-1)!)
+      expect(new Set(outputs).size).toBe(3)
+      for (const [i, output] of outputs.entries()) {
+        expect(path.dirname(output)).toBe(tempDir)
+        expect(path.basename(output)).toMatch(
+          new RegExp(`^kizuna-sub-episode01\\.mkv-${i === 2 ? 5 : 2}-[0-9a-f]{18}\\.ass$`)
+        )
+        expect(readText).toHaveBeenCalledWith(output)
+        expect(removeFile).toHaveBeenCalledWith(output)
+      }
+    })
+  }
+)
 
 describe('createSubtitleService loadExternalSubtitle', () => {
   it('reads and parses a .srt file into cues', async () => {

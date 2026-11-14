@@ -17,11 +17,11 @@ import { isRecord } from '../../../shared/guards'
  */
 
 /** Version of the newline-delimited protocol spoken by the PP-OCR worker. */
-export const PP_OCR_PROTOCOL_VERSION = 1
+const PP_OCR_PROTOCOL_VERSION = 1
 
 /** Payload limits belonging to the protocol rather than to process lifecycle. */
 export const PP_OCR_MAX_IMAGE_BASE64_BYTES = 32 * 1024 * 1024
-export const PP_OCR_MAX_IMAGE_PIXELS = 64 * 1024 * 1024
+const PP_OCR_MAX_IMAGE_PIXELS = 64 * 1024 * 1024
 
 const WORKER_ARGS = {
   protocolVersion: '--protocol-version',

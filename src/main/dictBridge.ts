@@ -46,7 +46,7 @@ export const MAX_DICT_ZIP_BYTES = MAX_UNZIP_TOTAL_BYTES
  * reads it: a non-empty local path (not a URL) to a regular `.zip` file no
  * larger than `MAX_DICT_ZIP_BYTES`. Returns the path or throws.
  */
-export function validateDictZipPath(value: string): string {
+function validateDictZipPath(value: string): string {
   if (value.trim() === '' || isRemoteUrl(value)) {
     throw new Error('Dictionary import needs a local file path')
   }

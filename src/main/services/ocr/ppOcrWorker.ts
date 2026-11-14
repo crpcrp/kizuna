@@ -54,7 +54,7 @@ export interface PpOcrWorkerStatus {
  * bad protocol version — and without it a caller can only say that recognition
  * failed, which is what made a PNG-only decoder look like a recognition bug.
  */
-export const PP_OCR_STDERR_TAIL_CHARS = 400
+const PP_OCR_STDERR_TAIL_CHARS = 400
 
 /** Minimal stream surface needed by the adapter; tests provide a small fake. */
 export interface PpOcrWorkerOutput {
@@ -88,7 +88,7 @@ export type PpOcrSpawn = (
 ) => PpOcrWorkerProcess
 
 /** Production process factory. Tests inject a fake instead of starting PP-OCR. */
-export const spawnPpOcr: PpOcrSpawn = (executablePath, args, options) =>
+const spawnPpOcr: PpOcrSpawn = (executablePath, args, options) =>
   spawn(executablePath, args, options) as unknown as PpOcrWorkerProcess
 
 export interface PpOcrWorkerService {

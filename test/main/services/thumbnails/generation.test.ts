@@ -15,35 +15,17 @@ afterEach(() => {
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
-  seekTimeForBucket,
-  thumbnailCachePath,
-  buildThumbnailArgs,
-  createThumbnailService
+  createThumbnailService,
+  thumbnailCachePath
 } from '@src/main/services/thumbnails/generation'
 import { deferred } from '@test/harness/deferred'
 
-describe('seekTimeForBucket', () => {
-  it('returns the bucket midpoint in seconds', () => {
-    expect(seekTimeForBucket(0, 100)).toBeCloseTo(0.5)
-    expect(seekTimeForBucket(50, 100)).toBeCloseTo(50.5)
-  })
-
-  it('keeps even the last bucket strictly inside the file', () => {
-    // Bucket 99 → 99.5% of duration, never at or past EOF.
-    expect(seekTimeForBucket(99, 100)).toBeCloseTo(99.5)
-    expect(seekTimeForBucket(99, 100)).toBeLessThan(100)
-  })
-})
-
-// The cache layout is platform-shaped, so both variants are asserted on either
-// host rather than only the runner's own separator.
 describe.each(PATH_PLATFORMS)(
-  'thumbnailCachePath on $label',
+  'thumbnail cache paths on $label',
   ({ platform, path, mediaDir, userDataDir }) => {
-    const cacheDir = path.join(userDataDir, 'thumbnails')
-
-    it('builds <cacheDir>/<sha1>/<bucket>.jpg', () => {
-      const built = thumbnailCachePath(
+    it('derives the cache directory with target-platform path semantics', () => {
+      const cacheDir = path.join(userDataDir, 'thumbnails')
+      const output = thumbnailCachePath(
         cacheDir,
         path.join(mediaDir, 'ep1.mkv'),
         100,
@@ -51,52 +33,15 @@ describe.each(PATH_PLATFORMS)(
         42,
         platform
       )
-
-      expect(path.dirname(path.dirname(built))).toBe(cacheDir)
-      expect(path.basename(path.dirname(built))).toMatch(/^[0-9a-f]{40}$/)
-      expect(path.basename(built)).toBe('42.jpg')
+      expect(path.dirname(path.dirname(output))).toBe(cacheDir)
+      expect(path.basename(path.dirname(output))).toMatch(/^[0-9a-f]{40}$/)
+      expect(path.basename(output)).toBe('42.jpg')
+      expect(thumbnailCachePath(cacheDir, 'E:\\Video\\A.mkv', 100, 200, 42, platform)).toBe(
+        thumbnailCachePath(cacheDir, 'e:/video/a.mkv', 100, 200, 42, platform)
+      )
     })
   }
 )
-
-describe('thumbnailCachePath', () => {
-  it('canonicalizes Windows paths so casing/separators do not fork the key', () => {
-    const a = thumbnailCachePath('/cache', 'E:\\Video\\A.mkv', 1, 2, 0, 'linux')
-    const b = thumbnailCachePath('/cache', 'e:/video/a.mkv', 1, 2, 0, 'linux')
-    expect(a).toBe(b)
-  })
-
-  it('hashes file identity: a new size or mtime yields a different directory', () => {
-    const base = thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 200, 5, 'linux')
-    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 101, 200, 5, 'linux')).not.toBe(base)
-    expect(thumbnailCachePath('/cache', '/v/ep1.mkv', 100, 201, 5, 'linux')).not.toBe(base)
-  })
-})
-
-describe('buildThumbnailArgs', () => {
-  it('seeks before -i and emits one scaled frame', () => {
-    expect(buildThumbnailArgs('/v/ep1.mkv', 12.5, '/cache/h/5.jpg')).toEqual([
-      '-v',
-      'error',
-      '-y',
-      '-ss',
-      '12.5',
-      '-i',
-      '/v/ep1.mkv',
-      '-frames:v',
-      '1',
-      '-vf',
-      'scale=200:-2',
-      '-f',
-      'image2',
-      '/cache/h/5.jpg'
-    ])
-  })
-
-  it('clamps a negative seek time to 0', () => {
-    expect(buildThumbnailArgs('/v/ep1.mkv', -3, '/o.jpg')[4]).toBe('0')
-  })
-})
 
 function fixture() {
   const dir = tempDir()
@@ -122,17 +67,37 @@ describe('thumbnail generation on disk', () => {
     const output = await f.getThumbnail(f.media, 50, 100)
     expect(output).not.toBeNull()
     expect(disk.readFileSync(output!, 'utf-8')).toBe('jpg')
-    expect(f.exec.mock.calls[0][1].at(-1)).toMatch(/\.tmp$/)
+    const args = f.exec.mock.calls[0][1]
+    expect(f.exec.mock.calls[0][0]).toBe('ffmpeg')
+    expect(args).toEqual([
+      '-v',
+      'error',
+      '-y',
+      '-ss',
+      '50.5',
+      '-i',
+      f.media,
+      '-frames:v',
+      '1',
+      '-vf',
+      'scale=200:-2',
+      '-f',
+      'image2',
+      expect.stringMatching(/\.tmp$/)
+    ])
     expect(await f.getThumbnail(f.media, 50.4, 100)).toBe(output)
     expect(f.exec).toHaveBeenCalledTimes(1)
     expect(f.schedule).toHaveBeenCalledTimes(1)
   })
 
-  it('seeks strictly inside the last bucket at the right edge', async () => {
+  it.each([
+    [0, 0.5],
+    [100, 99.5]
+  ])('seeks within the file for hover %s', async (hover, seek) => {
     const f = fixture()
-    expect(await f.getThumbnail(f.media, 100, 100)).not.toBeNull()
+    expect(await f.getThumbnail(f.media, hover, 100)).not.toBeNull()
     const args = f.exec.mock.calls[0][1]
-    expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(99.5)
+    expect(Number(args[args.indexOf('-ss') + 1])).toBeCloseTo(seek)
   })
 
   it('deduplicates concurrent requests for one bucket', async () => {
@@ -155,6 +120,17 @@ describe('thumbnail generation on disk', () => {
     const f = fixture()
     const first = await f.getThumbnail(f.media, 50, 100)
     disk.writeFileSync(f.media, 'replacement video')
+    await f.getThumbnail(join(f.cacheDir, 'missing'), 50, 100)
+    const second = await f.getThumbnail(f.media, 50, 100)
+    expect(second).not.toBeNull()
+    expect(second).not.toBe(first)
+    expect(f.exec).toHaveBeenCalledTimes(2)
+  })
+
+  it('invalidates the cache when only the file modification time changes', async () => {
+    const f = fixture()
+    const first = await f.getThumbnail(f.media, 50, 100)
+    disk.utimesSync(f.media, 1, 1)
     await f.getThumbnail(join(f.cacheDir, 'missing'), 50, 100)
     const second = await f.getThumbnail(f.media, 50, 100)
     expect(second).not.toBeNull()

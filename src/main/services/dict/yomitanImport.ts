@@ -34,7 +34,7 @@ export interface ImportDb extends DbLike {
 }
 
 /** Default number of inserted rows between `onProgress` calls (see `importDictionary`). */
-export const DEFAULT_PROGRESS_BATCH_SIZE = 500
+const DEFAULT_PROGRESS_BATCH_SIZE = 500
 
 /** Compare bank names numerically (so bank_10 sorts after bank_2). */
 function compareBankNames(a: string, b: string): number {

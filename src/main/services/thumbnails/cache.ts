@@ -88,7 +88,7 @@ export function selectEvictions(entries: ThumbnailCacheEntry[], maxBytes: number
  * Pure. Summarizes one file-dir from its files' stats: total bytes, and the
  * newest mtime as the recency proxy.
  */
-export function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): ThumbnailCacheEntry {
+function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): ThumbnailCacheEntry {
   return {
     path: dir,
     bytes: stats.reduce((total, stat) => total + stat.size, 0),
@@ -100,7 +100,7 @@ export function summarizeCacheDir(dir: string, stats: ThumbnailStat[]): Thumbnai
  * Walks `cacheDir` into one {@link ThumbnailCacheEntry} per file-dir, summing
  * bytes and taking the newest mtime as the recency proxy.
  */
-export async function collectCacheEntriesAsync(cacheDir: string): Promise<ThumbnailCacheEntry[]> {
+async function collectCacheEntriesAsync(cacheDir: string): Promise<ThumbnailCacheEntry[]> {
   const subdirs = await listNames(cacheDir, 'dir')
   return Promise.all(
     subdirs.map(async (name) => {

@@ -41,7 +41,7 @@ const FALLBACK_REASON_TEXT: Record<GameOcrFallbackReason, string> = {
   'window-capture-failed': 'the foreground window could not be captured'
 }
 
-export function describeFallbackReason(reason: GameOcrFallbackReason): string {
+function describeFallbackReason(reason: GameOcrFallbackReason): string {
   return FALLBACK_REASON_TEXT[reason]
 }
 

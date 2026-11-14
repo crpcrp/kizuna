@@ -18,7 +18,7 @@ import type { PathNormalizationOptions } from '../../../shared/mediaHistory'
 import type { JimakuClient } from './client'
 import { isRecord } from '../../../shared/guards'
 
-export const JIMAKU_MAX_API_KEY_LENGTH = 4096
+const JIMAKU_MAX_API_KEY_LENGTH = 4096
 /** A harmless, fixed read-only query used only to verify authentication. */
 export const JIMAKU_CONNECTION_TEST_QUERY = 'Kizuna'
 
@@ -247,7 +247,7 @@ export function createJimakuSettingsService(
   }
 }
 
-export function normalizeApiKey(value: unknown): string {
+function normalizeApiKey(value: unknown): string {
   if (typeof value !== 'string') throw new Error(INVALID_API_KEY)
   const normalized = value.trim()
   if ([...normalized].length > JIMAKU_MAX_API_KEY_LENGTH || CONTROL_CHARACTER.test(normalized)) {
