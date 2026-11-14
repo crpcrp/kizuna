@@ -27,7 +27,7 @@ export interface BulkMiningViewModel {
   dismissCompletion(): void
 }
 
-export interface UseBulkMiningInput {
+interface UseBulkMiningInput {
   /** Dictionary resolution, Anki mining and duplicate checks, knowledge levels. */
   bridge: Pick<KizunaApi, 'dict' | 'anki' | 'knowledge'>
   player: Pick<PlayerApi, 'setPause'>
@@ -49,7 +49,7 @@ export interface UseBulkMiningInput {
   mineMediaSource(): MineMediaSource
 }
 
-export interface UseBulkMiningResult extends BulkMiningViewModel {
+interface UseBulkMiningResult extends BulkMiningViewModel {
   /** Opens the modal, or restores it from the compact sidebar. */
   open(): void
 }

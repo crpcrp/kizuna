@@ -144,7 +144,7 @@ export function deriveMiningCandidates(
 }
 
 /** Applies every bulk-mining filter to one candidate. Unresolved frequency rows remain visible. */
-export function isCandidateVisible(
+function isCandidateVisible(
   candidate: MiningCandidate,
   resolved: Record<string, ResolvedEntry>,
   filters: BulkMiningFilters

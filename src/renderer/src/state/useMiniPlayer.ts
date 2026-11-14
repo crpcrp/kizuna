@@ -24,7 +24,7 @@ export interface UseMiniPlayerInput {
   bottomBarRef: RefObject<HTMLDivElement | null>
 }
 
-export interface UseMiniPlayerResult {
+interface UseMiniPlayerResult {
   /** Applies a mini-player transition's effect: flips the mode, mirrors the
    * always-on-top flag both in state and to the window, and asks main to
    * set the bounds (mini corner computed main-side, or the restored explicit

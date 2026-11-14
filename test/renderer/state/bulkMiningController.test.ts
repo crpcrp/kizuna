@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
 import {
   defaultAnkiSettings,
@@ -24,15 +25,6 @@ function token(lemma: string): Token {
 }
 function entry(lemma: string): LookupResult {
   return makeLookupResult({ expression: lemma, reading: '', glossary: '', frequency: 4 })
-}
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
 }
 type TestBridges = BulkMineBridges & {
   anki: BulkMineBridges['anki'] & {
@@ -139,31 +131,6 @@ describe('createBulkMiningController', () => {
     gate.reject(new Error('late'))
     await opening
     expect(controller.getState()).toEqual({ kind: 'idle' })
-  })
-
-  it('uses accepted cue spans, still offering a bare member of a known compound', async () => {
-    const bridges = anki()
-    const controller = createBulkMiningController()
-    await controller.open({
-      bridges: { ...bridges, knowledge: { detailsFor: vi.fn().mockResolvedValue({}) } },
-      cueTokens: [
-        {
-          cueKey: 'compound',
-          text: '神様',
-          tokens: [token('神'), { ...token('様'), startOffset: 1 }],
-          spans: [acceptedSpan('compound', 'known')]
-        },
-        { cueKey: 'standalone', text: '様', tokens: [token('様')], spans: [] }
-      ],
-      frequencyDictId: 1
-    })
-
-    // The known 神様 span is not offered, while the standalone 様 is its own
-    // unknown word rather than being counted as known through the compound.
-    expect(controller.getState()).toMatchObject({
-      kind: 'ready',
-      candidates: [{ lemma: '様', count: 1 }]
-    })
   })
 
   it('requests projected span identities together with token identities', async () => {
@@ -825,14 +792,6 @@ describe('createBulkMiningController sentence-audio media context', () => {
           endSec: 12.25
         }
       })
-    )
-  })
-
-  it('omits the context entirely when start() is called without a media source', async () => {
-    const bridges = await mine()
-
-    expect((bridges.anki.addNote as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toHaveProperty(
-      'media'
     )
   })
 

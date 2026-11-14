@@ -1,3 +1,4 @@
+import { deferred } from '@test/harness/deferred'
 import { describe, it, expect, vi } from 'vitest'
 import {
   createPlaylistController,
@@ -38,26 +39,7 @@ const A = '/media/a.mkv'
 const B = '/media/b.mkv'
 const C = '/media/c.mkv'
 
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (error: unknown) => void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 describe('playlist controller — state', () => {
-  it('starts empty', () => {
-    const controller = createPlaylistController()
-    expect(controller.getState().playlist.entries).toEqual([])
-  })
-
   it('owns playback only when the playing file is the current entry', () => {
     const controller = createPlaylistController()
     // Empty / single entry: never owns playback.
@@ -86,23 +68,16 @@ describe('playlist controller — state', () => {
     expect(controller.isPlaybackCurrent(A)).toBe(false)
   })
 
-  it('notifies subscribers on mutation', () => {
+  it('notifies subscribers on mutation and stops after unsubscribe', () => {
     const controller = createPlaylistController()
     const listener = vi.fn()
-    controller.subscribe(listener)
+    const unsubscribe = controller.subscribe(listener)
     controller.addPaths([A])
-    expect(listener).toHaveBeenCalled()
-  })
-
-  it('appends, removes, reorders, and clears entries', () => {
-    const controller = createPlaylistController()
-    controller.addPaths([A, B, C])
-    controller.moveEntry(0, 2)
-    expect(controller.getState().playlist.entries).toEqual([B, C, A])
-    controller.removeAt(1)
-    expect(controller.getState().playlist.entries).toEqual([B, A])
+    expect(listener).toHaveBeenCalledOnce()
+    unsubscribe()
     controller.clear()
     expect(controller.getState().playlist.entries).toEqual([])
+    expect(listener).toHaveBeenCalledOnce()
   })
 })
 
@@ -242,18 +217,6 @@ describe('playlist controller — explicit navigation', () => {
     expect(controller.getState().playlist.currentIndex).toBe(0)
     expect(load.mock.calls.map((call) => call[0])).toEqual([A, B, A])
     expect(play).not.toHaveBeenCalled()
-  })
-
-  it('explicit next always advances even under repeat-one', async () => {
-    const controller = createPlaylistController()
-    controller.addPaths([A, B])
-    controller.setRepeat('one')
-    const { deps } = okLoad()
-
-    await controller.playAt(0, deps)
-    await controller.next(deps)
-
-    expect(controller.getState().playlist.currentIndex).toBe(1)
   })
 
   it('does not select a refused navigation while an accepted open is pending', async () => {

@@ -1,48 +1,19 @@
-import { describe, expect, it, vi } from 'vitest'
+import { deferred } from '@test/harness/deferred'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
 import type { PlayerSettings } from '@src/shared/playerSettings'
-import type { TimerLike } from '@src/renderer/src/state/settingsPersistence'
 
-/** Deterministic manual-clock TimerLike. */
-function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
-  let nextId = 1
-  const pending = new Map<number, () => void>()
+function fakeTimers() {
+  vi.useFakeTimers()
   return {
-    setTimeout(handler: () => void): unknown {
-      const id = nextId++
-      pending.set(id, handler)
-      return id
-    },
-    clearTimeout(handle: unknown): void {
-      pending.delete(handle as number)
-    },
-    flush(): void {
-      const callbacks = [...pending.values()]
-      pending.clear()
-      callbacks.forEach((cb) => cb())
-    },
-    pendingCount(): number {
-      return pending.size
-    }
+    setTimeout: (handler: () => void, ms: number) => setTimeout(handler, ms),
+    clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    flush: () => vi.runOnlyPendingTimers(),
+    pendingCount: () => vi.getTimerCount()
   }
 }
 
-function deferred<T>(): {
-  promise: Promise<T>
-  resolve(value: T): void
-  reject(error: unknown): void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (error: unknown) => void
-  return {
-    promise: new Promise((res, rej) => {
-      resolve = res
-      reject = rej
-    }),
-    resolve,
-    reject
-  }
-}
+afterEach(() => vi.useRealTimers())
 
 const settingsResult = {} as PlayerSettings
 

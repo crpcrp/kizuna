@@ -15,3 +15,8 @@ Rules that differ inside `test/`. The repository-wide principles stay in
   and must name its technical reason and counterpart coverage.
 - No live binaries, accounts, or network calls, and no secrets or personal data
   in fixtures.
+
+- Test a behavior once, at the lowest layer that can observe it. A hook or
+  component test covers only what the layer adds (wiring, effects, rendering).
+  Do not export a function to test it; test it through its caller. One App
+  integration test per user-visible flow.

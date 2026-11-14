@@ -10,7 +10,7 @@ import type { SubtitleStyleSettings } from '../../../shared/playerSettings'
  * out: the pre-mini window rectangle and the always-on-top flag as it was
  * (mini forces always-on-top on; exiting must not clobber a user who already
  * had it on). */
-export interface MiniPlayerSnapshot {
+interface MiniPlayerSnapshot {
   savedBounds: WindowBounds
   wasAlwaysOnTop: boolean
 }
@@ -98,7 +98,7 @@ export function miniPlayerForFullscreen(
 /** Subtitle font-scale multiplier applied while in mini-player, so text stays
  * legible against the shrunken 480×270 video without touching the persisted
  * `subtitleStyle`. */
-export const MINI_PLAYER_SUBTITLE_SCALE = 0.6
+const MINI_PLAYER_SUBTITLE_SCALE = 0.6
 
 /**
  * Pure: the subtitle style to render with. In mini-player the persisted font
