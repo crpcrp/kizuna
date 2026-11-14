@@ -22,7 +22,7 @@ import {
  * recognition fails. Changing this means rebuilding and republishing the
  * vendor payload with the matching codec.
  */
-export const CAPTURE_MEDIA_TYPE = 'image/png'
+const CAPTURE_MEDIA_TYPE = 'image/png'
 
 export interface GameOcrCaptureBridge {
   onFreeze(cb: (request: GameOcrFreezeRequest) => void): () => void

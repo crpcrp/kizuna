@@ -52,7 +52,7 @@ export function cueKey(cue: Cue): string {
  * offset that follows is an offset into this text, which
  * `InteractiveText` projects back onto the displayed lines.
  */
-export function cueAnalysisText(cue: Cue): string {
+function cueAnalysisText(cue: Cue): string {
   return displayTextProjection(cue.text).analysisText
 }
 

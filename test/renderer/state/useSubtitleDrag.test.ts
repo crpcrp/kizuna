@@ -1,11 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  clampSubtitlePosition,
-  pointerToSubtitlePosition,
-  useSubtitleDrag
-} from '@src/renderer/src/state/useSubtitleDrag'
+import { useSubtitleDrag } from '@src/renderer/src/state/useSubtitleDrag'
 import type { PlayerAction } from '@src/renderer/src/state/playerState'
 import type { SettingsPersistence } from '@src/renderer/src/state/settingsPersistence'
 
@@ -73,17 +69,23 @@ describe('useSubtitleDrag', () => {
     expect(addSpy).toHaveBeenCalledWith('mouseup', expect.any(Function))
   })
 
-  it('movement applies the same delta and dispatches the same state update', () => {
-    const { dispatch, hook } = setup()
+  it.each([
+    { rect: [0, 0, 200, 100], pointer: [100, 82], position: [50, 82] },
+    { rect: [100, 200, 400, 200], pointer: [300, 300], position: [50, 50] },
+    { rect: [0, 0, 200, 100], pointer: [-50, -10], position: [0, 0] },
+    { rect: [0, 0, 200, 100], pointer: [300, 200], position: [100, 100] },
+    { rect: [0, 0, 0, 0], pointer: [10, 10], position: [50, 82] }
+  ])('maps $pointer in $rect to $position while dragging', ({ rect, pointer, position }) => {
+    const { contentRef, dispatch, hook } = setup()
+    const [left, top, width, height] = rect
+    contentRef.current!.getBoundingClientRect = () => ({ left, top, width, height }) as DOMRect
     startDrag(hook)
 
-    act(() => {
-      moveMouse(100, 82)
-    })
+    act(() => moveMouse(pointer[0], pointer[1]))
 
-    expect(dispatch).toHaveBeenCalledWith({
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith({
       type: 'setSubtitleStyle',
-      value: { xPct: 50, yPct: 82 }
+      value: { xPct: position[0], yPct: position[1] }
     })
   })
 
@@ -158,34 +160,5 @@ describe('useSubtitleDrag', () => {
       moveMouse(20, 20)
     })
     expect(dispatch).not.toHaveBeenCalled()
-  })
-})
-
-describe('subtitle drag geometry', () => {
-  it('clamps positions to the valid percentage range', () => {
-    expect(clampSubtitlePosition(50, 82)).toEqual({ xPct: 50, yPct: 82 })
-    expect(clampSubtitlePosition(-10, -1)).toEqual({ xPct: 0, yPct: 0 })
-    expect(clampSubtitlePosition(150, 200)).toEqual({ xPct: 100, yPct: 100 })
-  })
-
-  it('maps viewport pointers into the container coordinate system', () => {
-    expect(
-      pointerToSubtitlePosition(300, 300, {
-        left: 100,
-        top: 200,
-        width: 400,
-        height: 200
-      })
-    ).toEqual({ xPct: 50, yPct: 50 })
-    expect(
-      pointerToSubtitlePosition(-50, 500, { left: 0, top: 0, width: 200, height: 100 })
-    ).toEqual({ xPct: 0, yPct: 100 })
-  })
-
-  it('uses the default position for a zero-sized container', () => {
-    expect(pointerToSubtitlePosition(10, 10, { left: 0, top: 0, width: 0, height: 0 })).toEqual({
-      xPct: 50,
-      yPct: 82
-    })
   })
 })

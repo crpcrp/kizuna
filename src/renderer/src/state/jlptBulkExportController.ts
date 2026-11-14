@@ -58,7 +58,7 @@ export interface CreateJlptBulkExportControllerDeps {
   refreshKnowledge?: () => Promise<unknown>
 }
 
-export const JLPT_BULK_EXPORT_ERROR_MESSAGES = {
+const JLPT_BULK_EXPORT_ERROR_MESSAGES = {
   bundledData: 'The bundled JLPT export data is unavailable or corrupt.',
   knowledgeDatabase: 'The local knowledge database is unavailable.',
   unexpected: 'Could not load unknown JLPT items.'

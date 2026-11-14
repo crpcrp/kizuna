@@ -32,7 +32,7 @@ export function subtitleOffsetForFile(
 }
 
 /** Returns a downloaded subtitle's explicit offset, when one has been set. */
-export function subtitleOffsetForVersion(
+function subtitleOffsetForVersion(
   offsets: Record<string, number>,
   contentVersion: string
 ): number | undefined {

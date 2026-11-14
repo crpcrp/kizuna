@@ -1,7 +1,7 @@
 import { findActiveCue, offsetTimePos, type Cue } from '../../../shared/cue'
 import type { Chapter } from '../../../shared/chapter'
 
-export const PREV_CHAPTER_RESTART_SECONDS = 2
+const PREV_CHAPTER_RESTART_SECONDS = 2
 
 function seekTargetForCueStart(cue: Cue, offsetMs: number): number {
   return cue.start + offsetMs / 1000

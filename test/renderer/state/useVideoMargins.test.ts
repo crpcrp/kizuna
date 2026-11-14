@@ -2,7 +2,6 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  computeVideoMargins,
   useVideoMargins,
   type UseVideoMarginsInput,
   type VideoMarginsPlayer
@@ -130,6 +129,20 @@ describe('useVideoMargins', () => {
     expect(player.setVideoMargins).toHaveBeenLastCalledWith(0, 0, 0, 0)
   })
 
+  it.each([
+    { height: 0, width: 0, expected: [0, 0, 0, 0] },
+    { height: 100, width: 100, expected: [0.45, 0.45, 0.45, 0.45] },
+    { height: 1080, width: 0, expected: [64 / 1080, 54 / 1080, 0, 0] }
+  ])('bounds measured margins for a $width × $height window', ({ height, width, expected }) => {
+    const { player } = setup({ leftSidebarStackRef: { current: measuredElement(0, 280) } })
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(height)
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(width)
+
+    act(() => window.dispatchEvent(new Event('resize')))
+
+    expect(player.setVideoMargins).toHaveBeenLastCalledWith(...expected)
+  })
+
   it('recomputes once for each resize observer or window resize event', () => {
     const { player } = setup()
     const observer = observers[0]
@@ -161,40 +174,5 @@ describe('useVideoMargins', () => {
       window.dispatchEvent(new Event('resize'))
     })
     expect(player.setVideoMargins).not.toHaveBeenCalled()
-  })
-})
-
-describe('computeVideoMargins', () => {
-  it('converts measured chrome into window-relative margins', () => {
-    expect(computeVideoMargins(64, 54, 1080, false, 320, 1600, 280)).toEqual({
-      top: 64 / 1080,
-      bottom: 54 / 1080,
-      right: 320 / 1600,
-      left: 280 / 1600
-    })
-  })
-
-  it('returns zero margins in fullscreen or for invalid dimensions', () => {
-    expect(computeVideoMargins(64, 54, 1080, true, 320, 1600, 280)).toEqual({
-      top: 0,
-      bottom: 0,
-      right: 0,
-      left: 0
-    })
-    expect(computeVideoMargins(64, 54, 0, false, 320, 0, 280)).toEqual({
-      top: 0,
-      bottom: 0,
-      right: 0,
-      left: 0
-    })
-  })
-
-  it('clamps every margin to 0.45', () => {
-    expect(computeVideoMargins(900, 900, 1000, false, 900, 1000, 900)).toEqual({
-      top: 0.45,
-      bottom: 0.45,
-      right: 0.45,
-      left: 0.45
-    })
   })
 })
