@@ -1,20 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import {
-  APPLICATION_SURFACE_HEIGHT,
-  APPLICATION_SURFACE_WIDTH,
-  centeredSurfaceBounds,
-  normalSurfaceBounds,
-  SPLASH_SURFACE_HEIGHT,
-  SPLASH_SURFACE_WIDTH
-} from '@src/shared/surfaceBounds'
+import { centeredSurfaceBounds, normalSurfaceBounds } from '@src/shared/surfaceBounds'
 
 describe('centeredSurfaceBounds', () => {
   it('centers the compact splash on a secondary display', () => {
     expect(centeredSurfaceBounds({ x: -1920, y: 40, width: 1920, height: 1040 })).toEqual({
       x: -1280,
       y: 380,
-      width: SPLASH_SURFACE_WIDTH,
-      height: SPLASH_SURFACE_HEIGHT
+      width: 640,
+      height: 360
     })
   })
 
@@ -37,8 +30,8 @@ describe('centeredSurfaceBounds', () => {
     expect(normalSurfaceBounds({ x: -1920, y: 40, width: 1920, height: 1040 })).toEqual({
       x: -1600,
       y: 200,
-      width: APPLICATION_SURFACE_WIDTH,
-      height: APPLICATION_SURFACE_HEIGHT
+      width: 1280,
+      height: 720
     })
   })
 })

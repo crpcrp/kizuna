@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  END_RESTART_WINDOW_SECONDS,
   MAX_SUBTITLE_VERSION_OFFSETS,
   MAX_RECENT_FILES,
-  MAX_PLAYBACK_ENTRIES,
-  MIN_RESUME_SECONDS,
   createStoredTrackSelection,
   getResumePosition,
   mediaFileBasename,
   mediaPathKey,
   normalizeMediaHistory,
   normalizeMediaPath,
-  normalizeRecentFiles,
   normalizeSubtitleSelection,
   normalizeSubtitleOffsetsByVersion
 } from '@src/shared/mediaHistory'
@@ -167,12 +163,14 @@ describe('media-history normalization', () => {
   })
 
   it('deduplicates, orders, and caps recent paths while retaining the newest display casing', () => {
-    const recent = normalizeRecentFiles(
-      [
-        { path: 'C:\\Media\\ONE.mkv', openedAt: 1 },
-        { path: 'c:\\media\\one.mkv', openedAt: 7 },
-        ...[2, 3, 4, 5, 6].map((openedAt) => ({ path: `C:\\Media\\${openedAt}.mkv`, openedAt }))
-      ],
+    const { recentFiles: recent } = normalizeMediaHistory(
+      {
+        recentFiles: [
+          { path: 'C:\\Media\\ONE.mkv', openedAt: 1 },
+          { path: 'c:\\media\\one.mkv', openedAt: 7 },
+          ...[2, 3, 4, 5, 6].map((openedAt) => ({ path: `C:\\Media\\${openedAt}.mkv`, openedAt }))
+        ]
+      },
       windows
     )
     expect(recent).toHaveLength(MAX_RECENT_FILES)
@@ -211,7 +209,7 @@ describe('media-history normalization', () => {
 
   it('keeps the newest 500 playback entries when normalizing oversized history', () => {
     const playbackByPath = Object.fromEntries(
-      Array.from({ length: MAX_PLAYBACK_ENTRIES + 1 }, (_, index) => [
+      Array.from({ length: 500 + 1 }, (_, index) => [
         `C:/Media/${String(index).padStart(3, '0')}.mkv`,
         { positionSeconds: index, updatedAt: index }
       ])
@@ -219,7 +217,7 @@ describe('media-history normalization', () => {
 
     const history = normalizeMediaHistory({ playbackByPath }, windows)
 
-    expect(Object.keys(history.playbackByPath)).toHaveLength(MAX_PLAYBACK_ENTRIES)
+    expect(Object.keys(history.playbackByPath)).toHaveLength(500)
     expect(history.playbackByPath['c:\\media\\000.mkv']).toBeUndefined()
     expect(history.playbackByPath['c:\\media\\001.mkv']).toBeDefined()
     expect(history.playbackByPath['c:\\media\\500.mkv']).toBeDefined()
@@ -227,7 +225,7 @@ describe('media-history normalization', () => {
 
   it('uses lexical path order to break equal playback-history timestamps', () => {
     const playbackByPath = Object.fromEntries(
-      Array.from({ length: MAX_PLAYBACK_ENTRIES + 1 }, (_, index) => [
+      Array.from({ length: 500 + 1 }, (_, index) => [
         `C:/Media/${String(index).padStart(3, '0')}.mkv`,
         { positionSeconds: index, updatedAt: 1 }
       ])
@@ -235,14 +233,14 @@ describe('media-history normalization', () => {
 
     const history = normalizeMediaHistory({ playbackByPath }, windows)
 
-    expect(Object.keys(history.playbackByPath)).toHaveLength(MAX_PLAYBACK_ENTRIES)
+    expect(Object.keys(history.playbackByPath)).toHaveLength(500)
     expect(history.playbackByPath['c:\\media\\000.mkv']).toBeDefined()
     expect(history.playbackByPath['c:\\media\\500.mkv']).toBeUndefined()
   })
 
   it('retains old recent playback entries while pruning older eligible entries', () => {
     const playbackByPath = Object.fromEntries(
-      Array.from({ length: MAX_PLAYBACK_ENTRIES + 1 }, (_, index) => [
+      Array.from({ length: 500 + 1 }, (_, index) => [
         `C:/Media/${String(index).padStart(3, '0')}.mkv`,
         { positionSeconds: index, updatedAt: index }
       ])
@@ -289,15 +287,12 @@ describe('media-history normalization', () => {
 
 describe('smart resume', () => {
   it('enforces the start and end thresholds and clamps a valid saved position', () => {
-    expect(getResumePosition({ positionSeconds: MIN_RESUME_SECONDS - 0.1 })).toBeUndefined()
-    expect(getResumePosition({ positionSeconds: MIN_RESUME_SECONDS, durationSeconds: 100 })).toBe(
-      MIN_RESUME_SECONDS
-    )
+    expect(getResumePosition({ positionSeconds: 10 - 0.1 })).toBeUndefined()
+    expect(getResumePosition({ positionSeconds: 10, durationSeconds: 100 })).toBe(10)
     expect(getResumePosition({ positionSeconds: 70, durationSeconds: 100 })).toBeUndefined()
     expect(getResumePosition({ positionSeconds: 69.9, durationSeconds: 100 })).toBe(69.9)
     expect(getResumePosition({ positionSeconds: 150, durationSeconds: 120 })).toBeUndefined()
     expect(getResumePosition({ positionSeconds: 20, durationSeconds: Infinity })).toBeUndefined()
-    expect(END_RESTART_WINDOW_SECONDS).toBe(30)
   })
 })
 

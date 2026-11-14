@@ -16,7 +16,6 @@ import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_POPUP_SETTINGS,
   DEFAULT_SKIP_SECONDS,
-  DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
   DEFAULT_SUBTITLE_STYLE
 } from '@src/shared/playerSettings'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -186,7 +185,7 @@ describe('playerReducer', () => {
       rightClickTogglePause: true,
       autoPlayNext: false,
       subtitleAutoPauseTiming: 'before',
-      subtitleAutoPauseScope: DEFAULT_SUBTITLE_AUTO_PAUSE_SCOPE,
+      subtitleAutoPauseScope: 'all',
       translationEnabled: false,
       subtitleOffsetMs: 0,
       subtitleOffsetsByVersion: {},
