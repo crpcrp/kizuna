@@ -26,10 +26,6 @@ export function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean'
 }
 
-export function isUint8Array(value: unknown): value is Uint8Array {
-  return value instanceof Uint8Array
-}
-
 /** A string array no longer than `maxLength`. */
 export function isStringArray(value: unknown, maxLength = Infinity): value is string[] {
   return (

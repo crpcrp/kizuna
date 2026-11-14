@@ -1,25 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
+import { deferred } from '@test/harness/deferred'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
 import {
-  sanitizeScreenshotName,
   formatScreenshotTimestamp,
-  screenshotPath,
   createScreenshotService,
   createFrameCaptureService,
   ScreenshotFolderError
 } from '@src/main/services/screenshots'
-
-describe('sanitizeScreenshotName', () => {
-  it('replaces Windows-invalid characters with dashes', () => {
-    expect(sanitizeScreenshotName('a:b?c')).toBe('a-b-c')
-    expect(sanitizeScreenshotName('re<al>ly"bad/\\name|?*')).toBe('re-al-ly-bad--name---')
-  })
-
-  it('trims trailing dots and spaces', () => {
-    expect(sanitizeScreenshotName('name.  ')).toBe('name')
-    expect(sanitizeScreenshotName('ok')).toBe('ok')
-  })
-})
 
 describe('formatScreenshotTimestamp', () => {
   it('formats seconds as h-mm-ss (floor; h unpadded, mm/ss 2-digit)', () => {
@@ -38,60 +25,67 @@ describe('formatScreenshotTimestamp', () => {
 // The saved path is platform-shaped, so both variants are asserted on either
 // host. `pics` and the media path are in the case's own format; expectations
 // are joined with the case's own path API rather than the host's.
-describe.each(PATH_PLATFORMS)('screenshotPath on $label', ({ platform, path, mediaDir }) => {
+describe.each(PATH_PLATFORMS)('screenshot capture on $label', ({ platform, path, mediaDir }) => {
   const pics = path.join(mediaDir, 'pics')
   const media = (name: string): string => path.join(mediaDir, name)
 
-  it('builds <dir>/<stem>-<h-mm-ss>.png from a media basename minus its extension', () => {
-    expect(screenshotPath(pics, media('ep1.mkv'), 3671.9, () => false, platform)).toBe(
-      path.join(pics, 'ep1-1-01-11.png')
+  function capture(
+    mediaPath: string,
+    timePos: number,
+    exists: (path: string) => boolean = () => false,
+    folder = pics
+  ): Promise<string> {
+    return createScreenshotService({
+      takeScreenshot: async () => {},
+      folder: () => folder,
+      exists,
+      mkdir: () => {},
+      platform
+    }).capture(mediaPath, timePos)
+  }
+
+  it('builds <dir>/<stem>-<h-mm-ss>.png from a media basename minus its extension', async () => {
+    expect(await capture(media('ep1.mkv'), 3671.9)).toBe(path.join(pics, 'ep1-1-01-11.png'))
+  })
+
+  it('sanitizes the stem', async () => {
+    expect(await capture(media('a:b?c<>\"|*\u0001.  .mkv'), 0)).toBe(
+      path.join(pics, 'a-b-c-------0-00-00.png')
     )
   })
 
-  it('sanitizes the stem', () => {
-    expect(screenshotPath(pics, media('a:b?c.mkv'), 0, () => false, platform)).toBe(
-      path.join(pics, 'a-b-c-0-00-00.png')
-    )
-  })
-
-  it('appends -2, -3 … until the name is free', () => {
+  it('appends -2, -3 … until the name is free', async () => {
     const taken = new Set([
       path.join(pics, 'ep1-0-00-05.png'),
       path.join(pics, 'ep1-0-00-05-2.png')
     ])
 
-    expect(screenshotPath(pics, media('ep1.mkv'), 5, (p) => taken.has(p), platform)).toBe(
+    expect(await capture(media('ep1.mkv'), 5, (p) => taken.has(p))).toBe(
       path.join(pics, 'ep1-0-00-05-3.png')
     )
   })
 
-  it('falls back to a "screenshot" stem when the basename sanitizes to nothing', () => {
+  it('falls back to a "screenshot" stem when the basename sanitizes to nothing', async () => {
     // A stem of only spaces/dots trims to empty; without the fallback this
     // would emit a stem-less "-0-00-00.png".
-    expect(screenshotPath(pics, media('   .mkv'), 0, () => false, platform)).toBe(
-      path.join(pics, 'screenshot-0-00-00.png')
-    )
+    expect(await capture(media('   .mkv'), 0)).toBe(path.join(pics, 'screenshot-0-00-00.png'))
   })
 
-  it('joins dir and name with the platform separator (no mixed slashes)', () => {
+  it('joins dir and name with the platform separator (no mixed slashes)', async () => {
     // A trailing separator is normalized away; the joined name still lands
     // directly under the dir with one separator, never a raw doubled slash.
     const withTrailingSeparator = `${path.join(pics, 'Kizuna')}${path.sep}`
 
-    expect(screenshotPath(withTrailingSeparator, media('ep1.mkv'), 5, () => false, platform)).toBe(
+    expect(await capture(media('ep1.mkv'), 5, () => false, withTrailingSeparator)).toBe(
       path.join(pics, 'Kizuna', 'ep1-0-00-05.png')
     )
   })
 
-  it("takes the stem from the last segment of a path in the other platform's format", () => {
+  it("takes the stem from the last segment of a path in the other platform's format", async () => {
     // Drag-and-drop and playlists can hand over a path written with the other
     // separator; the stem is split on both, so the folder never leaks into it.
-    expect(screenshotPath(pics, 'C:\\videos\\ep1.mkv', 5, () => false, platform)).toBe(
-      path.join(pics, 'ep1-0-00-05.png')
-    )
-    expect(screenshotPath(pics, '/videos/ep1.mkv', 5, () => false, platform)).toBe(
-      path.join(pics, 'ep1-0-00-05.png')
-    )
+    expect(await capture('C:\\videos\\ep1.mkv', 5)).toBe(path.join(pics, 'ep1-0-00-05.png'))
+    expect(await capture('/videos/ep1.mkv', 5)).toBe(path.join(pics, 'ep1-0-00-05.png'))
   })
 })
 
@@ -138,18 +132,11 @@ describe('createScreenshotService.capture', () => {
 
   it('reserves the chosen path so concurrent captures do not collide', async () => {
     const written = new Set<string>()
-    let release: (() => void) | undefined
-    const firstWriteStarted = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    // The first write blocks until we release it, so the second capture runs
-    // while the first path is chosen-but-not-yet-written. Without reservation
-    // both would resolve to the same `-0-00-05.png` name.
+    const write = deferred<void>()
     const service = createScreenshotService({
       takeScreenshot: async (path: string) => {
         if (!written.size) {
-          release?.()
-          await new Promise((resolve) => setTimeout(resolve, 5))
+          await write.promise
         }
         written.add(path)
       },
@@ -160,8 +147,8 @@ describe('createScreenshotService.capture', () => {
     })
 
     const first = service.capture('/v/ep1.mkv', 5)
-    await firstWriteStarted
     const second = service.capture('/v/ep1.mkv', 5)
+    write.resolve()
     const [a, b] = await Promise.all([first, second])
     expect(new Set([a, b])).toEqual(new Set(['/pics/ep1-0-00-05.png', '/pics/ep1-0-00-05-2.png']))
     expect(written.size).toBe(2)

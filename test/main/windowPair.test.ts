@@ -155,7 +155,12 @@ describe('createAppWindowSet', () => {
       transparent: true,
       backgroundColor: '#00000000'
     })
-    expect(factory.created[0].options.webPreferences?.preload).toBe('preload.js')
+    expect(factory.created[0].options.webPreferences).toMatchObject({
+      preload: 'preload.js',
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    })
 
     windows.close()
     expect(factory.created[0].close).toHaveBeenCalledTimes(1)

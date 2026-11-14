@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   isNumberArray,
   isStringArray,
-  isUint8Array,
   isFiniteNumber,
   isNonNegativeSafeInteger,
   isPositiveSafeInteger,
@@ -61,10 +60,5 @@ describe('array guards', () => {
     expect(isNumberArray([0, -1.5])).toBe(true)
     expect(isNumberArray([1, Number.NaN])).toBe(false)
     expect(isNumberArray('12')).toBe(false)
-  })
-
-  it('isUint8Array rejects plain number arrays', () => {
-    expect(isUint8Array(new Uint8Array(2))).toBe(true)
-    expect(isUint8Array([80, 75])).toBe(false)
   })
 })

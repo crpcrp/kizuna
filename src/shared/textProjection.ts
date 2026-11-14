@@ -75,20 +75,6 @@ export function displayTextProjection(displayText: string): TextProjection {
   return createTextProjection(displayText.split('\n'))
 }
 
-/** Maps a display boundary to the number of visible UTF-16 code units before it. */
-export function mapDisplayOffsetToAnalysisOffset(
-  projection: TextProjection,
-  offset: number
-): number {
-  assertOffset(offset, projection.displayText.length, 'display offset')
-
-  let analysisOffset = 0
-  for (let displayOffset = 0; displayOffset < offset; displayOffset++) {
-    if (projection.displayText[displayOffset] !== '\n') analysisOffset++
-  }
-  return analysisOffset
-}
-
 /**
  * Maps one continuous analysis range to ordered visible segments. Inserted
  * newlines are never included in the returned ranges.

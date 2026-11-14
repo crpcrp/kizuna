@@ -4,27 +4,10 @@ import {
   APP_IDENTITY,
   COPYRIGHT,
   EXECUTABLE_NAME,
-  isValidAppId,
   PRODUCT_NAME,
   REPOSITORY_URL,
   USER_DATA_DIR_NAME
 } from '@src/shared/appIdentity'
-
-describe('isValidAppId', () => {
-  it('accepts a reverse-DNS identifier', () => {
-    expect(isValidAppId('com.crp.kizuna')).toBe(true)
-    expect(isValidAppId('io.github.crp-crp.kizuna')).toBe(true)
-  })
-
-  it('rejects identifiers Windows would silently ignore', () => {
-    expect(isValidAppId('kizuna')).toBe(false) // no dot-separated segments
-    expect(isValidAppId('com..kizuna')).toBe(false) // empty segment
-    expect(isValidAppId('com.1crp.kizuna')).toBe(false) // segment starts with a digit
-    expect(isValidAppId('com.crp.kizuna ')).toBe(false) // trailing whitespace
-    expect(isValidAppId('com.crp.kizuna_app')).toBe(false) // underscore
-    expect(isValidAppId('')).toBe(false)
-  })
-})
 
 describe('APP_IDENTITY', () => {
   it('exposes every field as a non-empty string', () => {
@@ -41,10 +24,6 @@ describe('APP_IDENTITY', () => {
     expect(USER_DATA_DIR_NAME).toBe(APP_IDENTITY.userDataDirName)
     expect(COPYRIGHT).toBe(APP_IDENTITY.copyright)
     expect(REPOSITORY_URL).toBe(APP_IDENTITY.repositoryUrl)
-  })
-
-  it('carries a usable Windows appId', () => {
-    expect(isValidAppId(APP_ID)).toBe(true)
   })
 
   it('keeps the executable name free of characters Windows forbids in a filename', () => {

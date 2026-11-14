@@ -19,7 +19,7 @@ const END_OF_OPTIONS = '--'
  * ffprobe, e.g.:
  *   ffprobe -v error -print_format json -show_streams -- <filePath>
  */
-export function buildFfprobeArgs(filePath: string): string[] {
+function buildFfprobeArgs(filePath: string): string[] {
   return ['-v', 'error', '-print_format', 'json', '-show_streams', END_OF_OPTIONS, filePath]
 }
 
@@ -28,7 +28,7 @@ export function buildFfprobeArgs(filePath: string): string[] {
  * ffprobe, e.g.:
  *   ffprobe -v error -print_format json -show_chapters -- <filePath>
  */
-export function buildFfprobeChaptersArgs(filePath: string): string[] {
+function buildFfprobeChaptersArgs(filePath: string): string[] {
   return ['-v', 'error', '-print_format', 'json', '-show_chapters', END_OF_OPTIONS, filePath]
 }
 

@@ -18,7 +18,6 @@ import {
 import { buildAudioAttachment, type AnkiMediaAttachment } from './audioSource'
 
 export type { AnkiMediaAttachment }
-export { pitchAccentValue }
 
 export interface AnkiNote {
   deckName: string
@@ -35,14 +34,14 @@ export interface AnkiNote {
  * capture, or other impure input) but which `buildNote` places. Keeping them
  * as an input keeps `buildNote` pure.
  */
-export interface NoteExtras {
+interface NoteExtras {
   /** The captured frame, already encoded and named by the Anki service. */
   picture?: AnkiMediaAttachment
   /** The clipped subtitle line, already encoded and named by the Anki service. */
   sentenceAudio?: AnkiMediaAttachment
 }
 
-export interface NoteSource {
+interface NoteSource {
   token: Token
   result: LookupResult
   sentence: string
@@ -154,7 +153,7 @@ export function formatAnkiFurigana(expression: string, dictionaryReading: string
  * no frequency metadata yields `''`, which a mapped field still receives so the
  * card keeps the model's field shape instead of a fabricated value.
  */
-export function frequencyValue(result: LookupResult): string {
+function frequencyValue(result: LookupResult): string {
   if (result.frequencyDisplay) return result.frequencyDisplay
   return Number.isFinite(result.frequency) ? String(result.frequency) : ''
 }

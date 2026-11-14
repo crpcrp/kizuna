@@ -165,7 +165,7 @@ export function applyReloadGuard(webContents: InputGuardTarget): void {
 }
 
 /** The subset of a window's `webContents` a safe send needs. */
-export interface SendableWebContents {
+interface SendableWebContents {
   isDestroyed(): boolean
   send(channel: string, ...args: unknown[]): void
 }
@@ -217,7 +217,7 @@ export interface WindowControlTarget {
 }
 
 /** One display's usable area (`Electron.Display`'s `workArea`). */
-export interface DisplayLike {
+interface DisplayLike {
   workArea: WindowBounds
 }
 
@@ -236,7 +236,7 @@ export interface ScreenLike {
  * `screen.getDisplayMatching(win.getBounds())`. Returns null for a malformed or
  * unrecognized request so the handler can no-op.
  */
-export function resolveWindowBounds(
+function resolveWindowBounds(
   win: Pick<WindowControlTarget, 'getBounds'>,
   screen: ScreenLike,
   request: unknown

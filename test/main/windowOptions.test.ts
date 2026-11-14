@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   applyNavigationGuards,
   applyReloadGuard,
-  getMainWindowOptions,
   registerWindowControls,
   sendToWindow,
   type WindowControlTarget,
@@ -11,28 +10,6 @@ import {
   type SendTarget
 } from '@src/main/windowOptions'
 import { WINDOW_CONTROL_CHANNELS } from '@src/shared/ipcChannels'
-
-describe('getMainWindowOptions', () => {
-  const opts = getMainWindowOptions('/fake/preload.js')
-
-  it('creates the transparent frameless Windows window', () => {
-    expect(opts.transparent).toBe(true)
-    expect(opts.frame).toBe(false)
-    expect(opts.backgroundColor).toBe('#00000000')
-  })
-
-  it('has a sensible default size', () => {
-    expect(opts.width).toBeGreaterThanOrEqual(640)
-    expect(opts.height).toBeGreaterThanOrEqual(360)
-  })
-
-  it('locks down webPreferences and wires the given preload path', () => {
-    expect(opts.webPreferences?.contextIsolation).toBe(true)
-    expect(opts.webPreferences?.nodeIntegration).toBe(false)
-    expect(opts.webPreferences?.sandbox).toBe(true)
-    expect(opts.webPreferences?.preload).toBe('/fake/preload.js')
-  })
-})
 
 describe('applyNavigationGuards', () => {
   const currentUrl = 'file:///app/renderer/index.html'
@@ -63,17 +40,6 @@ describe('applyNavigationGuards', () => {
       }
     }
   }
-
-  it('registers a will-navigate listener and a window-open handler', () => {
-    const wc = fakeWebContents()
-    const onSpy = vi.spyOn(wc, 'on')
-    const openSpy = vi.spyOn(wc, 'setWindowOpenHandler')
-
-    applyNavigationGuards(wc)
-
-    expect(onSpy).toHaveBeenCalledWith('will-navigate', expect.any(Function))
-    expect(openSpy).toHaveBeenCalledWith(expect.any(Function))
-  })
 
   it('prevents navigation to a different URL (off-origin or file://)', () => {
     const wc = fakeWebContents()

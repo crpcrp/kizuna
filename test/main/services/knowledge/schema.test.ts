@@ -70,15 +70,6 @@ describe('initSchema', () => {
     db.close()
   })
 
-  it('is idempotent — calling initSchema twice does not throw', () => {
-    const db = new Database(':memory:')
-    initSchema(db)
-
-    expect(() => initSchema(db)).not.toThrow()
-
-    db.close()
-  })
-
   it('enforces (source, lemma, reading) as the primary key', () => {
     const db = new Database(':memory:')
     initSchema(db)
