@@ -72,36 +72,16 @@ describe('boldTarget', () => {
 })
 
 describe('formatAnkiFurigana', () => {
-  it('uses the dictionary reading while preserving okurigana', () => {
-    expect(formatAnkiFurigana('食べる', 'タベル')).toBe('食[た]べる')
-  })
-
-  it('leaves kana-only expressions unchanged', () => {
-    expect(formatAnkiFurigana('ここ', 'ここ')).toBe('ここ')
-  })
-
-  it('uses one safe span for an all-kanji expression', () => {
-    expect(formatAnkiFurigana('今日', 'きょう')).toBe('今日[きょう]')
-  })
-
-  it('uses the dictionary reading for full-width numeral headwords', () => {
-    expect(formatAnkiFurigana('１年', 'いちねん')).toBe('１年[いちねん]')
-  })
-
-  it('leaves an unalignable expression unformatted', () => {
-    expect(formatAnkiFurigana('食べる', 'くう')).toBe('食べる')
-  })
-
-  it('separates a ruby group from a preceding kana prefix', () => {
-    expect(formatAnkiFurigana('うなり声', 'うなりごえ')).toBe('うなり 声[ごえ]')
-  })
-
-  it('separates a ruby group that follows okurigana', () => {
-    expect(formatAnkiFurigana('引っ張る', 'ひっぱる')).toBe('引[ひ]っ 張[ぱ]る')
-  })
-
-  it('does not prefix a space when the expression starts with kanji', () => {
-    expect(formatAnkiFurigana('食べる', 'タベル')).toBe('食[た]べる')
+  it.each([
+    ['okurigana without a leading space', '食べる', 'タベル', '食[た]べる'],
+    ['kana only', 'ここ', 'ここ', 'ここ'],
+    ['all kanji', '今日', 'きょう', '今日[きょう]'],
+    ['full-width numeral', '１年', 'いちねん', '１年[いちねん]'],
+    ['unalignable reading', '食べる', 'くう', '食べる'],
+    ['kana prefix', 'うなり声', 'うなりごえ', 'うなり 声[ごえ]'],
+    ['second ruby group', '引っ張る', 'ひっぱる', '引[ひ]っ 張[ぱ]る']
+  ])('formats %s', (_label, expression, reading, expected) => {
+    expect(formatAnkiFurigana(expression, reading)).toBe(expected)
   })
 
   // Anki's furigana filter regex, verbatim (rslib/src/template_filters.rs).
@@ -265,75 +245,45 @@ describe('buildNote', () => {
   })
 })
 
-describe('buildNote pitch accent field', () => {
-  const mapped: AnkiSettings = {
-    ...settings,
-    fieldMap: { ...settings.fieldMap, pitchAccent: 'Pitch' }
-  }
-  const sourceWith = (pitchAccent: number[] | null): NoteSource => ({
-    token,
-    result: { ...lookupResult, pitchAccent },
-    sentence: '私は食べるのが好き。'
+describe('buildNote optional vocabulary fields', () => {
+  const source: NoteSource = { token, result: lookupResult, sentence: '私は食べるのが好き。' }
+
+  it.each([
+    { field: 'pitchAccent', result: { pitchAccent: [0] }, expected: '0' },
+    { field: 'pitchAccent', result: { pitchAccent: [1, 3] }, expected: '1, 3' },
+    { field: 'pitchAccent', result: { pitchAccent: null }, expected: '' },
+    { field: 'pitchAccent', result: { pitchAccent: [] }, expected: '' },
+    { field: 'frequency', result: { frequency: 12000, frequencyDisplay: '12k' }, expected: '12k' },
+    { field: 'frequency', result: { frequency: 42, frequencyDisplay: null }, expected: '42' },
+    { field: 'frequency', result: { frequency: 0, frequencyDisplay: '' }, expected: '0' },
+    { field: 'frequency', result: { frequency: null, frequencyDisplay: null }, expected: '' },
+    { field: 'jlptLevel', result: { jlptLevel: 'N3' }, expected: 'N3' },
+    { field: 'jlptLevel', result: { jlptLevel: null }, expected: '' }
+  ] satisfies Array<{
+    field: 'pitchAccent' | 'frequency' | 'jlptLevel'
+    result: Partial<LookupResult>
+    expected: string
+  }>)('maps $field from $result', ({ field, result, expected }) => {
+    const input = { ...source, result: { ...lookupResult, ...result } }
+    const mapped = { ...settings, fieldMap: { ...settings.fieldMap, [field]: 'Value' } }
+    expect(buildNote(input, mapped).fields.Value).toBe(expected)
+    expect(buildNote(input, settings).fields).not.toHaveProperty('Value')
   })
 
-  it('writes the plain-text position list from the mined result alone', () => {
-    expect(buildNote(sourceWith([0]), mapped).fields.Pitch).toBe('0')
-    expect(buildNote(sourceWith([1, 3]), mapped).fields.Pitch).toBe('1, 3')
-  })
-
-  it('keeps a mapped field present but empty when the result has no pitch data', () => {
-    expect(buildNote(sourceWith(null), mapped).fields.Pitch).toBe('')
-    expect(buildNote(sourceWith([]), mapped).fields.Pitch).toBe('')
-  })
-
-  it('omits the field entirely when Pitch accent is unmapped', () => {
-    expect(buildNote(sourceWith([1, 3]), settings).fields).not.toHaveProperty('Pitch')
-  })
-})
-
-describe('buildNote frequency field', () => {
-  const mapped: AnkiSettings = {
-    ...settings,
-    fieldMap: { ...settings.fieldMap, frequency: 'Frequency' }
-  }
-  const sourceWith = (frequency: number | null, frequencyDisplay: string | null): NoteSource => ({
-    token,
-    result: { ...lookupResult, frequency, frequencyDisplay },
-    sentence: '私は食べるのが好き。'
-  })
-
-  it('maps each acceptance example from the mined result alone', () => {
-    expect(buildNote(sourceWith(12000, '12k'), mapped).fields.Frequency).toBe('12k')
-    expect(buildNote(sourceWith(42, null), mapped).fields.Frequency).toBe('42')
-    expect(buildNote(sourceWith(0, ''), mapped).fields.Frequency).toBe('0')
-    expect(buildNote(sourceWith(null, null), mapped).fields.Frequency).toBe('')
-  })
-
-  it('omits the field entirely when Frequency is unmapped', () => {
-    const note = buildNote(sourceWith(12000, '12k'), settings)
-
-    expect(note.fields).not.toHaveProperty('Frequency')
-  })
-
-  it('coexists with every other mapping', () => {
-    const everything: AnkiSettings = {
+  it('keeps vocabulary and media mappings together in the same note', () => {
+    const mapped = makeAnkiSettings({
       ...settings,
       fieldMap: {
-        word: 'Word',
-        reading: 'Reading',
-        definition: 'Definition',
-        sentence: 'Sentence',
+        ...settings.fieldMap,
         frequency: 'Frequency',
-        pitchAccent: '',
-        jlptLevel: '',
-        wordAudio: 'WordAudio',
         picture: 'Picture',
         sentenceAudio: 'SentenceAudio'
       }
-    }
-
-    const note = buildNote(sourceWith(12000, '12k'), everything)
-
+    })
+    const note = buildNote(
+      { ...source, result: { ...lookupResult, frequency: 12000, frequencyDisplay: '12k' } },
+      mapped
+    )
     expect(note.fields).toEqual({
       Word: '食べる',
       Reading: '食[た]べる',
@@ -344,30 +294,6 @@ describe('buildNote frequency field', () => {
       Picture: '',
       SentenceAudio: ''
     })
-  })
-})
-
-describe('buildNote JLPT level field', () => {
-  const mapped: AnkiSettings = {
-    ...settings,
-    fieldMap: { ...settings.fieldMap, jlptLevel: 'JLPT' }
-  }
-  const sourceWith = (jlptLevel: LookupResult['jlptLevel']): NoteSource => ({
-    token,
-    result: { ...lookupResult, jlptLevel },
-    sentence: '私は食べるのが好き。'
-  })
-
-  it('writes the canonical approximate level from the mined result', () => {
-    expect(buildNote(sourceWith('N3'), mapped).fields.JLPT).toBe('N3')
-  })
-
-  it('keeps a mapped field present but empty when the result is unclassified', () => {
-    expect(buildNote(sourceWith(null), mapped).fields.JLPT).toBe('')
-  })
-
-  it('omits the field entirely when JLPT level is unmapped', () => {
-    expect(buildNote(sourceWith('N3'), settings).fields).not.toHaveProperty('JLPT')
   })
 })
 

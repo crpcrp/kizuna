@@ -6,7 +6,8 @@ import { createSettingsStore } from '@src/main/services/settings'
 import {
   ANKI_MEMBERSHIP_BATCH_LIMIT,
   type MineMediaContext,
-  type MineRequest
+  type MineRequest,
+  type AnkiSettings
 } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
@@ -15,7 +16,7 @@ import type { SentenceAudioService } from '@src/main/services/anki/sentenceAudio
 import { fakeIo } from '@test/harness/fakeSettingsIo'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
-import { makeAnkiSettings } from '@test/harness/ankiFixtures'
+import { makeAnkiSettings, overwriteNote } from '@test/harness/ankiFixtures'
 
 /** Default sentence-audio fake: the dependency is required, but most cases
  * mine without a clip, so extraction reports "nothing to attach". */
@@ -37,49 +38,21 @@ const token: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 
-function overwriteNote(
-  noteId: number,
-  word: string,
-  fields: Record<string, { value: string; order: number } | undefined> = {}
-): {
-  noteId: number
-  modelName: string
-  tags: string[]
-  fields: Record<string, { value: string; order: number }>
-} {
-  const note = {
-    noteId,
-    modelName: 'Kizuna',
-    tags: [] as string[],
-    fields: {
-      Word: { value: word, order: 0 },
-      Reading: { value: 'old reading', order: 1 },
-      Definition: { value: 'old definition', order: 2 },
-      Sentence: { value: 'old sentence', order: 3 },
-      WordAudio: { value: '[sound:existing.mp3]', order: 4 },
-      ...fields
-    } as Record<string, { value: string; order: number } | undefined>
-  }
-  for (const [name, field] of Object.entries(note.fields)) {
-    if (field === undefined) delete note.fields[name]
-  }
-  return note as {
-    noteId: number
-    modelName: string
-    tags: string[]
-    fields: Record<string, { value: string; order: number }>
-  }
+function serviceWith(
+  fetch: Parameters<typeof createAnkiService>[0]['fetch'],
+  anki: Partial<AnkiSettings> = configuredAnkiSettings
+) {
+  return createAnkiService({
+    sentenceAudio: noSentenceAudio,
+    settings: createSettingsStore(fakeIo(JSON.stringify({ anki }))),
+    fetch
+  })
 }
 
 describe('createAnkiService', () => {
   it('ping() returns ok + version on success', async () => {
     const anki = fakeAnkiConnect({ version: { result: 6 } })
-    const settings = createSettingsStore(fakeIo())
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch, {})
 
     expect(await service.ping()).toEqual({ ok: true, version: 6 })
   })
@@ -88,12 +61,7 @@ describe('createAnkiService', () => {
     const refusingFetch = async (): Promise<never> => {
       throw new Error('ECONNREFUSED')
     }
-    const settings = createSettingsStore(fakeIo())
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: refusingFetch
-    })
+    const service = serviceWith(refusingFetch, {})
 
     const ping = await service.ping()
 
@@ -107,12 +75,7 @@ describe('createAnkiService', () => {
       modelNames: { result: ['Basic', 'Kizuna'] },
       modelFieldNames: { result: ['Word', 'Reading'] }
     })
-    const settings = createSettingsStore(fakeIo())
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch, {})
 
     expect(await service.deckNames()).toEqual(['Default', 'Japanese'])
     expect(await service.modelNames()).toEqual(['Basic', 'Kizuna'])
@@ -139,12 +102,7 @@ describe('createAnkiService', () => {
         return { result: null }
       }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     await expect(service.setupJlptField()).resolves.toEqual({
       status: 'changed',
@@ -182,15 +140,10 @@ describe('createAnkiService', () => {
       modelFieldNames: { result: ['JLPT Level'] },
       modelTemplates: { result: templates }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
-    await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).setupJlptField()
-    ).resolves.toEqual({ status: 'already-configured', modelName: 'Kizuna' })
+    await expect(serviceWith(anki.fetch, configuredAnkiSettings).setupJlptField()).resolves.toEqual(
+      { status: 'already-configured', modelName: 'Kizuna' }
+    )
     expect(anki.calls.map((call) => call.action)).toEqual(['modelFieldNames', 'modelTemplates'])
   })
 
@@ -203,19 +156,14 @@ describe('createAnkiService', () => {
         }
       }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
-    await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).setupJlptField()
-    ).resolves.toEqual({
-      status: 'preflight-failure',
-      modelName: 'Kizuna',
-      message: 'Back template "Card 1" must contain {{Word Meaning}} or the Kizuna JLPT marker.'
-    })
+    await expect(serviceWith(anki.fetch, configuredAnkiSettings).setupJlptField()).resolves.toEqual(
+      {
+        status: 'preflight-failure',
+        modelName: 'Kizuna',
+        message: 'Back template "Card 1" must contain {{Word Meaning}} or the Kizuna JLPT marker.'
+      }
+    )
     expect(anki.calls.map((call) => call.action)).toEqual(['modelFieldNames', 'modelTemplates'])
   })
 
@@ -225,19 +173,14 @@ describe('createAnkiService', () => {
       modelTemplates: { result: { 'Card 1': { Front: '{{Word}}', Back: '{{Word Meaning}}' } } },
       modelFieldAdd: { error: 'field already exists' }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
-    await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).setupJlptField()
-    ).resolves.toEqual({
-      status: 'api-failure',
-      modelName: 'Kizuna',
-      message: 'field already exists'
-    })
+    await expect(serviceWith(anki.fetch, configuredAnkiSettings).setupJlptField()).resolves.toEqual(
+      {
+        status: 'api-failure',
+        modelName: 'Kizuna',
+        message: 'field already exists'
+      }
+    )
     expect(anki.calls.map((call) => call.action)).toEqual([
       'modelFieldNames',
       'modelTemplates',
@@ -255,33 +198,21 @@ describe('createAnkiService', () => {
       modelFieldAdd: { result: null },
       updateModelTemplates: { result: null }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
-    await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).setupJlptField()
-    ).resolves.toEqual({
-      status: 'verification-failure',
-      modelName: 'Kizuna',
-      message:
-        'Anki accepted the setup, but the JLPT field or answer-template marker was not found during verification.'
-    })
+    await expect(serviceWith(anki.fetch, configuredAnkiSettings).setupJlptField()).resolves.toEqual(
+      {
+        status: 'verification-failure',
+        modelName: 'Kizuna',
+        message:
+          'Anki accepted the setup, but the JLPT field or answer-template marker was not found during verification.'
+      }
+    )
   })
 
   it('does not call Anki when no note type is configured', async () => {
     const anki = fakeAnkiConnect({})
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: { modelName: '' } })))
 
-    await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).setupJlptField()
-    ).resolves.toEqual({
+    await expect(serviceWith(anki.fetch, { modelName: '' }).setupJlptField()).resolves.toEqual({
       status: 'preflight-failure',
       modelName: '',
       message: 'Configure an Anki note type before setting up the JLPT field.'
@@ -291,14 +222,8 @@ describe('createAnkiService', () => {
 
   it('addNote posts a note carrying the audio attachment when includeWordAudio is enabled', async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-    const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ anki: { ...configuredAnkiSettings, includeWordAudio: true } }))
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+
+    const service = serviceWith(anki.fetch, { ...configuredAnkiSettings, includeWordAudio: true })
 
     const mined = await service.addNote(mineRequest)
 
@@ -310,14 +235,8 @@ describe('createAnkiService', () => {
 
   it('addNote posts a note with no audio when includeWordAudio is disabled', async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-    const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ anki: { ...configuredAnkiSettings, includeWordAudio: false } }))
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+
+    const service = serviceWith(anki.fetch, { ...configuredAnkiSettings, includeWordAudio: false })
 
     await service.addNote(mineRequest)
 
@@ -328,22 +247,11 @@ describe('createAnkiService', () => {
 
   it("exports the mined result's mapped pitch accent through the Anki service", async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-    const settings = createSettingsStore(
-      fakeIo(
-        JSON.stringify({
-          anki: {
-            ...configuredAnkiSettings,
-            includeWordAudio: false,
-            fieldMap: { ...configuredAnkiSettings.fieldMap, pitchAccent: 'Pitch' }
-          }
-        })
-      )
-    )
 
-    await createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
+    await serviceWith(anki.fetch, {
+      ...configuredAnkiSettings,
+      includeWordAudio: false,
+      fieldMap: { ...configuredAnkiSettings.fieldMap, pitchAccent: 'Pitch' }
     }).addNote({
       ...mineRequest,
       result: { ...result, pitchAccent: [1, 3] }
@@ -352,42 +260,6 @@ describe('createAnkiService', () => {
     const call = anki.calls.find((entry) => entry.action === 'addNote')!
     const fields = (call.params as { note: { fields: Record<string, string> } }).note.fields
     expect(fields.Pitch).toBe('1, 3')
-  })
-
-  it('keeps mapped missing pitch empty and omits an unmapped Pitch field', async () => {
-    const cases: Array<{
-      pitchAccent: number[] | null
-      mappedField: string
-      expected: string | undefined
-    }> = [
-      { pitchAccent: null, mappedField: 'Pitch', expected: '' },
-      { pitchAccent: [1, 3], mappedField: '', expected: undefined }
-    ]
-
-    for (const testCase of cases) {
-      const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-      const settings = createSettingsStore(
-        fakeIo(
-          JSON.stringify({
-            anki: {
-              ...configuredAnkiSettings,
-              includeWordAudio: false,
-              fieldMap: { ...configuredAnkiSettings.fieldMap, pitchAccent: testCase.mappedField }
-            }
-          })
-        )
-      )
-
-      await createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: anki.fetch
-      }).addNote({ ...mineRequest, result: { ...result, pitchAccent: testCase.pitchAccent } })
-
-      const call = anki.calls.find((entry) => entry.action === 'addNote')!
-      const fields = (call.params as { note: { fields: Record<string, string> } }).note.fields
-      expect(fields.Pitch).toBe(testCase.expected)
-    }
   })
 
   it('findExisting returns the first card plus sorted, deduplicated deck provenance', async () => {
@@ -406,12 +278,7 @@ describe('createAnkiService', () => {
         ]
       }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     const existing = await service.findExisting(token)
 
@@ -424,12 +291,7 @@ describe('createAnkiService', () => {
 
   it('findExisting returns null when no note matches', async () => {
     const anki = fakeAnkiConnect({ findCards: { result: [] } })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     expect(await service.findExisting(token)).toBeNull()
   })
@@ -443,32 +305,18 @@ describe('createAnkiService', () => {
       findCards: { result: [7] },
       cardsInfo: { result: [{ cardId: 7, deckName: '' }] }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
     await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: rejected.fetch
-      }).findExisting(token)
+      serviceWith(rejected.fetch, configuredAnkiSettings).findExisting(token)
     ).resolves.toEqual({ cardId: 7, deckNames: [] })
     await expect(
-      createAnkiService({
-        sentenceAudio: noSentenceAudio,
-        settings,
-        fetch: empty.fetch
-      }).findExisting(token)
+      serviceWith(empty.fetch, configuredAnkiSettings).findExisting(token)
     ).resolves.toEqual({ cardId: 7, deckNames: [] })
   })
 
   it('findExisting searches an explicit dictionary headword when provided', async () => {
     const anki = fakeAnkiConnect({ findCards: { result: [7] }, cardsInfo: { result: [] } })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     await service.findExisting(token, 'dictionary headword')
 
@@ -483,15 +331,10 @@ describe('createAnkiService', () => {
 
   it('searches the mapped Word field globally for prevent-global', async () => {
     const anki = fakeAnkiConnect({ findCards: { result: [7] }, cardsInfo: { result: [] } })
-    const settings = createSettingsStore(
-      fakeIo(
-        JSON.stringify({ anki: { ...configuredAnkiSettings, duplicatePolicy: 'prevent-global' } })
-      )
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
+
+    const service = serviceWith(anki.fetch, {
+      ...configuredAnkiSettings,
+      duplicatePolicy: 'prevent-global'
     })
 
     await service.findExisting(token)
@@ -507,12 +350,7 @@ describe('createAnkiService', () => {
 
   it('rejects a matching note before adding for prevention policies', async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [7] } })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     await expect(service.addNote(mineRequest)).rejects.toThrow('already exists')
     expect(anki.calls).toEqual([
@@ -522,14 +360,8 @@ describe('createAnkiService', () => {
 
   it('allows a duplicate without a preflight search', async () => {
     const anki = fakeAnkiConnect({ addNote: { result: 999 } })
-    const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ anki: { ...configuredAnkiSettings, duplicatePolicy: 'allow' } }))
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+
+    const service = serviceWith(anki.fetch, { ...configuredAnkiSettings, duplicatePolicy: 'allow' })
 
     expect(await service.addNote(mineRequest)).toEqual(
       expect.objectContaining({ noteId: 999, operation: 'added' })
@@ -548,13 +380,10 @@ describe('createAnkiService', () => {
 
   it('adds normally when overwrite finds no matching note', async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-    const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ anki: { ...configuredAnkiSettings, duplicatePolicy: 'overwrite' } }))
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
+
+    const service = serviceWith(anki.fetch, {
+      ...configuredAnkiSettings,
+      duplicatePolicy: 'overwrite'
     })
 
     expect(await service.addNote(mineRequest)).toEqual(
@@ -569,12 +398,9 @@ describe('createAnkiService', () => {
       notesInfo: { result: [overwriteNote(7, '猫屋')] },
       addNote: { result: 999 }
     })
-    const settings = createSettingsStore(
-      fakeIo(JSON.stringify({ anki: { ...configuredAnkiSettings, duplicatePolicy: 'overwrite' } }))
-    )
 
     await expect(
-      createAnkiService({ sentenceAudio: noSentenceAudio, settings, fetch: anki.fetch }).addNote(
+      serviceWith(anki.fetch, { ...configuredAnkiSettings, duplicatePolicy: 'overwrite' }).addNote(
         mineRequest
       )
     ).resolves.toEqual(expect.objectContaining({ noteId: 999, operation: 'added' }))
@@ -583,20 +409,10 @@ describe('createAnkiService', () => {
 
   it('findExisting returns null without calling AnkiConnect when the word field is unmapped', async () => {
     const anki = fakeAnkiConnect({})
-    const settings = createSettingsStore(
-      fakeIo(
-        JSON.stringify({
-          anki: {
-            ...configuredAnkiSettings,
-            fieldMap: { ...configuredAnkiSettings.fieldMap, word: '' }
-          }
-        })
-      )
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
+
+    const service = serviceWith(anki.fetch, {
+      ...configuredAnkiSettings,
+      fieldMap: { ...configuredAnkiSettings.fieldMap, word: '' }
     })
 
     expect(await service.findExisting(token)).toBeNull()
@@ -609,15 +425,10 @@ describe('createAnkiService', () => {
         result: [[7], ['bad', -1]]
       }
     })
-    const settings = createSettingsStore(
-      fakeIo(
-        JSON.stringify({ anki: { ...configuredAnkiSettings, duplicatePolicy: 'prevent-global' } })
-      )
-    )
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
+
+    const service = serviceWith(anki.fetch, {
+      ...configuredAnkiSettings,
+      duplicatePolicy: 'prevent-global'
     })
 
     await expect(service.findTargetDeckMembership(['cat', 'dog', 'cat'])).resolves.toEqual({
@@ -650,12 +461,7 @@ describe('createAnkiService', () => {
       findCards: { result: [7] },
       cardsInfo: { result: [] }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     await service.findExisting({ ...token, lemma: '猫たち' }, expression)
     await service.findTargetDeckMembership([expression])
@@ -672,24 +478,14 @@ describe('createAnkiService', () => {
     const anki = fakeAnkiConnect({
       multi: { result: [{ result: null, error: 'deck was not found' }] }
     })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
 
     await expect(service.findTargetDeckMembership(['cat'])).rejects.toThrow('deck was not found')
   })
 
   it('findTargetDeckMembership rejects an oversized unique batch before calling AnkiConnect', async () => {
     const anki = fakeAnkiConnect({})
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch)
     const expressions = Array.from(
       { length: ANKI_MEMBERSHIP_BATCH_LIMIT + 1 },
       (_, index) => `word-${index}`
@@ -703,12 +499,7 @@ describe('createAnkiService', () => {
 
   it('openCard() calls guiBrowse with a cid: query for the given card id', async () => {
     const anki = fakeAnkiConnect({ guiBrowse: { result: [7] } })
-    const settings = createSettingsStore(fakeIo())
-    const service = createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    })
+    const service = serviceWith(anki.fetch, {})
 
     await service.openCard(7)
 
@@ -794,13 +585,8 @@ describe('createAnkiService picture attachment', () => {
 
   it('drops a screenshot arriving while the Picture field is unmapped', async () => {
     const anki = fakeAnkiConnect({ findNotes: { result: [] }, addNote: { result: 999 } })
-    const settings = createSettingsStore(fakeIo(JSON.stringify({ anki: configuredAnkiSettings })))
 
-    await createAnkiService({
-      sentenceAudio: noSentenceAudio,
-      settings,
-      fetch: anki.fetch
-    }).addNote(screenshotRequest)
+    await serviceWith(anki.fetch, configuredAnkiSettings).addNote(screenshotRequest)
 
     const note = (
       anki.calls.find((c) => c.action === 'addNote')!.params as {

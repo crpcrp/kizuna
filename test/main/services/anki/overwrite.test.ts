@@ -5,7 +5,7 @@ import { pictureFilename } from '@src/main/services/anki/attachments'
 import { buildNote } from '@src/main/services/anki/noteBuilder'
 import type { AnkiMediaAttachment } from '@src/main/services/anki/noteBuilder'
 import { applyOverwrite, findOverwriteTarget } from '@src/main/services/anki/overwrite'
-import { defaultAnkiSettings } from '@src/shared/anki'
+import { makeAnkiSettings, overwriteNote } from '@test/harness/ankiFixtures'
 import type { MineRequest } from '@src/shared/anki'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { Token } from '@src/shared/token'
@@ -21,8 +21,7 @@ const token: Token = makeToken({ surface: '猫', reading: 'ネコ' })
 const result: LookupResult = makeLookupResult({ dictTitle: 'yomitan-sample' })
 const mineRequest: MineRequest = { token, result, sentence: '猫が好き。' }
 
-const configuredAnkiSettings = {
-  ...defaultAnkiSettings,
+const configuredAnkiSettings = makeAnkiSettings({
   deckName: 'Japanese',
   modelName: 'Kizuna',
   fieldMap: {
@@ -30,48 +29,9 @@ const configuredAnkiSettings = {
     reading: 'Reading',
     definition: 'Definition',
     sentence: 'Sentence',
-    frequency: '',
-    pitchAccent: '',
-    jlptLevel: '',
-    wordAudio: 'WordAudio',
-    picture: '',
-    sentenceAudio: ''
+    wordAudio: 'WordAudio'
   }
-}
-
-function overwriteNote(
-  noteId: number,
-  word: string,
-  fields: Record<string, { value: string; order: number } | undefined> = {}
-): {
-  noteId: number
-  modelName: string
-  tags: string[]
-  fields: Record<string, { value: string; order: number }>
-} {
-  const note = {
-    noteId,
-    modelName: 'Kizuna',
-    tags: [] as string[],
-    fields: {
-      Word: { value: word, order: 0 },
-      Reading: { value: 'old reading', order: 1 },
-      Definition: { value: 'old definition', order: 2 },
-      Sentence: { value: 'old sentence', order: 3 },
-      WordAudio: { value: '[sound:existing.mp3]', order: 4 },
-      ...fields
-    } as Record<string, { value: string; order: number } | undefined>
-  }
-  for (const [name, field] of Object.entries(note.fields)) {
-    if (field === undefined) delete note.fields[name]
-  }
-  return note as {
-    noteId: number
-    modelName: string
-    tags: string[]
-    fields: Record<string, { value: string; order: number }>
-  }
-}
+})
 
 /** Wraps a fresh AnkiClient around a fakeAnkiConnect instance, exposing both. */
 function client(routes: Record<string, FakeAnkiConnectRoute | FakeAnkiConnectRouteFn>): {

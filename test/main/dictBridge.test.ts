@@ -216,30 +216,20 @@ describe('createDictService', () => {
     db.close()
   })
 
-  it('importDict delegates to the injected importer instead of importing directly', async () => {
-    const db = new Database(':memory:')
-    const importer = fakeDictImporter({ dictId: 42, termCount: 1, metaCount: 0 })
-    const service = createDictService({ db, importer })
-
-    const zipBytes = new Uint8Array([1, 2, 3])
-    const result = await service.importDict(zipBytes)
-
-    expect(result).toEqual({ dictId: 42, termCount: 1, metaCount: 0 })
-    expect(importer.calls).toEqual([zipBytes])
-
-    db.close()
-  })
-
-  it('importDict forwards its onProgress callback to the injected importer', async () => {
+  it('delegates import bytes and progress to the injected importer', async () => {
     const db = new Database(':memory:')
     const importer = fakeDictImporter({ dictId: 42, termCount: 7, metaCount: 0 })
     const service = createDictService({ db, importer })
     const onProgress = vi.fn()
+    const zipBytes = new Uint8Array([1, 2, 3])
 
-    await service.importDict(new Uint8Array([1, 2, 3]), onProgress)
-
+    await expect(service.importDict(zipBytes, onProgress)).resolves.toEqual({
+      dictId: 42,
+      termCount: 7,
+      metaCount: 0
+    })
+    expect(importer.calls).toEqual([zipBytes])
     expect(onProgress).toHaveBeenCalledWith(7, 7)
-
     db.close()
   })
 
@@ -282,27 +272,16 @@ describe('createDictService', () => {
     db.close()
   })
 
-  it('setEnabled toggles a dict and listDicts reflects the change', async () => {
+  it.each([
+    ['setEnabled', 'enabled', false],
+    ['setFallbackOnly', 'fallbackOnly', true]
+  ] as const)('%s persists the dictionary flag', async (method, field, value) => {
     const db = new Database(':memory:')
     const service = createDictService({ db })
     const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
 
-    await service.setEnabled(dictId, false)
-
-    const dicts = await service.listDicts()
-    expect(dicts[0].enabled).toBe(false)
-
-    db.close()
-  })
-
-  it('setFallbackOnly toggles a dict and listDicts reflects the change', async () => {
-    const db = new Database(':memory:')
-    const service = createDictService({ db })
-    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
-
-    await service.setFallbackOnly(dictId, true)
-
-    expect((await service.listDicts())[0].fallbackOnly).toBe(true)
+    await service[method](dictId, value)
+    expect((await service.listDicts())[0][field]).toBe(value)
     db.close()
   })
 
@@ -435,91 +414,35 @@ describe('createDictService', () => {
     db.close()
   })
 
-  it('removeDict deletes the dict and its terms; listDicts and lookup no longer see it', async () => {
-    const db = new Database(':memory:')
-    const service = createDictService({ db })
-    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
-
-    await service.removeDict(dictId)
-
-    expect(await service.listDicts()).toEqual([])
-    expect(await service.lookup('猫')).toEqual([])
-
-    db.close()
-  })
-
-  it('removeDict deletes its term metadata with the dictionary', async () => {
-    const db = new Database(':memory:')
-    const service = createDictService({ db })
-    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
-    db.prepare(
-      'INSERT INTO term_meta (dict_id, expression, reading, mode, value, display) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(dictId, 'cat', null, 'freq', 1, null)
-
-    await service.removeDict(dictId)
-
-    expect(db.prepare('SELECT dict_id FROM term_meta WHERE dict_id = ?').all(dictId)).toEqual([])
-    expect(await service.listDicts()).toEqual([])
-    db.close()
-  })
-
-  it('removeDict reclaims freed pages, not just leaving them in the freelist', async () => {
-    const db = new Database(':memory:')
-    const service = createDictService({ db })
-    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
-
-    await service.removeDict(dictId)
-
-    expect(db.pragma('freelist_count', { simple: true })).toBe(0)
-
-    db.close()
-  })
-
-  it('removeDict reclaims incrementally instead of rewriting the whole file', async () => {
-    const db = new Database(':memory:')
-    const service = createDictService({ db })
-    const { dictId } = await service.importDict(new Uint8Array(ZIP_FIXTURE))
-    const exec = vi.spyOn(db, 'exec')
-
-    await service.removeDict(dictId)
-
-    expect(db.pragma('auto_vacuum', { simple: true })).toBe(2)
-    expect(exec.mock.calls.map(([sql]) => sql)).not.toContain('VACUUM')
-    exec.mockRestore()
-    db.close()
-  })
-
-  it('removeDict only removes the targeted dict, leaving others intact', async () => {
+  it('removes only the selected dictionary and its rows, reclaiming pages without a full VACUUM', async () => {
     const db = new Database(':memory:')
     const service = createDictService({ db })
     const first = await service.importDict(new Uint8Array(ZIP_FIXTURE))
     const second = await service.importDict(new Uint8Array(ZIP_FIXTURE))
+    const insertMeta = db.prepare(
+      'INSERT INTO term_meta (dict_id, expression, reading, mode, value, display) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    insertMeta.run(first.dictId, '猫', null, 'freq', 1, null)
+    insertMeta.run(second.dictId, '猫', null, 'freq', 2, null)
+    const exec = vi.spyOn(db, 'exec')
 
     await service.removeDict(first.dictId)
 
-    const dicts = await service.listDicts()
-    expect(dicts.map((d) => d.id)).toEqual([second.dictId])
+    expect((await service.listDicts()).map((dict) => dict.id)).toEqual([second.dictId])
     expect(await service.lookup('猫')).toEqual([
-      {
-        expression: '猫',
-        reading: 'ねこ',
-        glossary: 'cat',
-        glossaryJson: '["cat"]',
-        dictTitle: 'yomitan-sample',
-        dictId: expect.any(Number),
-        fallbackOnly: false,
-        stylesCss: null,
-        frequency: null,
-        frequencyDisplay: null,
-        pitchAccent: null,
-        jlptLevel: 'N5',
-        defTags: 'n',
-        termTags: '',
-        score: 1,
-        rules: ''
-      }
+      expect.objectContaining({ dictId: second.dictId, expression: '猫', glossary: 'cat' })
     ])
+    expect(db.prepare('SELECT id FROM terms WHERE dict_id = ?').all(first.dictId)).toEqual([])
+    expect(db.prepare('SELECT dict_id FROM term_meta').all()).toEqual([{ dict_id: second.dictId }])
+    expect(db.pragma('auto_vacuum', { simple: true })).toBe(2)
+    expect(db.pragma('freelist_count', { simple: true })).toBe(0)
+    expect(exec.mock.calls.map(([sql]) => sql)).not.toContain('VACUUM')
 
+    await service.removeDict(second.dictId)
+    expect(await service.listDicts()).toEqual([])
+    expect(await service.lookup('猫')).toEqual([])
+    expect(db.prepare('SELECT dict_id FROM term_meta').all()).toEqual([])
+    exec.mockRestore()
     db.close()
   })
 })
