@@ -34,7 +34,7 @@ import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
  * the POSIX implementation would embed the whole `C:\videos\ep.mkv` — drive
  * letter, backslashes and all — into the temp filename.
  */
-export function subtitleTempPath(
+function subtitleTempPath(
   tmpDir: string,
   inputPath: string,
   streamIndex: number,

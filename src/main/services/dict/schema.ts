@@ -74,7 +74,7 @@ const CREATE_TERM_META_EXPRESSION_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_term_meta_expr ON term_meta (dict_id, expression)`
 
 /** All DDL statements, in dependency order (tables before their indexes). */
-export const SCHEMA_STATEMENTS = [
+const SCHEMA_STATEMENTS = [
   CREATE_DICTIONARIES_TABLE,
   CREATE_TERMS_TABLE,
   CREATE_TERM_META_TABLE,

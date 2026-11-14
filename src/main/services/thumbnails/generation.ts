@@ -17,7 +17,7 @@ export type { ThumbnailEvictionScheduler, ThumbnailStat } from './types'
  * never at or past EOF (a right-edge hover with `timeSec >= durationSec` would
  * otherwise `-ss` past the last frame, yield no image, and poison the bucket).
  */
-export function seekTimeForBucket(bucket: number, durationSec: number): number {
+function seekTimeForBucket(bucket: number, durationSec: number): number {
   return ((bucket + 0.5) / 100) * durationSec
 }
 
@@ -54,11 +54,7 @@ export function thumbnailCachePath(
  * right for hover previews. `scale=200:-2` keeps the aspect ratio with an
  * even height (required by the jpeg encoder).
  */
-export function buildThumbnailArgs(
-  inputPath: string,
-  timeSec: number,
-  outputPath: string
-): string[] {
+function buildThumbnailArgs(inputPath: string, timeSec: number, outputPath: string): string[] {
   return [
     '-v',
     'error',

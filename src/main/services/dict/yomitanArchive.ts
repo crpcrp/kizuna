@@ -35,7 +35,7 @@ export const MAX_UNZIP_ENTRY_BYTES = 256 * 1024 * 1024
  * DEFLATE expansion ≈ 1032×, so ≈ 64 MiB per step) — this is what lets the cap
  * abort a "lying" zip bomb before it can pin the worker on CPU.
  */
-export const UNZIP_FEED_CHUNK_BYTES = 64 * 1024
+const UNZIP_FEED_CHUNK_BYTES = 64 * 1024
 
 const utf8Decoder = new TextDecoder()
 

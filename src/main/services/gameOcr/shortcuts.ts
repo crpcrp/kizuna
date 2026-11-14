@@ -12,7 +12,7 @@ export interface GameOcrShortcut {
  * released the moment it goes, so Escape and Ctrl+C belong to the game again
  * for as long as the user is playing it.
  */
-export const FRAME_ACCELERATORS = Object.freeze({
+const FRAME_ACCELERATORS = Object.freeze({
   dismiss: 'Escape',
   copySelection: 'CommandOrControl+C'
 })

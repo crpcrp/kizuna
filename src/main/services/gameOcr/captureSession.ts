@@ -35,7 +35,7 @@ const EMPTY_IMAGE_BYTES = new Uint8Array()
  * Joins a stage label to whatever the failing boundary said, so the Options
  * surface reports a cause rather than only the stage that hit it.
  */
-export function describeFailure(stage: string, error: unknown): string {
+function describeFailure(stage: string, error: unknown): string {
   const message = error instanceof Error ? error.message.trim() : ''
   if (message === '') return `${stage}.`
   const detail =

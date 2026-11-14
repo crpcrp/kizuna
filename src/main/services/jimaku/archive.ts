@@ -16,9 +16,9 @@ import type {
 import { JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES } from './downloadStore'
 import { fail, ok } from './result'
 
-export const JIMAKU_ARCHIVE_MAX_COMPRESSED_BYTES = JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
-export const JIMAKU_ARCHIVE_MAX_EXPANDED_BYTES = 100 * 1024 * 1024
-export const JIMAKU_ARCHIVE_MAX_MEMBER_BYTES = 10 * 1024 * 1024
+const JIMAKU_ARCHIVE_MAX_COMPRESSED_BYTES = JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
+const JIMAKU_ARCHIVE_MAX_EXPANDED_BYTES = 100 * 1024 * 1024
+const JIMAKU_ARCHIVE_MAX_MEMBER_BYTES = 10 * 1024 * 1024
 
 export type JimakuArchiveErrorCode =
   JimakuDownloadErrorCode | 'invalidArchive' | 'unsupportedArchive' | 'invalidMember'

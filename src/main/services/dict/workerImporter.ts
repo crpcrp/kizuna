@@ -48,7 +48,7 @@ export interface CreateWorkerImporterDeps {
  * hung. A large dictionary legitimately takes minutes of wall clock; what it
  * never does is go five minutes without inflating another few MiB.
  */
-export const WORKER_IMPORT_TIMEOUT_MS = 5 * 60 * 1000
+const WORKER_IMPORT_TIMEOUT_MS = 5 * 60 * 1000
 
 const systemTimers: WorkerImportTimers = {
   setTimer: (callback, delayMs) => setTimeout(callback, delayMs),

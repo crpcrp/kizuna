@@ -15,8 +15,7 @@ import { parseMecab } from './parseMecab'
  */
 export type MecabExec = (mecabPath: string, args: string[], input: string) => Promise<string>
 
-export const execMecab: MecabExec = (mecabPath, args, input) =>
-  runBounded(mecabPath, args, { input })
+const execMecab: MecabExec = (mecabPath, args, input) => runBounded(mecabPath, args, { input })
 
 export interface MecabConfig {
   mecabPath: string

@@ -16,10 +16,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   createDebouncedThumbnailEviction,
   selectEvictions,
-  summarizeCacheDir,
-  collectCacheEntriesAsync,
   sweepThumbnailCacheAsync,
-  THUMBNAIL_CACHE_MAX_BYTES,
   type ThumbnailCacheEntry
 } from '@src/main/services/thumbnails/cache'
 
@@ -57,25 +54,6 @@ describe('selectEvictions', () => {
     const entries = [entry('/a', 100, 5), entry('/b', 100, 5), entry('/c', 100, 5)]
     expect(selectEvictions(entries, 100)).toEqual(['/a', '/b'])
   })
-
-  it('exposes a ~500 MB default cap', () => {
-    expect(THUMBNAIL_CACHE_MAX_BYTES).toBe(500 * 1024 * 1024)
-  })
-})
-
-describe('summarizeCacheDir', () => {
-  it('sums bytes and takes the newest mtime', () => {
-    expect(
-      summarizeCacheDir('/cache/h1', [
-        { size: 100, mtimeMs: 10 },
-        { size: 50, mtimeMs: 40 }
-      ])
-    ).toEqual({ path: '/cache/h1', bytes: 150, mtimeMs: 40 })
-  })
-
-  it('reports an empty file-dir as zero bytes at mtime 0', () => {
-    expect(summarizeCacheDir('/cache/h1', [])).toEqual({ path: '/cache/h1', bytes: 0, mtimeMs: 0 })
-  })
 })
 
 describe('thumbnail cache on disk', () => {
@@ -94,21 +72,45 @@ describe('thumbnail cache on disk', () => {
     }
     disk.writeFileSync(join(cacheDir, 'unrelated'), 'keep')
     disk.mkdirSync(join(recent, 'nested'))
-    const entries = await collectCacheEntriesAsync(cacheDir)
-    expect(entries.sort((a, b) => a.mtimeMs - b.mtimeMs)).toEqual([
-      { path: old, bytes: 400, mtimeMs: 1000 },
-      { path: recent, bytes: 400, mtimeMs: 9000 }
-    ])
     await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 500 })).resolves.toEqual([old])
     expect(disk.existsSync(old)).toBe(false)
     expect(disk.existsSync(join(cacheDir, 'unrelated'))).toBe(true)
-    await expect(collectCacheEntriesAsync(cacheDir)).resolves.toEqual([
-      { path: recent, bytes: 400, mtimeMs: 9000 }
-    ])
+    expect(disk.existsSync(recent)).toBe(true)
+    await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 400 })).resolves.toEqual([])
+  })
+
+  it('sums every file and uses the newest file to rank a directory', async () => {
+    const cacheDir = tempDir()
+    const mixed = join(cacheDir, 'mixed')
+    const middle = join(cacheDir, 'middle')
+    disk.mkdirSync(mixed)
+    disk.mkdirSync(middle)
+    for (const [dir, name, time] of [
+      [mixed, '0.jpg', 1],
+      [mixed, '1.jpg', 9],
+      [middle, '0.jpg', 5]
+    ] as const) {
+      const file = join(dir, name)
+      disk.writeFileSync(file, new Uint8Array(100))
+      disk.utimesSync(file, time, time)
+    }
+    await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 200 })).resolves.toEqual([middle])
+    expect(disk.existsSync(mixed)).toBe(true)
+    await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 199 })).resolves.toEqual([mixed])
+  })
+
+  it('handles empty subdirectories without evicting under the cap', async () => {
+    const cacheDir = tempDir()
+    const empty = join(cacheDir, 'empty')
+    disk.mkdirSync(empty)
+    await expect(sweepThumbnailCacheAsync({ cacheDir, maxBytes: 0 })).resolves.toEqual([])
+    expect(disk.existsSync(empty)).toBe(true)
   })
 
   it('treats missing cache directories as empty', async () => {
-    await expect(collectCacheEntriesAsync(join(tempDir(), 'missing'))).resolves.toEqual([])
+    await expect(
+      sweepThumbnailCacheAsync({ cacheDir: join(tempDir(), 'missing'), maxBytes: 0 })
+    ).resolves.toEqual([])
   })
 })
 

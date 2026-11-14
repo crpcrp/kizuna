@@ -5,7 +5,7 @@
 import { isNumberArray, isStringArray } from '../shared/guards'
 
 /** Generous upper bound for renderer-supplied arrays (a whole track's cues or lemmas). */
-export const MAX_IPC_ARRAY_LENGTH = 50_000
+const MAX_IPC_ARRAY_LENGTH = 50_000
 
 export type Guard<T> = (value: unknown) => value is T
 

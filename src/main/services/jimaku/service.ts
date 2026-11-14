@@ -39,7 +39,7 @@ import type { JimakuSettingsService } from './settings'
 import type { MediaHistoryService } from '../mediaHistory'
 import { fail, ok } from './result'
 
-export const JIMAKU_SEARCH_CACHE_TTL_MS = 5 * 60 * 1000
+const JIMAKU_SEARCH_CACHE_TTL_MS = 5 * 60 * 1000
 
 type IdKind = 'session' | 'candidate' | 'package' | 'prepared'
 type PendingOperation = { token: number; controller: AbortController }
