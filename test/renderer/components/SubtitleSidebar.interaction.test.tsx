@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cueKey } from '@src/renderer/src/state/tokenization'
+import { makeToken } from '@test/harness/tokenFixtures'
+import type { Token } from '@src/shared/token'
 import type { Cue } from '@src/shared/cue'
 import SubtitleSidebar from '@src/renderer/src/components/SubtitleSidebar'
 import { deferred } from '@test/harness/deferred'
@@ -42,6 +45,7 @@ describe('SubtitleSidebar translation interactions', () => {
 
     expect(event.defaultPrevented).toBe(true)
     expect(props.onCopyCue).toHaveBeenCalledWith(cueA)
+    expect(props.onSelectCue).not.toHaveBeenCalled()
     expect(onTranslateCue).toHaveBeenCalledWith(cueA, 'request-1')
     expect(screen.getByRole('status').textContent).toContain('Copied to clipboard')
     expect(screen.getByText('Translating…')).not.toBeNull()
@@ -195,4 +199,94 @@ describe('SubtitleSidebar track changes', () => {
     unmount()
     expect(props.onCancelTranslation).toHaveBeenCalledWith('request-1')
   })
+})
+
+describe('SubtitleSidebar search and row controls', () => {
+  it('selects the clicked cue and navigates submitted matches with Enter and Shift+Enter', () => {
+    const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {})
+    const { props } = renderSidebar()
+    fireEvent.click(screen.getByRole('button', { name: cueB.text }))
+    expect(props.onSelectCue).toHaveBeenCalledWith(cueB)
+    const input = screen.getByLabelText('Search query')
+    fireEvent.change(input, { target: { value: 'cue' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByText('1/2')).not.toBeNull()
+    expect(scroll).not.toHaveBeenCalled()
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(screen.getByText('2/2')).not.toBeNull()
+    expect(scroll).toHaveBeenLastCalledWith({ block: 'center' })
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
+    expect(screen.getByText('1/2')).not.toBeNull()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect((input as HTMLInputElement).value).toBe('')
+    expect(screen.queryByText('1/2')).toBeNull()
+  })
+
+  it('disables navigation without matches and clears a submitted search', () => {
+    renderSidebar()
+    const input = screen.getByLabelText('Search query')
+    fireEvent.change(input, { target: { value: 'absent' } })
+    fireEvent.click(screen.getByLabelText('Search subtitles'))
+    expect(screen.getByText('0/0')).not.toBeNull()
+    expect((screen.getByLabelText('Next match') as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByLabelText('Clear search'))
+    expect((input as HTMLInputElement).value).toBe('')
+    expect(screen.queryByText('0/0')).toBeNull()
+  })
+
+  it('keeps ordinary typing away from window shortcuts', () => {
+    const onKey = vi.fn()
+    window.addEventListener('keydown', onKey)
+    try {
+      renderSidebar()
+      fireEvent.keyDown(screen.getByLabelText('Search query'), { key: 'a' })
+      expect(onKey).not.toHaveBeenCalled()
+      expect(screen.queryByText('0/0')).toBeNull()
+    } finally {
+      window.removeEventListener('keydown', onKey)
+    }
+  })
+
+  it.each([
+    ['猫は猫が好き', '猫', [], 2],
+    ['😀猫', '猫', [], 1],
+    [
+      '棒人間が描か\nれている。',
+      'れて',
+      [
+        makeToken({ surface: '棒人間' }),
+        makeToken({ surface: 'が', startOffset: 3 }),
+        makeToken({ surface: '描かれている', startOffset: 4 })
+      ],
+      1
+    ],
+    [
+      '棒人間が描か\nれている。',
+      '。',
+      [
+        makeToken({ surface: '棒人間' }),
+        makeToken({ surface: 'が', startOffset: 3 }),
+        makeToken({ surface: '描かれている', startOffset: 4 }),
+        makeToken({ surface: '。', startOffset: 10 })
+      ],
+      1
+    ]
+  ] satisfies [string, string, Token[], number][])(
+    'highlights display matches in plain and wrapped tokenized rows',
+    (text, query, tokens, count) => {
+      const cue: Cue = { start: 0, end: 1, text }
+      renderSidebar({
+        cues: [cue],
+        tokens: { [cueKey(cue)]: tokens },
+        levels: { 描く: 'learning' }
+      })
+      fireEvent.change(screen.getByLabelText('Search query'), { target: { value: query } })
+      fireEvent.click(screen.getByLabelText('Search subtitles'))
+      const marks = document.querySelectorAll('mark')
+      expect(marks).toHaveLength(count)
+      expect(marks[0].textContent).toBe(query)
+      expect(marks[0].hasAttribute('data-current')).toBe(true)
+      if (text.includes('\n')) expect(document.querySelectorAll('br')).toHaveLength(1)
+    }
+  )
 })

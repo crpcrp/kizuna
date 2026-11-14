@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import MenuBar, { isAnyMenuOpen, type MenuBarProps } from '@src/renderer/src/components/MenuBar'
+import MenuBar, { type MenuBarProps } from '@src/renderer/src/components/MenuBar'
 import type { Track } from '@src/shared/track'
 
 // Root composition only: category order, the Settings menu MenuBar owns
@@ -79,14 +79,6 @@ describe('MenuBar composition', () => {
     expect(settings).toContain('Start Game OCR')
     expect(settings).toMatch(/id="game-ocr-command"[^>]*disabled/)
   })
-
-  it('is a no-op to render with handlers wired (nothing fired at render)', () => {
-    const onOpenFile = vi.fn()
-    const onOpenOptions = vi.fn()
-    render({ media: { onOpenFile, onExit: noop }, onOpenOptions })
-    expect(onOpenFile).not.toHaveBeenCalled()
-    expect(onOpenOptions).not.toHaveBeenCalled()
-  })
 })
 
 describe('MenuBar grouped prop forwarding', () => {
@@ -131,20 +123,5 @@ describe('MenuBar grouped prop forwarding', () => {
     })
     expect(html).toContain('No audio tracks')
     for (const id of CATEGORY_IDS) expect(html).toContain(id)
-  })
-})
-
-describe('isAnyMenuOpen', () => {
-  it('reports true only when a category id is set', () => {
-    // Regression: in fullscreen, App used pointer-Y alone (edgeReveal) to
-    // decide whether to keep the top bar revealed, so moving the cursor
-    // down into an open dropdown (below the reveal threshold) slid the bar
-    // away mid-click before the item could be clicked ("dropdown appears,
-    // then disappears, nothing else happens"). App now also ORs in this
-    // signal, fed by MenuBar's onOpenChange, to keep the bar up while any
-    // dropdown is open regardless of pointer position.
-    expect(isAnyMenuOpen(null)).toBe(false)
-    expect(isAnyMenuOpen('playback')).toBe(true)
-    expect(isAnyMenuOpen('audio')).toBe(true)
   })
 })

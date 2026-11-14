@@ -7,7 +7,7 @@ export interface StartupTabProps extends SettingsTabProps {
   supportsGameOcr: boolean
 }
 
-export const STARTUP_BEHAVIOR_ROWS: readonly {
+const STARTUP_BEHAVIOR_ROWS: readonly {
   value: StartupBehavior
   label: string
   description: string

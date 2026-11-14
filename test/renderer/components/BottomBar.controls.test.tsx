@@ -1,12 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import BottomBar, {
-  formatSpeedLabel,
-  nextSpeedPreset,
-  type PlayerApi
-} from '@src/renderer/src/components/BottomBar'
-import { SPEED_PRESETS } from '@src/renderer/src/components/menu/utils'
+import BottomBar, { type PlayerApi } from '@src/renderer/src/components/BottomBar'
 import { DEFAULT_SKIP_SECONDS } from '@src/shared/playerSettings'
 
 // The left cluster of the transport bar: playback speed plus the
@@ -42,29 +37,8 @@ function renderBar(overrides: Partial<React.ComponentProps<typeof BottomBar>> = 
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
-})
-
-describe('nextSpeedPreset', () => {
-  it('steps to the next shared preset and wraps past the fastest', () => {
-    expect(nextSpeedPreset(1)).toBe(1.25)
-    expect(nextSpeedPreset(1.5)).toBe(2)
-    expect(nextSpeedPreset(2)).toBe(SPEED_PRESETS[0])
-  })
-
-  it('lifts an off-preset speed to the next preset above it and clamps junk', () => {
-    expect(nextSpeedPreset(1.1)).toBe(1.25)
-    expect(nextSpeedPreset(2.75)).toBe(SPEED_PRESETS[0])
-    expect(nextSpeedPreset(Number.NaN)).toBe(1.25)
-  })
-})
-
-describe('formatSpeedLabel', () => {
-  it('renders the multiplier with a × suffix, clamped to the shared range', () => {
-    expect(formatSpeedLabel(1)).toBe('1×')
-    expect(formatSpeedLabel(1.5)).toBe('1.5×')
-    expect(formatSpeedLabel(99)).toBe('3×')
-  })
 })
 
 describe('BottomBar speed control', () => {
@@ -196,5 +170,65 @@ describe('BottomBar seek preview', () => {
     fireEvent.pointerMove(seekWrap, { clientX: 200 })
     expect(document.querySelector('.seek-preview-image')).toBe(image)
     expect(thumbnailFetch).toHaveBeenCalledOnce()
+  })
+})
+
+describe('BottomBar transport commands', () => {
+  it('routes seeks, pause, mute, volume, and fullscreen through rendered controls', () => {
+    const { props, rerender } = renderBar({ duration: 123, skipSeconds: 10 })
+    const player = props.player!
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+    expect(player.setPause).toHaveBeenLastCalledWith(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Go to beginning' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Go to end' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip back 10 seconds' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Skip ahead 10 seconds' }))
+    fireEvent.change(screen.getByRole('slider', { name: 'Seek' }), { target: { value: '42' } })
+    expect(vi.mocked(player.seek).mock.calls).toEqual([
+      [0, true],
+      [123, true],
+      [-10, false],
+      [10, false],
+      [42, true]
+    ])
+    fireEvent.click(screen.getByRole('button', { name: 'Mute' }))
+    expect(player.setMuted).toHaveBeenLastCalledWith(true)
+    fireEvent.change(screen.getByRole('slider', { name: 'Volume' }), { target: { value: '75' } })
+    expect(player.setVolume).toHaveBeenLastCalledWith(75)
+    expect(player.setMuted).toHaveBeenCalledTimes(1)
+    rerender(<BottomBar {...props} paused muted />)
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }))
+    expect(player.setPause).toHaveBeenLastCalledWith(false)
+    fireEvent.change(screen.getByRole('slider', { name: 'Volume' }), { target: { value: '30' } })
+    expect(player.setVolume).toHaveBeenLastCalledWith(30)
+    expect(player.setMuted).toHaveBeenLastCalledWith(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle fullscreen' }))
+    expect(props.onToggleFullscreen).toHaveBeenCalledOnce()
+  })
+
+  it('uses the preload player when no player is injected', () => {
+    const player = fakePlayer()
+    vi.stubGlobal('kizuna', { player })
+    renderBar({ player: undefined })
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+    expect(player.setPause).toHaveBeenCalledWith(true)
+  })
+
+  it.each([
+    [1, '1×', 1.25],
+    [1.5, '1.5×', 2],
+    [2, '2×', 0.5],
+    [1.1, '1.1×', 1.25],
+    [2.75, '2.75×', 0.5],
+    [Number.NaN, '1×', 1.25],
+    [99, '3×', 0.5],
+    [0, '0.25×', 0.5]
+  ])('cycles speed %s through the displayed control', (speed, label, next) => {
+    const onSetSpeed = vi.fn()
+    renderBar({ speed: speed as number, onSetSpeed })
+    const button = document.querySelector('#speed-control')!
+    expect(button.textContent).toBe(label)
+    fireEvent.click(button)
+    expect(onSetSpeed).toHaveBeenCalledWith(next)
   })
 })

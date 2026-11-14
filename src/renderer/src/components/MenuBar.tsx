@@ -25,7 +25,7 @@ export interface MenuBarProps {
   }
 }
 
-export function isAnyMenuOpen(openMenu: string | null): boolean {
+function isAnyMenuOpen(openMenu: string | null): boolean {
   return openMenu !== null
 }
 

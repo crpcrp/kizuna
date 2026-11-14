@@ -79,7 +79,7 @@ export interface WordPopupProps {
  * fallback sense list for results imported before `glossaryJson` existed
  * (schema < 2).
  */
-export function splitSenses(glossary: string): string[] {
+function splitSenses(glossary: string): string[] {
   return glossary
     .split('\n')
     .map((sense) => sense.trim())
@@ -91,7 +91,7 @@ export function splitSenses(glossary: string): string[] {
  * common-word marker, including Jitendex's ★ definition tag. Tokens are
  * matched exactly, not as substrings, so e.g. 'newsflash1' would not match.
  */
-export function isHighPriority(termTags: string, defTags = ''): boolean {
+function isHighPriority(termTags: string, defTags = ''): boolean {
   return priorityWeight(termTags, defTags) > 0
 }
 
@@ -130,7 +130,7 @@ function labelForToken(token: string): string | null {
  * preserving first-seen order (e.g. 'v5r' from rules and 'v5r vt' from
  * defTags both map 'v5r' -> 'godan verb', which only appears once).
  */
-export function posAttributes(rules: string, defTags: string): string[] {
+function posAttributes(rules: string, defTags: string): string[] {
   const tokens = [...rules.split(' '), ...defTags.split(' ')].filter((t) => t.length > 0)
   const labels: string[] = []
   const seen = new Set<string>()
@@ -144,7 +144,7 @@ export function posAttributes(rules: string, defTags: string): string[] {
   return labels
 }
 
-export interface KnowledgeSourceBadge {
+interface KnowledgeSourceBadge {
   source: KnowledgeSource
   label: string
   detailed: boolean
@@ -156,9 +156,7 @@ const KNOWLEDGE_SOURCE_ORDER = ['wanikani', 'anki'] as const
  * Builds the source badges shown for one word. `sourceKinds` is authoritative
  * because detailed metadata is optional and may be absent or malformed.
  */
-export function knowledgeSourceBadges(
-  provenance: KnowledgeDetails | undefined
-): KnowledgeSourceBadge[] {
+function knowledgeSourceBadges(provenance: KnowledgeDetails | undefined): KnowledgeSourceBadge[] {
   if (!provenance) return []
 
   return KNOWLEDGE_SOURCE_ORDER.flatMap((sourceKind): KnowledgeSourceBadge[] => {
@@ -246,7 +244,7 @@ function renderGlossaryNode(
  * chips; Yomitan itself injects no default spacing for them, so without
  * this the chips render squashed together with no gap at all.
  */
-export function dictStylesheets(
+function dictStylesheets(
   results: Pick<LookupResult, 'dictId' | 'stylesCss'>[]
 ): Array<{ dictId: number; css: string }> {
   const seen = new Set<number>()
@@ -274,7 +272,7 @@ export function dictStylesheets(
  * Returns `''` when nothing survives sanitization, so the caller can skip
  * emitting an empty `<style>`.
  */
-export function scopeDictCss(dictId: number, css: string): string {
+function scopeDictCss(dictId: number, css: string): string {
   const safe = sanitizeGlossaryCss(css)
   if (safe === '') return ''
   return `@scope ([data-dict-id="${dictId}"]) {\n${safe}\n}`

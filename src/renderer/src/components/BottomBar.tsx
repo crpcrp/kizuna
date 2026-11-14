@@ -166,17 +166,17 @@ export function togglePause(player: PlayerApi | undefined, paused: boolean): voi
 }
 
 /** Seek-slider handler: absolute seek to the given position in seconds. */
-export function seekTo(player: PlayerApi | undefined, seconds: number): void {
+function seekTo(player: PlayerApi | undefined, seconds: number): void {
   resolvePlayer(player).seek(seconds, true)
 }
 
 /** Go-to-beginning button handler: absolute seek to time 0. */
-export function goToStart(player: PlayerApi | undefined): void {
+function goToStart(player: PlayerApi | undefined): void {
   resolvePlayer(player).seek(0, true)
 }
 
 /** Go-to-end button handler: absolute seek to the loaded media's duration. */
-export function goToEnd(player: PlayerApi | undefined, duration: number): void {
+function goToEnd(player: PlayerApi | undefined, duration: number): void {
   resolvePlayer(player).seek(duration, true)
 }
 
@@ -200,14 +200,14 @@ export function skipAhead(
  * Volume-slider handler. Dragging the volume while muted also unmutes, which
  * is what users expect (the slider is dead otherwise).
  */
-export function changeVolume(player: PlayerApi | undefined, volume: number, muted = false): void {
+function changeVolume(player: PlayerApi | undefined, volume: number, muted = false): void {
   const p = resolvePlayer(player)
   p.setVolume(volume)
   if (muted) p.setMuted(false)
 }
 
 /** Mute button handler: flips the current muted state. */
-export function toggleMute(player: PlayerApi | undefined, muted: boolean): void {
+function toggleMute(player: PlayerApi | undefined, muted: boolean): void {
   resolvePlayer(player).setMuted(!muted)
 }
 
@@ -223,18 +223,18 @@ export function clampSpeed(speed: number): number {
  * fastest. Off-preset speeds (set by the ±step shortcuts) land on the next
  * preset above them, and the result is clamped to the shared mpv/UI range.
  */
-export function nextSpeedPreset(speed: number): number {
+function nextSpeedPreset(speed: number): number {
   const current = clampSpeed(speed)
   const next = SPEED_PRESETS.find((preset) => preset > current) ?? SPEED_PRESETS[0]
   return clampSpeed(next)
 }
 
 /** Speed shown on the transport bar's speed button — `1×`, `1.5×`. */
-export function formatSpeedLabel(speed: number): string {
+function formatSpeedLabel(speed: number): string {
   return `${clampSpeed(speed)}×`
 }
 
-export function chapterMarkerPercents(chapters: Chapter[], duration: number): number[] {
+function chapterMarkerPercents(chapters: Chapter[], duration: number): number[] {
   if (!Number.isFinite(duration) || duration <= 0) return []
   return chapters.map((chapter) => Math.max(0, Math.min(100, (chapter.start / duration) * 100)))
 }
@@ -245,7 +245,7 @@ export function chapterMarkerPercents(chapters: Chapter[], duration: number): nu
  * unknown. Trusts `a <= b` (the renderer normalizes the pair before storing —
  * see `cycleAbLoop`), so the width is never negative.
  */
-export function abLoopRangePercent(
+function abLoopRangePercent(
   abLoop: AbLoopState | undefined,
   duration: number
 ): { left: number; width: number } | null {
@@ -258,17 +258,17 @@ export function abLoopRangePercent(
 }
 
 /** Whether the A–B loop badge should show: A is set (loop armed or active). */
-export function abLoopArmed(abLoop: AbLoopState | undefined): boolean {
+function abLoopArmed(abLoop: AbLoopState | undefined): boolean {
   return abLoop?.a != null
 }
 
 /** The volume slider always exposes mpv's full 0–200% range. */
-export function volumeSliderMax(): number {
+function volumeSliderMax(): number {
   return 200
 }
 
 /** True once volume is in the >100% software-boost range (drives the boost tint). */
-export function isVolumeBoosted(volume: number): boolean {
+function isVolumeBoosted(volume: number): boolean {
   return volume > 100
 }
 

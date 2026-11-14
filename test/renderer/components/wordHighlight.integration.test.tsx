@@ -1,11 +1,14 @@
+// @vitest-environment happy-dom
 import React from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+afterEach(cleanup)
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { parseMecab } from '@src/main/services/mecab/parseMecab'
 import { lookup } from '@src/main/services/dict/lookup'
 import type { LookupDb } from '@src/main/services/dict/lookupDb'
 import SubtitleOverlay from '@src/renderer/src/components/SubtitleOverlay'
-import { CueRowContent } from '@src/renderer/src/components/SubtitleSidebar'
+import SubtitleSidebar from '@src/renderer/src/components/SubtitleSidebar'
 import { cueKey } from '@src/renderer/src/state/tokenization'
 import { type DictLookupBridge, lookupWordPopup } from '@src/renderer/src/state/wordLookup'
 import type { Token } from '@src/shared/token'
@@ -204,16 +207,18 @@ describe('compound knowledge projection rendering', () => {
 
   it('applies the same resolver output in sidebar rows without corrupting overlapping search marks', async () => {
     const spans = await resolvedSpans()
-    const html = renderToStaticMarkup(
-      <CueRowContent
-        cue={cue}
-        rowTokens={tokens}
+    const { container } = render(
+      <SubtitleSidebar
+        cues={[cue]}
+        tokens={{ [cueKey(cue)]: tokens }}
         levels={{ 神: 'unknown', 様: 'unknown' }}
-        vocabularySpans={spans}
-        matches={[{ cueKey: cueKey(cue), start: 1, end: 3 }]}
-        currentMatch={{ cueKey: cueKey(cue), start: 1, end: 3 }}
+        spansForCue={() => spans}
+        onSelectCue={() => {}}
       />
     )
+    fireEvent.change(screen.getByLabelText('Search query'), { target: { value: '様と' } })
+    fireEvent.click(screen.getByLabelText('Search subtitles'))
+    const html = container.innerHTML
 
     expect(html).toContain('data-level="known"><mark data-current="">様</mark></span>')
     expect(html).toContain('data-level="wellKnown"><mark data-current="">と</mark></span>')

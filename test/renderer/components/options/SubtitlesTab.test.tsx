@@ -2,13 +2,9 @@
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import SubtitlesTab, {
-  describeJimakuKeyStorage,
-  describeJimakuTestOutcome,
-  describeTranslationKeyStorage
-} from '@src/renderer/src/components/options/SubtitlesTab'
+import SubtitlesTab from '@src/renderer/src/components/options/SubtitlesTab'
 import { DEFAULT_SUBTITLE_STYLE } from '@src/shared/playerSettings'
-import type { JimakuSettingsStatus } from '@src/shared/jimaku'
+import type { JimakuTestOutcome, JimakuSettingsStatus } from '@src/shared/jimaku'
 
 afterEach(cleanup)
 
@@ -36,59 +32,6 @@ function renderTab(
     />
   )
 }
-
-describe('describeTranslationKeyStorage', () => {
-  it('describes secure storage when available', () => {
-    const text = describeTranslationKeyStorage(true)
-    expect(text).toContain('encrypted with your operating system')
-    expect(text).toContain('sent to Microsoft Azure only when you explicitly request translation')
-    expect(text).not.toContain('unencrypted')
-  })
-
-  it('describes the unencrypted fallback when secure storage is unavailable', () => {
-    const text = describeTranslationKeyStorage(false)
-    expect(text).toContain('fallback is unencrypted')
-    expect(text).not.toContain('encrypted with your operating system')
-  })
-
-  it('makes no encryption claim while settings are unknown', () => {
-    const text = describeTranslationKeyStorage(undefined)
-    expect(text).toContain('stored locally')
-    expect(text).not.toMatch(/encrypted|unencrypted|secure store/)
-  })
-})
-
-describe('Jimaku option helpers', () => {
-  it('warns about unavailable storage without making a claim while loading', () => {
-    expect(describeJimakuKeyStorage(false)).toContain('without encryption')
-    expect(describeJimakuKeyStorage(undefined)).toContain('still being checked')
-    expect(describeJimakuKeyStorage(undefined)).not.toContain('without encryption')
-  })
-
-  it('sanitizes connection outcomes and includes a valid retry time', () => {
-    expect(describeJimakuTestOutcome({ status: 'connected' })).toContain(
-      'read-only API check succeeded'
-    )
-    expect(
-      describeJimakuTestOutcome({
-        status: 'error',
-        error: { code: 'unauthorized' }
-      })
-    ).toBe('Invalid API key.')
-    expect(
-      describeJimakuTestOutcome({
-        status: 'error',
-        error: { code: 'rateLimited', retryAt: '2026-09-09T12:00:00.000Z' }
-      })
-    ).toContain('Rate limited. Try again after')
-    expect(
-      describeJimakuTestOutcome({
-        status: 'error',
-        error: { code: 'network' }
-      })
-    ).toContain('could not be reached')
-  })
-})
 
 describe('SubtitlesTab Azure Translator controls', () => {
   it('renders an unconfigured password field without a saved key', () => {
@@ -323,5 +266,124 @@ describe('SubtitlesTab Jimaku controls', () => {
       />
     )
     expect((screen.getByLabelText('Paste API key') as HTMLInputElement).value).toBe('')
+  })
+})
+
+describe('SubtitlesTab storage disclosure', () => {
+  it.each([true, false, undefined])(
+    'reports Azure and Jimaku storage availability %s',
+    (available) => {
+      const { container } = renderTab({
+        translationSettings: {
+          hasAzureKey: false,
+          azureRegion: '',
+          encryptionAvailable: available
+        },
+        jimakuSettings:
+          available === undefined
+            ? undefined
+            : {
+                configured: false,
+                secretStorageAvailable: available,
+                testOutcome: { status: 'notTested' }
+              }
+      })
+      const text = container.textContent!
+      expect(text).toContain('sent to Microsoft Azure only when you explicitly request translation')
+      if (available === true) expect(text).toContain('encrypted with your operating system')
+      else if (available === false) {
+        expect(text).toContain('fallback is unencrypted')
+        expect(text).toContain('without encryption')
+      } else {
+        expect(text).toContain('stored locally')
+        expect(text).toContain('still being checked')
+        expect(text).not.toMatch(
+          /unencrypted|without encryption|encrypted with your operating system/
+        )
+      }
+    }
+  )
+
+  it.each([
+    [{ status: 'connected' }, 'read-only API check succeeded'],
+    [{ status: 'error', error: { code: 'unauthorized' } }, 'Invalid API key.'],
+    [
+      { status: 'error', error: { code: 'rateLimited', retryAt: '2026-09-09T12:00:00.000Z' } },
+      'Rate limited. Try again after'
+    ],
+    [{ status: 'error', error: { code: 'network' } }, 'could not be reached']
+  ] satisfies [JimakuTestOutcome, string][])(
+    'renders a sanitized saved-key test outcome',
+    (jimakuTestOutcome, message) => {
+      renderTab({
+        jimakuSettings: {
+          configured: true,
+          secretStorageAvailable: true,
+          testOutcome: jimakuTestOutcome
+        }
+      })
+      expect(document.body.textContent).toContain(message)
+    }
+  )
+})
+
+describe('SubtitlesTab numeric settings', () => {
+  it('converts valid font and position boundaries and ignores malformed input', () => {
+    const onChange = vi.fn()
+    renderTab({
+      onChange,
+      settings: {
+        ...initialPlayerState,
+        subtitleStyle: { ...DEFAULT_SUBTITLE_STYLE, fontScale: 0.9, xPct: 25, yPct: 25 }
+      }
+    })
+    for (const [id, key, values] of [
+      [
+        'subtitle-font-scale-input',
+        'fontScale',
+        [
+          ['100', 1],
+          ['150', 1.5],
+          ['50', 0.5],
+          ['300', 3]
+        ]
+      ],
+      [
+        'subtitle-x-input',
+        'xPct',
+        [
+          ['0', 0],
+          ['50', 50],
+          ['100', 100]
+        ]
+      ],
+      [
+        'subtitle-y-input',
+        'yPct',
+        [
+          ['0', 0],
+          ['100', 100]
+        ]
+      ]
+    ] as const) {
+      const input = document.getElementById(id)!
+      // Bypass number-input sanitization to exercise malformed raw values.
+      input.setAttribute('type', 'text')
+      for (const [value, expected] of values) {
+        input.setAttribute('type', 'text')
+        fireEvent.change(input, { target: { value } })
+        expect(onChange).toHaveBeenLastCalledWith({
+          subtitleStyle: { [key]: expected }
+        })
+      }
+      onChange.mockClear()
+      for (const value of id === 'subtitle-font-scale-input'
+        ? ['49', '301', 'abc', '']
+        : ['-1', '101', 'abc']) {
+        input.setAttribute('type', 'text')
+        fireEvent.change(input, { target: { value } })
+      }
+      expect(onChange).not.toHaveBeenCalled()
+    }
   })
 })

@@ -9,7 +9,7 @@ import type { KeyBinding, KeyBindings, PlayerKeyAction } from '../../../../share
 import type { SettingEntry } from './types'
 
 /** Row order and display label for each rebindable action. */
-export const ACTION_ROWS: { action: PlayerKeyAction; label: string }[] = [
+const ACTION_ROWS: { action: PlayerKeyAction; label: string }[] = [
   { action: 'togglePause', label: 'Play / Pause' },
   { action: 'toggleFullscreen', label: 'Toggle Fullscreen' },
   { action: 'exitFullscreen', label: 'Exit Fullscreen' },

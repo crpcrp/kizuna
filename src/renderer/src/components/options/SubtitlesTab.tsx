@@ -28,7 +28,7 @@ export interface SubtitlesTabProps extends SettingsTabProps {
   onOpenJimakuAccount: () => void
 }
 
-export function parseFontScalePercent(rawValue: string): number | null {
+function parseFontScalePercent(rawValue: string): number | null {
   const value = Number(rawValue)
   return Number.isFinite(value) &&
     value >= SUBTITLE_FONT_SCALE_MIN * 100 &&
@@ -37,12 +37,12 @@ export function parseFontScalePercent(rawValue: string): number | null {
     : null
 }
 
-export function parsePositionPercent(rawValue: string): number | null {
+function parsePositionPercent(rawValue: string): number | null {
   const value = Number(rawValue)
   return Number.isFinite(value) && value >= 0 && value <= 100 ? value : null
 }
 
-export function describeTranslationKeyStorage(encryptionAvailable: boolean | undefined): string {
+function describeTranslationKeyStorage(encryptionAvailable: boolean | undefined): string {
   const transmission =
     'Selected subtitle/OCR text is sent to Microsoft Azure only when you explicitly request translation.'
   if (encryptionAvailable === undefined) {
@@ -60,7 +60,7 @@ export function describeTranslationKeyStorage(encryptionAvailable: boolean | und
   )
 }
 
-export function describeJimakuKeyStorage(encryptionAvailable: boolean | undefined): string {
+function describeJimakuKeyStorage(encryptionAvailable: boolean | undefined): string {
   if (encryptionAvailable === undefined) {
     return 'The key is stored locally. Encryption availability is still being checked.'
   }
@@ -77,7 +77,7 @@ function formatRetryAt(retryAt: string | undefined): string | null {
   return timestamp.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-export function describeJimakuTestOutcome(outcome: JimakuTestOutcome | undefined): string | null {
+function describeJimakuTestOutcome(outcome: JimakuTestOutcome | undefined): string | null {
   if (outcome === undefined || outcome.status === 'notTested') return null
   if (outcome.status === 'connected') {
     return 'Connected. The read-only API check succeeded; subtitle availability is not guaranteed.'
