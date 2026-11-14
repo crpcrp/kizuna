@@ -9,7 +9,6 @@ import {
   SUPPORTED_SCHEMA_VERSION,
   acquireResources,
   lockProblems,
-  missingRequiredPaths,
   parseChecksums,
   platformKeyFor,
   stageResources,
@@ -403,7 +402,7 @@ describe('resource staging', () => {
     )
   })
 
-  it('is idempotent and reports missing required paths', async () => {
+  it('skips staged files and reports missing paths for the other platform', async () => {
     const { vendorDir, resourcesDir } = await makeMirror()
     const first = await stageResources({
       lock: LOCK,
@@ -420,10 +419,14 @@ describe('resource staging', () => {
     expect(first.copied).toHaveLength(5)
     expect(second.copied).toEqual([])
     expect(second.skipped).toHaveLength(5)
-
     await expect(
-      missingRequiredPaths({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
-    ).resolves.toEqual(expect.arrayContaining(['mpv/mpv', 'mecab/mecab']))
+      stagedResourceProblems({ lock: LOCK, platformKey: 'linux-x64', resourcesDir })
+    ).resolves.toEqual(
+      expect.arrayContaining([
+        'missing required path: mpv/mpv',
+        'missing required path: mecab/mecab'
+      ])
+    )
   })
 
   it('rejects a staged file whose contents drift from the lock', async () => {

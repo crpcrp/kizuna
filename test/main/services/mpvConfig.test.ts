@@ -14,7 +14,7 @@ afterEach(() => {
 })
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { PATH_PLATFORMS } from '@test/harness/platformPaths'
-import { createMpvConfigManager, mpvConfigDir, mpvScriptsDir } from '@src/main/services/mpvConfig'
+import { createMpvConfigManager } from '@src/main/services/mpvConfig'
 
 // The config dir is derived per platform, so both variants are asserted on
 // either host instead of letting the runner pick which one gets covered.
@@ -22,8 +22,13 @@ describe.each(PATH_PLATFORMS)(
   'mpvConfigDir / mpvScriptsDir on $label',
   ({ platform, path, userDataDir }) => {
     it('places the config dir under <userData>/mpv and scripts beneath it', () => {
-      expect(mpvConfigDir(userDataDir, platform)).toBe(path.join(userDataDir, 'mpv'))
-      expect(mpvScriptsDir(userDataDir, platform)).toBe(path.join(userDataDir, 'mpv', 'scripts'))
+      const manager = createMpvConfigManager({
+        userDataDir,
+        platform,
+        shell: { openPath: async () => '' }
+      })
+      expect(manager.configDir).toBe(path.join(userDataDir, 'mpv'))
+      expect(manager.scriptsDir).toBe(path.join(userDataDir, 'mpv', 'scripts'))
     })
   }
 )

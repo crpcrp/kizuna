@@ -9,7 +9,7 @@ export interface DbLike {
   exec(sql: string): unknown
 }
 
-export const CREATE_KNOWN_WORDS_TABLE = `
+const CREATE_KNOWN_WORDS_TABLE = `
 CREATE TABLE IF NOT EXISTS known_words (
   source     TEXT NOT NULL,
   lemma      TEXT NOT NULL,
@@ -21,10 +21,10 @@ CREATE TABLE IF NOT EXISTS known_words (
   PRIMARY KEY (source, lemma, reading)
 )`
 
-export const CREATE_KNOWN_LEMMA_INDEX = `
+const CREATE_KNOWN_LEMMA_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_known_lemma ON known_words (lemma)`
 
-export const CREATE_SYNC_STATE_TABLE = `
+const CREATE_SYNC_STATE_TABLE = `
 CREATE TABLE IF NOT EXISTS sync_state (
   source       TEXT PRIMARY KEY,
   last_sync_at TEXT,

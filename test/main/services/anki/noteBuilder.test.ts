@@ -1,12 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  boldTarget,
-  buildNote,
-  formatAnkiFurigana,
-  frequencyValue,
-  pitchAccentValue,
-  type NoteSource
-} from '@src/main/services/anki/noteBuilder'
+import { boldTarget, buildNote, formatAnkiFurigana } from '@src/main/services/anki/noteBuilder'
 import { JPOD101_NO_AUDIO_MD5 } from '@src/main/services/anki/audioSource'
 import type { AnkiSettings } from '@src/shared/anki'
 import type { Token } from '@src/shared/token'
@@ -14,6 +7,8 @@ import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 import { makeAnkiSettings } from '@test/harness/ankiFixtures'
+
+type NoteSource = Parameters<typeof buildNote>[0]
 
 const token: Token = makeToken({
   surface: '食べる',
@@ -268,45 +263,6 @@ describe('buildNote', () => {
     const note = buildNote(source, { ...settings, tags: ['kizuna', 'mined'] })
 
     expect(note.tags).toEqual(['kizuna', 'mined'])
-  })
-})
-
-describe('frequencyValue', () => {
-  const of = (frequency: number | null, frequencyDisplay: string | null): string =>
-    frequencyValue({ ...lookupResult, frequency, frequencyDisplay })
-
-  it('uses a non-empty display string verbatim', () => {
-    expect(of(12000, '12k')).toBe('12k')
-  })
-
-  it('stringifies the numeric frequency when there is no display string', () => {
-    expect(of(42, null)).toBe('42')
-  })
-
-  it('keeps a zero frequency when the display string is empty', () => {
-    expect(of(0, '')).toBe('0')
-  })
-
-  it('is empty when the result carries no frequency metadata', () => {
-    expect(of(null, null)).toBe('')
-  })
-})
-
-describe('pitchAccentValue', () => {
-  const of = (pitchAccent: number[] | null): string =>
-    pitchAccentValue({ ...lookupResult, pitchAccent })
-
-  it('formats a single heiban position', () => {
-    expect(of([0])).toBe('0')
-  })
-
-  it('joins several positions with a comma and a space, in order', () => {
-    expect(of([1, 3])).toBe('1, 3')
-  })
-
-  it('is empty for a result with no pitch metadata', () => {
-    expect(of(null)).toBe('')
-    expect(of([])).toBe('')
   })
 })
 

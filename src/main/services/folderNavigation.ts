@@ -4,7 +4,7 @@ import { pathApiFor } from '../platformPath'
 export type ReadDir = (folder: string) => Promise<string[]>
 
 /** Natural, case-insensitive filename comparison: `ep2` sorts before `ep10`. */
-export function naturalCompare(a: string, b: string): number {
+function naturalCompare(a: string, b: string): number {
   return a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' })
 }
 
@@ -12,7 +12,7 @@ export function naturalCompare(a: string, b: string): number {
  * Pure neighbor lookup for `currentBasename` among video filenames only.
  * Basename matching is case-insensitive to match Windows/NTFS behavior.
  */
-export function videoNeighbors(
+function videoNeighbors(
   fileNames: string[],
   currentBasename: string
 ): { prev?: string; next?: string } {
@@ -33,7 +33,7 @@ export function videoNeighbors(
  * The same filter/sort `videoNeighbors` uses, but the whole listing — for
  * "Add folder to playlist".
  */
-export function sortedVideoPaths(
+function sortedVideoPaths(
   folder: string,
   fileNames: string[],
   platform: NodeJS.Platform = process.platform

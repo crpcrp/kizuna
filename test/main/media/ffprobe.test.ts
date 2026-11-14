@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  buildFfprobeArgs,
   parseFfprobeTracks,
   parseFfprobeVideoDimensions,
   enumerateVideoDimensions
@@ -9,26 +8,6 @@ import {
 import { fixture } from '@test/paths'
 
 const FIXTURE = readFileSync(fixture('ffprobe-mkv.json'), 'utf-8')
-
-describe('buildFfprobeArgs', () => {
-  it('includes the file path and json print format', () => {
-    const args = buildFfprobeArgs('C:\\videos\\episode.mkv')
-
-    expect(args).toContain('C:\\videos\\episode.mkv')
-    expect(args).toContain('-print_format')
-    expect(args).toContain('json')
-    expect(args).toContain('-show_streams')
-  })
-
-  it('ends option parsing before the path so a leading-dash path is not an option', () => {
-    // `execFile` blocks shell injection, but ffprobe would still parse a path
-    // like `-show_format` as an option without the `--` separator.
-    const args = buildFfprobeArgs('-show_format')
-
-    expect(args.at(-2)).toBe('--')
-    expect(args.at(-1)).toBe('-show_format')
-  })
-})
 
 describe('parseFfprobeTracks', () => {
   it('returns only audio+subtitle tracks, excluding video, in order', () => {

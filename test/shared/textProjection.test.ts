@@ -4,7 +4,6 @@ import {
   createTextProjection,
   displayTextProjection,
   mapAnalysisRangeToDisplayRanges,
-  mapDisplayOffsetToAnalysisOffset,
   type TextOffsetRange
 } from '@src/shared/textProjection'
 
@@ -19,7 +18,6 @@ describe('text projection', () => {
 
     expect(projection.displayText).toBe('日本語')
     expect(projection.analysisText).toBe('日本語')
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
     expect(mapAnalysisRangeToDisplayRanges(projection, range(1, 3))).toEqual([range(1, 3)])
   })
 
@@ -28,7 +26,6 @@ describe('text projection', () => {
 
     expect(projection.displayText).toBe('棒人間が描か\nれている。')
     expect(projection.analysisText).toBe('棒人間が描かれている。')
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 7)).toBe(6)
   })
 
   it('retains empty lines in display text but not analysis text', () => {
@@ -58,25 +55,9 @@ describe('text projection', () => {
     expect(mapAnalysisRangeToDisplayRanges(projection, input)).toEqual(expected)
   })
 
-  it('maps display offsets across lines back to analysis offsets', () => {
-    const projection = createTextProjection(['描か', 'れている'])
-
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 6)).toBe(5)
-  })
-
-  it('maps an inserted newline to the analysis offset after it', () => {
-    const projection = createTextProjection(['前', '後'])
-
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 1)).toBe(1)
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 2)).toBe(1)
-  })
-
   it('keeps offset boundaries stable around a newline', () => {
     const projection = createTextProjection(['ab', 'cd'])
 
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 2)).toBe(2)
-    expect(mapDisplayOffsetToAnalysisOffset(projection, 3)).toBe(2)
     expect(mapAnalysisRangeToDisplayRanges(projection, range(2, 2))).toEqual([])
   })
 
@@ -89,7 +70,6 @@ describe('text projection', () => {
   it('rejects malformed offsets and ranges consistently', () => {
     const projection = createTextProjection(['abc'])
 
-    expect(() => mapDisplayOffsetToAnalysisOffset(projection, 4)).toThrow(RangeError)
     expect(() => mapAnalysisRangeToDisplayRanges(projection, range(2, 1))).toThrow(RangeError)
   })
 

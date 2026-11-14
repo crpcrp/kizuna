@@ -15,7 +15,7 @@ export interface DbLike {
 /** Bump when the on-disk schema shape changes; stored per-dictionary row. */
 export const CURRENT_DICT_SCHEMA_VERSION = 4
 
-export const CREATE_DICTIONARIES_TABLE = `
+const CREATE_DICTIONARIES_TABLE = `
 CREATE TABLE IF NOT EXISTS dictionaries (
   id INTEGER PRIMARY KEY,
   title TEXT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS dictionaries (
   styles_css TEXT
 )`
 
-export const CREATE_TERMS_TABLE = `
+const CREATE_TERMS_TABLE = `
 CREATE TABLE IF NOT EXISTS terms (
   id INTEGER PRIMARY KEY,
   dict_id INTEGER NOT NULL,
@@ -43,10 +43,10 @@ CREATE TABLE IF NOT EXISTS terms (
   glossary_json TEXT
 )`
 
-export const CREATE_TERMS_EXPRESSION_INDEX = `
+const CREATE_TERMS_EXPRESSION_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_terms_expression ON terms (expression)`
 
-export const CREATE_TERMS_READING_INDEX = `
+const CREATE_TERMS_READING_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_terms_reading ON terms (reading)`
 
 /**
@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_terms_reading ON terms (reading)`
  * can hold several positions, so it does not fit the single numeric `value`
  * column, and overloading it would break frequency queries.
  */
-export const CREATE_TERM_META_TABLE = `
+const CREATE_TERM_META_TABLE = `
 CREATE TABLE IF NOT EXISTS term_meta (
   id INTEGER PRIMARY KEY,
   dict_id INTEGER NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS term_meta (
   pitch_positions TEXT
 )`
 
-export const CREATE_TERM_META_EXPRESSION_INDEX = `
+const CREATE_TERM_META_EXPRESSION_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_term_meta_expr ON term_meta (dict_id, expression)`
 
 /** All DDL statements, in dependency order (tables before their indexes). */

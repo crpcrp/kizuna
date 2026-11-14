@@ -1,29 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fixture } from '@test/paths'
-import {
-  buildFfprobeChaptersArgs,
-  enumerateChapters,
-  parseFfprobeChapters
-} from '@src/main/media/ffprobe'
+import { enumerateChapters, parseFfprobeChapters } from '@src/main/media/ffprobe'
 
 const FIXTURE = readFileSync(fixture('ffprobe-chapters.json'), 'utf-8')
-
-describe('buildFfprobeChaptersArgs', () => {
-  it('includes the file path and chapter json flags', () => {
-    const args = buildFfprobeChaptersArgs('C:\\videos\\episode.mkv')
-
-    expect(args).toEqual([
-      '-v',
-      'error',
-      '-print_format',
-      'json',
-      '-show_chapters',
-      '--',
-      'C:\\videos\\episode.mkv'
-    ])
-  })
-})
 
 describe('parseFfprobeChapters', () => {
   it('parses chapter seconds and optional titles from fixture output', () => {
@@ -70,7 +50,10 @@ describe('enumerateChapters', () => {
 
     expect(chapters).toHaveLength(3)
     expect(calls).toEqual([
-      { ffprobePath: 'ffprobe.exe', args: buildFfprobeChaptersArgs(filePath) }
+      {
+        ffprobePath: 'ffprobe.exe',
+        args: ['-v', 'error', '-print_format', 'json', '-show_chapters', '--', filePath]
+      }
     ])
   })
 })

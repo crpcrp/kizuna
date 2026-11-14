@@ -812,18 +812,6 @@ export async function stagedResourceProblems({ lock, platformKey, resourcesDir }
 }
 
 /**
- * Backwards-compatible helper name for callers that only need missing paths.
- *
- * @param {{ lock: LockFile, platformKey: string, resourcesDir: string }} options
- * @returns {Promise<string[]>}
- */
-export async function missingRequiredPaths({ lock, platformKey, resourcesDir }) {
-  return (await stagedResourceProblems({ lock, platformKey, resourcesDir }))
-    .filter((problem) => problem.startsWith('missing required path:'))
-    .map((problem) => problem.slice('missing required path: '.length))
-}
-
-/**
  * Whole flow: validate the lock, materialise the pinned mirror, verify the
  * selected platform, stage resources, and re-check the resulting layout.
  *

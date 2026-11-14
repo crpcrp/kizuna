@@ -1,5 +1,5 @@
 import * as fs from 'node:fs'
-import type { BrowserWindow, IpcMain, WebContents } from 'electron'
+import type { BrowserWindow, IpcMain } from 'electron'
 import type { SecretCodec } from '../services/secrets'
 import type { SettingsStore } from '../services/settings'
 import type { AppPaths } from './paths'
@@ -24,10 +24,6 @@ export interface BootstrapDeps {
  */
 export interface MainWindowRef {
   current: BrowserWindow | undefined
-}
-
-export function isMainWindowSender(ref: MainWindowRef, sender: WebContents): boolean {
-  return sender === ref.current?.webContents
 }
 
 /** Read-then-delete adapters for the short-lived files under `app.getPath('temp')`. */

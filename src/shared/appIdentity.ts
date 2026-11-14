@@ -41,15 +41,3 @@ export const APP_ID = APP_IDENTITY.appId
 export const USER_DATA_DIR_NAME = APP_IDENTITY.userDataDirName
 export const COPYRIGHT = APP_IDENTITY.copyright
 export const REPOSITORY_URL = APP_IDENTITY.repositoryUrl
-
-/**
- * Whether `id` is a usable Windows AppUserModelID / electron-builder `appId`:
- * at least two dot-separated segments of ASCII letters, digits, or hyphens,
- * each starting with a letter. Windows silently ignores a malformed
- * AppUserModelID (taskbar grouping and notifications then fall back to the
- * executable path), so this is asserted at build time by a test rather than
- * discovered after a release.
- */
-export function isValidAppId(id: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z][A-Za-z0-9-]*)+$/.test(id)
-}

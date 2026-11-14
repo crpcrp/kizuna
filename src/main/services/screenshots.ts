@@ -11,7 +11,7 @@ const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g
  * Replaces Windows-invalid filename characters (`<>:"/\|?*` and control
  * chars) with '-'; trims trailing dots/spaces.
  */
-export function sanitizeScreenshotName(name: string): string {
+function sanitizeScreenshotName(name: string): string {
   return name.replace(INVALID_FILENAME_CHARS, '-').replace(/[. ]+$/, '')
 }
 
@@ -40,7 +40,7 @@ function screenshotStem(mediaPath: string): string {
  * `-3`… appended before `.png` until the name is free. `stem` is the media
  * basename minus its extension, sanitized.
  */
-export function screenshotPath(
+function screenshotPath(
   dir: string,
   mediaPath: string,
   timePos: number,

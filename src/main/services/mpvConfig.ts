@@ -6,23 +6,17 @@ import { mkdirSync } from 'node:fs'
 import { pathApiFor } from '../platformPath'
 
 /** The mpv config dir mpv reads from when the user enables it. */
-export function mpvConfigDir(
-  userDataDir: string,
-  platform: NodeJS.Platform = process.platform
-): string {
+function mpvConfigDir(userDataDir: string, platform: NodeJS.Platform = process.platform): string {
   return pathApiFor(platform).join(userDataDir, 'mpv')
 }
 
 /** The `scripts/` subfolder created on first enable so users have a drop target. */
-export function mpvScriptsDir(
-  userDataDir: string,
-  platform: NodeJS.Platform = process.platform
-): string {
+function mpvScriptsDir(userDataDir: string, platform: NodeJS.Platform = process.platform): string {
   return pathApiFor(platform).join(mpvConfigDir(userDataDir, platform), 'scripts')
 }
 
 /** The slice of Electron's `shell` this manager needs (fakeable in tests). */
-export interface MpvConfigShellLike {
+interface MpvConfigShellLike {
   openPath(path: string): Promise<string>
 }
 
