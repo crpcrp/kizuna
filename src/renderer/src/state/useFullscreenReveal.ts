@@ -5,7 +5,7 @@ export interface EdgeReveal {
   bottom: boolean
 }
 
-export function edgeReveal(
+function edgeReveal(
   clientY: number,
   innerHeight: number,
   threshold = 80,

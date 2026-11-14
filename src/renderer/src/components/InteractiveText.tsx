@@ -115,7 +115,7 @@ export function tokenSpans(
  * timing. `id` is only the vocabulary-span identity used by the existing
  * compound projection; it is not rendered as a DOM id.
  */
-export function tokenLevels(
+function tokenLevels(
   id: string,
   tokens: Token[],
   levels: Record<string, KnowledgeLevel> | undefined,

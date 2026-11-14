@@ -16,7 +16,7 @@ import { errorMessage } from '../util/errorMessage'
 
 /** Seconds of lead-in/lead-out kept around a mined line, so the clip does not
  * clip the speaker's first or last mora. */
-export const SENTENCE_AUDIO_PAD_SEC = 0.25
+const SENTENCE_AUDIO_PAD_SEC = 0.25
 
 /** Hard ceiling on one mined clip, guarding against a pathological cue that
  * spans minutes of the file. */

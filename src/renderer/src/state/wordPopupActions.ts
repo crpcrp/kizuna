@@ -17,7 +17,7 @@ export interface PopupRequestToken {
 }
 
 /** Owns popup requests so late dictionary or Anki responses cannot update a newer popup. */
-export function createPopupRequestToken(): PopupRequestToken {
+function createPopupRequestToken(): PopupRequestToken {
   let current = 0
   return {
     begin: () => ++current,

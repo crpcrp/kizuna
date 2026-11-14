@@ -242,7 +242,7 @@ export function SidebarRowView({
 
 /** Memoized row: with stable props, an active-cue change re-renders only the
  * previously and newly active rows, not the whole track. */
-export const SidebarRow = memo(SidebarRowView)
+const SidebarRow = memo(SidebarRowView)
 
 export default function SubtitleSidebar({
   cues,

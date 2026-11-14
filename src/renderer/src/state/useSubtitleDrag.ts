@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import type { PlayerAction } from './playerState'
 import type { SettingsPersistence } from './settingsPersistence'
 
-export function clampSubtitlePosition(xPct: number, yPct: number): { xPct: number; yPct: number } {
+function clampSubtitlePosition(xPct: number, yPct: number): { xPct: number; yPct: number } {
   return { xPct: Math.min(100, Math.max(0, xPct)), yPct: Math.min(100, Math.max(0, yPct)) }
 }
 
-export function pointerToSubtitlePosition(
+function pointerToSubtitlePosition(
   clientX: number,
   clientY: number,
   containerRect: { left: number; top: number; width: number; height: number }

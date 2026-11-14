@@ -8,7 +8,7 @@ export interface VideoMargins {
   left: number
 }
 
-export function computeVideoMargins(
+function computeVideoMargins(
   topBarHeight: number,
   bottomBarHeight: number,
   windowHeight: number,

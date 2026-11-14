@@ -46,7 +46,7 @@ function logError(error: unknown): void {
   console.error('[kizuna] JLPT coverage report failed:', error)
 }
 
-export function userSafeError(message: string): string {
+function userSafeError(message: string): string {
   const normalized = message.toLowerCase()
   if (
     normalized.includes('bundled jlpt coverage data') &&
