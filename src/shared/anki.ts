@@ -49,7 +49,7 @@ export interface AnkiSettings {
 }
 
 /** Every mappable note field, in Options → Anki row order. */
-export const ANKI_FIELDS: AnkiField[] = [
+const ANKI_FIELDS: AnkiField[] = [
   'word',
   'reading',
   'definition',

@@ -156,7 +156,7 @@ const defaultThumbnailFetch: ThumbnailFetch = (path, timeSec, durationSec) =>
  * Picks the injected player or falls back to the preload bridge.
  * Resolved lazily (at call time) so SSR tests never need `window`.
  */
-export function resolvePlayer(player?: PlayerApi): PlayerApi {
+function resolvePlayer(player?: PlayerApi): PlayerApi {
   return player ?? window.kizuna.player
 }
 

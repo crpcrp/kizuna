@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  DEFAULT_GAME_OCR_SHORTCUT,
   formatGameOcrShortcutForDisplay,
   gameOcrShortcutFromKeyboardEvent,
   normalizeGameOcrShortcut
@@ -14,7 +13,7 @@ describe('Game OCR shortcut settings', () => {
 
   it('falls back for malformed or duplicate accelerators', () => {
     for (const value of [undefined, null, '', 'Ctrl+Ctrl+O', 'Ctrl', 'Ctrl+NotAKey']) {
-      expect(normalizeGameOcrShortcut(value)).toBe(DEFAULT_GAME_OCR_SHORTCUT)
+      expect(normalizeGameOcrShortcut(value)).toBe('Ctrl+Shift+O')
     }
   })
 

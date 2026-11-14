@@ -42,7 +42,7 @@ export interface GameOcrDisplayEvents {
  * The controller requests focus after the screenshot is drawn. Windows can
  * refuse programmatic activation, so mouse activation must remain enabled too.
  */
-export function getGameOcrWindowOptions(
+function getGameOcrWindowOptions(
   preloadPath: string,
   displayBounds: OcrDisplayBounds
 ): BrowserWindowConstructorOptions {

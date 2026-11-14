@@ -12,11 +12,7 @@ import {
   verifyDesktopEntry,
   verifyExecutableModes
 } from '@scripts/linuxPackaging.mjs'
-import {
-  createStartupProbe,
-  STARTUP_MILESTONES,
-  type StartupMilestone
-} from '@src/main/startupProbe'
+import { createStartupProbe, type StartupMilestone } from '@src/main/startupProbe'
 
 describe('expectedArtifactNames', () => {
   // electron-builder expands ${arch} per packaging format, so the two names
@@ -322,10 +318,10 @@ describe('readStartupProbeOutcome', () => {
   // other (one is ESM tooling, the other is bundled TypeScript), so the
   // contract is pinned by feeding the parser the real thing.
   it('reads a successful launch produced by the application itself', () => {
-    const outcome = readStartupProbeOutcome(probeOutput([...STARTUP_MILESTONES]))
+    const outcome = readStartupProbeOutcome(probeOutput(['window', 'mpv', 'renderer']))
 
     expect(outcome.ready).toBe(true)
-    expect(outcome.milestones).toEqual([...STARTUP_MILESTONES])
+    expect(outcome.milestones).toEqual(['window', 'mpv', 'renderer'])
   })
 
   it('reports a partial launch without calling it ready', () => {

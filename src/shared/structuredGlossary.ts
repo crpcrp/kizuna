@@ -144,7 +144,7 @@ function safeData(data: unknown): Record<string, string> {
   return normalized
 }
 
-export function parseInternalLinkQuery(href: string): string | null {
+function parseInternalLinkQuery(href: string): string | null {
   const match = /^\?(.*)$/.exec(href)
   const query = match && new URLSearchParams(match[1]).get('query')
   return query && query.length > 0 ? query : null

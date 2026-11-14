@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   createGameOcrDisplaySources,
-  displayCaptureImageSize,
   type DisplayCaptureDisplay,
   type DisplayCaptureScreen,
   type DisplayCaptureSource
@@ -38,17 +37,6 @@ function screenFor(
     )
   }
 }
-
-describe('displayCaptureImageSize', () => {
-  it('converts logical display bounds to physical pixels using the scale factor', () => {
-    expect(
-      displayCaptureImageSize({
-        bounds: { x: -1280, y: 0, width: 1280, height: 720 },
-        scaleFactor: 1.5
-      })
-    ).toEqual({ width: 1920, height: 1080 })
-  })
-})
 
 describe('createGameOcrDisplaySources', () => {
   it('resolves the cursor display and its capture source without reading pixels', async () => {

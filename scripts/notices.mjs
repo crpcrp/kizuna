@@ -464,7 +464,7 @@ export function licenseFileNames(entries) {
  * @param {{ repoRoot: string, pkg: NpmPackage }} options
  * @returns {Promise<string[]>} Names inside the package directory; empty if none.
  */
-export async function findPackageLicenses({ repoRoot, pkg }) {
+async function findPackageLicenses({ repoRoot, pkg }) {
   try {
     return licenseFileNames(await readdir(join(repoRoot, pkg.path)))
   } catch {

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  AUTO_PAUSE_END_INSET_SECONDS,
   createSubtitleAutoPauseController,
   type SubtitleAutoPauseObservation
 } from '@src/renderer/src/state/subtitleAutoPause'
@@ -68,7 +67,7 @@ describe('subtitle auto-pause controller', () => {
     expect(controller.observe(observation({ timing: 'after', timePos: 3.1 }))).toMatchObject({
       timing: 'after',
       cue: CUE,
-      seekTarget: CUE.end - AUTO_PAUSE_END_INSET_SECONDS
+      seekTarget: CUE.end - 0.01
     })
   })
 

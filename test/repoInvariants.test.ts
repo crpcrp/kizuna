@@ -3,7 +3,7 @@ import { createRequire } from 'node:module'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { REPO_ROOT } from '@test/paths'
-import { APP_ID, EXECUTABLE_NAME, PRODUCT_NAME } from '@src/shared/appIdentity'
+import { APP_ID, PRODUCT_NAME } from '@src/shared/appIdentity'
 import { VIDEO_EXTENSIONS } from '@src/shared/mediaFileTypes'
 import {
   licenseFileNames,
@@ -47,7 +47,9 @@ describe('packaging identity', () => {
   it('matches the runtime app identity', () => {
     expect(builder.appId).toBe(APP_ID)
     expect(builder.productName).toBe(PRODUCT_NAME)
-    expect(builder.executableName).toBe(EXECUTABLE_NAME)
+    expect(builder.executableName).toBe(
+      readJson<{ executableName: string }>('src/shared/appIdentity.json').executableName
+    )
     expect(read('src/renderer/index.html')).toContain(`<title>${PRODUCT_NAME}</title>`)
   })
 

@@ -21,10 +21,7 @@ import {
   createJimakuDownloadStore,
   JIMAKU_ARCHIVE_DOWNLOAD_MAX_BYTES
 } from '@src/main/services/jimaku/downloadStore'
-import {
-  JIMAKU_DOWNLOAD_ORIGIN,
-  JIMAKU_DOWNLOAD_TIMEOUT_MS
-} from '@src/main/services/jimaku/download'
+import { JIMAKU_DOWNLOAD_ORIGIN } from '@src/main/services/jimaku/download'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
 
 const SRT = '1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n'
@@ -205,7 +202,7 @@ describe('Jimaku download redirects and limits', () => {
       error: { code: 'invalidResponse' }
     })
     expect(http.calls).toHaveLength(4)
-    for (const call of http.calls) expect(call.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
+    for (const call of http.calls) expect(call.init?.timeoutMs).toBe(60_000)
   })
 
   it('follows a relative redirect within the same entry', async () => {
@@ -392,7 +389,7 @@ describe('Jimaku download failures', () => {
       ok: false,
       error: { code: 'network' }
     })
-    expect(http.calls[0]?.init?.timeoutMs).toBe(JIMAKU_DOWNLOAD_TIMEOUT_MS)
+    expect(http.calls[0]?.init?.timeoutMs).toBe(60_000)
   })
 
   it('does not fetch or retain a preparation after cancellation', async () => {

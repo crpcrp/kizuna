@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import Database from 'better-sqlite3'
 import { syncWaniKani } from '@src/main/services/wanikani/sync'
-import { createWaniKaniClient, WANIKANI_BASE } from '@src/main/services/wanikani/client'
+import { createWaniKaniClient } from '@src/main/services/wanikani/client'
 import { initSchema } from '@src/main/services/knowledge/schema'
 import {
   countBySource,
@@ -12,7 +12,7 @@ import {
 } from '@src/main/services/knowledge/store'
 import { fakeHttp } from '@test/harness/fakeHttp'
 
-const ASSIGNMENTS_URL = `${WANIKANI_BASE}assignments?started=true&subject_types=vocabulary%2Ckana_vocabulary&per_page=500`
+const ASSIGNMENTS_URL = `${'https://api.wanikani.com/v2/'}assignments?started=true&subject_types=vocabulary%2Ckana_vocabulary&per_page=500`
 
 function assignmentsPage(
   entries: Array<{ subjectId: number; subjectType: string; srsStage: number }>
@@ -69,11 +69,11 @@ describe('syncWaniKani', () => {
         ]),
         assignmentsPage([{ subjectId: 1, subjectType: 'vocabulary', srsStage: 6 }])
       ],
-      [`${WANIKANI_BASE}subjects?ids=1%2C2&per_page=1000`]: subjectsPage([
+      [`${'https://api.wanikani.com/v2/'}subjects?ids=1%2C2&per_page=1000`]: subjectsPage([
         { id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' },
         { id: 2, type: 'kana_vocabulary', characters: '犬', reading: 'いぬ' }
       ]),
-      [`${WANIKANI_BASE}subjects?ids=1&per_page=1000`]: subjectsPage([
+      [`${'https://api.wanikani.com/v2/'}subjects?ids=1&per_page=1000`]: subjectsPage([
         { id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' }
       ])
     })
@@ -115,7 +115,7 @@ describe('syncWaniKani', () => {
       [ASSIGNMENTS_URL]: assignmentsPage([
         { subjectId: 1, subjectType: 'vocabulary', srsStage: 6 }
       ]),
-      [`${WANIKANI_BASE}subjects?ids=1&per_page=1000`]: subjectsPage([
+      [`${'https://api.wanikani.com/v2/'}subjects?ids=1&per_page=1000`]: subjectsPage([
         { id: 1, type: 'vocabulary', characters: '猫', reading: 'ねこ' }
       ])
     })
@@ -130,6 +130,6 @@ describe('syncWaniKani', () => {
     expect(http.calls).toHaveLength(2)
     expect(http.calls[0].url).toBe(ASSIGNMENTS_URL)
     expect(http.calls[0].url).not.toContain('kanji')
-    expect(http.calls[1].url).toBe(`${WANIKANI_BASE}subjects?ids=1&per_page=1000`)
+    expect(http.calls[1].url).toBe(`${'https://api.wanikani.com/v2/'}subjects?ids=1&per_page=1000`)
   })
 })

@@ -342,7 +342,7 @@ export function verifyExecutableModes(modes, requiredPaths) {
 }
 
 /** Prefix the application's startup probe shares (see src/main/startupProbe.ts). */
-export const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
+const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
 
 /**
  * Reduce a packaged launch's stdout to a verdict. Kept in step with

@@ -1,8 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
-  CARD_IMAGE_MAX_DIMENSION_PX,
-  CARD_IMAGE_JPEG_QUALITY,
-  MIN_CROP_DISPLAY_PX,
   fitWithinMaxDimension,
   fullFrameRect,
   isSubmittableCrop,
@@ -112,7 +109,7 @@ describe('normalizeSelection', () => {
 
 describe('isSubmittableCrop', () => {
   it('requires at least the minimum size on both axes', () => {
-    const min = MIN_CROP_DISPLAY_PX
+    const min = 8
     expect(isSubmittableCrop({ x: 0, y: 0, width: min, height: min })).toBe(true)
     expect(isSubmittableCrop({ x: 0, y: 0, width: min - 1, height: min })).toBe(false)
     expect(isSubmittableCrop({ x: 0, y: 0, width: min, height: min - 1 })).toBe(false)
@@ -204,7 +201,7 @@ describe('renderJpegBase64', () => {
     const base64 = renderJpegBase64(image, { x: 0, y: 0, width: 3840, height: 2160 }, canvas)
 
     expect(base64).toBe('ENCODED')
-    expect(canvas.width).toBe(CARD_IMAGE_MAX_DIMENSION_PX)
+    expect(canvas.width).toBe(1280)
     expect(canvas.height).toBe(720)
     expect(drawImage).toHaveBeenCalledWith(image, 0, 0, 3840, 2160, 0, 0, 1280, 720)
   })
@@ -230,7 +227,7 @@ describe('renderJpegBase64', () => {
 
     renderJpegBase64(image, { x: 0, y: 0, width: 8, height: 8 }, canvas)
 
-    expect(toDataURL).toHaveBeenCalledWith('image/jpeg', CARD_IMAGE_JPEG_QUALITY)
+    expect(toDataURL).toHaveBeenCalledWith('image/jpeg', 0.85)
   })
 
   it('returns null without a 2D context', () => {

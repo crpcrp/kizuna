@@ -2,9 +2,9 @@
 
 import { isTimeoutError, type HttpFetch } from '../http'
 
-export const WANIKANI_BASE = 'https://api.wanikani.com/v2/'
-export const WANIKANI_REVISION = '20170710'
-export const WANIKANI_REQUEST_TIMEOUT_MS = 15_000
+const WANIKANI_BASE = 'https://api.wanikani.com/v2/'
+const WANIKANI_REVISION = '20170710'
+const WANIKANI_REQUEST_TIMEOUT_MS = 15_000
 
 export class WaniKaniAuthError extends Error {}
 

@@ -222,7 +222,7 @@ export function performMediaKey(command: MediaKeyCommand, deps: MediaKeyDeps): v
  * queue decides what plays next and takes precedence (see
  * `playlistController.handleEof`).
  */
-export function shouldAutoAdvance(
+function shouldAutoAdvance(
   prevEof: boolean,
   eof: boolean,
   autoPlayNext: boolean,

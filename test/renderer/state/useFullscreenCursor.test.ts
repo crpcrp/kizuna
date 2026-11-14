@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  FULLSCREEN_CURSOR_HIDE_DELAY_MS,
-  useFullscreenCursor
-} from '@src/renderer/src/state/useFullscreenCursor'
+import { useFullscreenCursor } from '@src/renderer/src/state/useFullscreenCursor'
 
 afterEach(() => {
   cleanup()
@@ -21,7 +18,7 @@ describe('useFullscreenCursor', () => {
     vi.useFakeTimers()
     const { result } = renderHook(() => useFullscreenCursor(true))
 
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS - 1))
+    act(() => vi.advanceTimersByTime(5000 - 1))
     expect(result.current).toBe(false)
 
     act(() => vi.advanceTimersByTime(1))
@@ -32,16 +29,16 @@ describe('useFullscreenCursor', () => {
     vi.useFakeTimers()
     const { result } = renderHook(() => useFullscreenCursor(true))
 
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS))
+    act(() => vi.advanceTimersByTime(5000))
     expect(result.current).toBe(true)
 
     act(() => moveMouse())
     expect(result.current).toBe(false)
 
     act(() => {
-      vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS - 1)
+      vi.advanceTimersByTime(5000 - 1)
       moveMouse()
-      vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS - 1)
+      vi.advanceTimersByTime(5000 - 1)
     })
     expect(result.current).toBe(false)
 
@@ -54,7 +51,7 @@ describe('useFullscreenCursor', () => {
     const addSpy = vi.spyOn(window, 'addEventListener')
     const { result } = renderHook(() => useFullscreenCursor(false))
 
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS))
+    act(() => vi.advanceTimersByTime(5000))
 
     expect(result.current).toBe(false)
     expect(addSpy).not.toHaveBeenCalledWith('mousemove', expect.any(Function))
@@ -67,17 +64,17 @@ describe('useFullscreenCursor', () => {
       { initialProps: { fullscreen: true } }
     )
 
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS))
+    act(() => vi.advanceTimersByTime(5000))
     expect(result.current).toBe(true)
 
     rerender({ fullscreen: false })
     expect(result.current).toBe(false)
 
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS))
+    act(() => vi.advanceTimersByTime(5000))
     expect(result.current).toBe(false)
 
     rerender({ fullscreen: true })
-    act(() => vi.advanceTimersByTime(FULLSCREEN_CURSOR_HIDE_DELAY_MS - 1))
+    act(() => vi.advanceTimersByTime(5000 - 1))
     expect(result.current).toBe(false)
 
     act(() => vi.advanceTimersByTime(1))

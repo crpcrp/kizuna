@@ -17,7 +17,7 @@ import { type Dispatch } from './mediaSession'
  * a zero-length loop is rejected: A stays armed so the next press at a
  * different time can still close a valid range.
  */
-export function cycleAbLoop(current: AbLoopState, timeSec: number): AbLoopState {
+function cycleAbLoop(current: AbLoopState, timeSec: number): AbLoopState {
   const now = Math.max(0, timeSec)
   if (current.a === null) return { a: now, b: null }
   if (current.b === null) {

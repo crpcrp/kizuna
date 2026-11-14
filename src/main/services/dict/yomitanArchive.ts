@@ -27,7 +27,7 @@ export const MAX_UNZIP_TOTAL_BYTES = 2 * 1024 * 1024 * 1024
  * This one does bound peak memory, so it stays far tighter than the total.
  * The largest real entry observed is BCCWJ's 77.5 MB `term_meta_bank_1.json`.
  */
-export const MAX_UNZIP_ENTRY_BYTES = 256 * 1024 * 1024
+const MAX_UNZIP_ENTRY_BYTES = 256 * 1024 * 1024
 
 /**
  * Compressed bytes fed to the streaming unzip per step. Small enough that the

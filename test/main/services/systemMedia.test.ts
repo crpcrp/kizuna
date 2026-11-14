@@ -1,7 +1,6 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   createSystemMediaController,
-  MEDIA_KEY_BINDINGS,
   type GlobalShortcutLike,
   type SystemMediaIcons,
   type ThumbarButton
@@ -70,7 +69,7 @@ describe('createSystemMediaController — media keys', () => {
     controller.update(loaded)
     controller.update({ ...loaded, timePos: 10 })
 
-    expect(globalShortcut.register).toHaveBeenCalledTimes(MEDIA_KEY_BINDINGS.length)
+    expect(globalShortcut.register).toHaveBeenCalledTimes(4)
   })
 
   it('each registered media key pushes its mapped command to the renderer', () => {
@@ -110,7 +109,7 @@ describe('createSystemMediaController — media keys', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(() => controller.update(loaded)).not.toThrow()
-    expect(globalShortcut.register).toHaveBeenCalledTimes(MEDIA_KEY_BINDINGS.length)
+    expect(globalShortcut.register).toHaveBeenCalledTimes(4)
 
     warn.mockRestore()
   })
@@ -250,7 +249,7 @@ describe('createSystemMediaController — dispose', () => {
 
     controller.dispose()
 
-    expect(globalShortcut.unregister).toHaveBeenCalledTimes(MEDIA_KEY_BINDINGS.length)
+    expect(globalShortcut.unregister).toHaveBeenCalledTimes(4)
     expect(setProgressBar).toHaveBeenCalledWith(-1)
     expect(setThumbarButtons).toHaveBeenCalledWith([])
   })

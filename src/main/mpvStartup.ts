@@ -12,7 +12,7 @@ export interface MpvStartOptions {
 
 /** Shown to the user when their own mpv config broke startup and we retried
  * without it. Exported so the test asserts the exact banner text. */
-export const MPV_CONFIG_ERROR_MESSAGE =
+const MPV_CONFIG_ERROR_MESSAGE =
   'Your mpv config failed to load, so mpv started with it disabled. Check mpv.conf in the mpv config folder.'
 
 export interface StartMpvWithConfigDeps {

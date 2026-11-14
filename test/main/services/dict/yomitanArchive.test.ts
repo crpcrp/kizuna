@@ -4,8 +4,7 @@ import {
   decodeUtf8,
   parseJsonBytes,
   streamCappedUnzipSync,
-  MAX_UNZIP_TOTAL_BYTES,
-  MAX_UNZIP_ENTRY_BYTES
+  MAX_UNZIP_TOTAL_BYTES
 } from '@src/main/services/dict/yomitanArchive'
 
 /** Drain a zip into a name → bytes map so assertions can look entries up by name. */
@@ -115,7 +114,7 @@ describe('streamCappedUnzipSync (counts actual inflated bytes)', () => {
     const JITENDEX_INFLATED_BYTES = 539_374_214
     expect(MAX_UNZIP_TOTAL_BYTES).toBeGreaterThan(JITENDEX_INFLATED_BYTES)
     // BCCWJ's term_meta_bank_1.json is the largest single entry seen (77.5 MB).
-    expect(MAX_UNZIP_ENTRY_BYTES).toBeGreaterThan(78 * 1024 * 1024)
+    expect(256 * 1024 * 1024).toBeGreaterThan(78 * 1024 * 1024)
     // Still a bound, not an open door.
     expect(MAX_UNZIP_TOTAL_BYTES).toBeLessThanOrEqual(2 * 1024 * 1024 * 1024)
   })

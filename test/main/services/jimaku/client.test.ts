@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HttpFetch, HttpResponse } from '@src/main/services/http'
-import {
-  createJimakuClient,
-  JIMAKU_API_BASE,
-  JIMAKU_MAX_RESPONSE_BYTES,
-  JIMAKU_REQUEST_TIMEOUT_MS
-} from '@src/main/services/jimaku/client'
+import { createJimakuClient } from '@src/main/services/jimaku/client'
 import { fakeHttp, type FakeHttpRoute } from '@test/harness/fakeHttp'
 
 const flags = {
@@ -18,7 +13,7 @@ const flags = {
 
 function searchUrl(query: string, anime: boolean): string {
   const params = new URLSearchParams({ query, anime: String(anime) })
-  return `${JIMAKU_API_BASE}/entries/search?${params.toString()}`
+  return `${'https://jimaku.cc/api'}/entries/search?${params.toString()}`
 }
 
 function makeClient(
@@ -51,7 +46,7 @@ describe('createJimakuClient', () => {
       init: {
         method: 'GET',
         headers: { Authorization: 'test-key' },
-        timeoutMs: JIMAKU_REQUEST_TIMEOUT_MS
+        timeoutMs: 15_000
       }
     })
   })
@@ -68,7 +63,7 @@ describe('createJimakuClient', () => {
 
   it('rejects invalid IDs and does not add episode filtering to file requests', async () => {
     const { client, http } = makeClient({
-      [`${JIMAKU_API_BASE}/entries/42/files`]: { json: [] }
+      [`${'https://jimaku.cc/api'}/entries/42/files`]: { json: [] }
     })
 
     await expect(client.getEntry(0)).resolves.toEqual({
@@ -80,7 +75,7 @@ describe('createJimakuClient', () => {
       error: { code: 'invalidRequest' }
     })
     await expect(client.listFiles(42)).resolves.toEqual({ ok: true, value: [] })
-    expect(http.calls[0]?.url).toBe(`${JIMAKU_API_BASE}/entries/42/files`)
+    expect(http.calls[0]?.url).toBe(`${'https://jimaku.cc/api'}/entries/42/files`)
   })
 
   it('returns notConfigured without making an HTTP request when the key is missing', async () => {
@@ -94,7 +89,7 @@ describe('createJimakuClient', () => {
   })
 
   it('normalizes entries, drops null optionals, and ignores notes and unknown fields', async () => {
-    const url = `${JIMAKU_API_BASE}/entries/42`
+    const url = `${'https://jimaku.cc/api'}/entries/42`
     const { client } = makeClient({
       [url]: {
         json: {
@@ -123,7 +118,7 @@ describe('createJimakuClient', () => {
   })
 
   it('normalizes real-shaped file records while retaining the URL only in main', async () => {
-    const url = `${JIMAKU_API_BASE}/entries/42/files`
+    const url = `${'https://jimaku.cc/api'}/entries/42/files`
     const { client } = makeClient({
       [url]: {
         json: [
@@ -155,8 +150,8 @@ describe('createJimakuClient', () => {
     const search = searchUrl('Frieren', true)
     const { client } = makeClient({
       [search]: { json: [{ id: 42, name: 'bad', flags: { anime: 'yes' } }] },
-      [`${JIMAKU_API_BASE}/entries/42`]: { text: '{not-json' },
-      [`${JIMAKU_API_BASE}/entries/42/files`]: {
+      [`${'https://jimaku.cc/api'}/entries/42`]: { text: '{not-json' },
+      [`${'https://jimaku.cc/api'}/entries/42/files`]: {
         json: [{ name: 'bad.srt', url: 'https://jimaku.cc/file', size: -1, last_modified: 'now' }]
       }
     })
@@ -251,13 +246,13 @@ describe('createJimakuClient', () => {
     await expect(
       timeoutClient.client.searchEntries({ query: 'Frieren', anime: true })
     ).resolves.toEqual({ ok: false, error: { code: 'timeout' } })
-    expect(timeoutClient.http.calls[0]?.init?.timeoutMs).toBe(JIMAKU_REQUEST_TIMEOUT_MS)
+    expect(timeoutClient.http.calls[0]?.init?.timeoutMs).toBe(15_000)
   })
 
   it('rejects an oversized body even when Content-Length is absent', async () => {
     const url = searchUrl('Frieren', true)
     const { client } = makeClient({
-      [url]: { text: 'x'.repeat(JIMAKU_MAX_RESPONSE_BYTES + 1) }
+      [url]: { text: 'x'.repeat(10 * 1024 * 1024 + 1) }
     })
 
     await expect(client.searchEntries({ query: 'Frieren', anime: true })).resolves.toEqual({
@@ -275,7 +270,7 @@ describe('createJimakuClient', () => {
       headers: { get: () => null },
       body: (async function* () {
         try {
-          yield new Uint8Array(JIMAKU_MAX_RESPONSE_BYTES)
+          yield new Uint8Array(10 * 1024 * 1024)
           yield new Uint8Array([1])
         } finally {
           streamClosed = true

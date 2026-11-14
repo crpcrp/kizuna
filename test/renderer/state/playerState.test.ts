@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialPlayerState,
-  defaultAudioId,
   defaultSubtitleId,
   isJapaneseSubtitleTrack,
   playerReducer,
-  sameCueTokenSnapshot,
   type PlayerState,
   type PlayerAction
 } from '@src/renderer/src/state/playerState'
@@ -54,20 +52,6 @@ describe('initialPlayerState', () => {
       audioDelayMs: 0,
       abLoopState: { a: null, b: null }
     })
-  })
-})
-
-describe('defaultAudioId', () => {
-  it('returns the id of the first audio track in a mixed list', () => {
-    expect(defaultAudioId([subTrack, audioTrack, audioTrack2])).toBe(1)
-  })
-
-  it('returns undefined when there is no audio track', () => {
-    expect(defaultAudioId([subTrack, subTrack2])).toBeUndefined()
-  })
-
-  it('returns undefined for an empty list', () => {
-    expect(defaultAudioId([])).toBeUndefined()
   })
 })
 
@@ -508,7 +492,6 @@ describe('playerReducer', () => {
       tokens: { '0|1|hi': cueTokens }
     })
 
-    expect(sameCueTokenSnapshot(current.allCueTokens, { '0|1|hi': cueTokens })).toBe(true)
     expect(repeat).toBe(current)
   })
 

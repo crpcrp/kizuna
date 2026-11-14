@@ -57,7 +57,7 @@ export interface OcrResult extends OcrCaptureIdentity {
 }
 
 /** Confidence values below this cutoff are not useful for interactive text. */
-export const DEFAULT_OCR_CONFIDENCE_CUTOFF = 0.5
+const DEFAULT_OCR_CONFIDENCE_CUTOFF = 0.5
 
 /** Maximum width or height of a captured image accepted by the contract. */
 export const MAX_OCR_IMAGE_DIMENSION = 16_384
@@ -69,7 +69,7 @@ export const MAX_OCR_REGION_COUNT = 512
 export const MAX_OCR_TEXT_LENGTH = 4_096
 
 /** Maximum length of a region ID. */
-export const MAX_OCR_REGION_ID_LENGTH = 128
+const MAX_OCR_REGION_ID_LENGTH = 128
 
 /** Maximum safe counter value for a session or capture identity. */
 export const MAX_OCR_IDENTIFIER = 2_147_483_647
@@ -78,7 +78,7 @@ export const MAX_OCR_IDENTIFIER = 2_147_483_647
  * Rounding can put an OCR rectangle a pixel or two beyond the screenshot.
  * Larger overflows are treated as malformed rather than silently hidden.
  */
-export const MAX_OCR_CLIP_OVERFLOW = 2
+const MAX_OCR_CLIP_OVERFLOW = 2
 
 export interface OcrNormalizationSuccess {
   ok: true

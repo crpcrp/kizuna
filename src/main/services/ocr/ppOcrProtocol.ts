@@ -63,13 +63,13 @@ const REGION_KEYS = ['text', 'confidence', 'quad'] as const
  * 0.88 confidence, not recall: at the capture's own size the same five lines
  * come back, with their trailing punctuation intact more often.
  */
-export const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
+const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
 
 /** The worker refuses anything larger; it is also the whole-desktop worst case. */
-export const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
+const PP_OCR_MAX_DETECTION_SIDE_LENGTH = 4096
 
 /** Fixed pixel width used to normalize text crops for batched recognition. */
-export const PP_OCR_RECOGNITION_WIDTH = 480
+const PP_OCR_RECOGNITION_WIDTH = 480
 
 export type PpOcrWorkerErrorCode =
   | 'cancelled'

@@ -85,7 +85,7 @@ function sameBounds(left: WindowBounds, right: WindowBounds): boolean {
  * originate in `videoHost`. Windows still uses one BrowserWindow, so every
  * operation reaches that native window once.
  */
-export class AppWindowCoordinator implements WindowControlTarget {
+class AppWindowCoordinator implements WindowControlTarget {
   private readonly videoHost: ManagedWindow
   private readonly uiOverlay: ManagedWindow
   private readonly paired: boolean
@@ -477,7 +477,7 @@ export interface ContentBoundsWindow {
 }
 
 /** Aligns the child overlay once, before either Linux window is presented. */
-export function syncInitialWindowBounds(
+function syncInitialWindowBounds(
   videoHost: ContentBoundsWindow,
   uiOverlay: ContentBoundsWindow
 ): void {
@@ -515,7 +515,7 @@ interface CloseableWindow {
  * `window-all-closed`/`before-quit` path to run. A close guard can prevent a
  * user close while an app-owned forced close bypasses it.
  */
-export function attachPairCloseHandlers(
+function attachPairCloseHandlers(
   videoHost: CloseableWindow,
   uiOverlay: CloseableWindow,
   closeGuard?: (event: WindowCloseEvent) => boolean

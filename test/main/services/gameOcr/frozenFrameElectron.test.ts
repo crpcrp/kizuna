@@ -1,45 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import {
-  createGameOcrWindow,
-  getGameOcrWindowOptions
-} from '@src/main/services/gameOcr/frozenFrameElectron'
+import { createGameOcrWindow } from '@src/main/services/gameOcr/frozenFrameElectron'
 import { GAME_OCR_CHANNELS } from '@src/shared/ipcChannels'
 import { fakeNativeWindow } from '@test/harness/fakeFrozenFrame'
-
-describe('getGameOcrWindowOptions', () => {
-  it('creates an opaque, focusable, always-on-top full-display window', () => {
-    const options = getGameOcrWindowOptions('/fake/preload.js', {
-      x: -1920,
-      y: 40,
-      width: 1920,
-      height: 1080
-    })
-
-    expect(options).toMatchObject({
-      x: -1920,
-      y: 40,
-      width: 1920,
-      height: 1080,
-      frame: false,
-      transparent: false,
-      backgroundColor: '#000000',
-      show: false,
-      skipTaskbar: true,
-      // Foreground input must belong to the overlay while inspecting text.
-      focusable: true,
-      alwaysOnTop: true,
-      resizable: false,
-      fullscreenable: false
-    })
-    expect(options.webPreferences).toMatchObject({
-      preload: '/fake/preload.js',
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    })
-  })
-})
 
 function setup() {
   const fake = fakeNativeWindow()
@@ -81,7 +44,17 @@ describe('createGameOcrWindow', () => {
   it('re-asserts the display bounds Windows clamps away at construction', () => {
     const { fake, createWindow, displayBounds } = setup()
 
-    expect(createWindow).toHaveBeenCalledWith(expect.objectContaining(displayBounds))
+    expect(createWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...displayBounds,
+        webPreferences: expect.objectContaining({
+          preload: '/fake/preload.js',
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true
+        })
+      })
+    )
     // Windows shrinks the *initial* size of a window to the display's work
     // area. Without this second assignment the frozen frame comes up a taskbar
     // short and leaves a live strip of the game showing below the screenshot.

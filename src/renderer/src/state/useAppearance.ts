@@ -30,6 +30,6 @@ export function useAppearance({ appearance, levelColors }: UseAppearanceInput): 
   }, [levelColors])
 }
 
-export function resolveTheme(appearance: Appearance, systemPrefersDark: boolean): 'light' | 'dark' {
+function resolveTheme(appearance: Appearance, systemPrefersDark: boolean): 'light' | 'dark' {
   return appearance === 'system' ? (systemPrefersDark ? 'dark' : 'light') : appearance
 }
