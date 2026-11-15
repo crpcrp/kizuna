@@ -1,54 +1,20 @@
 #!/usr/bin/env node
-// Verifies the packaged Linux artifacts produced by `npm run dist:linux`.
-//
-// The Windows release already installs its own installer and runs a Node-mode
-// resource probe (see .github/workflows/release.yml). Linux needs more than
-// that: the deb declares distribution dependencies, both artifacts carry
-// executable bits through a packaging format, and mpv only embeds into an X11
-// window — none of which a Node-mode probe can see. So this script also starts
-// the real application under a virtual X server and waits for it to report
-// that its window, mpv IPC connection, and renderer are all up.
-//
-// Usage:
-//   node scripts/smoke-linux-package.mjs               # both artifacts
-//   node scripts/smoke-linux-package.mjs --only deb    # or --only appimage
-//   node scripts/smoke-linux-package.mjs --dist-dir D  # non-default output dir
-//   node scripts/smoke-linux-package.mjs --log-dir L   # failure logs (default dist/smoke-logs)
-//
-// Requires: dpkg-deb, xvfb-run, and passwordless sudo for the deb install
-// steps. No network, no accounts, and no media beyond a fixture this script
-// generates with the freshly packaged ffmpeg.
-//
-// The reusable assertions live in `scripts/linuxPackaging.mjs`; everything
-// process-shaped (spawning, temp directories, install/uninstall, log capture)
-// lives here.
 
 import { spawnSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import {
-  expectedArtifactNames,
-  parseDebContents,
-  parseDebControl,
-  parseDesktopEntry,
-  readStartupProbeOutcome,
-  RUNNABLE_TOOLS,
-  verifyArchivePaths,
-  verifyDebControl,
-  verifyDesktopEntry,
-  verifyExecutableModes
-} from './linuxPackaging.mjs'
+import { expectedArtifactNames, readStartupProbeOutcome } from './linuxPackaging.mjs'
+import { readFlag } from './vendorResources.mjs'
+
+const RUNNABLE_TOOLS = [
+  { label: 'mpv', path: 'resources/mpv/mpv', args: ['--version'] },
+  { label: 'ffmpeg', path: 'resources/ffmpeg/ffmpeg', args: ['-version'] },
+  { label: 'ffprobe', path: 'resources/ffmpeg/ffprobe', args: ['-version'] },
+  { label: 'MeCab', path: 'resources/mecab/bin/mecab', args: ['-v'] }
+]
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf-8'))
@@ -57,8 +23,6 @@ const resourceLock = JSON.parse(readFileSync(join(repoRoot, 'resources.lock.json
 const linuxResources = resourceLock.platforms?.['linux-x64']
 if (!linuxResources) throw new Error('resources.lock.json has no linux-x64 payload')
 
-// The lock is the source of truth for vendor files. The remaining entries are
-// first-party or generated files that electron-builder adds separately.
 const REQUIRED_ARCHIVE_PATHS = Object.freeze([
   'resources/app.asar',
   ...linuxResources.files.map((file) => `resources/${file.to}`),
@@ -71,48 +35,26 @@ const REQUIRED_EXECUTABLE_PATHS = Object.freeze(
   linuxResources.requiredExecutables.map((path) => `resources/${path}`)
 )
 
-/** Where a `.deb` installs the application tree. */
 const INSTALL_ROOT = `/opt/${identity.productName}`
-/** Desktop entry filename, kept in step with package.json `desktopName`. */
 const DESKTOP_FILE = `/usr/share/applications/${pkg.desktopName}`
 
-/** Startup budget for one packaged GUI launch. */
 const PROBE_TIMEOUT_MS = 90_000
-/** Hard ceiling on the spawn itself, so a wedged app cannot hang the job. */
 const LAUNCH_TIMEOUT_MS = PROBE_TIMEOUT_MS + 60_000
 
 const cleanups = []
-/** Every reported failure, written to the log directory for CI to collect. */
 const failures = []
-/** Overridden by `--log-dir`; resolved in `main` before any check runs. */
 let logDir = join(repoRoot, 'dist', 'smoke-logs')
-
-function parseArg(argv, flag) {
-  for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === flag) return argv[i + 1]
-    const inline = new RegExp(`^${flag}=(.+)$`).exec(argv[i])
-    if (inline) return inline[1]
-  }
-  return undefined
-}
 
 function log(message) {
   console.log(message)
 }
 
-/**
- * Reports a failed check and keeps going, so one run lists every problem.
- * The detail is echoed to the job log and kept for the log directory, because
- * a packaged startup failure is diagnosed from the app's own stderr and the
- * scrollback of a cancelled release run is not a reliable place to find it.
- */
 function reportFailure(step, problems) {
   failures.push({ step, problems })
   console.error(`\nFAIL ${step}`)
   for (const problem of problems) console.error(`  - ${problem}`)
 }
 
-/** Writes one file per failed step. Never throws: the exit code is the result. */
 function writeFailureLogs() {
   if (failures.length === 0) return
   try {
@@ -130,11 +72,6 @@ function writeFailureLogs() {
   }
 }
 
-/**
- * Run a command, capturing output. Never throws: callers decide whether a
- * non-zero exit is a failure, because `dpkg -i` before dependencies are
- * resolved may legitimately fail first.
- */
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: 'utf-8',
@@ -157,7 +94,6 @@ function run(command, args, options = {}) {
   }
 }
 
-/** Same, but a non-zero exit aborts the whole run — used for setup steps. */
 function runOrThrow(command, args, options = {}) {
   const result = run(command, args, options)
   if (!result.ok) {
@@ -169,7 +105,6 @@ function runOrThrow(command, args, options = {}) {
   return result
 }
 
-/** Root-elevating prefix, omitted when the run is already root (containers). */
 function asRoot(command, args) {
   if (typeof process.getuid === 'function' && process.getuid() === 0) {
     return { command, args }
@@ -195,12 +130,6 @@ function makeTempDir(prefix) {
   return dir
 }
 
-/**
- * Generates a one-second silent video with the *packaged* ffmpeg. Doing it
- * with the bundled binary rather than a committed fixture is deliberate: it
- * proves that ffmpeg kept its executable bit and can resolve its shared
- * libraries on this host, which a checked-in file would not.
- */
 function generateMediaFixture(ffmpegPath, intoDir) {
   const fixture = join(intoDir, 'fixture.mp4')
   runOrThrow(
@@ -226,12 +155,6 @@ function generateMediaFixture(ffmpegPath, intoDir) {
   return fixture
 }
 
-/**
- * Executes each bundled tool from the installed tree. This is the check that
- * catches a tool which is present, executable, and still cannot start —
- * a missing shared library, a wrapper pointed at the wrong relative directory,
- * or an unsatisfied distribution dependency.
- */
 function checkBundledToolsRun(step, installRoot) {
   const problems = []
   for (const tool of RUNNABLE_TOOLS) {
@@ -254,11 +177,6 @@ function checkBundledToolsRun(step, installRoot) {
   return true
 }
 
-/**
- * Tokenizes a Japanese fixture with the packaged MeCab. Running the binary is
- * not quite enough — MeCab starts fine and then fails to open its dictionary
- * if IPADIC did not survive packaging.
- */
 function checkMecabTokenizes(step, installRoot) {
   const mecabPath = join(installRoot, 'resources/mecab/bin/mecab')
   const ipadicDir = join(installRoot, 'resources/mecab/ipadic')
@@ -279,10 +197,6 @@ function checkMecabTokenizes(step, installRoot) {
   return true
 }
 
-/**
- * Runs the packaged app's Node-mode resource probe — the same
- * `out/main/smoke.js` the Windows release runs — against an installed tree.
- */
 function checkNodeModeProbe(step, appPath, resourcesPath) {
   const result = run(
     appPath,
@@ -301,16 +215,6 @@ function checkNodeModeProbe(step, appPath, resourcesPath) {
   return true
 }
 
-/**
- * Starts the real application under Xvfb and waits for its startup probe to
- * report every milestone.
- *
- * `--no-sandbox` is required, not preferred: Ubuntu 24.04 confines
- * unprivileged user namespaces with AppArmor, so Chromium's sandbox cannot
- * initialize for an app started from an arbitrary path on a CI runner. The
- * sandbox is a property of the installed application, not of packaging, and is
- * out of what this test can observe.
- */
 function checkGuiStartup(step, appPath, userDataDir, fixture, appArgs = []) {
   const result = run(
     'xvfb-run',
@@ -319,6 +223,7 @@ function checkGuiStartup(step, appPath, userDataDir, fixture, appArgs = []) {
       '--server-args=-screen 0 1280x800x24',
       appPath,
       ...appArgs,
+      // Ubuntu 24.04 CI AppArmor restrictions prevent Chromium sandbox initialization.
       '--no-sandbox',
       `--user-data-dir=${userDataDir}`,
       fixture
@@ -348,8 +253,6 @@ function checkGuiStartup(step, appPath, userDataDir, fixture, appArgs = []) {
   return false
 }
 
-/** ---------------------------------------------------------------- AppImage */
-
 function checkAppImage(distDir, artifactName) {
   const step = 'AppImage'
   const source = join(distDir, artifactName)
@@ -378,38 +281,11 @@ function checkAppImage(distDir, artifactName) {
   }
   const extracted = join(cleanDir, 'squashfs-root')
 
-  const listing = run('find', [extracted, '-mindepth', '1'], { timeout: 120_000 })
-  const relativePaths = listing.stdout
-    .split('\n')
-    .filter((line) => line !== '')
-    .map((line) => line.slice(extracted.length + 1))
-  const pathProblems = verifyArchivePaths(relativePaths, REQUIRED_ARCHIVE_PATHS)
-  if (pathProblems.length > 0) reportFailure(`${step}: contents`, pathProblems)
-  else log(`  ok  ${step}: required resources present, no Windows binaries`)
-
-  const modes = {}
-  for (const relative of relativePaths) {
-    try {
-      modes[relative] = statSync(join(extracted, relative)).mode
-    } catch {
-      // A broken symlink in the listing is not what this check is about.
-    }
-  }
-  const modeProblems = verifyExecutableModes(modes, REQUIRED_EXECUTABLE_PATHS)
-  if (modeProblems.length > 0) reportFailure(`${step}: executable modes`, modeProblems)
-  else log(`  ok  ${step}: bundled tools kept their executable bit`)
-
-  const desktopFiles = run('find', [extracted, '-maxdepth', '1', '-name', '*.desktop'])
-  const desktopPath = desktopFiles.stdout.split('\n').find((line) => line !== '')
-  if (!desktopPath) {
-    reportFailure(`${step}: desktop entry`, ['no .desktop file at the AppImage root'])
-  } else {
-    const entry = parseDesktopEntry(readFileSync(desktopPath, 'utf-8'))
-    const problems = verifyDesktopEntry(entry, desktopExpectations('AppRun'))
-    const iconPath = join(extracted, `${entry.Icon ?? identity.executableName}.png`)
-    if (!existsSync(iconPath)) problems.push(`desktop icon is missing: ${iconPath}`)
-    if (problems.length > 0) reportFailure(`${step}: desktop entry`, problems)
-    else log(`  ok  ${step}: desktop entry`)
+  checkContents(step, extracted)
+  const desktopPath = join(extracted, pkg.desktopName)
+  checkDesktopEntry(step, desktopPath, 'AppRun')
+  if (!existsSync(join(extracted, `${identity.executableName}.png`))) {
+    reportFailure(`${step}: desktop icon`, ['missing root PNG icon'])
   }
 
   // Exercise the AppImage runtime from the copied artifact while asking it to
@@ -428,66 +304,110 @@ function checkAppImage(distDir, artifactName) {
   ])
 }
 
-/** --------------------------------------------------------------------- deb */
-
-function desktopExpectations(commandName = identity.executableName) {
-  return {
-    productName: identity.productName,
-    commandName,
-    iconName: identity.executableName,
-    // electron-builder derives StartupWMClass from `desktopName` minus the
-    // suffix, which is what Electron uses as its X11 app_id.
-    wmClass: pkg.desktopName.replace(/\.desktop$/, ''),
-    requiredExecutableArgs: ['--ozone-platform=x11'],
-    requiredMimeTypes: [
-      'video/x-matroska',
-      'video/mp4',
-      'video/webm',
-      'video/x-msvideo',
-      'video/quicktime'
-    ],
-    requiredCategories: ['AudioVideo', 'Video', 'Player']
+function checkContents(step, root) {
+  const problems = []
+  for (const relative of REQUIRED_ARCHIVE_PATHS) {
+    if (!existsSync(join(root, relative))) problems.push(`missing required path "${relative}"`)
   }
+  for (const relative of REQUIRED_EXECUTABLE_PATHS) {
+    if (!run('test', ['-x', join(root, relative)]).ok) {
+      problems.push(`missing or non-executable "${relative}"`)
+    }
+  }
+  const foreign = runOrThrow('find', [
+    root,
+    '-iname',
+    '*.exe',
+    '-o',
+    '-iname',
+    '*.dll'
+  ]).stdout.trim()
+  if (foreign) problems.push(`contains Windows binaries:\n${foreign}`)
+  if (problems.length) reportFailure(`${step}: contents`, problems)
+  else log(`  ok  ${step}: resources and executable modes, no Windows binaries`)
+}
+
+function checkDesktopEntry(step, path, command) {
+  const validation = run('desktop-file-validate', [path])
+  const problems = validation.ok
+    ? []
+    : [validation.stderr || validation.stdout || 'invalid desktop entry']
+  if (existsSync(path)) {
+    // Restrict checks to the main group; desktop actions can repeat these keys.
+    const text = readFileSync(path, 'utf-8').split('[Desktop Entry]')[1]?.split(/\n\[/)[0] ?? ''
+    const lines = text.split(/\r?\n/)
+    for (const line of [
+      `Name=${identity.productName}`,
+      'Type=Application',
+      `Icon=${identity.executableName}`,
+      `StartupWMClass=${pkg.desktopName.replace(/\.desktop$/, '')}`
+    ]) {
+      if (!lines.includes(line)) problems.push(`missing ${line}`)
+    }
+    const exec = lines.find((line) => line.startsWith('Exec='))?.slice(5) ?? ''
+    const executable = /^(?:"([^"]+)"|(\S+))/.exec(exec)
+    if (
+      (executable?.[1] ?? executable?.[2] ?? '').split('/').at(-1) !== command ||
+      !/(?:^|\s)--ozone-platform=x11(?:\s|$)/.test(exec) ||
+      !/%[uUfF]/.test(exec)
+    ) {
+      problems.push(`invalid launcher: ${exec}`)
+    }
+    for (const [key, required] of Object.entries({
+      Categories: ['AudioVideo', 'Video', 'Player'],
+      MimeType: [
+        'video/x-matroska',
+        'video/mp4',
+        'video/webm',
+        'video/x-msvideo',
+        'video/quicktime'
+      ]
+    })) {
+      const values =
+        lines
+          .find((line) => line.startsWith(`${key}=`))
+          ?.slice(key.length + 1)
+          .split(';') ?? []
+      for (const value of required)
+        if (!values.includes(value)) problems.push(`${key} missing ${value}`)
+    }
+  }
+  if (problems.length) reportFailure(`${step}: desktop entry`, problems)
+  else log(`  ok  ${step}: desktop entry`)
 }
 
 function checkDebMetadata(debPath) {
-  const step = 'deb'
-  const fields = parseDebControl(runOrThrow('dpkg-deb', ['--field', debPath]).stdout)
-  const problems = verifyDebControl(fields, {
-    packageName: pkg.name,
-    version: pkg.version,
-    homepage: identity.repositoryUrl,
-    requiredDepends: ['mpv (= 0.37.0-1ubuntu4)', 'ffmpeg (= 7:6.1.1-3ubuntu5)']
-  })
-  if (problems.length > 0) reportFailure(`${step}: control metadata`, problems)
-  else log(`  ok  ${step}: control metadata and declared dependencies`)
+  const field = (name) => runOrThrow('dpkg-deb', ['-f', debPath, name]).stdout.trim()
+  const problems = []
+  for (const [name, expected] of Object.entries({
+    Package: pkg.name,
+    Version: pkg.version,
+    Architecture: 'amd64',
+    Homepage: identity.repositoryUrl
+  })) {
+    if (field(name) !== expected) problems.push(`${name} must be ${expected}`)
+  }
+  if (!/^.+ <[^@\s]+@[^@\s]+>$/.test(field('Maintainer')))
+    problems.push('missing maintainer address')
+  const depends = field('Depends')
+    .split(',')
+    .map((value) => value.replace(/\s+/g, ' ').trim())
+  for (const pin of ['mpv (= 0.37.0-1ubuntu4)', 'ffmpeg (= 7:6.1.1-3ubuntu5)']) {
+    if (!depends.includes(pin)) problems.push(`Depends missing ${pin}`)
+  }
+  if (problems.length) reportFailure('deb: control metadata', problems)
+  else log('  ok  deb: control metadata and declared dependencies')
 
-  const contents = runOrThrow('dpkg-deb', ['--contents', debPath]).stdout
-  const { appPaths, appModes, otherPaths } = parseDebContents(contents, INSTALL_ROOT)
-
-  const pathProblems = verifyArchivePaths(appPaths, REQUIRED_ARCHIVE_PATHS)
-  if (pathProblems.length > 0) reportFailure(`${step}: contents`, pathProblems)
-  else log(`  ok  ${step}: required resources present, no Windows binaries`)
-
-  const modeProblems = verifyExecutableModes(appModes, REQUIRED_EXECUTABLE_PATHS)
-  if (modeProblems.length > 0) reportFailure(`${step}: executable modes`, modeProblems)
-  else log(`  ok  ${step}: bundled tools kept their executable bit`)
-
-  if (!otherPaths.includes(DESKTOP_FILE)) {
-    reportFailure(`${step}: desktop integration`, [
-      `the package does not install ${DESKTOP_FILE} (installed outside ${INSTALL_ROOT}: ` +
-        `${otherPaths.filter((path) => path.includes('/share/')).join(', ') || 'nothing'})`
-    ])
-  } else if (
-    !otherPaths.some((path) =>
-      new RegExp(`/icons/hicolor/.+/apps/${identity.executableName}\\.png$`).test(path)
-    )
+  const extracted = makeTempDir('kizuna-deb-contents-')
+  runOrThrow('dpkg-deb', ['-x', debPath, extracted])
+  checkContents('deb', join(extracted, INSTALL_ROOT))
+  checkDesktopEntry('deb', join(extracted, DESKTOP_FILE), identity.executableName)
+  const icons = join(extracted, 'usr/share/icons/hicolor')
+  if (
+    !existsSync(icons) ||
+    !runOrThrow('find', [icons, '-path', `*/apps/${identity.executableName}.png`]).stdout.trim()
   ) {
-    reportFailure(`${step}: desktop integration`, [
-      `the package installs no hicolor icon for ${identity.executableName}`
-    ])
-  } else {
-    log(`  ok  ${step}: installs a desktop entry and hicolor icons`)
+    reportFailure('deb: desktop icon', ['no hicolor PNG icon'])
   }
 }
 
@@ -542,12 +462,7 @@ function checkDeb(distDir, artifactName) {
   if (!existsSync(DESKTOP_FILE)) {
     reportFailure(`${step}: install`, [`desktop entry was not installed: ${DESKTOP_FILE}`])
   } else {
-    const problems = verifyDesktopEntry(
-      parseDesktopEntry(readFileSync(DESKTOP_FILE, 'utf-8')),
-      desktopExpectations()
-    )
-    if (problems.length > 0) reportFailure(`${step}: installed desktop entry`, problems)
-    else log(`  ok  ${step}: installed desktop entry`)
+    checkDesktopEntry(step, DESKTOP_FILE, identity.executableName)
   }
 
   if (!checkNodeModeProbe(step, appExecutable, resourcesPath)) return
@@ -589,17 +504,15 @@ function checkDeb(distDir, artifactName) {
   log('  ok  deb: uninstall removes the application and its desktop entry')
 }
 
-/** -------------------------------------------------------------------- main */
-
 function main() {
   if (process.platform !== 'linux') {
     throw new Error(`The packaged Linux smoke test only runs on Linux, not ${process.platform}`)
   }
 
   const argv = process.argv.slice(2)
-  const only = parseArg(argv, '--only')
-  const distDir = resolve(parseArg(argv, '--dist-dir') ?? join(repoRoot, 'dist'))
-  logDir = resolve(parseArg(argv, '--log-dir') ?? join(distDir, 'smoke-logs'))
+  const only = readFlag(argv, 'only')
+  const distDir = resolve(readFlag(argv, 'dist-dir') ?? join(repoRoot, 'dist'))
+  logDir = resolve(readFlag(argv, 'log-dir') ?? join(distDir, 'smoke-logs'))
   if (!existsSync(distDir)) {
     throw new Error(`No packaged output at ${distDir}. Run "npm run dist:linux" first.`)
   }
@@ -608,6 +521,7 @@ function main() {
   log(`Verifying packaged Linux artifacts in ${distDir}`)
 
   requireTool('xvfb-run')
+  requireTool('desktop-file-validate')
   if (only !== 'deb') checkAppImage(distDir, names.appImage)
   if (only !== 'appimage') {
     requireTool('dpkg-deb')
