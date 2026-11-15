@@ -65,6 +65,13 @@ function fakeTimers(): TimerLike & { flush(): void; pendingCount(): number } {
   }
 }
 
+async function openPopup(
+  controller: ReturnType<typeof createPopupController>,
+  anki = fakeAnkiExisting(null)
+) {
+  await controller.open(fakeDict({ A: [result('A')] }), anki, fakeKnowledge(), openInput(token))
+}
+
 describe('popup hover debounce', () => {
   it('settles with the last item after the delay', () => {
     const timers = fakeTimers()
@@ -94,32 +101,51 @@ describe('popup hover debounce', () => {
 })
 
 describe('popupController', () => {
-  it('open() shows the popup, resets history and Anki state', async () => {
-    const controller = createPopupController()
-    const dict = fakeDict({ A: [result('A')] })
-    const anki = fakeAnkiExisting({ cardId: 7 })
-
-    await controller.open(dict, anki, fakeKnowledge(), openInput(token))
-
-    const state = controller.getState()
-    expect(state.popup?.token).toBe(token)
-    expect(state.popup?.results).toEqual([result('A')])
-    expect(state.history).toEqual([])
-    expect(state.ankiStatus).toBe('idle')
-    expect(state.ankiExisting).toEqual({ A: { cardId: 7 } })
-  })
-
-  it('notifies subscribers on every state transition', async () => {
+  it('publishes open, link, back and close transitions, preserving the original popup', async () => {
     const controller = createPopupController()
     const listener = vi.fn()
-    controller.subscribe(listener)
+    const unsubscribe = controller.subscribe(listener)
+    const before = controller.getState()
+    controller.back()
+    expect(controller.getState()).toBe(before)
+
     await controller.open(
       fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
+      fakeAnkiExisting({ cardId: 7 }),
       fakeKnowledge(),
       openInput(token)
     )
+    const original = controller.getState().popup
+    expect(original?.token).toBe(token)
+    expect(original?.results).toEqual([result('A')])
+    expect(controller.getState()).toMatchObject({
+      history: [],
+      ankiStatus: 'idle',
+      ankiExisting: { A: { cardId: 7 } }
+    })
     expect(listener).toHaveBeenCalled()
+
+    listener.mockClear()
+    await controller.openLink(fakeDict({ linked: [result('linked')] }), 'linked', null, undefined)
+    expect(controller.getState()).toMatchObject({
+      history: [original],
+      popup: { results: [result('linked')], highlightedTokens: [] }
+    })
+    expect(listener).toHaveBeenCalled()
+    controller.back()
+    expect(controller.getState()).toMatchObject({ popup: original, history: [] })
+    await controller.openLink(fakeDict({ linked: [result('linked')] }), 'linked', null, undefined)
+    expect(controller.getState().history).toHaveLength(1)
+    controller.close()
+    expect(controller.getState()).toMatchObject({
+      popup: null,
+      history: [],
+      ankiExisting: { A: { cardId: 7 } }
+    })
+    unsubscribe()
+    listener.mockClear()
+    await openPopup(controller)
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('invalidates old provenance before a newer popup finishes reading its policy', async () => {
@@ -157,75 +183,6 @@ describe('popupController', () => {
     await second
   })
 
-  it('openLink() pushes the current popup onto history and swaps in the linked results', async () => {
-    const controller = createPopupController()
-    await controller.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
-      fakeKnowledge(),
-      openInput(token)
-    )
-    const original = controller.getState().popup
-
-    await controller.openLink(fakeDict({ linked: [result('linked')] }), 'linked', null, undefined)
-
-    const state = controller.getState()
-    expect(state.history).toEqual([original])
-    expect(state.popup?.results).toEqual([result('linked')])
-    expect(state.popup?.highlightedTokens).toEqual([])
-  })
-
-  it('back() restores the previous popup and pops history', async () => {
-    const controller = createPopupController()
-    await controller.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
-      fakeKnowledge(),
-      openInput(token)
-    )
-    const original = controller.getState().popup
-    await controller.openLink(fakeDict({ linked: [result('linked')] }), 'linked', null, undefined)
-
-    controller.back()
-
-    const state = controller.getState()
-    expect(state.popup).toEqual(original)
-    expect(state.history).toEqual([])
-  })
-
-  it('back() is a no-op when history is empty', () => {
-    const controller = createPopupController()
-    const before = controller.getState()
-    controller.back()
-    expect(controller.getState()).toBe(before)
-  })
-
-  it('addToAnki() sets adding then the outcome status', async () => {
-    const controller = createPopupController()
-    await controller.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
-      fakeKnowledge(),
-      openInput(token)
-    )
-    const anki = {
-      addNote: vi
-        .fn()
-        .mockResolvedValue({ noteId: 1, operation: 'added', changedFields: ['Word'] }),
-      findExisting: vi.fn().mockResolvedValue(null),
-      openCard: vi.fn().mockResolvedValue(undefined)
-    }
-
-    await controller.addToAnki(anki, result('A'))
-
-    expect(anki.addNote).toHaveBeenCalledWith({
-      token,
-      result: result('A'),
-      sentence: token.surface
-    })
-    expect(controller.getState().ankiStatus).toBe('added')
-  })
-
   it('opens an already-mined selected dictionary headword instead of adding a duplicate', async () => {
     const controller = createPopupController()
     await controller.open(
@@ -250,12 +207,7 @@ describe('popupController', () => {
 
   it('forwards an accepted screenshot to addNote, and omits the key without one', async () => {
     const controller = createPopupController()
-    await controller.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
-      fakeKnowledge(),
-      openInput(token)
-    )
+    await openPopup(controller)
     const anki = {
       addNote: vi
         .fn()
@@ -273,6 +225,7 @@ describe('popupController', () => {
     })
 
     await controller.addToAnki(anki, result('A'))
+    expect(controller.getState().ankiStatus).toBe('added')
     expect(anki.addNote).toHaveBeenLastCalledWith({
       token,
       result: result('A'),
@@ -336,12 +289,7 @@ describe('popupController', () => {
 
     // Feature off: likewise no capture.
     const off = createPopupController()
-    await off.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting(null),
-      fakeKnowledge(),
-      openInput(token)
-    )
+    await openPopup(off)
     expect(await off.captureCardImage(player, true)).toBeNull()
     expect(player.captureFrame).not.toHaveBeenCalled()
   })
@@ -390,23 +338,6 @@ describe('popupController', () => {
     expect(anki.openCard).toHaveBeenCalledWith(3)
   })
 
-  it('close() clears the popup, history, and deferred Anki-card state', async () => {
-    const controller = createPopupController()
-    await controller.open(
-      fakeDict({ A: [result('A')] }),
-      fakeAnkiExisting({ cardId: 3 }),
-      fakeKnowledge(),
-      openInput(token)
-    )
-
-    controller.close()
-
-    const state = controller.getState()
-    expect(state.popup).toBeNull()
-    expect(state.history).toEqual([])
-    expect(state.ankiExisting).toEqual({ A: { cardId: 3 } })
-  })
-
   it('allow never preflights duplicates and refreshes the card state after adding', async () => {
     const controller = createPopupController()
     const anki = {
@@ -427,41 +358,28 @@ describe('popupController', () => {
     expect(controller.getState().ankiExisting).toEqual({ A: { cardId: 11 } })
   })
 
-  it('reports Added when overwrite settings add a new note and refreshes its card metadata', async () => {
-    const controller = createPopupController()
-    const anki = {
-      getSettings: vi.fn().mockResolvedValue({ duplicatePolicy: 'overwrite' as const }),
-      findExisting: vi.fn().mockResolvedValue({ cardId: 12 }),
-      addNote: vi
-        .fn()
-        .mockResolvedValue({ noteId: 12, operation: 'added', changedFields: ['Word'] }),
-      openCard: vi.fn().mockResolvedValue(undefined)
+  it.each(['added', 'updated'] as const)(
+    'reports the verified overwrite outcome: %s',
+    async (operation) => {
+      const controller = createPopupController()
+      const anki = {
+        ...fakeAnkiExisting({ cardId: 12 }),
+        getSettings: vi.fn().mockResolvedValue({ duplicatePolicy: 'overwrite' }),
+        addNote: vi
+          .fn()
+          .mockResolvedValue({ noteId: 12, operation, changedFields: ['Definition'] }),
+        openCard: vi.fn()
+      }
+      await controller.open(fakeDict({ A: [result('A')] }), anki, fakeKnowledge(), openInput(token))
+      await controller.addToAnki(anki, result('A'))
+      expect(anki.addNote).toHaveBeenCalledOnce()
+      expect(anki.openCard).not.toHaveBeenCalled()
+      expect(controller.getState()).toMatchObject({
+        ankiStatus: operation,
+        ankiExisting: { A: { cardId: 12 } }
+      })
     }
-
-    await controller.open(fakeDict({ A: [result('A')] }), anki, fakeKnowledge(), openInput(token))
-    await controller.addToAnki(anki, result('A'))
-
-    expect(anki.addNote).toHaveBeenCalledTimes(1)
-    expect(anki.openCard).not.toHaveBeenCalled()
-    expect(controller.getState().ankiStatus).toBe('added')
-  })
-
-  it('reports Updated only when Anki verifies an update', async () => {
-    const controller = createPopupController()
-    const anki = {
-      getSettings: vi.fn().mockResolvedValue({ duplicatePolicy: 'overwrite' as const }),
-      findExisting: vi.fn().mockResolvedValue({ cardId: 12 }),
-      addNote: vi.fn().mockResolvedValue({
-        noteId: 12,
-        operation: 'updated' as const,
-        changedFields: ['Definition']
-      }),
-      openCard: vi.fn().mockResolvedValue(undefined)
-    }
-    await controller.open(fakeDict({ A: [result('A')] }), anki, fakeKnowledge(), openInput(token))
-    await controller.addToAnki(anki, result('A'))
-    expect(controller.getState().ankiStatus).toBe('updated')
-  })
+  )
 
   it('keeps the popup error state on a rejected verification and blocks repeated clicks in flight', async () => {
     const controller = createPopupController()

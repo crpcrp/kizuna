@@ -118,22 +118,6 @@ function archiveResult(): PrepareResult {
   })
 }
 
-function cloneSnapshot(snapshot: SubtitleSelectionSnapshot): SubtitleSelectionSnapshot {
-  const selection = snapshot.selection
-  return {
-    offsetMs: snapshot.offsetMs,
-    selection:
-      selection.mode === 'track'
-        ? { mode: 'track', track: { ...selection.track } }
-        : selection.mode === 'external'
-          ? {
-              ...selection,
-              ...(selection.provenance ? { provenance: { ...selection.provenance } } : {})
-            }
-          : { mode: 'off' }
-  }
-}
-
 interface Harness {
   api: FakeJimaku
   controller: ReturnType<typeof createJimakuController>
@@ -185,7 +169,7 @@ function harness(
   }
 
   const subtitles: JimakuSubtitleActions = {
-    capture: vi.fn(() => cloneSnapshot(current)),
+    capture: vi.fn(() => structuredClone(current)),
     applyExternal: vi.fn(
       async (selection, offsetMs, isCurrent): Promise<JimakuSelectionApplyResult> => {
         if (!isCurrent()) return { status: 'stale' }
@@ -195,7 +179,7 @@ function harness(
     ),
     restore: vi.fn(async (snapshot, isCurrent): Promise<JimakuSelectionApplyResult> => {
       if (!isCurrent()) return { status: 'stale' }
-      current = cloneSnapshot(snapshot)
+      current = structuredClone(snapshot)
       return { status: 'applied' }
     })
   }
@@ -212,7 +196,7 @@ function harness(
     api,
     controller,
     subtitles,
-    getCurrent: () => cloneSnapshot(current),
+    getCurrent: () => structuredClone(current),
     setMedia(path, loadGeneration) {
       currentMedia = { filePath: path, loadGeneration }
       controller.syncMedia()
@@ -523,6 +507,29 @@ describe('createJimakuController', () => {
       canRevert: true
     })
     expect(vi.mocked(h.subtitles.applyExternal).mock.calls[0]?.[1]).toBe(900)
+  })
+
+  it('tracks A/B/A versions, skips the active checksum, and reverts only once', async () => {
+    const h = harness()
+    await openAndLoadFiles(h)
+    for (const contentVersion of ['a', 'b', 'a']) {
+      vi.mocked(h.api.prepareFile).mockResolvedValueOnce(ok(prepared(contentVersion)))
+      await h.controller.chooseFile('file-1')
+      expect(h.controller.getState().currentVersionId).toBe(contentVersion)
+    }
+    expect(h.controller.getState().triedVersionIds).toEqual(['b'])
+    expect(h.subtitles.applyExternal).toHaveBeenCalledTimes(3)
+    vi.mocked(h.api.prepareFile).mockResolvedValueOnce(ok(prepared('a')))
+    await h.controller.chooseFile('file-1')
+    expect(h.controller.getState().notice).toBe('sameContent')
+    expect(h.subtitles.applyExternal).toHaveBeenCalledTimes(3)
+    expect(h.api.commitPreparedSubtitle).toHaveBeenCalledTimes(3)
+
+    await h.controller.revert()
+    expect(h.getCurrent().selection).toEqual(prepared('b').selection)
+    expect(h.controller.getState()).toMatchObject({ currentVersionId: 'b', canRevert: false })
+    await h.controller.revert()
+    expect(h.subtitles.restore).toHaveBeenCalledOnce()
   })
 
   it('recognizes a duplicate checksum without reloading or creating a revert', async () => {

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '@src/renderer/src/App'
 import type {
@@ -11,7 +11,7 @@ import type {
 } from '@src/shared/jimaku'
 import type { MediaPlaybackHistory } from '@src/shared/mediaHistory'
 import type { Track } from '@src/shared/track'
-import { installFakeKizunaApi } from '../harness/fakeKizunaApi'
+import { installFakeKizunaApi, type FakeKizunaApiOverrides } from '../harness/fakeKizunaApi'
 import { EPISODE, appTeardown, openRecent } from '../harness/appIntegration'
 import { deferred } from '../harness/deferred'
 
@@ -126,6 +126,49 @@ function archiveMembers(entryId: number): JimakuArchiveMembersResult {
   }
 }
 
+const entry: JimakuEntry = {
+  id: 7,
+  name: 'Episode',
+  flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
+}
+
+function installJimakuApi(overrides: FakeKizunaApiOverrides = {}) {
+  const candidate = file(7, 'candidate-1', 'Episode05.srt')
+  return installFakeKizunaApi({
+    ...overrides,
+    media: {
+      enumerateTracks: vi.fn(async () => [SUB_EN]),
+      loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
+      loadExternalSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'こんにちは' }]),
+      ...overrides.media
+    },
+    mediaHistory: {
+      getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }]),
+      ...overrides.mediaHistory
+    },
+    jimaku: {
+      getStatus: vi.fn(async () => configured),
+      beginSession: vi.fn(async (_path, mediaGeneration) => ({
+        ok: true as const,
+        value: { sessionId: 'session-1', mediaGeneration }
+      })),
+      searchTitles: vi.fn(async () => ({
+        ok: true as const,
+        value: { entries: [entry], partial: false }
+      })),
+      listFiles: vi.fn(async () => ({
+        ok: true as const,
+        value: { entryId: entry.id, sourcePage: candidate.sourcePage, files: [candidate] }
+      })),
+      commitPreparedSubtitle: vi.fn(async () => ({
+        ok: true as const,
+        value: preparedSubtitle().selection
+      })),
+      ...overrides.jimaku
+    }
+  })
+}
+
 afterEach(appTeardown)
 
 describe('Jimaku player composition', () => {
@@ -142,15 +185,7 @@ describe('Jimaku player composition', () => {
   })
 
   it('shows the no-Japanese prompt once after subtitle restoration settles', async () => {
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      }
-    })
+    const api = installJimakuApi()
     render(<App />)
 
     await openRecent(api.player.load)
@@ -165,14 +200,8 @@ describe('Jimaku player composition', () => {
   })
 
   it('opens setup from Find and returns to the Subtitles options section', async () => {
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      }
+    const api = installJimakuApi({
+      jimaku: { getStatus: vi.fn(async () => ({ ...configured, configured: false })) }
     })
     render(<App />)
     await openRecent(api.player.load)
@@ -195,21 +224,9 @@ describe('Jimaku player composition', () => {
   })
 
   it('saves and tests the key before the first explicit search', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
     let hasKey = false
     let testOutcome: JimakuSettingsStatus['testOutcome'] = { status: 'notTested' }
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
+    const api = installJimakuApi({
       jimaku: {
         getStatus: vi.fn(async () => ({ ...configured, configured: hasKey, testOutcome })),
         setApiKey: vi.fn(async () => {
@@ -220,15 +237,7 @@ describe('Jimaku player composition', () => {
         testConnection: vi.fn(async () => {
           testOutcome = { status: 'connected' }
           return { ...configured, testOutcome }
-        }),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        }))
+        })
       }
     })
     render(<App />)
@@ -273,20 +282,8 @@ describe('Jimaku player composition', () => {
     }
     const recommended = file(7, 'recommended', 'Live title - 07.srt')
     const excluded = file(7, 'excluded', 'Live title - 99.srt', 'srt', 'excluded')
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
+    const api = installJimakuApi({
       jimaku: {
-        getStatus: vi.fn(async () => configured),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
         searchTitles: vi.fn(async () => ({
           ok: true as const,
           value: { entries: [entry], partial: true, failedCategories: ['anime'] as const }
@@ -326,42 +323,16 @@ describe('Jimaku player composition', () => {
   })
 
   it('requires an explicit ZIP member choice before applying subtitles', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
     const zip = file(7, 'zip', 'Episode-pack.zip', 'zip')
     const prepared = preparedSubtitle('b')
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
-        loadExternalSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'こんにちは' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
+    const api = installJimakuApi({
       jimaku: {
-        getStatus: vi.fn(async () => configured),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        })),
         listFiles: vi.fn(async () => ({
           ok: true as const,
           value: { entryId: entry.id, sourcePage: zip.sourcePage, files: [zip] }
         })),
         prepareFile: vi.fn(async () => ({ ok: true as const, value: archiveMembers(entry.id) })),
-        prepareArchiveMember: vi.fn(async () => ({ ok: true as const, value: prepared })),
-        commitPreparedSubtitle: vi.fn(async () => ({
-          ok: true as const,
-          value: prepared.selection
-        }))
+        prepareArchiveMember: vi.fn(async () => ({ ok: true as const, value: prepared }))
       }
     })
     render(<App />)
@@ -385,6 +356,23 @@ describe('Jimaku player composition', () => {
     )
     await waitFor(() => expect(api.media.loadExternalSubtitle).toHaveBeenCalled())
     expect(screen.getByText('Subtitle loaded.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Try another' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Choose file…' }))
+    await screen.findByText(/will not guess between ambiguous members/)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Download and use' })[0])
+    await screen.findByText('This subtitle is already in use.')
+    expect(api.media.loadExternalSubtitle).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Revert to previous subtitles' }))
+    await waitFor(() =>
+      expect(api.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith(
+        EPISODE,
+        expect.objectContaining({
+          mode: 'track',
+          track: expect.objectContaining({ id: SUB_EN.id })
+        })
+      )
+    )
+    await waitFor(() => expect(screen.getByText('Hello')).toBeTruthy())
   })
 
   it('loads a remembered folder title only when Find is opened', async () => {
@@ -399,21 +387,9 @@ describe('Jimaku player composition', () => {
       category: 'anime' as const,
       updatedAt: 1
     }
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
+    const api = installJimakuApi({
       jimaku: {
-        getStatus: vi.fn(async () => configured),
         getFolderHint: vi.fn(async () => remembered),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
         listFiles: vi.fn(async () => ({
           ok: true as const,
           value: {
@@ -447,14 +423,11 @@ describe('Jimaku player composition', () => {
       subtitle: prepared.selection,
       subtitleOffsetsByVersion: { [prepared.contentVersion]: 1500 }
     }
-    const api = installFakeKizunaApi({
+    const api = installJimakuApi({
       media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
         loadExternalSubtitle: vi.fn(async () => [{ start: -2, end: 1, text: 'こんにちは' }])
       },
       mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }]),
         getPlaybackHistory: vi.fn(async () => history)
       }
     })
@@ -485,19 +458,8 @@ describe('Jimaku player composition', () => {
   })
 
   it('drops a stale download when the video changes', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
-    const candidate = file(7, 'candidate-1', 'Episode05.srt')
     const pending = deferred<{ ok: true; value: JimakuPreparedSubtitleResult }>()
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
-        loadExternalSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'こんにちは' }])
-      },
+    const api = installJimakuApi({
       mediaHistory: {
         getRecentFiles: vi.fn(async () => [
           { path: EPISODE, openedAt: 2 },
@@ -505,18 +467,9 @@ describe('Jimaku player composition', () => {
         ])
       },
       jimaku: {
-        getStatus: vi.fn(async () => configured),
         beginSession: vi.fn(async (path, mediaGeneration) => ({
           ok: true as const,
           value: { sessionId: path === EPISODE ? 'session-a' : 'session-b', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        })),
-        listFiles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entryId: entry.id, sourcePage: candidate.sourcePage, files: [candidate] }
         })),
         prepareFile: vi.fn(async () => pending.promise)
       }
@@ -531,45 +484,24 @@ describe('Jimaku player composition', () => {
     await waitFor(() => expect(api.jimaku.prepareFile).toHaveBeenCalled())
 
     await openRecent(api.player.load, OTHER_EPISODE)
-    pending.resolve({ ok: true, value: preparedSubtitle('d') })
+    await act(async () => {
+      pending.resolve({ ok: true, value: preparedSubtitle('d') })
+      await pending.promise
+    })
     await waitFor(() => expect(api.player.load).toHaveBeenCalledWith(OTHER_EPISODE))
     expect(api.media.loadExternalSubtitle).not.toHaveBeenCalled()
     expect(screen.queryByText('こんにちは')).toBeNull()
   })
 
   it('keeps the current subtitle when a downloaded subtitle cannot be parsed', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
-    const candidate = file(7, 'candidate-1', 'Episode05.srt')
     const prepared = preparedSubtitle('e')
-    const api = installFakeKizunaApi({
+    const api = installJimakuApi({
       media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
         loadExternalSubtitle: vi.fn(async () => {
           throw new Error('invalid subtitle')
         })
       },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
       jimaku: {
-        getStatus: vi.fn(async () => configured),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        })),
-        listFiles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entryId: entry.id, sourcePage: candidate.sourcePage, files: [candidate] }
-        })),
         prepareFile: vi.fn(async () => ({ ok: true as const, value: prepared }))
       }
     })
@@ -593,11 +525,6 @@ describe('Jimaku player composition', () => {
   })
 
   it('downloads, applies, and persists a subtitle without seeking or pausing', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
     const file: JimakuFileCandidate = {
       candidateId: 'candidate-1',
       entryId: entry.id,
@@ -610,38 +537,17 @@ describe('Jimaku player composition', () => {
       reasons: []
     }
     const prepared = preparedSubtitle()
-    const api = installFakeKizunaApi({
+    const api = installJimakuApi({
       player: {
         setPause: vi.fn(async () => undefined),
         seek: vi.fn(async () => undefined)
       },
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
-        loadExternalSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'こんにちは' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
       jimaku: {
-        getStatus: vi.fn(async () => configured),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        })),
         listFiles: vi.fn(async () => ({
           ok: true as const,
           value: { entryId: entry.id, sourcePage: file.sourcePage, files: [file] }
         })),
         prepareFile: vi.fn(async () => ({ ok: true as const, value: prepared })),
-        commitPreparedSubtitle: vi.fn(async () => ({
-          ok: true as const,
-          value: prepared.selection
-        })),
         exportActiveSubtitle: vi.fn(async () => ({
           status: 'exported' as const,
           path: 'C:\\Exports\\Episode05.srt'
@@ -684,85 +590,6 @@ describe('Jimaku player composition', () => {
         mediaGeneration: 1,
         provenance: prepared.selection.provenance
       })
-    )
-  })
-
-  it('tracks A/B/A versions, deduplicates the active version, and reverts once', async () => {
-    const entry: JimakuEntry = {
-      id: 7,
-      name: 'Episode',
-      flags: { anime: true, movie: false, external: false, unverified: false, adult: false }
-    }
-    const candidate = file(7, 'candidate-1', 'Episode05.srt')
-    const versions = [
-      preparedSubtitle('a'),
-      preparedSubtitle('b'),
-      preparedSubtitle('a'),
-      preparedSubtitle('a')
-    ]
-    let prepareCount = 0
-    const api = installFakeKizunaApi({
-      media: {
-        enumerateTracks: vi.fn(async () => [SUB_EN]),
-        loadSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'Hello' }]),
-        loadExternalSubtitle: vi.fn(async () => [{ start: 0, end: 1, text: 'こんにちは' }])
-      },
-      mediaHistory: {
-        getRecentFiles: vi.fn(async () => [{ path: EPISODE, openedAt: 1 }])
-      },
-      jimaku: {
-        getStatus: vi.fn(async () => configured),
-        beginSession: vi.fn(async (_path, mediaGeneration) => ({
-          ok: true as const,
-          value: { sessionId: 'session-1', mediaGeneration }
-        })),
-        searchTitles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entries: [entry], partial: false }
-        })),
-        listFiles: vi.fn(async () => ({
-          ok: true as const,
-          value: { entryId: entry.id, sourcePage: candidate.sourcePage, files: [candidate] }
-        })),
-        prepareFile: vi.fn(async () => ({
-          ok: true as const,
-          value: versions[Math.min(prepareCount++, versions.length - 1)]
-        })),
-        commitPreparedSubtitle: vi.fn(async () => ({
-          ok: true as const,
-          value: versions[0].selection
-        }))
-      }
-    })
-    render(<App />)
-    await openConfiguredSearch(api)
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-    await waitFor(() => expect(api.jimaku.searchTitles).toHaveBeenCalled())
-    fireEvent.click(screen.getByRole('button', { name: /Episode/ }))
-    await waitFor(() => expect(api.jimaku.listFiles).toHaveBeenCalled())
-
-    const choose = (): void => {
-      fireEvent.click(screen.getByRole('button', { name: 'Download and use' }))
-    }
-    choose()
-    await waitFor(() => expect(api.media.loadExternalSubtitle).toHaveBeenCalledTimes(1))
-    fireEvent.click(screen.getByRole('button', { name: 'Try another' }))
-    choose()
-    await waitFor(() => expect(api.media.loadExternalSubtitle).toHaveBeenCalledTimes(2))
-    fireEvent.click(screen.getByRole('button', { name: 'Try another' }))
-    choose()
-    await waitFor(() => expect(api.media.loadExternalSubtitle).toHaveBeenCalledTimes(3))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Try another' }))
-    choose()
-    await waitFor(() => expect(screen.getByText('This subtitle is already in use.')))
-    expect(api.media.loadExternalSubtitle).toHaveBeenCalledTimes(3)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Revert to previous subtitles' }))
-    await waitFor(() => expect(api.media.loadExternalSubtitle).toHaveBeenCalledTimes(4))
-    expect(api.mediaHistory.setSubtitleTrack).toHaveBeenCalledWith(
-      EPISODE,
-      expect.objectContaining({ mode: 'external', path: versions[1].selection.path })
     )
   })
 })

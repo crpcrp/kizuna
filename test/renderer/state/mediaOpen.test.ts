@@ -171,68 +171,47 @@ describe('loadPath', () => {
     expect(dispatch).not.toHaveBeenCalled()
   })
 
-  it('returns { status: "failed", filePath, message } when player.load rejects, without dispatching fileLoaded', async () => {
-    const bridge = makeBridge({
-      player: { load: vi.fn().mockRejectedValue(new Error('mpv load failed')) }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
+  it.each(['probe', 'history', 'load'] as const)(
+    'fails before dispatching fileLoaded when %s rejects',
+    async (stage) => {
+      const bridge = makeBridge()
+      const operation =
+        stage === 'probe'
+          ? bridge.media.enumerateTracks
+          : stage === 'history'
+            ? bridge.mediaHistory.getPlaybackHistory
+            : bridge.player.load
+      vi.mocked(operation).mockRejectedValue(new Error(`${stage} failed`))
+      const dispatch = vi.fn()
+      expect(await loadPath(makeSession({ bridge, dispatch }), '/recent.mkv')).toEqual({
+        status: 'failed',
+        filePath: '/recent.mkv',
+        message: `${stage} failed`
+      })
+      expect(dispatch).not.toHaveBeenCalled()
+      if (stage !== 'load') expect(bridge.player.load).not.toHaveBeenCalled()
+    }
+  )
 
-    const result = await loadPath(session, '/recent.mkv')
-
-    expect(result).toEqual({
-      status: 'failed',
-      filePath: '/recent.mkv',
-      message: 'mpv load failed'
-    })
-    expect(dispatch).not.toHaveBeenCalled()
-  })
-
-  it('returns { status: "failed", filePath, message } when track enumeration/history lookup rejects', async () => {
-    const bridge = makeBridge({
-      media: { enumerateTracks: vi.fn().mockRejectedValue(new Error('probe failed')) }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    const result = await loadPath(session, '/recent.mkv')
-
-    expect(result).toEqual({ status: 'failed', filePath: '/recent.mkv', message: 'probe failed' })
-    expect(dispatch).not.toHaveBeenCalled()
-  })
-
-  it('seeks to the resume position when history is eligible for resume', async () => {
-    const bridge = makeBridge({
-      mediaHistory: {
-        getPlaybackHistory: vi
-          .fn()
-          .mockResolvedValue({ positionSeconds: 120, durationSeconds: 600, updatedAt: 1 })
-      }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    await loadPath(session, '/recent.mkv')
-
-    expect(bridge.player.seek).toHaveBeenCalledWith(120, true)
-  })
-
-  it('collects a resume-seek failure into warnings without failing the open', async () => {
-    const bridge = makeBridge({
-      player: { seek: vi.fn().mockRejectedValue(new Error('seek failed')) },
-      mediaHistory: {
-        getPlaybackHistory: vi
-          .fn()
-          .mockResolvedValue({ positionSeconds: 120, durationSeconds: 600, updatedAt: 1 })
-      }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    const result = await loadPath(session, '/recent.mkv')
-
-    expect(result).toEqual({ status: 'opened', filePath: '/recent.mkv', warnings: ['seek failed'] })
-  })
+  it.each([false, true])(
+    'restores the resume position and reports a seek failure as a warning: %s',
+    async (fails) => {
+      const bridge = makeBridge({
+        mediaHistory: {
+          getPlaybackHistory: vi
+            .fn()
+            .mockResolvedValue({ positionSeconds: 120, durationSeconds: 600, updatedAt: 1 })
+        }
+      })
+      if (fails) vi.mocked(bridge.player.seek).mockRejectedValue(new Error('seek failed'))
+      expect(await loadPath(makeSession({ bridge }), '/recent.mkv')).toEqual({
+        status: 'opened',
+        filePath: '/recent.mkv',
+        warnings: fails ? ['seek failed'] : []
+      })
+      expect(bridge.player.seek).toHaveBeenCalledExactlyOnceWith(120, true)
+    }
+  )
 
   it('returns an opened result without waiting for subtitle extraction, so callers can refresh recents and unlock the menu', async () => {
     const subtitleLoad = deferred<Cue[]>()
@@ -429,79 +408,67 @@ describe('loadPath', () => {
     expect(bridge.media.loadSubtitle).toHaveBeenNthCalledWith(2, '/fallback.mkv', 2)
   })
 
-  it('restores a saved external subtitle file instead of an embedded track', async () => {
-    const japanese: Cue[] = [{ start: 0, end: 1, text: 'こんにちは' }]
-    const bridge = makeBridge({
-      media: { loadExternalSubtitle: vi.fn().mockResolvedValue(japanese) },
-      mediaHistory: {
-        getPlaybackHistory: vi.fn().mockResolvedValue({
-          positionSeconds: 0,
-          updatedAt: 1,
-          subtitle: { mode: 'external', path: '/subs/episode.srt', encoding: 'shift_jis' }
-        })
+  it.each(['local', 'jimaku'] as const)(
+    'restores saved %s subtitle cues, encoding, cache and version offset',
+    async (kind) => {
+      const japanese: Cue[] = [{ start: 0, end: 1, text: 'こんにちは' }]
+      const contentVersion = 'a'.repeat(64)
+      const provenance = {
+        provider: 'jimaku' as const,
+        entryId: 7,
+        fileName: 'episode.srt',
+        contentVersion
       }
-    })
-    const dispatch = vi.fn()
-    const cache = new Map<number, Cue[]>()
-    const session = makeSession({
-      bridge,
-      dispatch,
-      cueCache: cache,
-      externalSubtitleEncoding: 'shift_jis'
-    })
-
-    await loadPath(session, '/recent.mkv')
-
-    expect(bridge.media.loadExternalSubtitle).toHaveBeenCalledWith('/subs/episode.srt', 'shift_jis')
-    expect(bridge.media.loadSubtitle).not.toHaveBeenCalled()
-    expect(dispatch.mock.calls).toContainEqual([
-      {
-        type: 'externalSubtitleLoaded',
+      const subtitle = {
+        mode: 'external' as const,
         path: '/subs/episode.srt',
-        track: externalSubtitleTrack('/subs/episode.srt', japanese),
-        cues: japanese,
-        encoding: 'shift_jis'
+        encoding: 'shift_jis' as const,
+        ...(kind === 'jimaku' ? { provenance } : {})
       }
-    ])
-    expect(cache.get(EXTERNAL_SUBTITLE_TRACK_ID)).toBe(japanese)
-  })
-
-  it('restores a saved downloaded subtitle with its content-version offset', async () => {
-    const japanese: Cue[] = [{ start: 0, end: 1, text: 'こんにちは' }]
-    const contentVersion = 'a'.repeat(64)
-    const provenance = {
-      provider: 'jimaku' as const,
-      entryId: 7,
-      fileName: 'episode.srt',
-      contentVersion
-    }
-    const bridge = makeBridge({
-      media: { loadExternalSubtitle: vi.fn().mockResolvedValue(japanese) },
-      mediaHistory: {
-        getPlaybackHistory: vi.fn().mockResolvedValue({
-          positionSeconds: 0,
-          updatedAt: 1,
-          subtitle: { mode: 'external', path: '/cache/episode.srt', encoding: 'auto', provenance },
-          subtitleOffsetsByVersion: { [contentVersion]: 1_500 }
-        })
+      const history = {
+        positionSeconds: 0,
+        updatedAt: 1,
+        subtitle,
+        ...(kind === 'jimaku' ? { subtitleOffsetsByVersion: { [contentVersion]: 1500 } } : {})
       }
-    })
-    const dispatch = vi.fn()
-    const session = makeSession({ bridge, dispatch })
-
-    await loadPath(session, '/recent.mkv')
-
-    await vi.waitFor(() =>
-      expect(dispatch).toHaveBeenCalledWith({
-        type: 'setSubtitleVersionOffset',
-        contentVersion,
-        value: 1_500
+      const bridge = makeBridge({
+        media: { loadExternalSubtitle: vi.fn().mockResolvedValue(japanese) },
+        mediaHistory: { getPlaybackHistory: vi.fn().mockResolvedValue(history) }
       })
-    )
-    expect(dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'fileLoaded', history: expect.any(Object) })
-    )
-  })
+      const dispatch = vi.fn()
+      const cache = new Map<number, Cue[]>()
+      await loadPath(
+        makeSession({ bridge, dispatch, cueCache: cache, externalSubtitleEncoding: 'auto' }),
+        '/recent.mkv'
+      )
+      await vi.waitFor(() =>
+        expect(dispatch).toHaveBeenCalledWith({
+          type: 'externalSubtitleLoaded',
+          path: subtitle.path,
+          track: externalSubtitleTrack(subtitle.path, japanese),
+          cues: japanese,
+          encoding: 'shift_jis',
+          ...(kind === 'jimaku' ? { provenance } : {})
+        })
+      )
+      expect(bridge.media.loadExternalSubtitle).toHaveBeenCalledExactlyOnceWith(
+        subtitle.path,
+        'shift_jis'
+      )
+      expect(bridge.media.loadSubtitle).not.toHaveBeenCalled()
+      expect(cache.get(EXTERNAL_SUBTITLE_TRACK_ID)).toBe(japanese)
+      if (kind === 'jimaku') {
+        expect(dispatch).toHaveBeenCalledWith({
+          type: 'setSubtitleVersionOffset',
+          contentVersion,
+          value: 1500
+        })
+        expect(dispatch).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'fileLoaded', history })
+        )
+      }
+    }
+  )
 
   it('falls back to the default embedded track when the saved external file can no longer be read', async () => {
     const bridge = makeBridge({
@@ -532,39 +499,26 @@ describe('loadPath', () => {
     )
   })
 
-  it('reports a subtitle extraction failure through onWarning after the open already succeeded', async () => {
+  it.each([
+    { thrown: new Error('ffmpeg failed'), warning: 'ffmpeg failed' },
+    {
+      thrown: { stack: 'at ffmpeg.ts:1:1', message: '/private/path/episode.mkv' },
+      warning: 'Something went wrong.'
+    }
+  ])('reports and sanitizes a late extraction failure: $warning', async ({ thrown, warning }) => {
     const extraction = deferred<Cue[]>()
     const bridge = makeBridge({
       media: { loadSubtitle: vi.fn().mockReturnValue(extraction.promise) }
     })
     const onWarning = vi.fn()
-    const session = makeSession({ bridge, onWarning })
-
-    const result = await loadPath(session, '/recent.mkv')
-
-    // The open succeeded and carries no warning of its own: extraction is
-    // still running at this point.
-    expect(result).toEqual({ status: 'opened', filePath: '/recent.mkv', warnings: [] })
+    expect(await loadPath(makeSession({ bridge, onWarning }), '/recent.mkv')).toEqual({
+      status: 'opened',
+      filePath: '/recent.mkv',
+      warnings: []
+    })
     expect(onWarning).not.toHaveBeenCalled()
-
-    extraction.reject(new Error('ffmpeg failed'))
-
-    await vi.waitFor(() => expect(onWarning).toHaveBeenCalledWith('ffmpeg failed'))
-    expect(onWarning).toHaveBeenCalledTimes(1)
-  })
-
-  it('sanitizes a subtitle warning rather than surfacing the raw thrown value', async () => {
-    const extraction = deferred<Cue[]>()
-    const bridge = makeBridge({
-      media: { loadSubtitle: vi.fn().mockReturnValue(extraction.promise) }
-    })
-    const onWarning = vi.fn()
-    const session = makeSession({ bridge, onWarning })
-
-    await loadPath(session, '/recent.mkv')
-    extraction.reject({ stack: 'at ffmpeg.ts:1:1', message: '/private/path/episode.mkv' })
-
-    await vi.waitFor(() => expect(onWarning).toHaveBeenCalledWith('Something went wrong.'))
+    extraction.reject(thrown)
+    await vi.waitFor(() => expect(onWarning).toHaveBeenCalledExactlyOnceWith(warning))
   })
 
   it('drops a subtitle warning belonging to a file request a newer open superseded', async () => {
@@ -672,38 +626,23 @@ describe('openRecentFile', () => {
     })
   })
 
-  it('keeps a recent path when availability has a transient error', async () => {
-    const bridge = makeRecentBridge({ status: 'error', message: 'Access denied.' })
-    const session = makeRecentSession(bridge)
-
-    const result = await openRecentFile(session, '/protected.mkv')
-
-    expect(bridge.mediaHistory.removeRecentFile).not.toHaveBeenCalled()
-    expect(bridge.player.load).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      status: 'failed',
-      filePath: '/protected.mkv',
-      message: 'Access denied.'
-    })
-  })
-
-  it('keeps a recent path when its availability check rejects', async () => {
-    const bridge = makeRecentBridge({ status: 'available' })
-    ;(bridge.mediaHistory.checkFileAvailability as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('Access denied')
-    )
-    const session = makeRecentSession(bridge)
-
-    const result = await openRecentFile(session, '/protected.mkv')
-
-    expect(bridge.mediaHistory.removeRecentFile).not.toHaveBeenCalled()
-    expect(bridge.player.load).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      status: 'failed',
-      filePath: '/protected.mkv',
-      message: 'Access denied'
-    })
-  })
+  it.each([false, true])(
+    'keeps a recent path after an availability error (rejected: %s)',
+    async (rejects) => {
+      const bridge = makeRecentBridge({ status: 'error', message: 'Access denied' })
+      if (rejects)
+        vi.mocked(bridge.mediaHistory.checkFileAvailability).mockRejectedValue(
+          new Error('Access denied')
+        )
+      expect(await openRecentFile(makeRecentSession(bridge), '/protected.mkv')).toEqual({
+        status: 'failed',
+        filePath: '/protected.mkv',
+        message: 'Access denied'
+      })
+      expect(bridge.mediaHistory.removeRecentFile).not.toHaveBeenCalled()
+      expect(bridge.player.load).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not remove a stale missing path after a newer request begins', async () => {
     const availability = deferred<import('@src/shared/preloadApi').FileAvailability>()

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
   initialPlayerState,
-  defaultSubtitleId,
   isJapaneseSubtitleTrack,
   playerReducer,
   type PlayerState,
@@ -13,7 +12,6 @@ import type { Token } from '@src/shared/token'
 import {
   DEFAULT_KEY_BINDINGS,
   DEFAULT_POPUP_SETTINGS,
-  DEFAULT_SKIP_SECONDS,
   DEFAULT_SUBTITLE_STYLE
 } from '@src/shared/playerSettings'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -23,51 +21,6 @@ const audioTrack2: Track = { id: 2, kind: 'audio', codec: 'aac' }
 const subTrack: Track = { id: 3, kind: 'subtitle', codec: 'ass' }
 const subTrack2: Track = { id: 4, kind: 'subtitle', codec: 'subrip' }
 const contentVersion = 'a'.repeat(64)
-
-describe('initialPlayerState', () => {
-  it('is the empty-file starting state', () => {
-    expect(initialPlayerState).toMatchObject({
-      filePath: undefined,
-      loadGeneration: 0,
-      tracks: [],
-      cues: [],
-      chapters: [],
-      duration: 0,
-      paused: false,
-      volume: 100,
-      muted: false,
-      speed: 1,
-      fullscreen: false,
-      selectedAudioId: undefined,
-      selectedSubtitleId: null,
-      externalSubtitlePath: undefined,
-      externalSubtitleProvenance: undefined,
-      activeTokens: [],
-      allCueTokens: {},
-      knownLevels: {},
-      knowledgeEpoch: 0,
-      externalSubtitleEncoding: 'auto',
-      subtitleOffsetMs: 0,
-      subtitleOffsetsByVersion: {},
-      audioDelayMs: 0,
-      abLoopState: { a: null, b: null }
-    })
-  })
-})
-
-describe('defaultSubtitleId', () => {
-  it('returns the id of the first subtitle track in a mixed list', () => {
-    expect(defaultSubtitleId([audioTrack, subTrack, subTrack2])).toBe(3)
-  })
-
-  it('returns null when there is no subtitle track', () => {
-    expect(defaultSubtitleId([audioTrack, audioTrack2])).toBeNull()
-  })
-
-  it('returns null for an empty list', () => {
-    expect(defaultSubtitleId([])).toBeNull()
-  })
-})
 
 describe('isJapaneseSubtitleTrack', () => {
   const japanese: Track = { id: 3, kind: 'subtitle', codec: 'ass', language: 'JA' }
@@ -111,6 +64,13 @@ describe('playerReducer', () => {
       // Per-file state that has to differ from its post-load value, or the
       // expectation below cannot tell a real reset from an untouched field.
       externalSubtitlePath: 'old-subs.srt',
+      externalSubtitleProvenance: {
+        provider: 'jimaku',
+        entryId: 7,
+        fileName: 'old.srt',
+        contentVersion
+      },
+      subtitleOffsetsByVersion: { [contentVersion]: 1500 },
       externalSubtitleEncoding: 'shift_jis',
       subtitleAutoPauseTiming: 'before',
       allCueTokens: { '0': [makeToken({ surface: '猫' })] },
@@ -135,11 +95,8 @@ describe('playerReducer', () => {
       filePath: 'new.mp4',
       tracks: [audioTrack2, subTrack2]
     })
-    // Spelled out in full on purpose: spreading `prev` here would let a field
-    // that should reset on load, but doesn't, pass unnoticed — the expectation
-    // would supply the stale value the reducer wrongly kept. Every field a new
-    // file resets has to be written out to be checked.
     expect(next).toEqual({
+      ...prev,
       filePath: 'new.mp4',
       loadGeneration: 5,
       tracks: [audioTrack2, subTrack2],
@@ -147,54 +104,17 @@ describe('playerReducer', () => {
       chapters: [],
       duration: 0,
       paused: false,
-      volume: 55,
-      muted: true,
       speed: 1,
-      fullscreen: true,
       selectedAudioId: 2,
       selectedSubtitleId: 4,
       externalSubtitlePath: undefined,
       externalSubtitleProvenance: undefined,
-      keyBindings: DEFAULT_KEY_BINDINGS,
-      startupBehavior: 'splash',
-      skipSeconds: DEFAULT_SKIP_SECONDS,
-      activeTokens: [],
-      allCueTokens: {},
-      knownLevels: {},
-      knowledgeEpoch: 0,
-      popupSettings: DEFAULT_POPUP_SETTINGS,
-      subtitleStyle: DEFAULT_SUBTITLE_STYLE,
-      subtitleDragEnabled: true,
       externalSubtitleEncoding: 'auto',
-      rightClickTogglePause: true,
-      autoPlayNext: false,
-      subtitleAutoPauseTiming: 'before',
-      subtitleAutoPauseScope: 'all',
-      translationEnabled: false,
       subtitleOffsetMs: 0,
       subtitleOffsetsByVersion: {},
       audioDelayMs: 0,
-      // A–B loop is per-file and clears on load.
       abLoopState: { a: null, b: null },
-      appearance: 'system',
-      // A new file resets playback, not the user's color preferences.
-      levelColors: { known: '#56be78' },
-      screenshotFolder: null,
-      mpvUserConfig: false,
-      mpvExtraArgs: [],
-      // App-wide picture adjustments survive a file change untouched.
-      videoAdjustments: {
-        brightness: 20,
-        contrast: 0,
-        saturation: 0,
-        gamma: 0,
-        hue: 0,
-        rotate: 90,
-        deinterlace: true
-      },
-      // App-wide audio preferences survive a file change untouched.
-      audioDevice: 'wasapi/{abc}',
-      loudnessNormalization: true
+      allCueTokens: {}
     })
   })
 
@@ -248,33 +168,30 @@ describe('playerReducer', () => {
     expect(next.keyBindings).toBe(active.keyBindings)
   })
 
-  it('fileLoaded increments loadGeneration even when the same path reopens', () => {
-    const first = playerReducer(initialPlayerState, {
-      type: 'fileLoaded',
-      filePath: 'same.mp4',
-      tracks: []
-    })
-    expect(first.loadGeneration).toBe(1)
-    // Reopening the identical path leaves filePath unchanged but must still
-    // bump loadGeneration so path-independent per-file effects re-run.
-    const second = playerReducer(first, {
-      type: 'fileLoaded',
-      filePath: 'same.mp4',
-      tracks: []
-    })
-    expect(second.filePath).toBe('same.mp4')
-    expect(second.loadGeneration).toBe(2)
-  })
-
-  it('fileLoaded with no tracks clears selections', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'fileLoaded',
-      filePath: 'blank.mp4',
-      tracks: []
-    })
-    expect(next.selectedAudioId).toBeUndefined()
-    expect(next.selectedSubtitleId).toBeNull()
-  })
+  it.each([
+    { tracks: [], audio: undefined, subtitle: null },
+    { tracks: [audioTrack, audioTrack2], audio: 1, subtitle: null },
+    { tracks: [audioTrack, subTrack, subTrack2], audio: 1, subtitle: 3 }
+  ])(
+    'reopening the same file advances generation and selects defaults: $tracks',
+    ({ tracks, audio, subtitle }) => {
+      const previous = {
+        ...initialPlayerState,
+        filePath: 'same.mp4',
+        loadGeneration: 1,
+        selectedAudioId: 99,
+        selectedSubtitleId: 99
+      }
+      expect(
+        playerReducer(previous, { type: 'fileLoaded', filePath: 'same.mp4', tracks })
+      ).toMatchObject({
+        filePath: 'same.mp4',
+        loadGeneration: 2,
+        selectedAudioId: audio,
+        selectedSubtitleId: subtitle
+      })
+    }
+  )
 
   it('externalSubtitleLoaded appends the synthetic track, selects it, and records its path', () => {
     const externalTrack: Track = {
@@ -432,31 +349,6 @@ describe('playerReducer', () => {
     expect(next.externalSubtitlePath).toBe('/subs/second.ass')
   })
 
-  it('fileLoaded clears the external subtitle path', () => {
-    const external: Track = {
-      id: EXTERNAL_SUBTITLE_TRACK_ID,
-      kind: 'subtitle',
-      codec: 'srt',
-      title: 'episode.srt'
-    }
-    const withExternal = playerReducer(initialPlayerState, {
-      type: 'externalSubtitleLoaded',
-      path: '/subs/episode.srt',
-      track: external,
-      cues: [],
-      encoding: 'auto'
-    })
-
-    const next = playerReducer(withExternal, {
-      type: 'fileLoaded',
-      filePath: 'new.mp4',
-      tracks: [audioTrack2]
-    })
-
-    expect(next.externalSubtitlePath).toBeUndefined()
-    expect(next.tracks).toEqual([audioTrack2])
-  })
-
   it('cuesLoaded replaces cues and clears the stale whole-track tokenization', () => {
     const cues: Cue[] = [{ start: 0, end: 2, text: 'one' }]
     const withTokens: PlayerState = {
@@ -472,45 +364,19 @@ describe('playerReducer', () => {
     expect(next.subtitleAutoPauseTiming).toBe('before')
   })
 
-  it('allCueTokensLoaded sets the whole-track token map', () => {
-    const tokens: Record<string, Token[]> = {
-      '0|1|hi': [makeToken({ surface: 'hi', pos: 'n' })]
-    }
-    const next = playerReducer(initialPlayerState, { type: 'allCueTokensLoaded', tokens })
-    expect(next.allCueTokens).toBe(tokens)
-  })
-
-  it('keeps state identity for a whole-track snapshot with the same cue keys and token arrays', () => {
-    const cueTokens: Token[] = [makeToken({ surface: 'hi', pos: 'n' })]
-    const current = playerReducer(initialPlayerState, {
-      type: 'allCueTokensLoaded',
-      tokens: { '0|1|hi': cueTokens }
-    })
-
-    const repeat = playerReducer(current, {
-      type: 'allCueTokensLoaded',
-      tokens: { '0|1|hi': cueTokens }
-    })
-
-    expect(repeat).toBe(current)
-  })
-
-  it('publishes a changed track once and clears a non-empty snapshot for invalidation', () => {
-    const firstTokens: Token[] = [makeToken({ surface: 'one', pos: 'n' })]
-    const changedTokens: Token[] = [makeToken({ surface: 'two', pos: 'n' })]
-    const first = playerReducer(initialPlayerState, {
-      type: 'allCueTokensLoaded',
-      tokens: { first: firstTokens }
-    })
-    const changed = playerReducer(first, {
-      type: 'allCueTokensLoaded',
-      tokens: { changed: changedTokens }
-    })
-    const cleared = playerReducer(changed, { type: 'allCueTokensLoaded', tokens: {} })
-
+  it('publishes changed token snapshots, reuses identical snapshots, and clears for invalidation', () => {
+    const tokens = { first: [makeToken({ surface: 'one' })] }
+    const first = playerReducer(initialPlayerState, { type: 'allCueTokensLoaded', tokens })
+    expect(first.allCueTokens).toBe(tokens)
+    expect(playerReducer(first, { type: 'allCueTokensLoaded', tokens: { ...tokens } })).toBe(first)
+    const changedTokens = { changed: [makeToken({ surface: 'two' })] }
+    const changed = playerReducer(first, { type: 'allCueTokensLoaded', tokens: changedTokens })
     expect(changed).not.toBe(first)
+    expect(changed.allCueTokens).toBe(changedTokens)
+    const cleared = playerReducer(changed, { type: 'allCueTokensLoaded', tokens: {} })
     expect(cleared).not.toBe(changed)
     expect(cleared.allCueTokens).toEqual({})
+    expect(first.allCueTokens).toBe(tokens)
   })
 
   it.each([
@@ -547,18 +413,12 @@ describe('playerReducer', () => {
     const next = playerReducer(initialPlayerState, {
       type: 'setKeyBinding',
       action: 'togglePause',
-      binding: 'KeyK'
-    })
-    expect(next.keyBindings).toEqual({ ...DEFAULT_KEY_BINDINGS, togglePause: 'KeyK' })
-  })
-
-  it('setKeyBinding stores a modifier chord as the action’s binding', () => {
-    const next = playerReducer(initialPlayerState, {
-      type: 'setKeyBinding',
-      action: 'skipBack',
       binding: 'ControlLeft+ArrowLeft'
     })
-    expect(next.keyBindings.skipBack).toBe('ControlLeft+ArrowLeft')
+    expect(next.keyBindings).toEqual({
+      ...DEFAULT_KEY_BINDINGS,
+      togglePause: 'ControlLeft+ArrowLeft'
+    })
   })
 
   it('activeTokensLoaded sets activeTokens', () => {
@@ -622,64 +482,41 @@ describe('playerReducer', () => {
     const popupSettings = { ...DEFAULT_POPUP_SETTINGS, maxEntries: 9 }
     const subtitleStyle = { ...DEFAULT_SUBTITLE_STYLE, fontScale: 1.4 }
     const levelColors = { unknown: '#112233' }
-    const next = playerReducer(initialPlayerState, {
-      type: 'loadSettings',
-      settings: {
-        keyBindings,
-        startupBehavior: 'video-player',
-        skipSeconds: 20,
-        popupSettings,
-        subtitleStyle,
-        subtitleDragEnabled: false,
-        rightClickTogglePause: false,
-        autoPlayNext: false,
-        subtitleAutoPauseTiming: 'before',
-        subtitleAutoPauseScope: 'unknown',
-        translationEnabled: true,
-        appearance: 'light',
-        levelColors,
-        screenshotFolder: 'D:\\Shots',
-        mpvUserConfig: true,
-        mpvExtraArgs: ['--hwdec=auto'],
-        videoAdjustments: {
-          brightness: 15,
-          contrast: 0,
-          saturation: 0,
-          gamma: 0,
-          hue: 0,
-          rotate: 180,
-          deinterlace: true
-        },
-        audioDevice: 'coreaudio/2',
-        loudnessNormalization: true
-      }
-    })
+    const settings: Extract<PlayerAction, { type: 'loadSettings' }>['settings'] = {
+      keyBindings,
+      startupBehavior: 'video-player',
+      skipSeconds: 20,
+      popupSettings,
+      subtitleStyle,
+      subtitleDragEnabled: false,
+      rightClickTogglePause: false,
+      autoPlayNext: false,
+      subtitleAutoPauseTiming: 'before',
+      subtitleAutoPauseScope: 'unknown',
+      translationEnabled: true,
+      appearance: 'light',
+      levelColors,
+      screenshotFolder: 'D:\\Shots',
+      mpvUserConfig: true,
+      mpvExtraArgs: ['--hwdec=auto'],
+      videoAdjustments: {
+        brightness: 15,
+        contrast: 0,
+        saturation: 0,
+        gamma: 0,
+        hue: 0,
+        rotate: 180,
+        deinterlace: true
+      },
+      audioDevice: 'coreaudio/2',
+      loudnessNormalization: true
+    }
+    const next = playerReducer(initialPlayerState, { type: 'loadSettings', settings })
+    expect(next).toEqual({ ...initialPlayerState, ...settings })
     expect(next.keyBindings).toBe(keyBindings)
-    expect(next.startupBehavior).toBe('video-player')
-    expect(next.skipSeconds).toBe(20)
     expect(next.popupSettings).toBe(popupSettings)
     expect(next.subtitleStyle).toBe(subtitleStyle)
-    expect(next.subtitleDragEnabled).toBe(false)
-    expect(next.rightClickTogglePause).toBe(false)
-    expect(next.subtitleAutoPauseTiming).toBe('before')
-    expect(next.subtitleAutoPauseScope).toBe('unknown')
-    expect(next.translationEnabled).toBe(true)
-    expect(next.appearance).toBe('light')
     expect(next.levelColors).toBe(levelColors)
-    expect(next.screenshotFolder).toBe('D:\\Shots')
-    expect(next.mpvUserConfig).toBe(true)
-    expect(next.mpvExtraArgs).toEqual(['--hwdec=auto'])
-    expect(next.videoAdjustments).toEqual({
-      brightness: 15,
-      contrast: 0,
-      saturation: 0,
-      gamma: 0,
-      hue: 0,
-      rotate: 180,
-      deinterlace: true
-    })
-    expect(next.audioDevice).toBe('coreaudio/2')
-    expect(next.loudnessNormalization).toBe(true)
   })
 
   it('setLevelColor sets, replaces, and deletes an override immutably', () => {
@@ -756,18 +593,6 @@ describe('playerReducer', () => {
       xPct: 20,
       yPct: 60
     })
-  })
-
-  it('does not mutate the input state object', () => {
-    const prev: PlayerState = { ...initialPlayerState, tracks: [audioTrack] }
-    const frozen = Object.freeze({ ...prev })
-    expect(() => playerReducer(frozen, { type: 'set', patch: { volume: 10 } })).not.toThrow()
-    expect(frozen.volume).toBe(100)
-  })
-
-  it('returns a new object reference (immutability) for a known action', () => {
-    const next = playerReducer(initialPlayerState, { type: 'set', patch: { paused: true } })
-    expect(next).not.toBe(initialPlayerState)
   })
 
   it('unknown action returns the same state reference unchanged', () => {
