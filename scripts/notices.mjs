@@ -1,25 +1,7 @@
-// Kizuna redistributes binaries it did not build (mpv, FFmpeg, MeCab, IPADIC)
-// and ships Electron plus its production npm dependencies
-// inside the installer. Several of those are copyleft, so the installer has to
-// carry their licence texts, identify the exact build it distributes, and say
-// where the matching source is.
-//
-// `third-party.json` is the committed metadata; this module turns it into the
-// bundle and, more importantly, refuses to produce one that is incomplete. The
-// gate that matters is `lockAgreementProblems`: it ties `third-party.json` to
-// `resources.lock.json`, so the only way to change a bundled binary — a lock
-// bump — is also the only way to invalidate the notices, and a stale or missing
-// licence entry fails the build instead of shipping.
-//
-// This is a compliance mechanism, not legal advice.
-//
-// Plain ESM, like `vendorResources.mjs`, so `scripts/generate-notices.mjs` can
-// run it with bare `node` before any build step exists. All filesystem work goes
-// through explicit directory arguments, so `test/scripts/notices.test.ts`
-// exercises the whole flow against temp directories with no network.
-
+// Notice generation fails closed on missing licences and lock/notice disagreement.
 import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, posix } from 'node:path'
+import { isPlainObject, nonemptyString, requireShape } from './manifestValidation.mjs'
 
 import {
   SUPPORTED_PLATFORM_KEYS,
@@ -147,170 +129,66 @@ const isSafeSourceRoot = (value) =>
  * @returns {string[]} Empty when the file is usable.
  */
 export function noticesProblems(notices) {
-  const problems = []
-  const n = /** @type {Partial<NoticesFile>} */ (notices ?? {})
-  if (n.schemaVersion !== SUPPORTED_NOTICES_SCHEMA_VERSION) {
-    problems.push(
-      `unsupported schemaVersion ${String(n.schemaVersion)} (this script understands ${SUPPORTED_NOTICES_SCHEMA_VERSION})`
-    )
-  }
-  if (!/^[0-9a-f]{40}$/.test(n.vendorCommit ?? '')) {
-    problems.push('vendorCommit must be a full 40-character commit SHA')
-  }
-  if (!Array.isArray(n.components) || n.components.length === 0) {
-    problems.push('components is empty')
-  }
-  if (n.npmLicenseFallbacks !== undefined) {
-    if (
-      n.npmLicenseFallbacks === null ||
-      typeof n.npmLicenseFallbacks !== 'object' ||
-      Array.isArray(n.npmLicenseFallbacks)
-    ) {
-      problems.push('npmLicenseFallbacks must be an object')
-    } else {
-      for (const [packageName, path] of Object.entries(n.npmLicenseFallbacks)) {
-        if (!packageName || typeof path !== 'string' || !isSafeRelativePath(path)) {
-          problems.push(`npmLicenseFallbacks has an unsafe entry for ${packageName || '(empty)'}`)
-        }
-      }
-    }
-  }
+  const problems = requireShape(
+    notices,
+    {
+      schemaVersion: (v) => v === SUPPORTED_NOTICES_SCHEMA_VERSION,
+      vendorCommit: (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v),
+      components: (v) => Array.isArray(v) && v.length > 0,
+      npmLicenseFallbacks: (v) =>
+        v === undefined ||
+        (isPlainObject(v) &&
+          Object.entries(v).every(
+            ([name, path]) => nonemptyString(name) && isSafeRelativePath(path)
+          ))
+    },
+    'notices'
+  )
+  if (problems.length) return problems
   const ids = new Set()
-  for (const component of n.components ?? []) {
-    const label = component?.name ?? '(unnamed)'
-    if (!component?.name) problems.push('a component has no name')
-    // The id namespaces the component's licence texts in the bundle, so a
-    // duplicate would let one component's GPLv3 text overwrite another's.
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(component?.id ?? '')) {
-      problems.push(`component "${label}" has no lowercase-kebab id`)
-    } else if (ids.has(component.id)) {
-      problems.push(`component id "${component.id}" is used twice`)
-    } else {
-      ids.add(component.id)
+  for (const component of notices.components) {
+    if (!isPlainObject(component)) {
+      problems.push('component must be an object')
+      continue
     }
-    if (!component?.license) problems.push(`component "${label}" has no license`)
-    if (!component?.copyright) problems.push(`component "${label}" has no copyright`)
-    if (!['resources', 'optional', 'node_modules', 'source'].includes(component?.bundled)) {
-      problems.push(`component "${label}" has an unknown bundled kind "${component?.bundled}"`)
+    if (ids.has(component.id)) problems.push(`duplicate component id ${component.id}`)
+    ids.add(component.id)
+    const platforms = component.platforms === undefined ? {} : component.platforms
+    if (!isPlainObject(platforms)) {
+      problems.push('platforms must be an object')
+      continue
     }
-    if (component?.bundled === 'resources') {
-      if (!component.resourceRoot) problems.push(`component "${label}" has no resourceRoot`)
-      if (!component.version) problems.push(`component "${label}" has no version`)
-      if (!component.licenseFiles?.length) {
-        problems.push(`component "${label}" ships from resources/ but lists no licenseFiles`)
+    for (const [key, override] of [[undefined, {}], ...Object.entries(platforms)]) {
+      if (key !== undefined && !SUPPORTED_PLATFORM_KEYS.includes(key))
+        problems.push(`unknown platform ${key}`)
+      if (!isPlainObject(override)) {
+        problems.push(`platform ${key} must be an object`)
+        continue
       }
-      // A copyleft binary without a source pointer is the single failure this
-      // whole file exists to prevent.
-      if (component.copyleft && !component.source?.code) {
-        problems.push(`copyleft component "${label}" has no source.code URL`)
-      }
-    }
-    if (component?.bundled === 'source') {
-      if (!component.version) problems.push(`component "${label}" has no version`)
-      if (!component.sourceRoot) {
-        problems.push(`component "${label}" has no sourceRoot`)
-      } else if (!isSafeSourceRoot(component.sourceRoot)) {
-        problems.push(
-          `component "${label}" has an unsafe sourceRoot ${String(component.sourceRoot)}`
-        )
-      }
-      if (!Array.isArray(component.licenseFiles) || component.licenseFiles.length === 0) {
-        problems.push(`component "${label}" ships as source data but lists no licenseFiles`)
-      } else {
-        for (const path of component.licenseFiles) {
-          if (!isSafeRelativePath(path)) {
-            problems.push(`component "${label}" has an unsafe license path ${String(path)}`)
-          }
-        }
-      }
-      if (component.copyleft && !component.source?.code) {
-        problems.push(`copyleft component "${label}" has no source.code URL`)
-      }
-    }
-    if (component?.bundled === 'node_modules' && !component.packageName) {
-      problems.push(`component "${label}" has no packageName`)
-    }
-    if (
-      component?.platformExclusive !== undefined &&
-      !SUPPORTED_PLATFORM_KEYS.includes(component.platformExclusive)
-    ) {
+      const effective = { ...component, ...override }
+      const bundledFiles = ['resources', 'source'].includes(effective.bundled)
       problems.push(
-        'component "' +
-          label +
-          '" platformExclusive must be one of ' +
-          SUPPORTED_PLATFORM_KEYS.join(', ')
+        ...requireShape(
+          effective,
+          {
+            id: (v) => typeof v === 'string' && /^[a-z0-9][a-z0-9-]*$/.test(v),
+            name: nonemptyString,
+            license: nonemptyString,
+            copyright: nonemptyString,
+            bundled: (v) => ['resources', 'optional', 'node_modules', 'source'].includes(v),
+            version: (v) => !bundledFiles || nonemptyString(v),
+            resourceRoot: (v) => effective.bundled !== 'resources' || isSafeRelativePath(v),
+            sourceRoot: (v) => effective.bundled !== 'source' || isSafeSourceRoot(v),
+            packageName: (v) => effective.bundled !== 'node_modules' || isSafeRelativePath(v),
+            licenseFiles: (v) =>
+              (!bundledFiles && v === undefined) ||
+              (Array.isArray(v) && (!bundledFiles || v.length > 0) && v.every(isSafeRelativePath)),
+            source: (v) => !bundledFiles || !effective.copyleft || nonemptyString(v?.code),
+            platformExclusive: (v) => v === undefined || SUPPORTED_PLATFORM_KEYS.includes(v)
+          },
+          `component ${component.id} (${key ?? 'base'})`
+        )
       )
-    }
-    if (component?.platforms !== undefined) {
-      if (
-        component.platforms === null ||
-        typeof component.platforms !== 'object' ||
-        Array.isArray(component.platforms)
-      ) {
-        problems.push('component "' + label + '" platforms must be an object')
-      } else {
-        for (const key of Object.keys(component.platforms)) {
-          if (!SUPPORTED_PLATFORM_KEYS.includes(key)) {
-            problems.push('component "' + label + '" has unknown platform metadata "' + key + '"')
-            continue
-          }
-          const override = component.platforms[key]
-          if (override === null || typeof override !== 'object' || Array.isArray(override)) {
-            problems.push('component "' + label + '" platform "' + key + '" must be an object')
-            continue
-          }
-          if (override.licenseFiles !== undefined) {
-            if (!Array.isArray(override.licenseFiles) || override.licenseFiles.length === 0) {
-              problems.push(
-                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
-              )
-            }
-            for (const path of override.licenseFiles ?? []) {
-              if (!isSafeRelativePath(path)) {
-                problems.push(
-                  'component "' +
-                    label +
-                    '" platform "' +
-                    key +
-                    '" has an unsafe license path ' +
-                    String(path)
-                )
-              }
-            }
-          }
-          const effective = { ...component, ...override }
-          if (component.bundled === 'resources') {
-            if (!effective.version) {
-              problems.push('component "' + label + '" platform "' + key + '" has no version')
-            }
-            if (!effective.licenseFiles?.length) {
-              problems.push(
-                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
-              )
-            }
-            if (effective.copyleft && !effective.source?.code) {
-              problems.push(
-                'copyleft component "' + label + '" platform "' + key + '" has no source.code URL'
-              )
-            }
-          }
-          if (component.bundled === 'source') {
-            if (!effective.version) {
-              problems.push('component "' + label + '" platform "' + key + '" has no version')
-            }
-            if (!effective.licenseFiles?.length) {
-              problems.push(
-                'component "' + label + '" platform "' + key + '" lists no licenseFiles'
-              )
-            }
-            if (effective.copyleft && !effective.source?.code) {
-              problems.push(
-                'copyleft component "' + label + '" platform "' + key + '" has no source.code URL'
-              )
-            }
-          }
-        }
-      }
     }
   }
   return problems
@@ -800,10 +678,10 @@ export async function generateNotices({
   log = () => {}
 }) {
   const selectedPlatformKey = platformKey ?? (lock.platforms ? platformKeyFor() : undefined)
-  const problems = [
-    ...noticesProblems(declared),
-    ...lockAgreementProblems(declared, lock, selectedPlatformKey)
-  ]
+  const problems = noticesProblems(declared)
+  if (problems.length === 0) {
+    problems.push(...lockAgreementProblems(declared, lock, selectedPlatformKey))
+  }
   if (problems.length > 0) {
     throw new Error(`third-party.json is unusable:\n  ${problems.join('\n  ')}`)
   }
@@ -859,6 +737,13 @@ export async function generateNotices({
       repoRoot,
       pkg: /** @type {NpmPackage} */ ({ path })
     })
+  }
+
+  const unlicensed = Object.entries(packageLicenseNames)
+    .filter(([, names]) => names.length === 0)
+    .map(([path]) => path)
+  if (unlicensed.length) {
+    throw new Error(`Packages have no licence text: ${unlicensed.join(', ')}`)
   }
 
   const plan = licenseCopyPlan({

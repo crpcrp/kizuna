@@ -18,8 +18,6 @@
 // here; the tested logic lives in `scripts/vendorResources.mjs`.
 
 import { spawn } from 'node:child_process'
-import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { Readable } from 'node:stream'
@@ -33,7 +31,8 @@ import {
   acquireResources,
   platformKeyFor,
   readFlag,
-  selectPlatformLock
+  selectPlatformLock,
+  sha256File
 } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -82,13 +81,6 @@ async function runTar(staging, asset, dir) {
       reject(new Error(`tar exited with code ${code} unpacking ${asset}`))
     })
   })
-}
-
-/** @param {string} path @returns {Promise<string>} */
-async function sha256File(path) {
-  const hash = createHash('sha256')
-  await pipeline(createReadStream(path), hash)
-  return hash.digest('hex')
 }
 
 /**
