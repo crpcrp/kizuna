@@ -1,19 +1,16 @@
+// @vitest-environment happy-dom
 import { initialPlayerState } from '@src/renderer/src/state/playerState'
-import { describe, it, expect } from 'vitest'
+import { afterEach, describe, it, expect, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { deferred } from '@test/harness/deferred'
 import { renderToStaticMarkup } from 'react-dom/server'
 import DictionariesTab, {
-  frequencyDictSelection,
-  sortOrderSelection,
-  parsePopupCountInput,
-  formatImportProgress
+  parsePopupCountInput
 } from '@src/renderer/src/components/options/DictionariesTab'
 import { DEFAULT_POPUP_SETTINGS } from '@src/shared/playerSettings'
 import type { McDict } from '@src/shared/mecab'
-import type { DictInfo } from '@src/shared/dictionary'
+import type { DictInfo, ImportProgress } from '@src/shared/dictionary'
 import { makeDictInfo } from '@test/harness/dictFixtures'
-
-// SSR-only render (no jsdom, no testing-library) per AGENTS.md testing
-// policy — same pattern OptionsMenu.test.tsx uses.
 
 function noop(): void {}
 async function asyncNoop(): Promise<void> {}
@@ -61,25 +58,29 @@ const THREE_YOMITAN_DICTS: DictInfo[] = [
   })
 ]
 
-function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTab>> = {}): string {
-  return renderToStaticMarkup(
-    <DictionariesTab
-      settings={{ ...initialPlayerState, popupSettings: DEFAULT_POPUP_SETTINGS }}
-      onChange={noop}
-      mecabDicts={IPADIC_ONLY}
-      currentMecabDictId="ipadic"
-      yomitanDicts={NO_YOMITAN_DICTS}
-      onSelectMecabDict={noop}
-      onOpenUserUnidicDir={noop}
-      onImportYomitanDict={asyncNoop}
-      onSetYomitanEnabled={noop}
-      onSetYomitanFallbackOnly={noop}
-      onReorderYomitanDicts={noop}
-      onRemoveYomitanDict={noop}
-      {...overrides}
-    />
-  )
+function props(
+  overrides: Partial<React.ComponentProps<typeof DictionariesTab>> = {}
+): React.ComponentProps<typeof DictionariesTab> {
+  return {
+    settings: { ...initialPlayerState, popupSettings: DEFAULT_POPUP_SETTINGS },
+    onChange: noop,
+    mecabDicts: IPADIC_ONLY,
+    currentMecabDictId: 'ipadic',
+    yomitanDicts: NO_YOMITAN_DICTS,
+    onSelectMecabDict: noop,
+    onOpenUserUnidicDir: noop,
+    onImportYomitanDict: asyncNoop,
+    onSetYomitanEnabled: noop,
+    onSetYomitanFallbackOnly: noop,
+    onReorderYomitanDicts: noop,
+    onRemoveYomitanDict: noop,
+    ...overrides
+  }
 }
+function renderTab(overrides: Partial<React.ComponentProps<typeof DictionariesTab>> = {}): string {
+  return renderToStaticMarkup(<DictionariesTab {...props(overrides)} />)
+}
+afterEach(cleanup)
 
 describe('DictionariesTab markup', () => {
   it('renders one row per mecab dict, with only the current one checked (IPADIC only)', () => {
@@ -268,33 +269,6 @@ describe('DictionariesTab pure helpers', () => {
     expect(parsePopupCountInput('abc')).toBeNull()
     expect(parsePopupCountInput('')).toBeNull()
   })
-
-  it('frequencyDictSelection maps "" to null and a numeric string to a number', () => {
-    expect(frequencyDictSelection('')).toEqual({ frequencyDictId: null })
-    expect(frequencyDictSelection('2')).toEqual({ frequencyDictId: 2 })
-  })
-
-  it('sortOrderSelection maps recognized values through and falls back to auto', () => {
-    expect(sortOrderSelection('rank-based')).toEqual({ sortOrder: 'rank-based' })
-    expect(sortOrderSelection('occurrence-based')).toEqual({ sortOrder: 'occurrence-based' })
-    expect(sortOrderSelection('bogus')).toEqual({ sortOrder: 'auto' })
-  })
-
-  it('formatImportProgress renders a "done / total rows" reading', () => {
-    expect(formatImportProgress({ done: 500, total: 5000 })).toBe(
-      `${(500).toLocaleString()} / ${(5000).toLocaleString()} rows`
-    )
-    expect(formatImportProgress({ done: 1000, total: 1000000 })).toBe(
-      `${(1000).toLocaleString()} / ${(1000000).toLocaleString()} rows`
-    )
-  })
-
-  it('formatImportProgress returns null when there is nothing worth showing yet', () => {
-    expect(formatImportProgress(undefined)).toBeNull()
-    expect(formatImportProgress({ done: 0, total: 0 })).toBeNull()
-    // done reached total: the overlay is about to close, no point showing it.
-    expect(formatImportProgress({ done: 5000, total: 5000 })).toBeNull()
-  })
 })
 
 describe('DictionariesTab setting descriptions', () => {
@@ -307,5 +281,66 @@ describe('DictionariesTab setting descriptions', () => {
     expect(html).toContain('How the word popup ranks entries')
     expect(html).toContain('Most dictionary entries the word popup lists for one word.')
     expect(html).toContain('Most definitions the word popup lists under a single entry.')
+  })
+})
+
+describe('DictionariesTab controls', () => {
+  it('maps frequency and sort selection changes into popup settings patches', () => {
+    const onChange = vi.fn()
+    render(<DictionariesTab {...props({ onChange, yomitanDicts: THREE_YOMITAN_DICTS })} />)
+    const frequency = document.getElementById('popup-freq-dict-select')!
+    for (const [value, expected] of [
+      ['2', 2],
+      ['', null]
+    ] as const) {
+      fireEvent.change(frequency, { target: { value } })
+      expect(onChange).toHaveBeenLastCalledWith({ popupSettings: { frequencyDictId: expected } })
+    }
+    const sort = document.getElementById('popup-sort-order-select')!
+    for (const value of ['rank-based', 'occurrence-based', 'bogus']) {
+      fireEvent.change(sort, { target: { value } })
+      expect(onChange).toHaveBeenLastCalledWith({
+        popupSettings: { sortOrder: value === 'bogus' ? 'auto' : value }
+      })
+    }
+  })
+
+  it('renders advisory row progress during an import and unsubscribes on completion', async () => {
+    const pending = deferred<void>()
+    const unsubscribe = vi.fn()
+    let progress!: (value: ImportProgress) => void
+    const onImportYomitanDict = vi.fn(() => pending.promise)
+    render(
+      <DictionariesTab
+        {...props({
+          onImportYomitanDict,
+          subscribeImportProgress: (listener) => {
+            progress = listener
+            return unsubscribe
+          }
+        })}
+      />
+    )
+    const file = new File(['fixture'], 'dictionary.zip')
+    fireEvent.change(document.getElementById('yomitan-import-input')!, {
+      target: { files: [file] }
+    })
+    expect(onImportYomitanDict).toHaveBeenCalledExactlyOnceWith(file)
+    expect(screen.getByText(/please wait/)).toBeTruthy()
+    expect(document.querySelector('.options-import-terms')).toBeNull()
+    for (const [done, total] of [
+      [0, 0],
+      [500, 5000],
+      [1000, 1000000],
+      [5000, 5000]
+    ]) {
+      act(() => progress({ done, total }))
+      const expected =
+        total > done ? `${done.toLocaleString()} / ${total.toLocaleString()} rows` : undefined
+      expect(document.querySelector('.options-import-terms')?.textContent).toBe(expected)
+    }
+    await act(async () => pending.resolve())
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(document.querySelector('.options-import-overlay.open')).toBeNull()
   })
 })

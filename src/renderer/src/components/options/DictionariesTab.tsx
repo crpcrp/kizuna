@@ -24,20 +24,20 @@ interface ImportStatus {
  * dictionary has no term rows at all, so totalling only those meant BCCWJ's
  * million-row import displayed no progress for its entire duration.
  */
-export function formatImportProgress(progress: ImportProgress | undefined): string | null {
+function formatImportProgress(progress: ImportProgress | undefined): string | null {
   if (!progress || progress.total <= 0 || progress.done >= progress.total) return null
   return `${progress.done.toLocaleString()} / ${progress.total.toLocaleString()} rows`
 }
 
 /** Maps the "Frequency dictionary" select's raw value ("" or a dict id
  * string) to the partial PopupSettings update it should apply. */
-export function frequencyDictSelection(rawValue: string): Partial<PopupSettings> {
+function frequencyDictSelection(rawValue: string): Partial<PopupSettings> {
   return { frequencyDictId: rawValue === '' ? null : Number(rawValue) }
 }
 
 /** Maps the "Sort order" select's raw value to the partial PopupSettings
  * update it should apply, falling back to 'auto' for any unrecognized value. */
-export function sortOrderSelection(rawValue: string): Partial<PopupSettings> {
+function sortOrderSelection(rawValue: string): Partial<PopupSettings> {
   return {
     sortOrder: rawValue === 'rank-based' || rawValue === 'occurrence-based' ? rawValue : 'auto'
   }

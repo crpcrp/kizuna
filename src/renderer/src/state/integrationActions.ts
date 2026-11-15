@@ -22,7 +22,7 @@ import { syncAndRefreshKnowledge, type SyncAndRefreshKnowledgeArgs } from './kno
  * Keybindings/playback need none. Subtitles loads its local translation and
  * Jimaku settings. Known Words also loads the
  * (cached, unforced) Anki domain for its deck checkboxes and field select. */
-export function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
+function domainsForCategory(category: OptionsCategory): OptionsDomain[] {
   switch (category) {
     case 'dictionaries':
       return ['dictionaries']

@@ -206,42 +206,6 @@ describe('recentFilesController openPath', () => {
   })
 })
 
-describe('recentFilesController openPath/openPicker via OpenSession', () => {
-  it('opens a dropped path from an OpenSession, refreshing recents', async () => {
-    const controller = createRecentFilesController()
-    const bridge = makeBridge({ getRecentFiles: () => Promise.resolve([recent('/dropped.mkv')]) })
-
-    const result = await controller.openPath(makeSession(bridge), '/dropped.mkv')
-
-    expect(result).toMatchObject({ status: 'opened', filePath: '/dropped.mkv' })
-    expect(bridge.mediaHistory.checkFileAvailability).not.toHaveBeenCalled()
-    expect(controller.getState().recentFiles).toEqual([recent('/dropped.mkv')])
-  })
-
-  it('opens the picker from an OpenSession, refreshing recents', async () => {
-    const controller = createRecentFilesController()
-    const bridge = makeBridge({ getRecentFiles: () => Promise.resolve([recent('/video.mkv')]) })
-
-    const result = await controller.openPicker(makeSession(bridge))
-
-    expect(result.status).toBe('opened')
-    expect(controller.getState().recentFiles).toEqual([recent('/video.mkv')])
-  })
-
-  it('refuses an openPath started while an openPicker is in flight', async () => {
-    const controller = createRecentFilesController()
-    const picked = deferred<string | undefined>()
-    const bridge = makeBridge({ openFile: () => picked.promise })
-
-    const picker = controller.openPicker(makeSession(bridge))
-    const blocked = await controller.openPath(makeSession(bridge), '/dropped.mkv')
-
-    expect(blocked).toEqual({ status: 'busy' })
-    picked.resolve('/picked.mkv')
-    await picker
-  })
-})
-
 describe('recentFilesController subtitle encoding', () => {
   it('forwards a non-default encoding through picker, recent, and dropped-path opens', async () => {
     const cases = [
@@ -322,23 +286,23 @@ describe('recentFilesController open exclusion', () => {
     expect(bridge.player.load).toHaveBeenLastCalledWith('/third.mkv')
   })
 
-  it('blocks openRecent while an openPicker is in flight', async () => {
-    const controller = createRecentFilesController()
-    const picked = deferred<string | undefined>()
-    const bridge = makeBridge({ openFile: () => picked.promise })
-
-    const picker = controller.openPicker(makeSession(bridge))
-    const blocked = await controller.openRecent(makeSession(bridge), '/recent.mkv')
-
-    expect(blocked).toEqual({ status: 'busy' })
-    expect(bridge.mediaHistory.checkFileAvailability).not.toHaveBeenCalled()
-    expect(bridge.player.load).not.toHaveBeenCalled()
-
-    picked.resolve('/picked.mkv')
-    expect(await picker).toMatchObject({ status: 'opened', filePath: '/picked.mkv' })
-    expect(bridge.player.load).toHaveBeenCalledTimes(1)
-    expect(bridge.player.load).toHaveBeenCalledWith('/picked.mkv')
-  })
+  it.each(['openPath', 'openRecent'] as const)(
+    'blocks %s while the picker is in flight',
+    async (method) => {
+      const controller = createRecentFilesController()
+      const picked = deferred<string | undefined>()
+      const bridge = makeBridge({ openFile: () => picked.promise })
+      const picker = controller.openPicker(makeSession(bridge))
+      expect(await controller[method](makeSession(bridge), '/other.mkv')).toEqual({
+        status: 'busy'
+      })
+      expect(bridge.mediaHistory.checkFileAvailability).not.toHaveBeenCalled()
+      expect(bridge.player.load).not.toHaveBeenCalled()
+      picked.resolve('/picked.mkv')
+      expect(await picker).toMatchObject({ status: 'opened', filePath: '/picked.mkv' })
+      expect(bridge.player.load).toHaveBeenCalledExactlyOnceWith('/picked.mkv')
+    }
+  )
 })
 
 describe('recentFilesController late subtitle-restoration warnings', () => {
@@ -495,12 +459,6 @@ describe('recentFilesController dispose', () => {
     timer.run(pending)
 
     expect(controller.getState().errorMessage).toBe('Screenshot saved: /a.png')
-  })
-
-  it('is a no-op when nothing is pending', () => {
-    const timer = fakeBannerTimer()
-    const controller = createRecentFilesController(timer)
-    expect(() => controller.dispose()).not.toThrow()
   })
 })
 

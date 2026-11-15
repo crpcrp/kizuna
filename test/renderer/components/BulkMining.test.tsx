@@ -1,544 +1,265 @@
-import { describe, expect, it } from 'vitest'
-import { isValidElement, type ReactElement, type ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import BulkMining, { type BulkMiningProps } from '@src/renderer/src/components/BulkMining'
-import type { LookupResult } from '@src/shared/dictionary'
+import type { BulkMiningReadyPhase } from '@src/renderer/src/state/bulkMining'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 
-const token = (surface: string, lemma = surface) => makeToken({ surface, lemma, pos: 'noun' })
-const entry = (frequency: number | null, frequencyDisplay: string | null = null): LookupResult =>
-  makeLookupResult({ expression: 'x', reading: '', glossary: '', frequency, frequencyDisplay })
 const candidates = [
-  { lemma: '食べる', token: token('食べた', '食べる'), sentence: '食べた', count: 2 },
-  { lemma: '猫', token: token('猫'), sentence: '猫', count: 1 }
+  {
+    lemma: '食べる',
+    token: makeToken({ surface: '食べた', lemma: '食べる' }),
+    sentence: '食べた',
+    count: 2
+  },
+  { lemma: '猫', token: makeToken({ surface: '猫' }), sentence: '猫', count: 1 }
 ]
-const callbacks = {
-  onThresholdChange: () => {},
-  onMinimumCountChange: () => {},
-  onSortChange: () => {},
-  onToggle: () => {},
-  onSelectAll: () => {},
-  onSelectNone: () => {},
-  onSetHideTargetDeckMatches: () => {},
-  onStart: () => {},
-  onCancel: () => {},
-  onClose: () => {},
-  onBackToList: () => {},
-  onRetry: () => {}
-}
-function render(props: Partial<Omit<BulkMiningProps, 'phase'>> & { phase?: unknown }): string {
-  return renderToStaticMarkup(
-    <BulkMining
-      {...({
-        ...callbacks,
-        frequencyDictConfigured: true,
-        phase: { kind: 'idle' },
-        ...props
-      } as BulkMiningProps)}
-    />
-  )
-}
-
-function findElement(
-  node: ReactNode,
-  predicate: (element: ReactElement) => boolean
-): ReactElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findElement(child, predicate)
-      if (found) return found
-    }
-    return null
+function ready(overrides: Partial<BulkMiningReadyPhase> = {}): BulkMiningReadyPhase {
+  return {
+    kind: 'ready',
+    candidates,
+    resolving: false,
+    threshold: null,
+    minimumCount: null,
+    sort: 'count',
+    selected: { 食べる: true, 猫: false },
+    resolved: {},
+    targetDeckMatches: {},
+    checkingTargetDeck: false,
+    hideTargetDeckMatches: false,
+    ...overrides
   }
-  if (!isValidElement(node)) return null
-  if (predicate(node)) return node
-  return findElement((node.props as { children?: ReactNode }).children, predicate)
 }
+function props(overrides: Partial<BulkMiningProps> = {}): BulkMiningProps {
+  return {
+    phase: ready(),
+    frequencyDictConfigured: true,
+    onThresholdChange: vi.fn(),
+    onMinimumCountChange: vi.fn(),
+    onSortChange: vi.fn(),
+    onToggle: vi.fn(),
+    onSelectAll: vi.fn(),
+    onSelectNone: vi.fn(),
+    onSetHideTargetDeckMatches: vi.fn(),
+    onStart: vi.fn(),
+    onCancel: vi.fn(),
+    onClose: vi.fn(),
+    onBackToList: vi.fn(),
+    onRetry: vi.fn(),
+    ...overrides
+  }
+}
+afterEach(cleanup)
 
-describe('BulkMining SSR', () => {
-  it('renders preparation status with Close only, and error controls that invoke Retry', () => {
-    const preparing = render({ phase: { kind: 'preparing' } })
-    expect(preparing).toContain('role="status"')
-    expect(preparing).toContain('>Close</button>')
-    expect(preparing).not.toContain('>Retry</button>')
-    expect(preparing).not.toContain('Mine 0 words')
-
-    let retries = 0
-    const tree = BulkMining({
-      ...callbacks,
-      phase: { kind: 'error', message: 'Dictionary unavailable' },
-      frequencyDictConfigured: true,
-      onRetry: () => {
-        retries++
-      }
-    })
-    const retry = findElement(
-      tree,
-      (element) =>
-        element.type === 'button' &&
-        (element.props as { children?: ReactNode }).children === 'Retry'
+describe('BulkMining presentation and controls', () => {
+  it('renders preparation and error states with their own actions', () => {
+    const callbacks = props({ phase: { kind: 'preparing' } })
+    const view = render(<BulkMining {...callbacks} />)
+    expect(screen.getByRole('status').textContent).toContain('Preparing')
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(callbacks.onClose).toHaveBeenCalledOnce()
+    view.rerender(
+      <BulkMining {...callbacks} phase={{ kind: 'error', message: 'Dictionary unavailable' }} />
     )
-    expect(retry).not.toBeNull()
-    ;(retry!.props as { onClick: () => void }).onClick()
-    expect(retries).toBe(1)
-    expect(render({ phase: { kind: 'error', message: 'Dictionary unavailable' } })).toContain(
-      'role="alert"'
-    )
+    expect(screen.getByRole('alert').textContent).toBe('Dictionary unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(callbacks.onRetry).toHaveBeenCalledOnce()
   })
 
-  it('renders the ready threshold enabled or disabled with resolution markers', () => {
-    const phase = {
-      kind: 'ready' as const,
-      candidates,
-      resolving: true,
-      threshold: 5000,
-      selected: { 食べる: true, 猫: false },
-      resolved: {
-        食べる: { entry: entry(12, '12k'), frequency: 12 },
-        猫: { entry: null, frequency: null }
-      }
-    }
-    const html = render({ phase })
-    expect(html).toContain('id="bulk-mining-threshold"')
-    expect(html).toContain('value="5000"')
-    expect(html).toContain('12k')
-    expect(html).toContain('words without frequency data are hidden')
-    expect(html).toContain('Resolving frequencies')
-    expect(render({ phase, frequencyDictConfigured: false })).toContain('disabled=""')
-  })
-
-  it('disables Mine and asks the user to wait while resolution is running', () => {
-    const phase = {
-      kind: 'ready' as const,
-      candidates,
-      resolving: true,
-      threshold: null,
-      minimumCount: null,
-      sort: 'count' as const,
-      selected: { 食べる: true, 猫: true },
-      resolved: {
-        食べる: { entry: entry(12, '12k'), frequency: 12 },
-        猫: { entry: entry(3), frequency: 3 }
-      },
-      targetDeckMatches: {},
-      checkingTargetDeck: false,
-      hideTargetDeckMatches: false
-    }
-    const resolvingHtml = render({ phase })
-    expect(resolvingHtml).toContain('please wait before mining')
-    expect(resolvingHtml).toContain('id="bulk-mining-start" disabled=""')
-    // The same selection becomes mineable once resolution finishes.
-    expect(render({ phase: { ...phase, resolving: false } })).not.toContain(
-      'id="bulk-mining-start" disabled=""'
-    )
-  })
-
-  it('shows pending entries, hidden-no-data note, and the selected mine count', () => {
-    const phase = {
-      kind: 'ready' as const,
-      candidates,
-      resolving: false,
-      threshold: 5000,
-      selected: { 食べる: true, 猫: true },
-      resolved: { 猫: { entry: entry(null), frequency: null } }
-    }
-    const html = render({ phase })
-    expect(html).toContain('bulk-mining-pending')
-    expect(html).toContain('words without frequency data are hidden')
-    expect(html).toContain('Mine 1 words')
-    expect(render({ phase: { ...phase, selected: { 食べる: false, 猫: false } } })).toContain(
-      'id="bulk-mining-start" disabled=""'
-    )
-  })
-
-  it('counts only no-frequency words hidden by the frequency filter alone', () => {
-    const html = render({
-      phase: {
-        kind: 'ready' as const,
-        candidates: [
-          { lemma: 'kept', token: token('kept'), sentence: '', count: 3 },
-          { lemma: 'rare', token: token('rare'), sentence: '', count: 1 }
-        ],
-        resolving: false,
-        threshold: 5000,
-        minimumCount: 2,
-        selected: {},
-        resolved: {
-          kept: { entry: entry(null), frequency: null },
-          rare: { entry: entry(null), frequency: null }
-        }
-      }
-    })
-    expect(html).toContain('1 words without frequency data are hidden.')
-  })
-
-  it('forwards the minimum count and keeps rows and Mine N on the same combined filter set', () => {
-    const composedCandidates = [
-      { lemma: 'target', token: token('target'), sentence: '', count: 2 },
-      { lemma: 'included', token: token('included'), sentence: '', count: 2 },
-      { lemma: 'below-minimum', token: token('below-minimum'), sentence: '', count: 1 }
-    ]
-    const phase = {
-      kind: 'ready' as const,
-      candidates: composedCandidates,
-      resolving: false,
-      threshold: 15,
-      minimumCount: 2,
-      sort: 'count' as const,
-      selected: { target: true, included: true, 'below-minimum': true },
-      resolved: {
-        target: { entry: entry(12), frequency: 12 },
-        included: { entry: entry(10), frequency: 10 },
-        'below-minimum': { entry: entry(10), frequency: 10 }
-      },
-      targetDeckMatches: { target: { cardId: 1, deckNames: ['Mining'] } },
-      checkingTargetDeck: false,
-      hideTargetDeckMatches: true
-    }
-    const html = render({ phase })
-    expect(html).toContain('id="bulk-mining-minimum-count"')
-    expect(html).toContain('value="2"')
-    expect(html).toContain('Showing 1 of 3 unknown words')
-    expect(html).toContain('included')
-    expect(html).not.toContain('aria-label="Mine target"')
-    expect(html).not.toContain('aria-label="Mine below-minimum"')
-    expect(html).toContain('Mine 1 words')
-
-    let raw: string | undefined
-    const tree = BulkMining({
-      ...callbacks,
-      phase,
-      frequencyDictConfigured: false,
-      onMinimumCountChange: (value) => {
-        raw = value
-      }
-    })
-    const minimumCount = findElement(
-      tree,
-      (element) =>
-        element.type === 'input' &&
-        (element.props as { id?: string }).id === 'bulk-mining-minimum-count'
-    )
-    expect(minimumCount).not.toBeNull()
-    expect((minimumCount!.props as { disabled?: boolean }).disabled).toBeUndefined()
-    ;(minimumCount!.props as { onChange: (event: { target: { value: string } }) => void }).onChange(
-      { target: { value: '3' } }
-    )
-    expect(raw).toBe('3')
-
-    const cleared = render({
-      phase: { ...phase, minimumCount: null, threshold: null, hideTargetDeckMatches: false }
-    })
-    expect(cleared).toContain('target')
-    expect(cleared).toContain('included')
-    expect(cleared).toContain('below-minimum')
-    expect(cleared).toContain('Mine 3 words')
-  })
-
-  it('shows concise copy instead of an empty table when filters hide every candidate', () => {
-    const html = render({
-      phase: {
-        kind: 'ready',
-        candidates,
-        resolving: false,
-        threshold: null,
-        minimumCount: 3,
-        selected: { [candidates[0].lemma]: true, [candidates[1].lemma]: true },
-        resolved: {},
-        targetDeckMatches: {},
-        checkingTargetDeck: false,
-        hideTargetDeckMatches: false
-      }
-    })
-    expect(html).toContain('No words match the current filters.')
-    expect(html).not.toContain('bulk-mining-table')
-    expect(html).toContain('Mine 0 words')
-  })
-
-  it('filters target-deck matches while keeping the advisory scan non-blocking', () => {
-    const phase = {
-      kind: 'ready' as const,
-      candidates,
-      resolving: false,
-      threshold: null,
-      selected: { [candidates[0].lemma]: false, [candidates[1].lemma]: true },
-      resolved: {
-        [candidates[0].lemma]: { entry: entry(12), frequency: 12 },
-        [candidates[1].lemma]: { entry: entry(20), frequency: 20 }
-      },
-      targetDeckMatches: {
-        [candidates[0].lemma]: { cardId: 1, deckNames: ['Mining'] },
-        [candidates[1].lemma]: null
-      },
-      checkingTargetDeck: true,
-      hideTargetDeckMatches: true,
-      advisoryWarning: 'Could not finish checking Anki.'
-    }
-    const html = render({ phase, targetDeckName: 'Mining' })
-    expect(html).toContain('checked=""')
-    expect(html).toContain('Hide words already in target deck')
-    expect(html).toContain('Checking target deck')
-    expect(html).toContain('1 already in Mining hidden')
-    expect(html).toContain('Could not finish checking Anki.')
-    expect(html).not.toContain(candidates[0].token.surface)
-    expect(html).toContain(candidates[1].token.surface)
-    expect(html).toContain('Mine 1 words')
-
-    const unfiltered = render({
-      phase: { ...phase, hideTargetDeckMatches: false, checkingTargetDeck: false }
-    })
-    expect(unfiltered).toContain(candidates[0].token.surface)
-  })
-
-  it('forwards target-deck filter changes through the required controller seam', () => {
-    let nextValue: boolean | undefined
-    const phase = {
-      kind: 'ready' as const,
-      candidates,
-      resolving: false,
-      threshold: null,
-      minimumCount: null,
-      sort: 'count' as const,
-      selected: {},
-      resolved: {},
-      targetDeckMatches: {},
-      checkingTargetDeck: false,
-      hideTargetDeckMatches: true
-    }
-    const tree = BulkMining({
-      ...callbacks,
-      phase,
-      frequencyDictConfigured: true,
-      onSetHideTargetDeckMatches: (hide) => {
-        nextValue = hide
-      }
-    })
-    const checkbox = findElement(
-      tree,
-      (element) =>
-        element.type === 'input' && (element.props as { checked?: boolean }).checked === true
-    )
-    expect(checkbox).not.toBeNull()
-    ;(checkbox!.props as { onChange: (event: { target: { checked: boolean } }) => void }).onChange({
-      target: { checked: false }
-    })
-    expect(nextValue).toBe(false)
-  })
-
-  it('groups Select all and Select none below the sort and target-deck controls', () => {
-    const html = render({
-      phase: {
-        kind: 'ready',
-        candidates,
-        resolving: false,
-        threshold: null,
-        minimumCount: null,
-        sort: 'count',
-        selected: {},
-        resolved: {},
-        targetDeckMatches: {},
-        checkingTargetDeck: false,
-        hideTargetDeckMatches: false
-      }
-    })
-    const actions =
-      '<div class="bulk-mining-selection-actions"><button type="button">Select all</button><button type="button">Select none</button></div>'
-    expect(html).toContain(actions)
-    expect(html.indexOf('Hide words already in target deck')).toBeLessThan(html.indexOf(actions))
-  })
-
-  it('forwards sort choices and renders Count and Frequency in different orders', () => {
-    const ordered = [
-      {
-        lemma: 'count-first',
-        token: token('count-first'),
-        sentence: '',
-        count: 3,
-        firstOccurrence: 0
-      },
-      {
-        lemma: 'frequency-first',
-        token: token('frequency-first'),
-        sentence: '',
-        count: 1,
-        firstOccurrence: 1
-      },
-      { lemma: 'pending', token: token('pending'), sentence: '', count: 2, firstOccurrence: 2 },
-      { lemma: 'no-data', token: token('no-data'), sentence: '', count: 1, firstOccurrence: 3 }
-    ]
-    const phase = {
-      kind: 'ready' as const,
-      candidates: ordered,
-      resolving: false,
-      threshold: null,
-      minimumCount: null,
-      sort: 'count' as const,
-      selected: {},
-      resolved: {
-        'count-first': { entry: entry(20), frequency: 20 },
-        'frequency-first': { entry: entry(10), frequency: 10 },
-        'no-data': { entry: entry(null), frequency: null }
-      },
-      targetDeckMatches: {},
-      checkingTargetDeck: false,
-      hideTargetDeckMatches: false
-    }
-    const countHtml = render({ phase })
-    const frequencyHtml = render({ phase: { ...phase, sort: 'frequency' as const } })
-    expect(countHtml.indexOf('count-first')).toBeLessThan(countHtml.indexOf('pending'))
-    expect(frequencyHtml.indexOf('frequency-first')).toBeLessThan(
-      frequencyHtml.indexOf('count-first')
-    )
-
-    let requested: string | undefined
-    const tree = BulkMining({
-      ...callbacks,
-      phase,
-      frequencyDictConfigured: true,
-      onSortChange: (sort) => {
-        requested = sort
-      }
-    })
-    const select = findElement(
-      tree,
-      (element) =>
-        element.type === 'select' && (element.props as { id?: string }).id === 'bulk-mining-sort'
-    )
-    expect(select).not.toBeNull()
-    ;(select!.props as { onChange: (event: { target: { value: string } }) => void }).onChange({
+  it('wires filters, row selection, selection actions, and start through DOM events', () => {
+    const callbacks = props()
+    render(<BulkMining {...callbacks} />)
+    fireEvent.change(screen.getByLabelText('Maximum frequency'), { target: { value: '5000' } })
+    fireEvent.change(screen.getByLabelText('Minimum count'), { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Sort unknown words'), {
       target: { value: 'frequency' }
     })
-    expect(requested).toBe('frequency')
+    fireEvent.click(screen.getByLabelText('Hide words already in target deck'))
+    fireEvent.click(screen.getByLabelText('Mine 猫'))
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Select none' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mine 1 words' }))
+    expect(callbacks.onThresholdChange).toHaveBeenCalledWith('5000')
+    expect(callbacks.onMinimumCountChange).toHaveBeenCalledWith('3')
+    expect(callbacks.onSortChange).toHaveBeenCalledWith('frequency')
+    expect(callbacks.onSetHideTargetDeckMatches).toHaveBeenCalledWith(true)
+    expect(callbacks.onToggle).toHaveBeenCalledWith('猫')
+    expect(callbacks.onSelectAll).toHaveBeenCalledOnce()
+    expect(callbacks.onSelectNone).toHaveBeenCalledOnce()
+    expect(callbacks.onStart).toHaveBeenCalledOnce()
   })
 
-  it('renders running status markers, progress, and cancel', () => {
-    const html = render({
-      phase: {
-        kind: 'running',
-        candidates,
-        statuses: { 食べる: { kind: 'added' }, 猫: { kind: 'mining' } },
-        cancelling: false
+  it('uses the combined model filters for both rows and the mine count', () => {
+    const phase = ready({
+      minimumCount: 2,
+      threshold: 15,
+      hideTargetDeckMatches: true,
+      resolved: {
+        食べる: {
+          entry: makeLookupResult({ expression: '食べる', frequencyDisplay: '12k' }),
+          frequency: 12
+        }
+      },
+      targetDeckMatches: { 猫: { cardId: 1, deckNames: ['Mining'] } },
+      checkingTargetDeck: true,
+      advisoryWarning: 'Could not finish checking Anki.'
+    })
+    render(<BulkMining {...props({ phase, targetDeckName: 'Mining' })} />)
+    expect(screen.getByLabelText('Mine 食べる')).toBeTruthy()
+    expect(screen.queryByLabelText('Mine 猫')).toBeNull()
+    expect(screen.getByText('12k')).toBeTruthy()
+    expect(screen.getByText('Showing 1 of 2 unknown words')).toBeTruthy()
+    expect(screen.getByText('Checking target deck…')).toBeTruthy()
+    expect(screen.getByText('Could not finish checking Anki.')).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: 'Mine 1 words' }) as HTMLButtonElement).disabled
+    ).toBe(false)
+  })
+
+  it('passes the chosen sort to the displayed rows', () => {
+    const phase = ready({
+      resolved: {
+        食べる: { entry: makeLookupResult({ expression: '食べる' }), frequency: 20 },
+        猫: { entry: makeLookupResult(), frequency: 10 }
       }
     })
-    expect(html).toContain('Mined 1 of 2')
-    expect(html).toContain('data-status="added"')
-    expect(html).toContain('data-status="mining"')
-    expect(html).toContain('id="bulk-mining-cancel"')
+    const view = render(<BulkMining {...props({ phase })} />)
+    const rowLabels = () =>
+      screen
+        .getAllByRole('checkbox')
+        .slice(1)
+        .map((row) => row.getAttribute('aria-label'))
+    expect(rowLabels()).toEqual(['Mine 食べる', 'Mine 猫'])
+    view.rerender(<BulkMining {...props({ phase: { ...phase, sort: 'frequency' } })} />)
+    expect(rowLabels()).toEqual(['Mine 猫', 'Mine 食べる'])
   })
 
-  it('renders separate updated rows and summary buckets', () => {
-    const html = render({
-      phase: {
-        kind: 'done',
-        candidates,
-        statuses: { 食べる: { kind: 'updated' }, 猫: { kind: 'added' } },
-        summary: { added: 1, updated: 1, duplicate: 0, noEntry: 0, error: 0, cancelled: 0 }
-      }
+  it('disables only frequency controls without a dictionary and mining while resolving', () => {
+    const callbacks = props({ frequencyDictConfigured: false, phase: ready({ resolving: true }) })
+    const view = render(<BulkMining {...callbacks} />)
+    expect((screen.getByLabelText('Maximum frequency') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('option', { name: 'Frequency' }) as HTMLOptionElement).disabled).toBe(
+      true
+    )
+    expect((screen.getByLabelText('Minimum count') as HTMLInputElement).disabled).toBe(false)
+    expect(screen.getByText(/please wait before mining/)).toBeTruthy()
+    const button = screen.getByRole('button', { name: 'Mine 1 words' }) as HTMLButtonElement
+    fireEvent.click(button)
+    expect(callbacks.onStart).not.toHaveBeenCalled()
+    expect(button.disabled).toBe(true)
+    view.rerender(<BulkMining {...callbacks} phase={ready()} />)
+    expect(button.disabled).toBe(false)
+  })
+
+  it('renders pending and missing entries, disabling selection only for missing entries', () => {
+    render(
+      <BulkMining
+        {...props({ phase: ready({ resolved: { 猫: { entry: null, frequency: null } } }) })}
+      />
+    )
+    expect(document.querySelector('.bulk-mining-pending')).not.toBeNull()
+    expect(screen.getByText('no entry')).toBeTruthy()
+    expect((screen.getByLabelText('Mine 猫') as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Mine 食べる') as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('shows hidden-frequency and target-deck explanations and an empty filtered list', () => {
+    const phase = ready({
+      threshold: 5000,
+      hideTargetDeckMatches: true,
+      resolved: {
+        食べる: { entry: makeLookupResult({ expression: '食べる' }), frequency: null },
+        猫: { entry: makeLookupResult(), frequency: 10 }
+      },
+      targetDeckMatches: { 猫: { cardId: 1, deckNames: ['Mining'] } }
     })
-    expect(html).toContain('data-status="updated"')
-    expect(html).toContain('>Updated<')
-    expect(html).toContain('1 added · 1 updated')
+    render(<BulkMining {...props({ phase, targetDeckName: 'Mining' })} />)
+    expect(screen.getByText('1 words without frequency data are hidden.')).toBeTruthy()
+    expect(screen.getByText('1 already in Mining hidden')).toBeTruthy()
+    expect(screen.getByText('No words match the current filters.')).toBeTruthy()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(
+      (screen.getByRole('button', { name: 'Mine 0 words' }) as HTMLButtonElement).disabled
+    ).toBe(true)
   })
 
-  it('keeps the running surface mounted while cancellation is pending', () => {
-    const html = render({ phase: { kind: 'running', candidates, statuses: {}, cancelling: true } })
-    expect(html).toContain('Cancelling…')
-    expect(html).toContain('id="bulk-mining-cancel" disabled=""')
-    expect(html).not.toContain('Back to report')
+  it('keeps progress visible and disables Cancel while cancellation is pending', () => {
+    const phase = {
+      kind: 'running' as const,
+      candidates,
+      statuses: { 食べる: { kind: 'added' as const }, 猫: { kind: 'mining' as const } },
+      cancelling: false
+    }
+    const callbacks = props({ phase })
+    const view = render(<BulkMining {...callbacks} />)
+    expect(screen.getByText('Mined 1 of 2')).toBeTruthy()
+    expect(document.querySelector('[data-status="mining"]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(callbacks.onCancel).toHaveBeenCalledOnce()
+    view.rerender(<BulkMining {...callbacks} phase={{ ...phase, cancelling: true }} />)
+    expect(
+      (screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    expect(screen.getByText('Mined 1 of 2')).toBeTruthy()
   })
 
-  it('renders done summaries without zero buckets, errors, and abort alerts', () => {
-    const html = render({
+  it('shows terminal errors and summary buckets and returns to the list without closing', () => {
+    const callbacks = props({
       phase: {
         kind: 'done',
         candidates,
         statuses: {
           食べる: { kind: 'error', message: 'Anki disconnected' },
-          猫: { kind: 'cancelled' }
+          猫: { kind: 'updated' }
         },
-        summary: { added: 0, updated: 0, duplicate: 0, noEntry: 0, error: 1, cancelled: 1 },
+        summary: { added: 0, updated: 1, duplicate: 0, noEntry: 0, error: 1, cancelled: 0 },
         abortMessage: 'Anki is unavailable'
       }
     })
-    expect(html).toContain('1 errors · 1 cancelled')
-    expect(html).not.toContain('0 duplicates')
-    expect(html).toContain('Anki disconnected')
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('id="bulk-mining-back"')
-    expect(html).toContain('>Back to word list</button>')
+    render(<BulkMining {...callbacks} />)
+    expect(screen.getByText('Updated')).toBeTruthy()
+    expect(screen.getByText('1 updated · 1 errors')).toBeTruthy()
+    expect(screen.getByText(/Anki disconnected/)).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toBe('Anki is unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Back to word list' }))
+    expect(callbacks.onBackToList).toHaveBeenCalledOnce()
+    expect(callbacks.onClose).not.toHaveBeenCalled()
   })
 
-  it('fires onBackToList from the done-phase footer instead of discarding the session', () => {
-    let backs = 0
-    let closes = 0
-    const tree = BulkMining({
-      ...callbacks,
-      frequencyDictConfigured: true,
-      onBackToList: () => {
-        backs++
-      },
-      onClose: () => {
-        closes++
-      },
-      phase: {
-        kind: 'done',
-        candidates,
-        statuses: { 食べる: { kind: 'added' }, 猫: { kind: 'added' } },
-        summary: { added: 2, updated: 0, duplicate: 0, noEntry: 0, error: 0, cancelled: 0 }
-      }
-    })
-    const back = findElement(
-      tree,
-      (element) =>
-        element.type === 'button' &&
-        (element.props as { children?: ReactNode }).children === 'Back to word list'
+  it('renders duplicate provenance as text, including unavailable deck names', () => {
+    render(
+      <BulkMining
+        {...props({
+          phase: {
+            kind: 'done',
+            candidates,
+            statuses: {
+              食べる: {
+                kind: 'duplicate',
+                deckNames: ['Long Deck Name That Must Wrap', '<Target Deck>']
+              },
+              猫: { kind: 'duplicate', deckNames: [] }
+            },
+            summary: { added: 0, updated: 0, duplicate: 2, noEntry: 0, error: 0, cancelled: 0 }
+          }
+        })}
+      />
     )
-    expect(back).not.toBeNull()
-    ;(back!.props as { onClick: () => void }).onClick()
-    expect(backs).toBe(1)
-    expect(closes).toBe(0)
+    expect(
+      screen.getByText('Duplicate in: Long Deck Name That Must Wrap, <Target Deck>')
+    ).toBeTruthy()
+    expect(screen.getByText('Duplicate (deck unavailable)')).toBeTruthy()
+    expect(document.querySelector('target')).toBeNull()
+    expect(screen.getByText('2 duplicates')).toBeTruthy()
   })
 
-  it('renders duplicate deck provenance as escaped, wrapping status text', () => {
-    const html = render({
-      phase: {
-        kind: 'done',
-        candidates,
-        statuses: {
-          [candidates[0].lemma]: {
-            kind: 'duplicate',
-            deckNames: ['Long Deck Name That Must Wrap', '<Target Deck>']
-          },
-          [candidates[1].lemma]: { kind: 'duplicate', deckNames: [] }
-        },
-        summary: { added: 0, updated: 0, duplicate: 2, noEntry: 0, error: 0, cancelled: 0 }
-      }
-    })
-    expect(html).toContain('Duplicate in: Long Deck Name That Must Wrap, &lt;Target Deck&gt;')
-    expect(html).toContain('Duplicate (deck unavailable)')
-    expect(html).toContain('bulk-mining-status')
-    expect(html).toContain('2 duplicates')
+  it('renders nothing while idle and explains unavailable vocabulary', () => {
+    const callbacks = props({ phase: { kind: 'idle' } })
+    const view = render(<BulkMining {...callbacks} />)
+    expect(view.container.innerHTML).toBe('')
+    view.rerender(<BulkMining {...callbacks} phase={{ kind: 'unavailable' }} />)
+    expect(screen.getByRole('status').textContent).toContain('No Japanese subtitle vocabulary')
   })
-
-  it('renders a direct ready surface without report-navigation wording', () => {
-    const html = render({
-      phase: {
-        kind: 'ready',
-        candidates,
-        resolving: false,
-        threshold: null,
-        selected: {},
-        resolved: {},
-        targetDeckMatches: {},
-        checkingTargetDeck: false,
-        hideTargetDeckMatches: false
-      }
-    })
-    expect(html).toContain('Bulk Anki mining')
-    expect(html).not.toContain('id="bulk-mining-close"')
-    expect(html).not.toContain('Back to report')
-  })
-
-  it('renders nothing while idle', () => expect(render({ phase: { kind: 'idle' } })).toBe(''))
 })

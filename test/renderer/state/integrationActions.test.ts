@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  domainsForCategory,
   loadCategoryDomains,
   selectMecabDict,
   importYomitanDict,
@@ -30,43 +29,20 @@ function fakeOptionsData(): OptionsDataController & { load: ReturnType<typeof vi
   } as unknown as OptionsDataController & { load: ReturnType<typeof vi.fn> }
 }
 
-describe('domainsForCategory / loadCategoryDomains', () => {
-  it('loads no domain for keybindings or playback', () => {
-    expect(domainsForCategory('keybindings')).toEqual([])
-    expect(domainsForCategory('playback')).toEqual([])
-  })
-
-  it('loads translation settings for Subtitles', () => {
-    expect(domainsForCategory('subtitles')).toEqual(['translation', 'jimaku'])
-  })
-
-  it('loads only dictionaries for the Parser & Dictionaries category', () => {
-    expect(domainsForCategory('dictionaries')).toEqual(['dictionaries'])
-  })
-
-  it('loads knowledge plus anki for Known Words', () => {
-    expect(domainsForCategory('knowledge')).toEqual(['knowledge', 'anki'])
-  })
-
-  it('loads the setup domain plus the two it reports on for Setup & integrations', () => {
-    expect(domainsForCategory('setup')).toEqual(['setup', 'dictionaries', 'knowledge'])
-  })
-
-  it('loadCategoryDomains loads every domain the category needs', () => {
+describe('loadCategoryDomains', () => {
+  it.each([
+    ['keybindings', []],
+    ['playback', []],
+    ['subtitles', ['translation', 'jimaku']],
+    ['dictionaries', ['dictionaries']],
+    ['knowledge', ['knowledge', 'anki']],
+    ['setup', ['setup', 'dictionaries', 'knowledge']]
+  ] as const)('loads only %s domains and forces only the live setup probe', (category, domains) => {
     const optionsData = fakeOptionsData()
-    loadCategoryDomains(optionsData, 'knowledge')
-    expect(optionsData.load).toHaveBeenCalledWith('knowledge', { force: false })
-    expect(optionsData.load).toHaveBeenCalledWith('anki', { force: false })
-  })
-
-  it('re-probes the setup domain on every open, but reuses the cached ones', () => {
-    const optionsData = fakeOptionsData()
-    loadCategoryDomains(optionsData, 'setup')
-    // A cached "Connected" for an Anki that has since been closed is exactly
-    // the wrong answer for a status page, so only this domain is forced.
-    expect(optionsData.load).toHaveBeenCalledWith('setup', { force: true })
-    expect(optionsData.load).toHaveBeenCalledWith('dictionaries', { force: false })
-    expect(optionsData.load).toHaveBeenCalledWith('knowledge', { force: false })
+    loadCategoryDomains(optionsData, category)
+    expect(optionsData.load.mock.calls).toEqual(
+      domains.map((domain) => [domain, { force: domain === 'setup' }])
+    )
   })
 })
 
