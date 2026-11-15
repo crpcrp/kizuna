@@ -1,71 +1,20 @@
 import { deferred } from '@test/harness/deferred'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  createOptionsDataController,
-  type OptionsDataBridge
-} from '@src/renderer/src/state/optionsData'
+import { createOptionsDataController } from '@src/renderer/src/state/optionsData'
 import { defaultAnkiSettings } from '@src/shared/anki'
-import type { SyncStatus } from '@src/shared/knowledge'
 import type { PublicTranslationSettings } from '@src/shared/translation'
 import type { JimakuSettingsStatus } from '@src/shared/jimaku'
-import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
+import { createFakeKizunaApi, type FakeKizunaApiOverrides } from '@test/harness/fakeKizunaApi'
 
-const knowledgeSettings = makePublicKnowledgeSettings()
-
-const syncStatus: SyncStatus = {
-  wanikani: { lastSyncAt: null, count: 0, configured: false },
-  anki: { lastSyncAt: null, count: 0, configured: false }
-}
-
-type BridgeOverrides = {
-  [K in keyof OptionsDataBridge]?: Partial<OptionsDataBridge[K]>
-}
-
-/** Bridge whose calls always resolve immediately with fixed fixture data. */
-function fakeBridge(overrides: BridgeOverrides = {}): OptionsDataBridge {
-  return {
-    mecab: {
-      listDicts: vi.fn().mockResolvedValue([]),
-      currentDict: vi.fn().mockResolvedValue('ipadic'),
-      ...overrides.mecab
-    },
-    dict: {
-      listDicts: vi.fn().mockResolvedValue([]),
-      ...overrides.dict
-    },
-    anki: {
-      ping: vi.fn().mockResolvedValue({ ok: true, version: 6 }),
-      getSettings: vi.fn().mockResolvedValue(defaultAnkiSettings),
-      deckNames: vi.fn().mockResolvedValue([]),
-      modelNames: vi.fn().mockResolvedValue([]),
-      modelFieldNames: vi.fn().mockResolvedValue([]),
-      ...overrides.anki
-    },
-    knowledge: {
-      getSettings: vi.fn().mockResolvedValue(knowledgeSettings),
-      syncStatus: vi.fn().mockResolvedValue(syncStatus),
-      ...overrides.knowledge
-    },
-    translate: {
-      getSettings: vi.fn().mockResolvedValue({
-        hasAzureKey: false,
-        azureRegion: ''
-      } satisfies PublicTranslationSettings),
-      ...overrides.translate
-    },
-    jimaku: {
-      getStatus: vi.fn().mockResolvedValue({
-        configured: false,
-        secretStorageAvailable: true,
-        testOutcome: { status: 'notTested' }
-      } satisfies JimakuSettingsStatus),
-      ...overrides.jimaku
-    },
+function fakeBridge(overrides: FakeKizunaApiOverrides = {}) {
+  return createFakeKizunaApi({
+    ...overrides,
+    anki: { ping: vi.fn().mockResolvedValue({ ok: true, version: 6 }), ...overrides.anki },
     integration: {
       binaryStatus: vi.fn().mockResolvedValue({ ffmpeg: true, ffprobe: true }),
       ...overrides.integration
     }
-  }
+  })
 }
 
 describe('createOptionsDataController', () => {
@@ -142,17 +91,23 @@ describe('createOptionsDataController', () => {
     expect(controller.getState('anki').status).toBe('ready')
   })
 
-  it("one domain's failure never blocks another domain's load", async () => {
-    const bridge = fakeBridge({
-      anki: { getSettings: vi.fn().mockRejectedValue(new Error('boom')) }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await Promise.all([controller.load('anki'), controller.load('knowledge')])
-
-    expect(controller.getState('anki').status).toBe('error')
-    expect(controller.getState('knowledge').status).toBe('ready')
-  })
+  it.each(['anki', 'translation'] as const)(
+    'isolates a failed %s domain from knowledge',
+    async (domain) => {
+      const bridge = fakeBridge()
+      vi.mocked(
+        domain === 'anki' ? bridge.anki.getSettings : bridge.translate.getSettings
+      ).mockRejectedValue(new Error('settings failed'))
+      const controller = createOptionsDataController(bridge)
+      await Promise.all([controller.load(domain), controller.load('knowledge')])
+      expect(controller.getState(domain)).toEqual({
+        status: 'error',
+        data: undefined,
+        error: 'settings failed'
+      })
+      expect(controller.getState('knowledge').status).toBe('ready')
+    }
+  )
 
   it('loads and caches only the local translation settings', async () => {
     const getSettings = vi.fn().mockResolvedValue({
@@ -221,24 +176,6 @@ describe('createOptionsDataController', () => {
       configured: true,
       testOutcome: { status: 'connected' }
     })
-  })
-
-  it('isolates translation settings failures from other domains', async () => {
-    const bridge = fakeBridge({
-      translate: {
-        getSettings: vi.fn().mockRejectedValue(new Error('translation settings failed'))
-      }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await Promise.all([controller.load('translation'), controller.load('knowledge')])
-
-    expect(controller.getState('translation')).toEqual({
-      status: 'error',
-      data: undefined,
-      error: 'translation settings failed'
-    })
-    expect(controller.getState('knowledge').status).toBe('ready')
   })
 
   it('fetches model fields only when a model is already selected', async () => {
@@ -316,127 +253,61 @@ describe('createOptionsDataController', () => {
     expect(state.data?.settings).toEqual(saved)
   })
 
-  it('keeps the previously loaded deck/model lists when a reload cannot reach Anki', async () => {
-    const getSettings = vi
-      .fn()
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, modelName: 'Basic' })
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, modelName: 'Basic', deckName: 'Mining' })
-    const deckNames = vi
-      .fn()
-      .mockResolvedValueOnce(['Mining'])
-      .mockRejectedValueOnce(new Error('Is Anki running?'))
-    const modelFieldNames = vi.fn().mockResolvedValue(['Front', 'Back'])
-    const bridge = fakeBridge({
-      anki: {
-        getSettings,
-        deckNames,
-        modelNames: vi.fn().mockResolvedValue(['Basic']),
-        modelFieldNames
-      }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await controller.load('anki')
-    await controller.load('anki', { force: true })
-
-    const state = controller.getState('anki')
-    expect(state.status).toBe('error')
-    expect(state.data?.settings.deckName).toBe('Mining')
-    expect(state.data?.deckNames).toEqual(['Mining'])
-    expect(state.data?.modelNames).toEqual(['Basic'])
-    expect(state.data?.modelFields).toEqual(['Front', 'Back'])
-    // The lists already failed on this connection; asking for the fields
-    // again would only add a second failing request.
-    expect(modelFieldNames).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops the cached fields when an unreachable reload follows a note-type change', async () => {
-    // The user picks a different note type; that saves the setting and force
-    // reloads this domain. If Anki is unreachable for that reload, showing
-    // the previous model's fields under the new model's name would let field
-    // mappings be saved against fields the selected note type does not have.
-    const getSettings = vi
-      .fn()
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, modelName: 'Basic' })
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, modelName: 'Kizuna' })
-    const deckNames = vi.fn().mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('offline'))
-    const bridge = fakeBridge({
-      anki: {
-        getSettings,
-        deckNames,
-        modelFieldNames: vi.fn().mockResolvedValue(['Front', 'Back'])
-      }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await controller.load('anki')
-    expect(controller.getState('anki').data?.modelFields).toEqual(['Front', 'Back'])
-
-    await controller.load('anki', { force: true })
-    const state = controller.getState('anki')
-    expect(state.data?.settings.modelName).toBe('Kizuna')
-    expect(state.data?.modelFields).toEqual([])
-  })
-
-  it('drops cached lists when an unreachable reload follows an endpoint change', async () => {
-    // Saving a new URL (or API key) force reloads this domain. The cached
-    // decks/note types belong to the *old* server, so keeping them under the
-    // new URL would offer selections that need not exist on the new endpoint.
-    const getSettings = vi
-      .fn()
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, modelName: 'Basic' })
-      .mockResolvedValueOnce({
-        ...defaultAnkiSettings,
-        modelName: 'Basic',
-        url: 'http://192.168.1.20:8765'
+  it.each([
+    {
+      name: 'same endpoint and model',
+      patch: { deckName: 'Mining' },
+      decks: ['Mining'],
+      models: ['Basic'],
+      fields: ['Front', 'Back']
+    },
+    {
+      name: 'different model',
+      patch: { modelName: 'Kizuna' },
+      decks: ['Mining'],
+      models: ['Basic'],
+      fields: []
+    },
+    {
+      name: 'different endpoint',
+      patch: { url: 'http://192.168.1.20:8765' },
+      decks: [],
+      models: [],
+      fields: []
+    },
+    { name: 'different API key', patch: { apiKey: 'new-key' }, decks: [], models: [], fields: [] }
+  ])(
+    'retains only applicable Anki data after an unreachable reload: $name',
+    async ({ patch, decks, models, fields }) => {
+      const initial = { ...defaultAnkiSettings, modelName: 'Basic' }
+      const saved = { ...initial, ...patch }
+      const bridge = fakeBridge({
+        anki: {
+          getSettings: vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(saved),
+          deckNames: vi
+            .fn()
+            .mockResolvedValueOnce(['Mining'])
+            .mockRejectedValueOnce(new Error('offline')),
+          modelNames: vi.fn().mockResolvedValue(['Basic']),
+          modelFieldNames: vi.fn().mockResolvedValue(['Front', 'Back'])
+        }
       })
-    const bridge = fakeBridge({
-      anki: {
-        getSettings,
-        deckNames: vi
-          .fn()
-          .mockResolvedValueOnce(['Mining'])
-          .mockRejectedValueOnce(new Error('offline')),
-        modelNames: vi.fn().mockResolvedValue(['Basic']),
-        modelFieldNames: vi.fn().mockResolvedValue(['Front', 'Back'])
-      }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await controller.load('anki')
-    expect(controller.getState('anki').data?.deckNames).toEqual(['Mining'])
-
-    await controller.load('anki', { force: true })
-    const state = controller.getState('anki')
-    expect(state.status).toBe('error')
-    expect(state.data?.settings.url).toBe('http://192.168.1.20:8765')
-    expect(state.data?.deckNames).toEqual([])
-    expect(state.data?.modelNames).toEqual([])
-    // Same modelName as before, but it described the old endpoint's note type.
-    expect(state.data?.modelFields).toEqual([])
-  })
-
-  it('drops cached lists when an unreachable reload follows an API-key change', async () => {
-    const getSettings = vi
-      .fn()
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, apiKey: '' })
-      .mockResolvedValueOnce({ ...defaultAnkiSettings, apiKey: 'new-key' })
-    const bridge = fakeBridge({
-      anki: {
-        getSettings,
-        deckNames: vi
-          .fn()
-          .mockResolvedValueOnce(['Mining'])
-          .mockRejectedValueOnce(new Error('bad key'))
-      }
-    })
-    const controller = createOptionsDataController(bridge)
-
-    await controller.load('anki')
-    await controller.load('anki', { force: true })
-
-    expect(controller.getState('anki').data?.deckNames).toEqual([])
-  })
+      const controller = createOptionsDataController(bridge)
+      await controller.load('anki')
+      expect(controller.getState('anki').data).toMatchObject({
+        deckNames: ['Mining'],
+        modelNames: ['Basic'],
+        modelFields: ['Front', 'Back']
+      })
+      await controller.load('anki', { force: true })
+      expect(controller.getState('anki')).toEqual({
+        status: 'error',
+        error: 'offline',
+        data: { settings: saved, deckNames: decks, modelNames: models, modelFields: fields }
+      })
+      expect(bridge.anki.modelFieldNames).toHaveBeenCalledExactlyOnceWith('Basic')
+    }
+  )
 
   it('commits settings and lists when only the field lookup fails', async () => {
     const bridge = fakeBridge({
