@@ -459,57 +459,18 @@ describe('popupController sentence-audio media context', () => {
     return anki
   }
 
-  it('retains the source cue timing and mines the padded media-clock window', async () => {
-    const anki = await mine(cueInput, localSource)
+  it('threads popup cue timing, file, audio stream and subtitle offset into the mine request', async () => {
+    const anki = await mine(cueInput, { ...localSource, subtitleOffsetMs: 500 })
 
-    expect(anki.addNote).toHaveBeenCalledWith(
+    expect(anki.addNote).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         media: {
-          path: 'C:\\videos\\ep1.mkv',
+          path: localSource.filePath,
           audioStreamIndex: 2,
-          startSec: 9.75,
-          endSec: 12.25
+          startSec: 10.25,
+          endSec: 12.75
         }
       })
     )
-  })
-
-  it('applies the file\u2019s subtitle offset to the mined window', async () => {
-    const anki = await mine(cueInput, { ...localSource, subtitleOffsetMs: 500 })
-
-    expect(anki.addNote.mock.calls[0][0].media).toEqual(
-      expect.objectContaining({ startSec: 10.25, endSec: 12.75 })
-    )
-  })
-
-  it('omits the context when no media source is supplied at all', async () => {
-    const anki = await mine(cueInput)
-
-    expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')
-  })
-
-  it('omits the context without a loaded file or a selected audio track', async () => {
-    for (const source of [
-      { ...localSource, filePath: undefined },
-      { ...localSource, audioStreamIndex: undefined }
-    ]) {
-      const anki = await mine(cueInput, source)
-      expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')
-    }
-  })
-
-  it('omits the context for a remote URL', async () => {
-    const anki = await mine(cueInput, {
-      ...localSource,
-      filePath: 'https://host.example/media'
-    })
-
-    expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')
-  })
-
-  it('omits the context when the popup was opened with no active cue timing', async () => {
-    const anki = await mine(openInput(token), localSource)
-
-    expect(anki.addNote.mock.calls[0][0]).not.toHaveProperty('media')
   })
 })

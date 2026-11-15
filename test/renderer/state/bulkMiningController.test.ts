@@ -761,41 +761,7 @@ describe('createBulkMiningController', () => {
 describe('createBulkMiningController sentence-audio media context', () => {
   const source = { filePath: 'C:\\videos\\ep1.mkv', audioStreamIndex: 2, subtitleOffsetMs: 0 }
 
-  /** Opens with one timed cue, waits for resolution, and mines everything. */
-  async function mine(
-    media?: Parameters<ReturnType<typeof createBulkMiningController>['start']>[1]
-  ): Promise<TestBridges> {
-    const bridges = anki()
-    const controller = createBulkMiningController()
-    await controller.open({
-      bridges: { ...bridges, knowledge: { detailsFor: vi.fn().mockResolvedValue({}) } },
-      cueTokens: [{ text: 'one', tokens: [token('one')], start: 10, end: 12 }],
-      frequencyDictId: 1
-    })
-    await vi.waitFor(() => {
-      const phase = controller.getState()
-      if (phase.kind !== 'ready' || phase.resolving) throw new Error('still resolving')
-    })
-    await controller.start(bridges, media)
-    return bridges
-  }
-
-  it('forwards the media source so each mined row carries its own clip window', async () => {
-    const bridges = await mine(source)
-
-    expect(bridges.anki.addNote).toHaveBeenCalledWith(
-      expect.objectContaining({
-        media: {
-          path: 'C:\\videos\\ep1.mkv',
-          audioStreamIndex: 2,
-          startSec: 9.75,
-          endSec: 12.25
-        }
-      })
-    )
-  })
-
-  it('carries the source cue timing through a whole-track snapshot open', async () => {
+  it('carries whole-track snapshot timing and media source through to the mine request', async () => {
     const bridges = anki()
     const controller = createBulkMiningController()
     await controller.open({
@@ -816,6 +782,21 @@ describe('createBulkMiningController sentence-audio media context', () => {
       kind: 'ready',
       candidates: [{ lemma: 'one', cueStart: 10, cueEnd: 12 }]
     })
+    await vi.waitFor(() => {
+      expect(controller.getState()).toMatchObject({ kind: 'ready', resolving: false })
+    })
+    await controller.start(bridges, source)
+
+    expect(bridges.anki.addNote).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        media: {
+          path: source.filePath,
+          audioStreamIndex: 2,
+          startSec: 9.75,
+          endSec: 12.25
+        }
+      })
+    )
   })
 })
 

@@ -27,36 +27,26 @@ function alertText(): string {
 afterEach(appTeardown)
 
 describe('App playlist interactions', () => {
-  it('reports a rejected add-files picker without changing the queue', async () => {
-    const api = installBridge({
-      openFiles: vi.fn(async () => {
-        throw new Error('picker failed')
+  it.each([
+    ['openFiles', 'Add files to playlist', 'Could not add files to the playlist.'],
+    ['openFolder', 'Add folder to playlist', 'Could not add the folder to the playlist.']
+  ] as const)(
+    'reports a rejected %s picker without changing the queue',
+    async (method, command, message) => {
+      const api = installBridge({
+        [method]: vi.fn().mockRejectedValue(new Error('picker failed'))
       })
-    })
 
-    await openMediaMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Add files to playlist' }))
+      await openMediaMenu()
+      fireEvent.click(screen.getByRole('menuitem', { name: command }))
 
-    await waitFor(() => expect(alertText()).toContain('Could not add files to the playlist.'))
-    expect(api.media.openFiles).toHaveBeenCalledTimes(1)
+      await waitFor(() => expect(alertText()).toContain(message))
+      expect(api.media[method]).toHaveBeenCalledTimes(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle playlist sidebar' }))
-    expect(screen.getByText(/Queue is empty/)).toBeTruthy()
-  })
-
-  it('reports a rejected folder picker without changing the queue', async () => {
-    const api = installBridge({
-      openFolder: vi.fn(async () => {
-        throw new Error('folder failed')
-      })
-    })
-
-    await openMediaMenu()
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Add folder to playlist' }))
-
-    await waitFor(() => expect(alertText()).toContain('Could not add the folder to the playlist.'))
-    expect(api.media.openFolder).toHaveBeenCalledTimes(1)
-  })
+      fireEvent.click(screen.getByRole('button', { name: 'Toggle playlist sidebar' }))
+      expect(screen.getByText(/Queue is empty/)).toBeTruthy()
+    }
+  )
 
   it('reports a selected unreadable playlist separately from picker failures', async () => {
     const api = installBridge({
