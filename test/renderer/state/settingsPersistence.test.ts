@@ -83,6 +83,8 @@ describe('settingsPersistence', () => {
 
     second.resolve(settingsResult)
     await flushB
+    await persistence.flush()
+    expect(write).toHaveBeenCalledTimes(2)
   })
 
   it('reports a rejected write and includes its retained patch in the next scheduled write', async () => {
@@ -104,6 +106,8 @@ describe('settingsPersistence', () => {
 
     expect(write).toHaveBeenCalledTimes(2)
     expect(write).toHaveBeenLastCalledWith({ skipSeconds: 3, rightClickTogglePause: false })
+    await persistence.flush()
+    expect(write).toHaveBeenCalledTimes(2)
   })
 
   it('retries a failed in-flight snapshot with the newer value, never the old value', async () => {
@@ -128,44 +132,6 @@ describe('settingsPersistence', () => {
     second.resolve(settingsResult)
     await retry
     expect(onWriteError).toHaveBeenCalledOnce()
-  })
-
-  it('does not clear a newer value when an older snapshot succeeds', async () => {
-    const timers = fakeTimers()
-    const first = deferred<PlayerSettings>()
-    const second = deferred<PlayerSettings>()
-    const write = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
-    const persistence = createSettingsPersistence(write, timers)
-
-    persistence.schedule({ skipSeconds: 3 })
-    const firstFlush = persistence.flush()
-    persistence.schedule({ skipSeconds: 4 })
-    const retry = persistence.flush()
-
-    first.resolve(settingsResult)
-    await firstFlush
-    expect(write).toHaveBeenLastCalledWith({ skipSeconds: 4 })
-
-    second.resolve(settingsResult)
-    await retry
-    await persistence.flush()
-    expect(write).toHaveBeenCalledTimes(2)
-  })
-
-  it('leaves no retained work after a failed write is successfully retried', async () => {
-    const timers = fakeTimers()
-    const write = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('disk full'))
-      .mockResolvedValueOnce(settingsResult)
-    const persistence = createSettingsPersistence(write, timers)
-
-    persistence.schedule({ skipSeconds: 3 })
-    await persistence.flush()
-    await persistence.flush()
-    await persistence.flush()
-
-    expect(write).toHaveBeenCalledTimes(2)
   })
 
   it('continues processing later writes after a rejected timer attempt', async () => {

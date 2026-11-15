@@ -177,5 +177,8 @@ describe('useSettingsLifecycle', () => {
     expect(setupResult.dispatch).not.toHaveBeenCalled()
     expect(setupResult.setSidebarOpen).not.toHaveBeenCalled()
     expect(setupResult.reportError).not.toHaveBeenCalled()
+    expect(setupResult.setPlaylistOpen).not.toHaveBeenCalled()
+    setupResult.timers.flush()
+    expect(setupResult.settingsWriter).not.toHaveBeenCalled()
   })
 })

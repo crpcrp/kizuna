@@ -173,17 +173,6 @@ describe('playlist controller — add-and-maybe-play', () => {
 })
 
 describe('playlist controller — explicit navigation', () => {
-  it('playAt loads the entry and marks it current', async () => {
-    const controller = createPlaylistController()
-    controller.addPaths([A, B, C])
-    const { deps, load } = okLoad()
-
-    await controller.playAt(1, deps)
-
-    expect(load).toHaveBeenCalledWith(B)
-    expect(controller.getState().playlist.currentIndex).toBe(1)
-  })
-
   it('drops HTTP and HTTPS URL entries before they reach the playlist', async () => {
     const controller = createPlaylistController()
     controller.addPaths([A, 'https://host/stream.m3u8', 'HTTP://host/live', C])
@@ -205,12 +194,14 @@ describe('playlist controller — explicit navigation', () => {
     expect(load).not.toHaveBeenCalled()
   })
 
-  it('next/prev walk display order', async () => {
+  it('playAt selects the entry and next/prev walk display order without starting playback', async () => {
     const controller = createPlaylistController()
     controller.addPaths([A, B, C])
     const { deps, load, play } = okLoad()
 
     await controller.playAt(0, deps)
+    expect(controller.getState().playlist.currentIndex).toBe(0)
+    expect(load).toHaveBeenCalledWith(A)
     await controller.next(deps)
     expect(controller.getState().playlist.currentIndex).toBe(1)
     await controller.prev(deps)

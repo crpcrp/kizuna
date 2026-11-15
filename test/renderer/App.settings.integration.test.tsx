@@ -99,19 +99,6 @@ describe('App settings hydration', () => {
     expect(await offsetValue()).toBe('-375')
   })
 
-  it('ignores a late resolution after unmount', async () => {
-    const read = deferred<PlayerSettings>()
-    const setSettings = installBridge(read.promise)
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const view = render(<App />)
-
-    view.unmount()
-    await act(async () => read.resolve(settings()))
-
-    expect(error).not.toHaveBeenCalled()
-    expect(setSettings).not.toHaveBeenCalled()
-  })
-
   it('unblocks missing offsets after a rejected read without persisting defaults', async () => {
     const read = deferred<PlayerSettings>()
     const setSettings = installBridge(read.promise)

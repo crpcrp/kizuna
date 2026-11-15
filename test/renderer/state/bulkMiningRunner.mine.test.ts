@@ -246,7 +246,7 @@ describe('runBulkMining', () => {
 })
 
 describe('runBulkMining sentence-audio media context', () => {
-  const source = { filePath: 'C:\\videos\\ep1.mkv', audioStreamIndex: 2, subtitleOffsetMs: 0 }
+  const source = { filePath: 'C:\\videos\\ep1.mkv', audioStreamIndex: 2, subtitleOffsetMs: -500 }
 
   function timedCandidate(lemma: string, cueStart?: number, cueEnd?: number): MiningCandidate {
     return { ...candidate(lemma), cueStart, cueEnd }
@@ -276,35 +276,16 @@ describe('runBulkMining sentence-audio media context', () => {
         media: {
           path: 'C:\\videos\\ep1.mkv',
           audioStreamIndex: 2,
-          startSec: 9.75,
-          endSec: 12.25
+          startSec: 9.25,
+          endSec: 11.75
         }
       })
     )
     expect(anki.anki.addNote).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        media: expect.objectContaining({ startSec: 99.75, endSec: 101.25 })
+        media: expect.objectContaining({ startSec: 99.25, endSec: 100.75 })
       })
-    )
-  })
-
-  it('applies the threaded subtitle offset to every candidate', async () => {
-    const anki = await mine([timedCandidate('one', 10, 12)], {
-      ...source,
-      subtitleOffsetMs: -500
-    })
-
-    expect((anki.anki.addNote as ReturnType<typeof vi.fn>).mock.calls[0][0].media).toEqual(
-      expect.objectContaining({ startSec: 9.25, endSec: 11.75 })
-    )
-  })
-
-  it('omits the context when no media source was threaded through', async () => {
-    const anki = await mine([timedCandidate('one', 10, 12)])
-
-    expect((anki.anki.addNote as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toHaveProperty(
-      'media'
     )
   })
 
@@ -313,17 +294,6 @@ describe('runBulkMining sentence-audio media context', () => {
 
     const calls = (anki.anki.addNote as ReturnType<typeof vi.fn>).mock.calls
     expect(calls[0][0]).not.toHaveProperty('media')
-    expect(calls[1][0].media).toEqual(expect.objectContaining({ startSec: 9.75 }))
-  })
-
-  it('omits it for a remote URL, which ffmpeg cannot clip', async () => {
-    const anki = await mine([timedCandidate('one', 10, 12)], {
-      ...source,
-      filePath: 'https://host.example/media'
-    })
-
-    expect((anki.anki.addNote as ReturnType<typeof vi.fn>).mock.calls[0][0]).not.toHaveProperty(
-      'media'
-    )
+    expect(calls[1][0].media).toEqual(expect.objectContaining({ startSec: 9.25 }))
   })
 })

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { isValidElement, type ReactElement, type ReactNode } from 'react'
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render as renderDom, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import BulkMiningSidebar, {
   type BulkMiningSidebarProps
@@ -32,19 +33,7 @@ function render(props: Partial<BulkMiningSidebarProps>): string {
   )
 }
 
-function findButton(node: ReactNode, text: string): ReactElement | null {
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const found = findButton(child, text)
-      if (found) return found
-    }
-    return null
-  }
-  if (!isValidElement(node)) return null
-  if (node.type === 'button' && (node.props as { children?: ReactNode }).children === text)
-    return node
-  return findButton((node.props as { children?: ReactNode }).children, text)
-}
+afterEach(cleanup)
 
 describe('BulkMiningSidebar', () => {
   it('shows active-word progress, status, Reopen, and Cancel while mining', () => {
@@ -109,26 +98,49 @@ describe('BulkMiningSidebar', () => {
     expect(html).toContain('Exported 0 of 2')
   })
 
-  it('forwards Reopen and Cancel callbacks only for an active run', () => {
-    let reopened = 0
-    let cancelled = 0
-    const tree = BulkMiningSidebar({
+  it('allows Reopen throughout the run and Cancel only before cancellation', () => {
+    const onReopen = vi.fn()
+    const onCancel = vi.fn()
+    const props: BulkMiningSidebarProps = {
       phase: { kind: 'running', candidates, statuses: {}, cancelling: false },
-      onReopen: () => {
-        reopened++
-      },
-      onCancel: () => {
-        cancelled++
-      }
-    })
-    const reopen = findButton(tree, 'Reopen')
-    const cancel = findButton(tree, 'Cancel')
-    expect(reopen).not.toBeNull()
-    expect(cancel).not.toBeNull()
-    ;(reopen!.props as { onClick: () => void }).onClick()
-    ;(cancel!.props as { onClick: () => void }).onClick()
-    expect(reopened).toBe(1)
-    expect(cancelled).toBe(1)
+      onReopen,
+      onCancel
+    }
+    const view = renderDom(<BulkMiningSidebar {...props} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onReopen).toHaveBeenCalledTimes(1)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+
+    view.rerender(
+      <BulkMiningSidebar
+        {...props}
+        phase={{ kind: 'running', candidates, statuses: {}, cancelling: true }}
+      />
+    )
+    const cancel = screen.getByRole<HTMLButtonElement>('button', { name: 'Cancelling…' })
+    expect(cancel.disabled).toBe(true)
+    fireEvent.click(cancel)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+    expect(onReopen).toHaveBeenCalledTimes(2)
+
+    view.rerender(
+      <BulkMiningSidebar
+        {...props}
+        phase={{
+          kind: 'done',
+          candidates,
+          statuses: { 食べる: { kind: 'added' }, 猫: { kind: 'cancelled' } },
+          summary: { added: 1, updated: 0, duplicate: 0, noEntry: 0, error: 0, cancelled: 1 }
+        }}
+      />
+    )
+    expect(screen.queryByRole('button', { name: /Cancel/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+    expect(onReopen).toHaveBeenCalledTimes(3)
+    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
   it('does not render outside running or done controller phases', () => {
