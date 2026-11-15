@@ -89,7 +89,7 @@ cancelled prevents the tag and draft.
 To run the Linux package checks locally on Ubuntu 24.04:
 
 ```bash
-sudo apt-get install --yes xvfb 'mpv=0.37.0-1ubuntu4' 'ffmpeg=7:6.1.1-3ubuntu5'
+sudo apt-get install --yes xvfb desktop-file-utils 'mpv=0.37.0-1ubuntu4' 'ffmpeg=7:6.1.1-3ubuntu5'
 npm run resources -- --platform linux-x64
 npm run dist:linux
 npm run smoke:linux
