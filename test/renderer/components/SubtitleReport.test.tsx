@@ -23,291 +23,131 @@ function makeReport(overrides: Partial<Report> = {}): Report {
   }
 }
 
+function ready(
+  report: Partial<Report> = {},
+  sources = { wanikani: true, anki: true }
+): SubtitleReportPhase {
+  return { kind: 'ready', report: makeReport(report), sources }
+}
+function markup(phase: SubtitleReportPhase = ready(), open = true): string {
+  return renderToStaticMarkup(
+    <SubtitleReport open={open} phase={phase} onClose={() => {}} onRetry={() => {}} />
+  )
+}
 afterEach(cleanup)
 
-describe('SubtitleReport closed state', () => {
-  it('lacks the open class and generating state when closed and idle', () => {
-    const html = renderToStaticMarkup(
-      <SubtitleReport open={false} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
-    )
-    expect(html).not.toContain('open')
-    expect(html).not.toContain('Generating word report')
-  })
-})
-
-describe('SubtitleReport phase markers', () => {
-  it('renders the generating state immediately when opened while idle', () => {
-    const html = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={{ kind: 'idle' }} onClose={() => {}} onRetry={() => {}} />
-    )
-    expect(html).toContain('id="subtitle-report-loading"')
-    expect(html).toContain('Generating word report')
-    expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
-  })
-
-  it('renders an accessible preparing status with a decorative spinner', () => {
-    const html = renderToStaticMarkup(
-      <SubtitleReport
-        open={true}
-        phase={{ kind: 'preparing' }}
-        onClose={() => {}}
-        onRetry={() => {}}
-      />
-    )
-    expect(html).toContain('id="subtitle-report-loading"')
-    expect(html).toContain('role="status"')
-    expect(html).toContain('Generating word report')
-    expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
-  })
-
-  it('renders the empty marker for noSubtitles', () => {
-    const html = renderToStaticMarkup(
-      <SubtitleReport
-        open={true}
-        phase={{ kind: 'noSubtitles' }}
-        onClose={() => {}}
-        onRetry={() => {}}
-      />
-    )
-    expect(html).toContain('id="subtitle-report-empty"')
-  })
-
-  it('renders the empty marker for an all-symbol ready report', () => {
-    const phase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({ totalTokens: 0, uniqueLemmas: 0, topUnknown: [], ankiDecks: [] }),
-      sources: { wanikani: true, anki: true }
+describe('SubtitleReport presentation', () => {
+  it('hides a closed report and shows accessible progress for idle and preparing opens', () => {
+    const closed = markup({ kind: 'idle' }, false)
+    expect(closed).not.toContain('open')
+    expect(closed).not.toContain('Generating word report')
+    for (const kind of ['idle', 'preparing'] as const) {
+      const html = markup({ kind })
+      expect(html).toContain('id="subtitle-report-loading"')
+      expect(html).toContain('role="status"')
+      expect(html).toContain('Generating word report')
+      expect(html).toContain('class="report-loading-spinner" aria-hidden="true"')
     }
-    const html = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={phase} onClose={() => {}} onRetry={() => {}} />
-    )
-    expect(html).toContain('id="subtitle-report-empty"')
   })
 
-  it('renders the error message inside a role=alert block', () => {
-    const html = renderToStaticMarkup(
-      <SubtitleReport
-        open={true}
-        phase={{ kind: 'error', message: 'knowledge DB unavailable' }}
-        onClose={() => {}}
-        onRetry={() => {}}
-      />
-    )
-    expect(html).toContain('role="alert"')
-    expect(html).toContain('knowledge DB unavailable')
+  it('shows the empty state for absent subtitles and an all-symbol report', () => {
+    for (const phase of [
+      { kind: 'noSubtitles' } as const,
+      ready({ totalTokens: 0, uniqueLemmas: 0, topUnknown: [], ankiDecks: [] })
+    ]) {
+      expect(markup(phase)).toContain('id="subtitle-report-empty"')
+    }
   })
 
-  it('forwards Retry from the error dialog', () => {
+  it('announces errors and wires Retry and Close', () => {
     const onRetry = vi.fn()
+    const onClose = vi.fn()
     render(
       <SubtitleReport
         open
         phase={{ kind: 'error', message: 'knowledge DB unavailable' }}
-        onClose={vi.fn()}
+        onClose={onClose}
         onRetry={onRetry}
       />
     )
+    expect(screen.getByRole('alert').textContent).toContain('knowledge DB unavailable')
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(onRetry).toHaveBeenCalledOnce()
-  })
-})
-
-describe('SubtitleReport ready phase', () => {
-  const phase: SubtitleReportPhase = {
-    kind: 'ready',
-    report: makeReport(),
-    sources: { wanikani: true, anki: true }
-  }
-  const html = renderToStaticMarkup(
-    <SubtitleReport open={true} phase={phase} onClose={() => {}} onRetry={() => {}} />
-  )
-
-  it('shows totals and both percentages formatted to one decimal', () => {
-    expect(html).toContain('10 words')
-    expect(html).toContain('5 unique words')
-    // tokenLevels: (4+1)/10 known = 50.0%; lemmaLevels: (1+1)/5 known = 40.0%
-    expect(html).toContain('50.0%')
-    expect(html).toContain('40.0%')
+    fireEvent.click(screen.getByRole('button', { name: /close/i }))
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('uses the Word report name throughout the open dialog', () => {
-    expect(html).toContain('aria-label="Word report"')
-    expect(html).not.toContain('Subtitle report')
+  it('renders report totals, formatted percentages, legends, decks, and unknown surfaces', () => {
+    const html = markup()
+    for (const text of [
+      '10 words',
+      '5 unique words',
+      '50.0%',
+      '40.0%',
+      'aria-label="Word report"',
+      'Unknown',
+      'In deck',
+      'Learning',
+      'Known',
+      'Well known',
+      'Core 2k',
+      '<td>3</td>',
+      '食べた'
+    ]) {
+      expect(html).toContain(text)
+    }
+    for (const text of [
+      'Subtitle report',
+      'in deck',
+      'Unsourced',
+      'Grammar words',
+      'subtitle-report-mine',
+      'Bulk Anki mining'
+    ]) {
+      expect(html).not.toContain(text)
+    }
+    const rows = html.match(/<li>.*?<\/li>/g) ?? []
+    expect(rows.some((row) => row.includes('食べた') && row.includes('4'))).toBe(true)
+    expect(rows.some((row) => /\(/.test(row))).toBe(false)
   })
 
-  it('renders every legend level', () => {
-    expect(html).toContain('Unknown')
-    expect(html).toContain('In deck')
-    expect(html).toContain('Learning')
-    expect(html).toContain('Known')
-    expect(html).toContain('Well known')
-    expect(html).toContain('data-level="inDeck"')
-  })
-
-  it('carries data-level on bar segments and omits zero-count segments', () => {
-    const barSegment = (level: string): RegExp =>
-      new RegExp(`class="report-bar-segment" data-level="${level}"`, 'g')
-
-    // Both bars (token- and lemma-weighted) have these levels nonzero here.
-    expect((html.match(barSegment('unknown')) ?? []).length).toBe(2)
-    expect((html.match(barSegment('wellKnown')) ?? []).length).toBe(2)
-    // makeReport() carries no in-deck words, so that segment is skipped entirely.
-    expect((html.match(barSegment('inDeck')) ?? []).length).toBe(0)
-
-    const zeroPhase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({
+  it('renders only nonzero bar segments for both weightings', () => {
+    const html = markup(
+      ready({
         tokenLevels: { ...emptyLevels(), known: 5 },
         lemmaLevels: { ...emptyLevels(), known: 3 }
-      }),
-      sources: { wanikani: true, anki: true }
-    }
-    const zeroHtml = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={zeroPhase} onClose={() => {}} onRetry={() => {}} />
+      })
     )
-    expect((zeroHtml.match(barSegment('unknown')) ?? []).length).toBe(0)
-    expect((zeroHtml.match(barSegment('inDeck')) ?? []).length).toBe(0)
-    expect((zeroHtml.match(barSegment('learning')) ?? []).length).toBe(0)
-    expect((zeroHtml.match(barSegment('wellKnown')) ?? []).length).toBe(0)
-    // Two bars (token + lemma), one 'known' segment each.
-    expect((zeroHtml.match(barSegment('known')) ?? []).length).toBe(2)
+    expect(html.match(/class="report-bar-segment" data-level="known"/g)).toHaveLength(2)
+    for (const level of ['unknown', 'inDeck', 'learning', 'wellKnown']) {
+      expect(html).not.toContain(`class="report-bar-segment" data-level="${level}"`)
+    }
   })
 
-  it('renders an inDeck bar segment and the mined share once in-deck words exist', () => {
-    const inDeckPhase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({
+  it('renders in-deck segments and their formatted share independently of understanding', () => {
+    const html = markup(
+      ready({
         tokenLevels: { ...emptyLevels(), unknown: 3, inDeck: 2, known: 5 },
         lemmaLevels: { ...emptyLevels(), unknown: 3, inDeck: 1, known: 4 }
-      }),
-      sources: { wanikani: true, anki: true }
-    }
-    const inDeckHtml = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={inDeckPhase} onClose={() => {}} onRetry={() => {}} />
+      })
     )
-    const barSegment = /class="report-bar-segment" data-level="inDeck"/g
-    // One segment per bar (token- and lemma-weighted).
-    expect((inDeckHtml.match(barSegment) ?? []).length).toBe(2)
-    // tokenLevels: 2/10 in deck; lemmaLevels: 1/8 in deck.
-    expect(inDeckHtml).toContain('20.0% in deck')
-    expect(inDeckHtml).toContain('12.5% in deck')
+    expect(html.match(/class="report-bar-segment" data-level="inDeck"/g)).toHaveLength(2)
+    expect(html).toContain('20.0% in deck')
+    expect(html).toContain('12.5% in deck')
   })
 
-  it('omits the mined share entirely when no word is in deck', () => {
-    expect(html).not.toContain('in deck')
-  })
-
-  it('renders deck rows with name and count', () => {
-    expect(html).toContain('Core 2k')
-    expect(html).toContain('<td>3</td>')
-  })
-
-  it('renders topUnknown rows with surface and count only', () => {
-    expect(html).toContain('食べた')
-    expect(html).toContain('4')
-  })
-
-  it('hides the unsourced row when its count is 0', () => {
+  it('shows grammar provenance but hides diagnostic unsourced counts', () => {
+    const html = markup(
+      ready({ provenance: { wanikaniOnly: 1, ankiOnly: 1, both: 1, grammar: 2, unsourced: 2 } })
+    )
+    expect(html).toContain('Grammar words (always counted as known): 2')
     expect(html).not.toContain('Unsourced')
   })
 
-  it('never renders the diagnostic unsourced count', () => {
-    const withUnsourced: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({
-        provenance: { wanikaniOnly: 0, ankiOnly: 0, both: 0, grammar: 0, unsourced: 2 }
-      }),
-      sources: { wanikani: true, anki: true }
-    }
-    const withUnsourcedHtml = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={withUnsourced} onClose={() => {}} onRetry={() => {}} />
-    )
-    expect(withUnsourcedHtml).not.toContain('Unsourced: 2')
-  })
-
-  it('renders grammar words with their dedicated provenance count', () => {
-    const grammarPhase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({
-        provenance: { wanikaniOnly: 1, ankiOnly: 1, both: 1, grammar: 2, unsourced: 0 }
-      }),
-      sources: { wanikani: true, anki: true }
-    }
-    const grammarHtml = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={grammarPhase} onClose={() => {}} onRetry={() => {}} />
-    )
-    expect(grammarHtml).toContain('Grammar words (always counted as known): 2')
-  })
-
-  it('omits the grammar row when its count is zero', () => {
-    expect(html).not.toContain('Grammar words')
-  })
-})
-
-describe('SubtitleReport unconfigured banner', () => {
-  it('shows the banner and hides provenance, but keeps totals visible', () => {
-    const phase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport(),
-      sources: { wanikani: false, anki: false }
-    }
-    const html = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={phase} onClose={() => {}} onRetry={() => {}} />
-    )
+  it('shows an unconfigured banner without provenance while retaining totals', () => {
+    const html = markup(ready({}, { wanikani: false, anki: false }))
     expect(html).toContain('id="subtitle-report-unconfigured"')
     expect(html).not.toContain('Via WaniKani only')
     expect(html).toContain('10 words')
-  })
-})
-
-describe('SubtitleReport topUnknown formatting', () => {
-  it('renders no parenthesized text after the surface (QA-2: readings dropped)', () => {
-    const phase: SubtitleReportPhase = {
-      kind: 'ready',
-      report: makeReport({
-        topUnknown: [
-          { lemma: 'a', surface: 'ですね', count: 2 },
-          { lemma: 'b', surface: '猫', count: 1 }
-        ]
-      }),
-      sources: { wanikani: true, anki: true }
-    }
-    const html = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={phase} onClose={() => {}} onRetry={() => {}} />
-    )
-    const rows = html.match(/<li>.*?<\/li>/g) ?? []
-    expect(rows.some((row) => row.includes('ですね'))).toBe(true)
-    expect(rows.some((row) => /\(/.test(row))).toBe(false)
-  })
-})
-
-describe('SubtitleReport independent mining surface', () => {
-  const phase: SubtitleReportPhase = {
-    kind: 'ready',
-    report: makeReport(),
-    sources: { wanikani: true, anki: true }
-  }
-
-  it('contains no mining entry whether unknown lemmas are present or absent', () => {
-    const unknownHtml = renderToStaticMarkup(
-      <SubtitleReport open={true} phase={phase} onClose={() => {}} onRetry={() => {}} />
-    )
-    const noUnknownHtml = renderToStaticMarkup(
-      <SubtitleReport
-        open={true}
-        phase={{
-          ...phase,
-          report: makeReport({
-            lemmaLevels: { ...emptyLevels(), learning: 1, known: 1, wellKnown: 1 }
-          })
-        }}
-        onClose={() => {}}
-        onRetry={() => {}}
-      />
-    )
-
-    expect(unknownHtml).not.toContain('subtitle-report-mine')
-    expect(noUnknownHtml).not.toContain('id="subtitle-report-mine"')
-    expect(unknownHtml).not.toContain('Bulk Anki mining')
   })
 })

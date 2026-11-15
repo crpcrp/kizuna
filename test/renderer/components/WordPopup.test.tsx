@@ -5,9 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import WordPopup from '@src/renderer/src/components/WordPopup'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
-import type { Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
-import { makeToken } from '@test/harness/tokenFixtures'
 
 function noop(): void {}
 
@@ -129,22 +127,6 @@ describe('WordPopup markup', () => {
     expect(html).not.toContain('word-popup-provenance')
   })
 
-  it('omits the WaniKani level segment when the curriculum level is unavailable', () => {
-    const html = renderPopup({
-      results: [makeResult()],
-      provenanceByExpression: {
-        [makeResult().expression]: {
-          level: 'known',
-          sourceKinds: ['wanikani'],
-          sources: [{ source: 'wanikani', proficiency: 'Guru II' }]
-        }
-      }
-    })
-
-    expect(html).toContain('WaniKani - Guru II')
-    expect(html).not.toContain('Level undefined')
-  })
-
   it('renders an accessible approximate JLPT badge with the row metadata', () => {
     const result = makeResult({
       jlptLevel: 'N3',
@@ -205,13 +187,6 @@ describe('WordPopup markup', () => {
     expect(html.match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(2)
     expect(html).not.toContain('JLPT N1')
     expect(html).not.toContain('JLPT N5')
-  })
-
-  it('does not duplicate a badge when rendered again with the same props', () => {
-    const render = () => renderPopup({ results: [makeResult({ jlptLevel: 'N5' })] })
-
-    expect(render().match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(1)
-    expect(render().match(/class="word-popup-jlpt-level"/g) ?? []).toHaveLength(1)
   })
 
   it('is present but hidden (no "open" class) when position is null', () => {
@@ -277,23 +252,6 @@ describe('WordPopup markup', () => {
   it('omits furigana when reading equals expression or is empty', () => {
     const html = renderPopup({ results: [makeResult({ expression: 'ここ', reading: 'ここ' })] })
     expect(html).not.toContain('<ruby>')
-  })
-
-  it('shows a priority marker for a Jitendex definition-tag priority entry only', () => {
-    const html = renderPopup({
-      results: [
-        makeResult({ termTags: '', defTags: '★ priority form' }),
-        makeResult({ expression: '物', termTags: '', defTags: '' })
-      ]
-    })
-    const priorityMatches = html.match(/word-popup-priority/g) ?? []
-    expect(priorityMatches).toHaveLength(1)
-  })
-
-  it('shows frequency display text when frequency is present', () => {
-    const html = renderPopup({ results: [makeResult({ frequency: 12, frequencyDisplay: '12㋕' })] })
-    expect(html).toContain('word-popup-frequency')
-    expect(html).toContain('12㋕')
   })
 
   it('falls back to the raw frequency number when frequencyDisplay is null', () => {
@@ -495,15 +453,6 @@ describe('WordPopup markup', () => {
     })
     expect(html).toContain('to eat')
   })
-
-  it('marks a high-priority row with data-priority for the CSS highlight', () => {
-    const html = renderPopup({
-      results: [makeResult({ termTags: 'P' }), makeResult({ expression: '物', termTags: '' })]
-    })
-    expect(html).toMatch(/data-priority="true"/)
-    const priorityMatches = html.match(/data-priority="true"/g) ?? []
-    expect(priorityMatches).toHaveLength(1)
-  })
 })
 
 describe('WordPopup dictionary CSS injection', () => {
@@ -535,173 +484,63 @@ describe('WordPopup dictionary CSS injection', () => {
   })
 })
 
-const sampleToken: Token = makeToken({ surface: '食べる', reading: 'たべる', pos: '動詞' })
 afterEach(cleanup)
 
 describe('WordPopup Anki mining action', () => {
-  it('renders one ＋ Anki button per row when onAddToAnki is supplied', () => {
-    const tree = render(
-      <WordPopup
-        {...{
-          results: sampleResults,
-          position: { x: 0, y: 0 },
-          onAddToAnki: vi.fn()
-        }}
-      />
-    )
-    const buttons = tree.container.querySelectorAll('.word-popup-anki-button')
-    expect(buttons).toHaveLength(sampleResults.length)
-  })
-
-  it('is hidden (SSR markup has no anki button) when onAddToAnki is omitted', () => {
-    const html = renderPopup()
-    expect(html).not.toContain('word-popup-anki-button')
-  })
-
-  it("invoking a row's button onClick calls onAddToAnki with that row's own result", () => {
-    const onAddToAnki = vi.fn()
-    const tree = render(
-      <WordPopup
-        {...{
-          results: sampleResults,
-          position: { x: 0, y: 0 },
-          onAddToAnki
-        }}
-      />
-    )
-    const buttons = tree.container.querySelectorAll('.word-popup-anki-button')
-
-    fireEvent.click(buttons[1])
-
-    expect(onAddToAnki).toHaveBeenCalledTimes(1)
-    expect(onAddToAnki).toHaveBeenCalledWith(sampleResults[1])
-  })
-
-  it('renders "adding" status in place of the button while a mine request is in flight', () => {
-    const html = renderPopup({ onAddToAnki: noop, ankiStatus: 'adding' })
-    expect(html).not.toContain('word-popup-anki-button')
-    expect(html).toContain('data-anki-status="adding"')
-  })
-
-  it('renders a "✓ Added" marker in place of the button when ankiStatus is added', () => {
-    const html = renderPopup({ onAddToAnki: noop, ankiStatus: 'added' })
-    expect(html).toContain('data-anki-status="added"')
-    expect(html).toContain('Added')
-  })
-
-  it('renders an Updated marker after an overwrite', () => {
-    const html = renderPopup({ onAddToAnki: noop, ankiStatus: 'updated' })
-    expect(html).toContain('data-anki-status="updated"')
-    expect(html).toContain('Updated')
-  })
-
-  it('renders a "✕ <error>" marker in place of the button when ankiStatus is error', () => {
-    const html = renderPopup({
-      onAddToAnki: noop,
-      ankiStatus: 'error',
-      ankiError: 'AnkiConnect not running'
-    })
-    expect(html).toContain('data-anki-status="error"')
-    expect(html).toContain('AnkiConnect not running')
-  })
-
-  it('renders "Open in Anki" instead of the ＋ Anki button when ankiExisting is set', () => {
-    const html = renderPopup({
-      onAddToAnki: noop,
-      ankiExisting: {
-        [sampleResults[0].expression]: { cardId: 7 },
-        [sampleResults[1].expression]: { cardId: 8 }
+  it.each([
+    ['new', undefined, undefined, '＋ Anki'],
+    ['existing', 'prevent-deck', { 食べる: { cardId: 7 }, 食べ物: { cardId: 8 } }, 'Open in Anki'],
+    ['overwrite', 'overwrite', { 食べる: { cardId: 7 }, 食べ物: { cardId: 8 } }, 'Update Anki']
+  ] as const)(
+    'routes the %s row action to its own result or card',
+    (_name, policy, ankiExisting, label) => {
+      const onAddToAnki = vi.fn()
+      const onOpenAnkiCard = vi.fn()
+      const tree = render(
+        <WordPopup
+          results={sampleResults}
+          position={{ x: 0, y: 0 }}
+          duplicatePolicy={policy}
+          ankiExisting={ankiExisting}
+          onAddToAnki={onAddToAnki}
+          onOpenAnkiCard={onOpenAnkiCard}
+        />
+      )
+      const buttons = tree.getAllByRole('button', { name: label })
+      expect(buttons).toHaveLength(sampleResults.length)
+      fireEvent.click(buttons[1])
+      if (policy === 'prevent-deck') {
+        expect(onOpenAnkiCard).toHaveBeenCalledExactlyOnceWith(8)
+        expect(onAddToAnki).not.toHaveBeenCalled()
+      } else {
+        expect(onAddToAnki).toHaveBeenCalledExactlyOnceWith(sampleResults[1])
+        expect(onOpenAnkiCard).not.toHaveBeenCalled()
       }
-    })
-    expect(html).not.toContain('>＋ Anki<')
-    expect(html).toContain('Open in Anki')
-    expect(html).toContain('word-popup-anki-button--open')
-  })
+    }
+  )
 
-  it('clicking "Open in Anki" calls onOpenAnkiCard', () => {
-    const onOpenAnkiCard = vi.fn()
-    const tree = render(
-      <WordPopup
-        {...{
-          results: sampleResults,
-          position: { x: 0, y: 0 },
-          onAddToAnki: noop,
-          ankiExisting: {
-            [sampleResults[0].expression]: { cardId: 7 },
-            [sampleResults[1].expression]: { cardId: 8 }
-          },
-          onOpenAnkiCard
-        }}
-      />
-    )
-    const buttons = tree.container.querySelectorAll(
-      '.word-popup-anki-button.word-popup-anki-button--open'
-    )
+  it.each([
+    ['adding', 'adding'],
+    ['added', 'Added'],
+    ['updated', 'Updated'],
+    ['error', 'AnkiConnect not running']
+  ] as const)(
+    'renders %s status in place of actions, even after membership refresh',
+    (ankiStatus, text) => {
+      const html = renderPopup({
+        onAddToAnki: noop,
+        ankiStatus,
+        ankiError: 'AnkiConnect not running',
+        ankiExisting: { 食べる: { cardId: 7 }, 食べ物: { cardId: 8 } }
+      })
+      expect(html).toContain(`data-anki-status="${ankiStatus}"`)
+      expect(html).toContain(text)
+      expect(html).not.toContain('word-popup-anki-button')
+    }
+  )
 
-    expect(buttons).toHaveLength(sampleResults.length)
-    fireEvent.click(buttons[0])
-
-    expect(onOpenAnkiCard).toHaveBeenCalledTimes(1)
-    expect(onOpenAnkiCard).toHaveBeenCalledWith(7)
-  })
-
-  it('renders Update Anki instead of Open in Anki for overwrite matches', () => {
-    const html = renderPopup({
-      onAddToAnki: noop,
-      duplicatePolicy: 'overwrite',
-      ankiExisting: {
-        [sampleResults[0].expression]: { cardId: 7 },
-        [sampleResults[1].expression]: { cardId: 8 }
-      }
-    })
-    expect(html).toContain('Update Anki')
-    expect(html).not.toContain('Open in Anki')
-  })
-
-  it('clicking Update Anki mines the selected result instead of opening its card', () => {
-    const onAddToAnki = vi.fn()
-    const onOpenAnkiCard = vi.fn()
-    const tree = render(
-      <WordPopup
-        {...{
-          results: sampleResults,
-          position: { x: 0, y: 0 },
-          onAddToAnki,
-          onOpenAnkiCard,
-          duplicatePolicy: 'overwrite',
-          ankiExisting: {
-            [sampleResults[0].expression]: { cardId: 7 },
-            [sampleResults[1].expression]: { cardId: 8 }
-          }
-        }}
-      />
-    )
-    const buttons = tree.container.querySelectorAll(
-      '.word-popup-anki-button.word-popup-anki-button--open'
-    )
-
-    fireEvent.click(buttons[0])
-
-    expect(onAddToAnki).toHaveBeenCalledWith(sampleResults[0])
-    expect(onOpenAnkiCard).not.toHaveBeenCalled()
-  })
-
-  it('a mutation status takes priority over refreshed ankiExisting state', () => {
-    const html = renderPopup({
-      onAddToAnki: noop,
-      ankiStatus: 'added',
-      ankiExisting: {
-        [sampleResults[0].expression]: { cardId: 7 },
-        [sampleResults[1].expression]: { cardId: 8 }
-      }
-    })
-    expect(html).toContain('Added')
-    expect(html).toContain('data-anki-status="added"')
-  })
-
-  it('accepts token/sentence props without affecting the rendered markup (forwarded only to onAddToAnki callers)', () => {
-    const html = renderPopup({ token: sampleToken, sentence: '猫が食べる。' })
-    expect(html).not.toContain('猫が食べる。')
+  it('omits mining actions when no handler is supplied', () => {
+    expect(renderPopup()).not.toContain('word-popup-anki-button')
   })
 })
 

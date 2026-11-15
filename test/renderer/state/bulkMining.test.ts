@@ -256,6 +256,25 @@ describe('candidate filtering and selection', () => {
     ).toBe(0)
   })
 
+  it('counts no-frequency rows only when the other filters would keep them', () => {
+    const rows = [candidate('kept', 3), candidate('rare', 1), candidate('target', 3)]
+    const resolved = Object.fromEntries(
+      rows.map(({ lemma }) => [lemma, { ...entry, frequency: null }])
+    )
+    expect(
+      hiddenNoDataCount(
+        rows,
+        resolved,
+        filters({
+          maximumFrequency: 5000,
+          minimumCount: 2,
+          hideTargetDeckMatches: true,
+          targetDeckMatches: { target: { cardId: 1, deckNames: ['Mining'] } }
+        })
+      )
+    ).toBe(1)
+  })
+
   it('deselects no-entry candidates and mines only visible selected candidates in order', () => {
     const selected = { ...defaultSelection(candidates, resolved), common: false, rare: true }
     expect(defaultSelection(candidates, resolved).noEntry).toBe(false)
