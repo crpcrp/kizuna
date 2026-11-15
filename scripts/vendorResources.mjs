@@ -1,30 +1,9 @@
-// Pinned, checksum-verified acquisition of the runtime binaries
-// (mpv, ffmpeg/ffprobe, MeCab + IPADIC) that resources/ holds and
-// electron-builder.cjs bundles.
-//
-// The binaries live in the reviewed mirror named by resources.lock.json and
-// are selected by an explicit platform key. This module turns that mirror into
-// the logical resources/ layout used by the application and fails closed on
-// hash, manifest, path, mode, or layout mismatches.
-//
-// The mirror is delivered as a per-platform archive attached to a GitHub
-// release, not as a git checkout. Cloning it meant `git lfs pull`, which
-// downloads every LFS object at the commit — ~855 MB, both platforms' payloads,
-// on every build that missed its cache — and Git LFS bandwidth is a metered
-// monthly quota. Release assets are not metered that way, carry only the
-// selected platform, and compress to roughly a third of the size. The archive
-// is laid out exactly like the mirror repository, so `from` paths,
-// manifest.json and SHA256SUMS.txt are unchanged and so is every check below.
-//
-// Everything here is plain ESM so scripts/fetch-resources.mjs can run it with
-// bare node. The download and unpack are reached only through an injected
-// materialize callback, so the tests use tiny fixture trees with no network and
-// no live binaries.
-
+// Fetch and stage only the reviewed, checksum-pinned vendor payload.
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rm, stat, unlink } from 'node:fs/promises'
 import { dirname, join, posix, resolve } from 'node:path'
+import { isPlainObject, requireShape } from './manifestValidation.mjs'
 
 /**
  * @typedef {object} LockArchive
@@ -162,11 +141,6 @@ export function parseChecksums(text) {
   return sums
 }
 
-/** @param {unknown} value @returns {boolean} */
-function isPlainObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
 /**
  * Lock paths are repository-relative POSIX paths. Rejecting backslashes and
  * dot segments makes the same lock safe on both Windows and Linux.
@@ -215,191 +189,98 @@ function isSafeUrlSegment(value) {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)
 }
 
-/**
- * @param {unknown} archive
- * @param {string} label
- * @returns {string[]}
- */
-function archiveProblems(archive, label) {
-  const problems = []
-  if (!isPlainObject(archive)) {
-    problems.push(label + ' is missing; schema 3 fetches a release asset, not a git checkout')
-    return problems
-  }
-  const a = /** @type {Partial<LockArchive>} */ (archive)
-  if (!isSafeUrlSegment(a.release)) {
-    problems.push(label + '.release must be a release tag safe to use as a URL segment')
-  }
-  if (!isSafeUrlSegment(a.asset) || !a.asset?.endsWith('.tar.gz')) {
-    problems.push(label + '.asset must be a .tar.gz file name safe to use as a URL segment')
-  }
-  if (!/^[0-9a-f]{64}$/.test(a.sha256 ?? '')) {
-    problems.push(label + '.sha256 must be a sha256 hex digest of the archive')
-  }
-  if (!Number.isSafeInteger(a.size) || Number(a.size) <= 0) {
-    problems.push(label + '.size must be the archive length in bytes')
-  }
-  return problems
-}
+const isSha256 = (v) => typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)
+const safePaths = (v) =>
+  Array.isArray(v) && v.length > 0 && v.every(isSafeRelativePath) && new Set(v).size === v.length
 
-/**
- * Reject a lock file that this script cannot honour, before any network or disk
- * work. Returns reasons so callers can report all structural failures together.
- *
- * @param {unknown} lock
- * @returns {string[]}
- */
+/** @param {unknown} lock @returns {string[]} */
 export function lockProblems(lock) {
-  const problems = []
-  const l = /** @type {Partial<LockFile>} */ (lock ?? {})
-  if (l.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
-    problems.push(
-      'unsupported schemaVersion ' +
-        String(l.schemaVersion) +
-        ' (this script understands ' +
-        SUPPORTED_SCHEMA_VERSION +
-        ')'
+  const problems = requireShape(
+    lock,
+    {
+      schemaVersion: (v) => v === SUPPORTED_SCHEMA_VERSION,
+      platforms: (v) =>
+        isPlainObject(v) &&
+        Object.keys(v).length === SUPPORTED_PLATFORM_KEYS.length &&
+        SUPPORTED_PLATFORM_KEYS.every((key) => isPlainObject(v[key]))
+    },
+    'lock'
+  )
+  if (problems.length) return problems
+  const l = /** @type {LockFile} */ (lock)
+  const first = l.platforms[SUPPORTED_PLATFORM_KEYS[0]].source
+  for (const [key, entry] of Object.entries(l.platforms)) {
+    const shape = requireShape(
+      entry,
+      {
+        platform: (v) => v === key.split('-')[0],
+        architecture: (v) => v === 'x64',
+        source: isPlainObject,
+        requiredPaths: safePaths,
+        requiredExecutables: safePaths,
+        files: (v) => Array.isArray(v) && v.length > 0 && v.every(isPlainObject)
+      },
+      key
     )
-  }
-
-  if (!isPlainObject(l.platforms)) {
-    problems.push('platforms must be an object containing win32-x64 and linux-x64 entries')
-    return problems
-  }
-
-  const keys = Object.keys(l.platforms)
-  for (const key of keys) {
-    if (!supportedPlatformSet.has(key)) {
-      problems.push(
-        'platforms contains unknown key ' +
-          key +
-          '. Supported targets: ' +
-          SUPPORTED_PLATFORM_KEYS.join(', ')
-      )
-    }
-  }
-  for (const key of SUPPORTED_PLATFORM_KEYS) {
-    if (!l.platforms[key]) problems.push('platforms is missing required entry ' + key)
-  }
-
-  /** @type {LockSource | undefined} */
-  let firstSource
-  for (const key of keys.filter((entry) => supportedPlatformSet.has(entry))) {
-    const entry = l.platforms[key]
-    const expectedPlatform = key.slice(0, key.lastIndexOf('-'))
-    const label = 'platforms[' + key + ']'
-    if (!isPlainObject(entry)) {
-      problems.push(label + ' must be an object')
-      continue
-    }
-    if (entry.platform !== expectedPlatform) {
-      problems.push(label + '.platform must be ' + expectedPlatform)
-    }
-    if (entry.architecture !== 'x64') problems.push(label + '.architecture must be x64')
+    problems.push(...shape)
+    if (shape.length) continue
     const source = entry.source
-    if (!isPlainObject(source) || !source.repo) problems.push(label + '.source.repo is missing')
-    if (!/^[0-9a-f]{40}$/.test(source?.commit ?? '')) {
-      problems.push(label + '.source.commit must be a full 40-character commit SHA')
-    }
-    for (const field of ['manifest', 'checksums']) {
-      if (!isSafeRelativePath(source?.[field])) {
-        problems.push(label + '.source.' + field + ' must be a safe relative path')
-      }
-    }
-    problems.push(...archiveProblems(source?.archive, label + '.source.archive'))
-
-    if (!Array.isArray(entry.requiredPaths) || entry.requiredPaths.length === 0) {
-      problems.push(label + '.requiredPaths is empty, so a truncated mirror could pass silently')
-    } else {
-      const seenRequired = new Set()
-      for (const required of entry.requiredPaths) {
-        if (!isSafeRelativePath(required)) {
-          problems.push(label + '.requiredPaths contains an unsafe path ' + String(required))
-        }
-        if (seenRequired.has(required))
-          problems.push(label + '.requiredPaths contains duplicate ' + required)
-        seenRequired.add(required)
-      }
-    }
-
-    if (!Array.isArray(entry.requiredExecutables) || entry.requiredExecutables.length === 0) {
-      problems.push(label + '.requiredExecutables is empty')
-    } else {
-      const seenExecutables = new Set()
-      for (const executable of entry.requiredExecutables) {
-        if (!isSafeRelativePath(executable)) {
-          problems.push(
-            label + '.requiredExecutables contains an unsafe path ' + String(executable)
-          )
-        }
-        if (seenExecutables.has(executable)) {
-          problems.push(label + '.requiredExecutables contains duplicate ' + executable)
-        }
-        seenExecutables.add(executable)
-      }
-    }
-
-    if (!Array.isArray(entry.files) || entry.files.length === 0) {
-      problems.push(label + '.files is empty')
-      continue
-    }
-    const fromPaths = new Set()
-    const toPaths = new Set()
+    problems.push(
+      ...requireShape(
+        source,
+        {
+          repo: (v) => typeof v === 'string' && /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(v),
+          commit: (v) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v),
+          manifest: isSafeRelativePath,
+          checksums: isSafeRelativePath
+        },
+        `${key}.source`
+      ),
+      ...requireShape(
+        source.archive,
+        {
+          release: isSafeUrlSegment,
+          asset: (v) => isSafeUrlSegment(v) && v.endsWith('.tar.gz'),
+          sha256: isSha256,
+          size: (v) => Number.isSafeInteger(v) && v > 0
+        },
+        `${key}.source.archive`
+      )
+    )
+    if (
+      source.repo !== first?.repo ||
+      source.commit !== first?.commit ||
+      source.archive?.release !== first?.archive?.release
+    )
+      problems.push('all platforms must use the same vendor repository, commit and release')
+    const destinations = new Map(entry.files.map((file) => [file.to, file]))
+    if (
+      destinations.size !== entry.files.length ||
+      new Set(entry.files.map((file) => file.from)).size !== entry.files.length
+    )
+      problems.push(`${key}: duplicate source or destination`)
     for (const file of entry.files) {
-      if (!isSafeRelativePath(file?.from)) {
-        problems.push(label + ' file has an unsafe from path ' + String(file?.from))
-      }
-      if (!isSafeRelativePath(file?.to)) {
-        problems.push(label + ' file has an unsafe to path ' + String(file?.to))
-      }
-      if (fromPaths.has(file?.from)) problems.push(label + ' has duplicate source ' + file?.from)
-      if (toPaths.has(file?.to)) {
-        problems.push(label + ' has duplicate destination ' + file?.to)
-      }
-      fromPaths.add(file?.from)
-      toPaths.add(file?.to)
-      if (!/^[0-9a-f]{64}$/.test(file?.sha256 ?? '')) {
-        problems.push(label + ' file ' + String(file?.from) + ' has no valid sha256')
-      }
-      if (typeof file?.executable !== 'boolean') {
-        problems.push(
-          label + ' file ' + String(file?.from) + ' must declare executable true or false'
+      problems.push(
+        ...requireShape(
+          file,
+          {
+            from: isSafeRelativePath,
+            to: isSafeRelativePath,
+            sha256: isSha256,
+            executable: (v) => typeof v === 'boolean'
+          },
+          `${key}.file ${file.from}`
         )
-      }
-      for (const [root, owner] of Object.entries(PLATFORM_EXCLUSIVE_ROOTS)) {
-        if (key !== owner && typeof file?.to === 'string' && file.to.startsWith(root)) {
-          problems.push(label + ' stages ' + file.to + ', which only ' + owner + ' may ship')
-        }
-      }
+      )
+      for (const [root, owner] of Object.entries(PLATFORM_EXCLUSIVE_ROOTS))
+        if (key !== owner && typeof file.to === 'string' && file.to.startsWith(root))
+          problems.push(`${key} stages ${file.to}, which only ${owner} may ship`)
     }
-
-    for (const required of entry.requiredPaths ?? []) {
-      if (!toPaths.has(required)) {
-        problems.push(label + ' required path is not staged: ' + required)
-      }
-    }
-    for (const executable of entry.requiredExecutables ?? []) {
-      const file = entry.files.find((candidate) => candidate?.to === executable)
-      if (!file) {
-        problems.push(label + ' required executable is not staged: ' + executable)
-      } else if (file.executable !== true) {
-        problems.push(label + ' required executable is not marked executable: ' + executable)
-      }
-    }
-
-    if (!firstSource) {
-      firstSource = source
-    } else {
-      if (source?.repo !== firstSource.repo) {
-        problems.push('all platform entries must use the same vendor repository')
-      }
-      if (source?.commit !== firstSource.commit) {
-        problems.push('all platform entries must use the same immutable vendor commit')
-      }
-      if (source?.archive?.release !== firstSource.archive?.release) {
-        problems.push('all platform entries must use the same vendor release')
-      }
-    }
+    for (const path of entry.requiredPaths)
+      if (!destinations.has(path)) problems.push(`${key}: required path is not staged: ${path}`)
+    for (const path of entry.requiredExecutables)
+      if (destinations.get(path)?.executable !== true)
+        problems.push(`${key}: required executable is missing or not executable: ${path}`)
   }
   return problems
 }

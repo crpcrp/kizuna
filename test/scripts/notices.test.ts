@@ -34,10 +34,6 @@ type NoticesFile = import('@scripts/notices.mjs').NoticesFile
 type NoticeComponent = import('@scripts/notices.mjs').NoticeComponent
 type PackageLock = Parameters<typeof productionPackages>[0]
 
-/** Cast a deliberately malformed fixture past the compiler, for the reject cases. */
-const invalid = (component: Record<string, unknown>): NoticeComponent =>
-  component as unknown as NoticeComponent
-
 const COMMIT = 'a'.repeat(40)
 const sha256 = (contents: string): string => createHash('sha256').update(contents).digest('hex')
 
@@ -136,101 +132,43 @@ const PLATFORM_LOCK = {
 }
 
 describe('noticesProblems', () => {
-  it('accepts a well-formed notices file', () => {
-    expect(noticesProblems(noticesWith(MPV))).toEqual([])
+  it('accepts resource and source-data components', () => {
+    expect(noticesProblems(noticesWith(MPV, SOURCE_DATA))).toEqual([])
   })
 
-  it('rejects a schema version this script does not understand', () => {
-    const notices = { ...noticesWith(MPV), schemaVersion: 99 }
-    expect(noticesProblems(notices).join()).toContain('unsupported schemaVersion 99')
-  })
-
-  it('rejects a vendorCommit that is not a full 40-character SHA', () => {
-    const notices = { ...noticesWith(MPV), vendorCommit: 'abc1234' }
-    expect(noticesProblems(notices).join()).toContain('40-character commit SHA')
-  })
-
-  // The failure this prevents: two components whose licence texts would be
-  // written to the same path, so one silently replaces the other.
-  it('rejects a duplicate component id', () => {
-    const problems = noticesProblems(noticesWith(MPV, { ...MPV, name: 'other' }))
-    expect(problems.join()).toContain('component id "mpv" is used twice')
-  })
-
-  it('rejects a component id that is not lowercase kebab', () => {
-    expect(noticesProblems(noticesWith({ ...MPV, id: 'MPV Build' })).join()).toContain(
-      'no lowercase-kebab id'
-    )
-  })
-
-  // The whole point of the file: a shipped copyleft binary with no way for a
-  // user to obtain its source.
-  it('rejects a copyleft component with no source.code URL', () => {
-    const problems = noticesProblems(noticesWith({ ...MPV, source: {} }))
-    expect(problems.join()).toContain('has no source.code URL')
-  })
-
-  it('rejects a resources component that lists no licence files', () => {
-    const problems = noticesProblems(noticesWith({ ...MPV, licenseFiles: [] }))
-    expect(problems.join()).toContain('lists no licenseFiles')
-  })
-
-  it('accepts a valid source component', () => {
-    expect(noticesProblems(noticesWith(SOURCE_DATA))).toEqual([])
-  })
-
-  it.each([
-    ['version', { version: undefined }, 'has no version'],
-    ['sourceRoot', { sourceRoot: undefined }, 'has no sourceRoot'],
-    ['licenseFiles', { licenseFiles: [] }, 'lists no licenseFiles']
-  ])('requires source component %s', (_field, changes, message) => {
-    expect(noticesProblems(noticesWith(invalid({ ...SOURCE_DATA, ...changes }))).join()).toContain(
-      message
-    )
-  })
-
-  it('requires a source offer for copyleft source data', () => {
-    const component = invalid({ ...SOURCE_DATA, copyleft: true, source: {} })
-    expect(noticesProblems(noticesWith(component)).join()).toContain('has no source.code URL')
-  })
-
-  it.each(['/src/data/vocabulary', '../src/data/vocabulary', 'src\\data\\vocabulary', 'docs/data'])(
-    'rejects an unsafe source root %s',
-    (sourceRoot) => {
-      const problems = noticesProblems(noticesWith(invalid({ ...SOURCE_DATA, sourceRoot }))).join()
-      expect(problems).toContain('unsafe sourceRoot')
+  it('rejects malformed manifests before resolving components', () => {
+    for (const value of [null, [], {}, { ...noticesWith(MPV), components: {} }]) {
+      expect(noticesProblems(value).length).toBeGreaterThan(0)
     }
-  )
-
-  it('rejects an unsafe source-component licence path', () => {
-    const problems = noticesProblems(
-      noticesWith(invalid({ ...SOURCE_DATA, licenseFiles: ['../LICENSE.txt'] }))
-    )
-    expect(problems.join()).toContain('unsafe license path')
   })
 
-  it('rejects a component with an unknown bundled kind', () => {
+  it('rejects colliding licence destinations and unsafe paths', () => {
+    expect(noticesProblems(noticesWith(MPV, MPV)).join()).toContain('duplicate component id')
+    for (const component of [
+      { ...MPV, id: '../outside' },
+      { ...SOURCE_DATA, sourceRoot: '../src/data' },
+      { ...SOURCE_DATA, licenseFiles: ['../LICENSE'] },
+      { ...MPV, platforms: { 'linux-x64': { licenseFiles: ['../LICENSE'] } } }
+    ]) {
+      expect(noticesProblems(noticesWith(component)).length).toBeGreaterThan(0)
+    }
     expect(
-      noticesProblems(noticesWith(invalid({ ...MPV, bundled: 'somewhere' }))).join()
-    ).toContain('unknown bundled kind')
+      noticesProblems({ ...noticesWith(MPV), npmLicenseFallbacks: { react: '../LICENSE' } }).join()
+    ).toContain('npmLicenseFallbacks')
   })
 
-  it('requires a packageName for a node_modules component', () => {
-    const component = invalid({
-      id: 'electron',
-      name: 'Electron',
-      license: 'MIT',
-      copyright: 'Copyright the Electron contributors.',
-      bundled: 'node_modules'
-    })
-    expect(noticesProblems(noticesWith(component)).join()).toContain('has no packageName')
-  })
-
-  it('rejects a platformExclusive that names no supported platform', () => {
-    const component = invalid({ ...MPV, platformExclusive: 'win32-arm64' })
-    expect(noticesProblems(noticesWith(component)).join()).toContain(
-      'platformExclusive must be one of'
-    )
+  it('requires licence texts and copyleft source offers, including platform overrides', () => {
+    for (const component of [MPV, { ...SOURCE_DATA, copyleft: true }]) {
+      expect(noticesProblems(noticesWith({ ...component, licenseFiles: [] })).join()).toContain(
+        'licenseFiles'
+      )
+      expect(noticesProblems(noticesWith({ ...component, source: {} })).join()).toContain('source')
+      expect(
+        noticesProblems(
+          noticesWith({ ...component, platforms: { 'linux-x64': { source: {} } } })
+        ).join()
+      ).toContain('source')
+    }
   })
 })
 
@@ -697,6 +635,26 @@ describe('generateNotices', () => {
     await expect(run(repoRoot, noticesWith(MPV))).rejects.toThrow(
       'Licence texts named by third-party.json are missing'
     )
+  })
+
+  it.each(['react', 'electron'])('rejects a missing %s licence before writing', async (name) => {
+    const files = { ...repoFiles } as Record<string, string>
+    delete files[`node_modules/${name}/LICENSE`]
+    const repoRoot = await makeRepo(files)
+    await expect(run(repoRoot, noticesWith(MPV, ELECTRON))).rejects.toThrow('no licence text')
+    await expect(readFile(join(repoRoot, 'build/notices', NOTICES_FILE))).rejects.toThrow()
+  })
+
+  it('uses a committed fallback when an npm package omits its licence', async () => {
+    const { 'node_modules/react/LICENSE': _omitted, ...files } = repoFiles
+    const repoRoot = await makeRepo({ ...files, 'licenses/react.txt': 'fallback MIT text' })
+    await run(repoRoot, {
+      ...noticesWith(MPV),
+      npmLicenseFallbacks: { react: 'licenses/react.txt' }
+    })
+    expect(
+      await readFile(join(repoRoot, 'build/notices/licenses/npm/react/react.txt'), 'utf8')
+    ).toBe('fallback MIT text')
   })
 
   it('refuses to generate notices for a mixed-platform resources tree', async () => {

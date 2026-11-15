@@ -198,53 +198,57 @@ describe('platform selection and lock validation', () => {
     expect(lockProblems(LOCK)).toEqual([])
   })
 
-  it('rejects unknown keys, missing hashes, unsafe paths, duplicate destinations, and mismatched pins', () => {
+  it('rejects unknown keys, missing hashes, unsafe paths, duplicate source or destinations, and mismatched pins', () => {
     const unknownLock = mutableLock()
     unknownLock.platforms['darwin-x64'] = copy(unknownLock.platforms['win32-x64'])
-    expect(lockProblems(unknownLock).join('\n')).toContain('unknown key darwin-x64')
+    expect(lockProblems(unknownLock).join('\n')).toContain('lock.platforms')
 
     const unhashed = mutableLock()
     unhashed.platforms['win32-x64'].files[0].sha256 = ''
-    expect(lockProblems(unhashed).join('\n')).toContain('has no valid sha256')
+    expect(lockProblems(unhashed).join('\n')).toContain('sha256 is invalid')
 
     const unsafe = mutableLock()
     unsafe.platforms['linux-x64'].files[0].to = '../outside'
-    expect(lockProblems(unsafe).join('\n')).toContain('unsafe to path')
+    expect(lockProblems(unsafe).join('\n')).toContain('to is invalid')
 
     const duplicate = mutableLock()
     duplicate.platforms['win32-x64'].files.push({
       ...duplicate.platforms['win32-x64'].files[0],
       from: 'other/file'
     })
-    expect(lockProblems(duplicate).join('\n')).toContain('duplicate destination')
+    expect(lockProblems(duplicate).join('\n')).toContain('duplicate source or destination')
 
     const mismatched = mutableLock()
     mismatched.platforms['linux-x64'].source.commit = 'b'.repeat(40)
-    expect(lockProblems(mismatched).join('\n')).toContain('same immutable vendor commit')
+    expect(lockProblems(mismatched).join('\n')).toContain(
+      'same vendor repository, commit and release'
+    )
 
     const splitRelease = mutableLock()
     splitRelease.platforms['linux-x64'].source.archive.release = 'payloads-elsewhere'
-    expect(lockProblems(splitRelease).join('\n')).toContain('same vendor release')
+    expect(lockProblems(splitRelease).join('\n')).toContain(
+      'same vendor repository, commit and release'
+    )
   })
 
   it('rejects an archive that could point the download somewhere else', () => {
     const traversal = mutableLock()
     traversal.platforms['win32-x64'].source.archive.release = '../../other'
-    expect(lockProblems(traversal).join('\n')).toContain('archive.release must be a release tag')
+    expect(lockProblems(traversal).join('\n')).toContain('archive.release is invalid')
 
     const foreignHost = mutableLock()
     foreignHost.platforms['win32-x64'].source.archive.asset = 'https://evil.test/p.tar.gz'
-    expect(lockProblems(foreignHost).join('\n')).toContain('archive.asset must be a .tar.gz')
+    expect(lockProblems(foreignHost).join('\n')).toContain('archive.asset is invalid')
 
     const unhashedArchive = mutableLock()
     unhashedArchive.platforms['win32-x64'].source.archive.sha256 = ''
-    expect(lockProblems(unhashedArchive).join('\n')).toContain('archive.sha256 must be a sha256')
+    expect(lockProblems(unhashedArchive).join('\n')).toContain('archive.sha256 is invalid')
 
     const legacy = mutableLock() as unknown as {
       platforms: Record<string, { source: Record<string, unknown> }>
     }
     delete legacy.platforms['win32-x64'].source.archive
-    expect(lockProblems(legacy).join('\n')).toContain('schema 3 fetches a release asset')
+    expect(lockProblems(legacy).join('\n')).toContain('archive must be an object')
   })
 
   // Game OCR runs on Windows only, so its PP-OCR runtime must never enter
@@ -465,6 +469,15 @@ describe('acquireResources', () => {
         sha256: sha256('linux-x64')
       }
     ])
+  })
+
+  it('aborts acquisition on a wrong payload hash without staging files', async () => {
+    const { vendorDir, resourcesDir } = await makeMirror()
+    await writeFile(join(vendorDir, 'linux-x64/mpv/bin/mpv'), 'tampered')
+    await expect(
+      acquireResources({ lock: LOCK, platformKey: 'linux-x64', vendorDir, resourcesDir })
+    ).rejects.toThrow()
+    await expect(stat(join(resourcesDir, 'mpv/mpv'))).rejects.toThrow()
   })
 
   it('refuses a malformed lock before materialization', async () => {
