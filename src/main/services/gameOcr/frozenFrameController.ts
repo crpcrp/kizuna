@@ -8,7 +8,6 @@ import type { OcrDisplayBounds, OcrImageSize, OcrResult } from '../../../shared/
 import { parseWindowSourceHandle } from './windowCapture'
 import { sendToWindow, type SendTarget } from '../../windowOptions'
 
-/** Minimal BrowserWindow surface used by the controller and its tests. */
 export interface GameOcrNativeWindow extends SendTarget {
   show(): void
   hide(): void
@@ -32,45 +31,19 @@ export interface GameOcrNativeWindow extends SendTarget {
 }
 
 export interface GameOcrWindow {
-  /**
-   * Asks the frame to freeze the display it is streaming, shows it once the
-   * renderer reports the frame drawn, and resolves with what was actually
-   * captured. On recapture the old canvas may remain visible; native content
-   * protection keeps this window out of the desktop stream.
-   */
+  /** Resolves once drawn; content protection permits recapture over the visible old canvas. */
   freeze(request: GameOcrFreezeRequest): Promise<OcrImageSize>
-  /**
-   * The encoded screenshot for that capture, which the renderer produces after
-   * the frame is already on screen. Resolves whenever the encode lands.
-   */
+  /** Encoding completes after the frozen frame is displayed. */
   captureBytes(captureId: number): Promise<Uint8Array>
-  /** Renderer→main report that the frame is drawn. Bound by the IPC glue. */
   reportFrozen(frozen: GameOcrFrozenFrame): void
-  /** Renderer→main report carrying the encoded screenshot. */
   reportCaptureBytes(value: GameOcrCaptureBytes): void
-  /** Updates the small renderer-owned recognition indicator. */
   setRecognizing(recognizing: boolean): void
-  /**
-   * Publishes the accepted OCR regions for the presented screenshot. The
-   * result carries its own session/capture identity, so a renderer that has
-   * already been discarded can drop a late push instead of drawing boxes over
-   * a newer frame.
-   */
+  /** Session/capture identities let the renderer reject regions for an obsolete frame. */
   setRegions(result: OcrResult): void
-  /** Marks the dedicated renderer ready to receive presentation pushes. */
   rendererReady(): void
-  /**
-   * Asks the frame to put its current text selection on the clipboard. The
-   * copy can also arrive from the frame's global shortcut.
-   */
   copySelection(): void
-  /** Places the retained window on the display being captured. */
   moveTo(displayBounds: OcrDisplayBounds): void
-  /**
-   * Issues one native hide, drops the screenshot and boxes, and resolves
-   * without waiting for Electron's lagging native `hide` event. The renderer
-   * survives, so the next frame skips the load-and-handshake cost.
-   */
+  /** Hides without waiting for the native hide event; retains the renderer for reuse. */
   discard(): Promise<void>
   /** The renderer asked for the live game back: discards, then notifies. */
   dismiss(): Promise<void>
@@ -87,15 +60,10 @@ export interface GameOcrWindow {
 export interface GameOcrWindowControllerOptions {
   window: GameOcrNativeWindow
   loaded?: boolean
-  /** The bounds the native window was constructed with, so the first capture
-   * on that same display does not move a window that is already there. */
+  /** Initial logical bounds avoid an unnecessary first-capture move. */
   displayBounds?: OcrDisplayBounds
 }
 
-/**
- * Creates the lifecycle around an already-created native window. Keeping this
- * separate from Electron construction keeps native lifecycle testable.
- */
 export function createGameOcrWindowController({
   window,
   loaded = false,
@@ -127,7 +95,6 @@ export function createGameOcrWindowController({
     }
   >()
 
-  /** Fails everything still waiting on a renderer that can no longer answer. */
   const abandonWaiters = (reason: string): void => {
     const frozen = [...frozenWaiters.values()]
     frozenWaiters.clear()
@@ -137,12 +104,7 @@ export function createGameOcrWindowController({
     for (const waiter of waiters) waiter.reject(new Error(reason))
   }
 
-  /**
-   * Only `present` awaits readiness. A load that fails while no presentation is
-   * queued — a crashed renderer whose reload also fails, for instance — would
-   * otherwise reject a promise nobody holds, which Node reports as an
-   * unhandled rejection, so the rejection is marked handled here.
-   */
+  // Load failure can reject while no freeze is waiting; mark the rejection handled.
   const createReadyPromise = (): Promise<void> => {
     const promise = new Promise<void>((resolve, reject) => {
       readyResolve = resolve
@@ -179,16 +141,12 @@ export function createGameOcrWindowController({
 
   const sendFreeze = (request: GameOcrFreezeRequest): void => {
     if (closed || !rendererLoaded) return
-    // Only the request goes out here. Content protection excludes this window
-    // from the desktop stream, so a retained visible canvas is safe to replace.
     sendToWindow(window, GAME_OCR_CHANNELS.freeze, request)
   }
 
   const showFrozen = (): void => {
     if (closed) return
     if (!window.isVisible()) window.show()
-    // Keep the overlay above games that are themselves topmost, then take
-    // input focus before the user interacts with the screenshot or text.
     window.setAlwaysOnTop?.(true, 'screen-saver')
     window.moveTop?.()
     window.focus()
@@ -196,16 +154,11 @@ export function createGameOcrWindowController({
 
   const requestHide = (): void => {
     if (closed || window.isDestroyed()) return
-    // BrowserWindow.hide() issues the native command synchronously, but its
-    // `hide` event can lag by seconds on Windows. Capture safety is provided by
-    // the compositor yield plus desktop-stream frame acknowledgement, so the
-    // shortcut path must not wait on that unrelated event.
+    // Windows can delay the hide event by seconds even though hide() issues the command immediately.
     window.hide()
   }
 
-  // Both the renderer's close request and a display change can ask for the
-  // same close. The in-flight promise is reused so one native window never
-  // accumulates a `closed` listener per request.
+  // Reuse the pending close so concurrent requests do not accumulate native listeners.
   const waitUntilClosed = (): Promise<void> => {
     if (closed || window.isDestroyed()) return Promise.resolve()
     if (closePromise) return closePromise
@@ -227,9 +180,7 @@ export function createGameOcrWindowController({
   window.webContents.on('did-finish-load', () => {
     rendererLoaded = true
   })
-  // A window whose renderer is unusable cannot serve the next frame either.
-  // Tearing it down hands the coordinator a clean rebuild instead of a
-  // retained window whose readiness handshake would never complete again.
+  // Rebuild an unusable renderer rather than retaining a window that cannot complete readiness.
   window.webContents.on('did-fail-load', (...args) => {
     const reason = typeof args[1] === 'string' ? args[1] : 'renderer load failed'
     readyReject?.(new Error(`Game OCR renderer failed to load: ${reason}`))
@@ -275,14 +226,12 @@ export function createGameOcrWindowController({
         resolve = resolvePromise
         reject = rejectPromise
       })
-      // Marked handled: a capture abandoned before its bytes arrive leaves this
-      // rejection with no reader, which Node would report as unhandled.
+      // An abandoned capture may have no reader left to handle rejection.
       void promise.catch(() => undefined)
       bytesWaiters.set(captureId, { promise, resolve, reject })
       return promise
     },
 
-    /** Called by the IPC binding when the renderer reports a drawn frame. */
     reportFrozen(frozen): void {
       const waiter = frozenWaiters.get(frozen.captureId)
       if (!waiter) return
@@ -290,7 +239,6 @@ export function createGameOcrWindowController({
       waiter.resolve(frozen)
     },
 
-    /** Called by the IPC binding when the renderer finishes encoding. */
     reportCaptureBytes(value): void {
       const waiter = bytesWaiters.get(value.captureId)
       if (!waiter) return
@@ -305,9 +253,7 @@ export function createGameOcrWindowController({
     },
 
     setRegions(result): void {
-      // A result that arrives before the renderer has taken its screenshot
-      // would paint boxes over nothing; the coordinator only recognizes after
-      // `present` resolved, so dropping it here is the crash/reload case.
+      // Drop results during renderer crash/reload, before it can display a screenshot.
       if (closed || !rendererLoaded || !rendererIsReady) return
       sendToWindow(window, GAME_OCR_CHANNELS.regions, result)
     },
@@ -343,13 +289,10 @@ export function createGameOcrWindowController({
     async dismiss(): Promise<void> {
       presentationEpoch++
       abandonWaiters('The Game OCR frame was dismissed before it was captured.')
-      // The native window goes first so one background press returns to the
-      // game even if renderer cleanup is delayed.
+      // Return to the live game before potentially delayed renderer cleanup.
       requestHide()
       sendDiscard()
-      // Listeners learn the frame is gone before the hide settles: the
-      // coordinator has to invalidate the session's results either way, and
-      // the user already sees the live game.
+      // Invalidate results immediately, without waiting for the delayed native hide event.
       for (const listener of [...dismissListeners]) listener()
     },
 
@@ -382,13 +325,11 @@ export function createGameOcrWindowController({
 
 type GameOcrIpcListener = (event: { sender: unknown }, value: unknown) => void
 
-/** Minimal ipcMain surface used to bind this renderer to its native window. */
 export interface GameOcrIpcMain {
   on(channel: string, listener: GameOcrIpcListener): unknown
   removeListener(channel: string, listener: GameOcrIpcListener): unknown
 }
 
-/** Routes the renderer's reports to the controller, only from this window's webContents. */
 export function registerGameOcrIpc(
   ipc: GameOcrIpcMain,
   window: GameOcrNativeWindow,
@@ -399,8 +340,7 @@ export function registerGameOcrIpc(
 ): () => void {
   const handlers: [string, (value: unknown) => void][] = [
     [GAME_OCR_CHANNELS.rendererReady, () => controller.rendererReady()],
-    // The renderer returns the user to the live game; it does not tear the
-    // retained window down. Stopping Game OCR is what closes it for good.
+    // Dismissal retains the renderer; stopping Game OCR destroys it.
     [GAME_OCR_CHANNELS.close, () => void controller.dismiss()],
     [GAME_OCR_CHANNELS.frozen, (value) => controller.reportFrozen(value as GameOcrFrozenFrame)],
     [
@@ -440,9 +380,7 @@ function validateFreezeRequest(request: GameOcrFreezeRequest): void {
   ) {
     throw new Error('Game OCR freeze request is invalid.')
   }
-  // A window request's source id *is* its window handle. Checking the shape
-  // here fails the capture in main, where it falls back to display capture,
-  // rather than in the renderer as an opaque `getUserMedia` rejection.
+  // Validate in main so invalid window ids take the display-fallback path.
   if (request.targetKind === 'window' && parseWindowSourceHandle(request.sourceId) === undefined) {
     throw new Error(`Game OCR freeze request names no window handle: ${request.sourceId}`)
   }

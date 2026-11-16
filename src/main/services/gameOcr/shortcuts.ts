@@ -1,17 +1,9 @@
-/** Electron's globalShortcut surface used by the Game OCR coordinator. */
 export interface GameOcrShortcut {
   register(accelerator: string, callback: () => void): boolean
   unregister(accelerator: string): void
 }
 
-/**
- * Accelerators the frozen frame needs while it is on screen. The window never
- * takes the Windows foreground — deliberately, so the game keeps rendering and
- * so no first mouse press is spent activating it — which also means its page
- * receives no key events at all. These are registered when a frame appears and
- * released the moment it goes, so Escape and Ctrl+C belong to the game again
- * for as long as the user is playing it.
- */
+// Claim these only while a frame is visible so gameplay keeps its own Escape/Ctrl+C.
 const FRAME_ACCELERATORS = Object.freeze({
   dismiss: 'Escape',
   copySelection: 'CommandOrControl+C'
@@ -20,7 +12,6 @@ const FRAME_ACCELERATORS = Object.freeze({
 /** Suppresses key-repeat callbacks from one held global-shortcut chord. */
 const SHORTCUT_REPEAT_GUARD_MS = 250
 
-/** What the frame accelerators do while a frozen frame is visible. */
 export interface GameOcrFrameShortcutHandlers {
   dismiss(): void
   copySelection(): void
@@ -29,19 +20,12 @@ export interface GameOcrFrameShortcutHandlers {
 export interface GameOcrShortcutOwnerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
-  /** Runs one capture for one physical press of the capture accelerator. */
   onCapture: () => Promise<void>
   onError: (message: string, error: unknown) => void
 }
 
-/**
- * Owns every global shortcut Game OCR claims: the capture accelerator with its
- * key-repeat guard, and the Escape/Ctrl+C pair held only while a frozen frame
- * is on screen. Nothing here knows about sessions, capture, or presentation.
- */
 export interface GameOcrShortcutOwner {
   readonly accelerator: string
-  /** True while the capture accelerator is claimed, so `armed` is honest. */
   readonly captureRegistered: boolean
   registerCapture(): boolean
   unregisterCapture(): void
@@ -103,9 +87,7 @@ export function createGameOcrShortcutOwner(
         return true
       }
 
-      // Register the replacement first. If Electron reports a conflict, the
-      // existing shortcut remains active and the caller can keep persisted
-      // settings aligned with that usable state.
+      // Register first so a conflict leaves the existing capture shortcut usable.
       if (!options.shortcut.register(next, requestCapture)) {
         options.onError(
           `The Game OCR shortcut is already in use: ${next}`,
@@ -124,13 +106,7 @@ export function createGameOcrShortcutOwner(
       }
       return true
     },
-    /**
-     * Claimed only while a frame is visible. A refusal is not fatal: another
-     * application already owns the accelerator, and the frame stays usable
-     * without it — a background press still dismisses, and the box text can
-     * still be selected — so this reports and carries on rather than failing a
-     * capture the user can see.
-     */
+    // Shortcut conflicts are nonfatal: background dismissal and text selection still work.
     holdFrame(handlers) {
       if (frameHeld) return
       frameHeld = true

@@ -27,17 +27,11 @@ export interface GameOcrStatus {
 export interface GameOcrControllerOptions {
   shortcut: GameOcrShortcut
   accelerator: string
-  /** Resolves the focused window, or the display under the pointer. */
   targets: GameOcrCaptureTargets
-  /** Builds the frozen-frame window over the given logical desktop rectangle. */
   createPresentation: (bounds: OcrDisplayBounds) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
   onError?: (message: string, error: unknown) => void
-  /**
-   * One line per capture describing what was targeted and, when the focused
-   * window was not usable, why. Development only; it carries the executable
-   * basename and PID, never a full path.
-   */
+  /** Development log includes executable basename and PID, never full paths. */
   log?: (message: string) => void
 }
 
@@ -47,17 +41,11 @@ export interface GameOcrController {
   arm(): Promise<boolean>
   /** Changes the global shortcut, retaining the old registration on conflict. */
   setAccelerator(accelerator: string): Promise<boolean>
-  /** Handles one configured global-shortcut press. Useful for tests and IPC. */
   capture(): Promise<void>
   stop(): Promise<void>
   shutdown(): Promise<void>
 }
 
-/**
- * The Game OCR lifecycle facade. It owns arming, stopping, and the published
- * status, and composes the two boundaries it does not implement: the shortcut
- * owner (`shortcuts.ts`) and the capture coordinator (`captureSession.ts`).
- */
 export function createGameOcrController(options: GameOcrControllerOptions): GameOcrController {
   let status: GameOcrStatus = { state: 'off', sessionId: 0 }
   const listeners = new Set<(next: GameOcrStatus) => void>()
@@ -119,10 +107,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     onStateChange: (state, sessionId) => notify({ state, sessionId }),
     onFailure: fail,
     onFrameEnded: () => {
-      // Only a still-registered hotkey means armed. A failure released the
-      // shortcut on its way into `error`, and reporting armed there would both
-      // mislead the Options surface and let `arm`'s fast path decline to
-      // register the shortcut again.
+      // Reporting armed without a registered hotkey would prevent arm() from restoring it.
       if (isRunning() && shortcuts.captureRegistered)
         notify({ state: 'armed', sessionId: status.sessionId })
     },
@@ -191,8 +176,6 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     coordinator.invalidate()
     shortcuts.releaseFrame()
     shortcuts.unregisterCapture()
-    // Releases cached desktop source ids and immutable display targets. The
-    // adapter remains reusable if Game OCR is armed again later.
     invalidateDisplayCache()
     const close = coordinator.close()
     await Promise.allSettled([close, options.ocr.stop(), armPromise])
@@ -200,11 +183,7 @@ export function createGameOcrController(options: GameOcrControllerOptions): Game
     stopping = false
   }
 
-  /**
-   * Stopping keeps the native foreground boundary loaded, because arming
-   * again is the ordinary next thing to happen and reloading it is not free.
-   * Only application shutdown releases it.
-   */
+  // Keep the native boundary loaded for rearming; release it only at shutdown.
   const shutdown = async (): Promise<void> => {
     await stop()
     try {
@@ -236,7 +215,6 @@ export interface GameOcrRuntimeService {
   start(): Promise<GameOcrRuntimeStatus>
   stop(): Promise<GameOcrRuntimeStatus>
   retry(): Promise<GameOcrRuntimeStatus>
-  /** Records a worker transition so the Options surface can show progress. */
   updateWorkerStatus(status: PpOcrWorkerStatus): void
   /** Records a non-fatal command/configuration error without disarming. */
   reportError(message: string): void
@@ -246,21 +224,12 @@ export interface GameOcrRuntimeOptions {
   settings: SettingsStore
   controller: GameOcrController
   worker: Pick<PpOcrWorkerService, 'getStatus'>
-  /**
-   * Checked before every arm attempt. Returning a message keeps the runtime
-   * stopped and reports that message instead of spawning a worker that would
-   * fail on a missing or damaged bundled resource. Re-run by `retry`, so
-   * restoring the files recovers without a restart.
-   */
+  /** Rechecked on retry so repaired resources recover without restarting. */
   preflight?: () => string | undefined
 }
 
 const DEFAULT_WORKER_STATUS: PpOcrWorkerStatus = { state: 'stopped' }
 
-/**
- * Joins the persisted shortcut, PP-OCR worker, and coordinator into the
- * small serializable state consumed by the main-window Options surface.
- */
 export function createGameOcrRuntimeService(options: GameOcrRuntimeOptions): GameOcrRuntimeService {
   const listeners = new Set<(status: GameOcrRuntimeStatus) => void>()
   let workerStatus = options.worker.getStatus() ?? DEFAULT_WORKER_STATUS
