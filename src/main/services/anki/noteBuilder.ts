@@ -1,7 +1,3 @@
-// Note field mapping. Pure: turns a looked-up word + its
-// sentence into the AnkiConnect `addNote` payload, honoring the user's
-// field mapping (unmapped fields are simply omitted).
-
 import type { Token } from '../../../shared/token'
 import {
   clipAnalysisRangeToDisplayRanges,
@@ -29,15 +25,8 @@ export interface AnkiNote {
   picture?: AnkiMediaAttachment[]
 }
 
-/**
- * Attachments the caller prepared outside the builder (they need a clock, a
- * capture, or other impure input) but which `buildNote` places. Keeping them
- * as an input keeps `buildNote` pure.
- */
 interface NoteExtras {
-  /** The captured frame, already encoded and named by the Anki service. */
   picture?: AnkiMediaAttachment
-  /** The clipped subtitle line, already encoded and named by the Anki service. */
   sentenceAudio?: AnkiMediaAttachment
 }
 
@@ -47,13 +36,7 @@ interface NoteSource {
   sentence: string
 }
 
-/**
- * Wraps `token`'s surface span within `sentence` in `<b>…</b>`. Token offsets
- * ignore the sentence's line breaks (see `shared/textProjection.ts`), so a
- * word wrapped across two lines is bolded as one piece per line and every
- * later word still lands on its own characters. A token that does not belong
- * to `sentence` leaves it unchanged rather than bolding the wrong span.
- */
+// Token offsets exclude line breaks; project them back to display ranges before bolding.
 export function boldTarget(sentence: string, token: Token): string {
   const projection = displayTextProjection(sentence)
   const ranges = clipAnalysisRangeToDisplayRanges(projection, {
@@ -78,21 +61,11 @@ function normalizeFuriganaReading(reading: string): string {
   return reading.replace(/[ァ-ヺ]/g, (char) => String.fromCodePoint(char.codePointAt(0)! - 0x60))
 }
 
-/**
- * Anki's furigana parser (` ?([^ >]+?)\[(.+?)\]`) treats a space as the only
- * boundary between a ruby base and the plain text before it — without one,
- * `うなり声[ごえ]` puts ごえ above all four characters. The space is consumed
- * by the parser, so it never appears in the rendered card.
- */
+// Anki consumes a space before a ruby base; without it, うなり声[ごえ] annotates all four characters.
 function separator(formatted: string): string {
   return formatted === '' ? '' : ' '
 }
 
-/**
- * Converts a dictionary headword and its dictionary-supplied reading to Anki
- * furigana syntax. Kana in the expression are retained, and uncertain
- * boundaries are left unformatted rather than guessed.
- */
 export function formatAnkiFurigana(expression: string, dictionaryReading: string): string {
   if (expression === '' || dictionaryReading === '') return expression
 
@@ -145,28 +118,11 @@ export function formatAnkiFurigana(expression: string, dictionaryReading: string
   return cursor === reading.length ? formatted : expression
 }
 
-/**
- * The frequency text for a mined note, taken only from the result being mined —
- * never a second lookup and never the popup's display component. The
- * dictionary's own `frequencyDisplay` (e.g. `12k`) wins when it is non-empty;
- * otherwise a finite `frequency`, including `0`, is stringified. A result with
- * no frequency metadata yields `''`, which a mapped field still receives so the
- * card keeps the model's field shape instead of a fabricated value.
- */
 function frequencyValue(result: LookupResult): string {
   if (result.frequencyDisplay) return result.frequencyDisplay
   return Number.isFinite(result.frequency) ? String(result.frequency) : ''
 }
 
-/**
- * Builds the AnkiConnect note for `source` per `settings.fieldMap`. A field
- * mapped to `''` is dropped entirely (the user left it unmapped). Audio is
- * attached only when `settings.includeWordAudio` and the word/field pair
- * yields one (`buildAudioAttachment`). A prepared `extras.picture` /
- * `extras.sentenceAudio` is attached only while its own field is mapped; the
- * sentence clip is appended after word audio. The duplicate options are derived
- * from the configured policy; the service performs the mapped-Word preflight.
- */
 export function buildNote(
   source: NoteSource,
   settings: AnkiSettings,
@@ -192,8 +148,7 @@ export function buildNote(
     frequency: frequencyValue(result),
     pitchAccent: pitchAccentValue(result),
     jlptLevel: result.jlptLevel ?? '',
-    // Attachment-only fields: AnkiConnect fills them from the media arrays, so
-    // the mapped field is created empty and never carries a value itself.
+    // AnkiConnect fills attachment fields from media arrays; their initial values must be empty.
     wordAudio: '',
     picture: '',
     sentenceAudio: ''
@@ -230,8 +185,7 @@ export function buildNote(
     }
   }
 
-  // Appended *after* any word audio so the two attachments keep a stable order
-  // when both are mapped onto the same Anki field (word audio first).
+  // Keep word audio before sentence audio when both share a field.
   if (settings.fieldMap.sentenceAudio !== '' && extras.sentenceAudio) {
     note.audio = [...(note.audio ?? []), extras.sentenceAudio]
   }

@@ -1,12 +1,8 @@
-// Word audio source. Pure: builds a JapanesePod101 URL for
-// AnkiConnect to fetch; Kizuna itself never downloads the file (see
-// docs/binaries.md §8).
-
 const JPOD101_BASE = 'https://assets.languagepod101.com/dictionary/japanese/audiomp3.php'
-/** MD5 of JPod101's "no recording" placeholder mp3 — see docs/binaries.md §8. */
+// MD5 of JapanesePod101's no-recording placeholder MP3 (docs/binaries.md §8).
 const JPOD101_NO_AUDIO_MD5 = '7e2c2f954ef6051373ba916f000168dc'
 
-/** Characters that could let a headword escape Anki's media folder as a path. */
+// Strip path-hostile characters so media names cannot escape Anki's media folder.
 const PATH_HOSTILE = /[/\\:*?"<>|\s]+/g
 
 function jpod101AudioUrl(expression: string, reading?: string): string {
@@ -35,22 +31,12 @@ interface AnkiMediaAttachmentBase {
   fields: string[]
 }
 
-/**
- * One AnkiConnect media attachment. AnkiConnect accepts exactly one source per
- * attachment — `url` (it downloads) or `data` (raw base64 it writes) — so the
- * two are modelled as a union with the other side explicitly forbidden rather
- * than as two optional properties.
- */
+// AnkiConnect accepts exactly one source: url for it to fetch, or raw base64 data.
 export type AnkiMediaAttachment =
   | (AnkiMediaAttachmentBase & { url: string; data?: never })
   | (AnkiMediaAttachmentBase & { data: string; url?: never })
 
-/**
- * Builds the `audio` array entry for `addNote`, or `undefined` when the
- * caller has no field to attach it to (`field === ''`) or no headword yet
- * (`expression === ''`). `skipHash` tells AnkiConnect to silently drop the
- * attachment when the download matches JPod101's placeholder MP3.
- */
+// skipHash makes AnkiConnect discard JapanesePod101's no-recording placeholder.
 export function buildAudioAttachment(
   expression: string,
   reading: string | undefined,

@@ -1,5 +1,3 @@
-// HttpFetch is injected so client tests do not require AnkiConnect.
-
 import { isTimeoutError, type HttpFetch } from '../http'
 import type { AnkiMediaAttachment } from './audioSource'
 import type { AnkiNote } from './noteBuilder'
@@ -8,12 +6,7 @@ import { isRecord } from '../../../shared/guards'
 const ANKI_CONNECT_VERSION = 6
 const ANKI_REQUEST_TIMEOUT_MS = 60_000
 
-/**
- * JSON body for one AnkiConnect request: `{ action, version, params }`, plus a
- * top-level `key` when an API key is configured. AnkiConnect reads the key from
- * the request root (sibling to `action`/`version`/`params`), not from `params`.
- * An empty/undefined `apiKey` is omitted so unauthenticated setups are unchanged.
- */
+// AnkiConnect requires the API key at the request root, outside params.
 function buildRequest(action: string, params?: unknown, apiKey?: string): string {
   const key = apiKey ? apiKey : undefined
   return JSON.stringify({ action, version: ANKI_CONNECT_VERSION, params, key })
@@ -27,12 +20,7 @@ function isResponseEnvelope(
   return raw !== null && typeof raw === 'object' && 'result' in raw && 'error' in raw
 }
 
-/**
- * Every AnkiConnect response is `{ result, error }`, arriving with HTTP 200
- * even when `error` is set — so this checks `error` first and never looks at
- * status. Throws `AnkiConnectError` on a non-null `error` or a body that
- * doesn't look like an AnkiConnect envelope at all.
- */
+// AnkiConnect returns HTTP 200 even for errors; inspect the response envelope.
 function parseResponse(raw: unknown): unknown {
   if (!isResponseEnvelope(raw)) {
     throw new AnkiConnectError('AnkiConnect: malformed response')
@@ -54,7 +42,6 @@ export interface AnkiCardInfo {
   interval: number
 }
 
-/** The note fields and metadata needed to select an overwrite target. */
 export interface AnkiNoteInfo {
   noteId: number
   modelName: string
@@ -125,13 +112,6 @@ export interface AnkiClient {
   guiBrowse(query: string): Promise<number[]>
 }
 
-/**
- * Creates an `AnkiClient` that POSTs every action to `deps.url` via the
- * injected `deps.fetch`. A rejected `fetch` (Anki not running / connection
- * refused) or a request exceeding `ANKI_REQUEST_TIMEOUT_MS` is remapped to an
- * `AnkiConnectError` with a user-facing hint, rather than surfacing a raw
- * network error.
- */
 export function createAnkiClient(deps: {
   url: string
   fetch: HttpFetch
@@ -162,9 +142,7 @@ export function createAnkiClient(deps: {
   return {
     invoke,
     async multi<T>(actions: Array<{ action: string; params?: unknown }>): Promise<T[]> {
-      // AnkiConnect implements `multi` by passing every nested action through
-      // the same authenticated request handler as the outer action. Therefore
-      // a configured key must be present on each child as well as on `multi`.
+      // AnkiConnect authenticates each nested multi action, so children also need the API key.
       const authenticatedActions = apiKey
         ? actions.map((action) => ({ ...action, key: apiKey }))
         : actions
@@ -172,11 +150,8 @@ export function createAnkiClient(deps: {
       if (!Array.isArray(responses)) {
         throw new AnkiConnectError('AnkiConnect: malformed multi response')
       }
-      // AnkiConnect invokes each child action without a version when the
-      // caller omits one, so successful child responses are raw results. A
-      // child failure is still returned as a `{ result, error }` envelope.
-      // Accept versioned envelopes too, since some compatible servers return
-      // them for every child action.
+      // Unversioned multi children return raw successes and error envelopes.
+      // Compatible servers may return envelopes for successes too.
       return responses.map((response) =>
         isResponseEnvelope(response) ? (parseResponse(response) as T) : (response as T)
       )
@@ -210,8 +185,7 @@ export function createAnkiClient(deps: {
     notesInfo: (ids: number[]) => invoke<AnkiNoteInfo[]>('notesInfo', { notes: ids }),
     updateNoteFields: (noteId: number, { fields, audio, picture }) =>
       invoke<void>('updateNoteFields', {
-        // Each media key is omitted entirely when absent: AnkiConnect treats a
-        // present-but-empty `audio`/`picture` as an attachment request.
+        // AnkiConnect treats present-but-empty media arrays as attachment requests; omit absent keys.
         note: {
           id: noteId,
           fields,

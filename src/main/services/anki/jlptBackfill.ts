@@ -17,7 +17,6 @@ export type JlptBackfillClassification =
   | { kind: 'invalid-source' }
   | { kind: 'destination-missing' }
 
-/** Removes markup Anki stores around note-field text and normalizes spaces. */
 export function stripHtml(value: string): string {
   return stripTags(value).replace(/&nbsp;/giu, ' ')
 }
@@ -28,11 +27,7 @@ function isKana(value: string): boolean {
   return KANA_ONLY.test(value)
 }
 
-/**
- * Converts a plain kana or Anki furigana reading to classifier input. Anki's
- * `漢字[かんじ]かな` form becomes `かんじかな`; malformed ruby is ignored so
- * the caller can safely use expression-only classification instead.
- */
+// Anki readings use 漢字[かんじ]かな; malformed ruby falls back to expression-only classification.
 export function normalizeBackfillReading(rawValue: string): string | undefined {
   const value = stripHtml(rawValue).replace(/\s+/gu, '')
   if (value === '') return undefined
@@ -62,7 +57,6 @@ export function normalizeBackfillReading(rawValue: string): string | undefined {
   return reading === '' ? undefined : reading
 }
 
-/** Classifies one note without reading or mutating Anki. */
 export function classifyBackfillNote(
   note: AnkiNoteInfo | undefined,
   fields: JlptBackfillFields,
@@ -83,7 +77,6 @@ export function classifyBackfillNote(
   return level === null ? { kind: 'unclassified' } : { kind: 'would-write', level }
 }
 
-/** Creates the mutually-exclusive preview counters. */
 export function emptyBackfillCounts(total = 0): AnkiJlptBackfillCounts {
   return {
     total,
@@ -98,7 +91,6 @@ export function emptyBackfillCounts(total = 0): AnkiJlptBackfillCounts {
   }
 }
 
-/** Adds one classification and returns a fresh count object. */
 export function addBackfillClassification(
   counts: AnkiJlptBackfillCounts,
   classification: JlptBackfillClassification
@@ -124,7 +116,6 @@ export function addBackfillClassification(
   return next
 }
 
-/** Extracts the fields used by the pure classifier from persisted settings. */
 export function backfillFields(settings: AnkiSettings): JlptBackfillFields {
   return {
     wordField: settings.fieldMap.word,
