@@ -11,10 +11,6 @@ export function expectedArtifactNames(name, version, arch = 'x86_64') {
 const STARTUP_PROBE_PREFIX = 'kizuna-startup-probe'
 
 /**
- * Reduce a packaged launch's stdout to a verdict. Kept in step with
- * `src/main/startupProbe.ts` by `test/scripts/linuxPackaging.test.ts`, which
- * feeds this the real module's own output.
- *
  * @param {string} stdout
  * @returns {{ ready: boolean, milestones: string[] }}
  */

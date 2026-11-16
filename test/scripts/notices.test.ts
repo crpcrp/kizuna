@@ -18,18 +18,10 @@ import {
   productionPackages,
   renderCorrespondingSource,
   renderThirdPartyNotices,
-  resolveComponentVersions,
   resolvePlatformNotices,
   writeNoticeBundle
 } from '@scripts/notices.mjs'
 
-// No network, no real binaries: `resources/` and `node_modules/` are throwaway
-// directories of tiny text files. Everything this module decides — that the
-// notices still describe the pinned binaries, that every named licence text
-// exists, that nothing collides in the bundle — is independent of the payloads.
-
-// The generator is plain ESM with JSDoc types; these pull its shapes into the
-// test so a fixture that drifts from the schema is a compile error.
 type NoticesFile = import('@scripts/notices.mjs').NoticesFile
 type NoticeComponent = import('@scripts/notices.mjs').NoticeComponent
 type PackageLock = Parameters<typeof productionPackages>[0]
@@ -37,7 +29,6 @@ type PackageLock = Parameters<typeof productionPackages>[0]
 const COMMIT = 'a'.repeat(40)
 const sha256 = (contents: string): string => createHash('sha256').update(contents).digest('hex')
 
-/** A minimal but valid notices file, with the one component under test. */
 const noticesWith = (...components: NoticeComponent[]): NoticesFile => ({
   schemaVersion: SUPPORTED_NOTICES_SCHEMA_VERSION,
   vendorCommit: COMMIT,
@@ -172,9 +163,6 @@ describe('noticesProblems', () => {
   })
 })
 
-// Game OCR ships on Windows alone, so its notice must not follow the Linux
-// artifact around: those licence texts are never staged there, and a notice
-// naming them would be a promise the bundle does not keep.
 describe('resolvePlatformNotices', () => {
   const PPOCR: NoticeComponent = {
     ...MPV,
@@ -200,8 +188,6 @@ describe('resolvePlatformNotices', () => {
     expect(resolvePlatformNotices(notices, undefined)).toBe(notices)
   })
 
-  // Kept on Windows, the component is held to the same standard as any other:
-  // its licence texts have to be staged. Dropped on Linux, it says nothing.
   it('holds the component to the lock only on its own platform', () => {
     const notices = noticesWith(MPV, PPOCR)
     expect(lockAgreementProblems(notices, PLATFORM_LOCK, 'win32-x64').join()).toContain(
@@ -220,8 +206,6 @@ describe('lockAgreementProblems', () => {
     expect(lockAgreementProblems(noticesWith(MPV, SOURCE_DATA), LOCK)).toEqual([])
   })
 
-  // The acceptance criterion: bumping a binary is a lock bump, and a lock bump
-  // that leaves the notices behind must not build.
   it('rejects notices pinned to a different vendor commit than the lock', () => {
     const stale = { ...noticesWith(MPV), vendorCommit: 'd'.repeat(40) }
     expect(lockAgreementProblems(stale, LOCK).join()).toContain(
@@ -236,7 +220,6 @@ describe('lockAgreementProblems', () => {
     )
   })
 
-  // The other half: a whole component added to the binary tree with no notice.
   it('rejects a locked path that no component covers', () => {
     const lock = {
       ...LOCK,
@@ -378,46 +361,27 @@ describe('licenseCopyPlan', () => {
   })
 })
 
-describe('resolveComponentVersions', () => {
-  const electron: NoticeComponent = {
-    id: 'electron',
-    name: 'Electron',
-    license: 'MIT',
-    copyright: 'Copyright the Electron contributors.',
-    bundled: 'node_modules',
-    packageName: 'electron'
-  }
-
-  it('fills a node_modules component version from the lockfile', () => {
-    const resolved = resolveComponentVersions(noticesWith(electron), {
-      packages: { 'node_modules/electron': { version: '43.0.1' } }
-    })
-    expect(resolved.components[0].version).toBe('43.0.1')
-  })
-
-  it('leaves resources components alone', () => {
-    const resolved = resolveComponentVersions(noticesWith(MPV), { packages: {} })
-    expect(resolved.components[0].version).toBe('0.41.0')
-  })
-})
-
 describe('renderThirdPartyNotices', () => {
-  const markdown = renderThirdPartyNotices({
-    notices: noticesWith({ ...MPV, notes: ['This build links GPLv3 components.'] }),
-    packages: [{ name: 'react', version: '19.2.7', license: 'MIT', path: 'node_modules/react' }],
-    packageLicenseNames: { 'node_modules/react': ['LICENSE'] },
-    productName: 'Kizuna'
-  })
+  it('renders component metadata, notes, npm licences, and the compliance notice', () => {
+    const markdown = renderThirdPartyNotices({
+      notices: noticesWith({ ...MPV, notes: ['This build links GPLv3 components.'] }),
+      packages: [{ name: 'react', version: '19.2.7', license: 'MIT', path: 'node_modules/react' }],
+      packageLicenseNames: { 'node_modules/react': ['LICENSE'] },
+      productName: 'Kizuna'
+    })
 
-  it('does not couple the document heading to the application version', () => {
     expect(markdown).toContain('# Third-party notices for Kizuna')
     expect(markdown).not.toContain('# Third-party notices for Kizuna 0.0.1')
-  })
 
-  it('names the exact build, its licence, and the bundled licence text', () => {
     expect(markdown).toContain('- Version: `0.41.0`')
     expect(markdown).toContain('- License: GPL-3.0-or-later')
     expect(markdown).toContain('- License text: `licenses/mpv/LICENSE.GPLv3.txt`')
+
+    expect(markdown).toContain('This build links GPLv3 components.')
+
+    expect(markdown).toContain('| react | 19.2.7 | MIT | `licenses/npm/react/LICENSE` |')
+
+    expect(markdown).toContain('compliance mechanism, not legal advice')
   })
 
   it('describes source data as bundled application data, not optional content', () => {
@@ -430,51 +394,32 @@ describe('renderThirdPartyNotices', () => {
     expect(sourceMarkdown).toContain('Bundled application data from `src/data/vocabulary`.')
     expect(sourceMarkdown).not.toContain('Bundled only when present at packaging time.')
   })
-
-  it('keeps the component notes, which carry the build-configuration caveats', () => {
-    expect(markdown).toContain('This build links GPLv3 components.')
-  })
-
-  it('tabulates each production npm dependency against its licence text', () => {
-    expect(markdown).toContain('| react | 19.2.7 | MIT | `licenses/npm/react/LICENSE` |')
-  })
-
-  // Acceptance criterion: the documentation must say what this is and is not.
-  it('states that it is a compliance mechanism, not legal advice', () => {
-    expect(markdown).toContain('compliance mechanism, not legal advice')
-  })
 })
 
 describe('renderCorrespondingSource', () => {
-  const markdown = renderCorrespondingSource({
-    notices: noticesWith({
-      ...MPV,
-      source: {
-        binaryArchive: 'https://example.invalid/mpv.7z',
-        binaryArchiveSha256: 'c'.repeat(64),
-        code: 'https://example.invalid/mpv-source.zip',
-        buildRecipe: 'https://example.invalid/recipe',
-        additional: [{ label: 'Build log', url: 'https://example.invalid/log' }]
-      }
-    }),
-    productName: 'Kizuna'
-  })
+  it('renders binary hashes, source obligations, source links, and the compliance notice', () => {
+    const markdown = renderCorrespondingSource({
+      notices: noticesWith({
+        ...MPV,
+        source: {
+          binaryArchive: 'https://example.invalid/mpv.7z',
+          binaryArchiveSha256: 'c'.repeat(64),
+          code: 'https://example.invalid/mpv-source.zip',
+          buildRecipe: 'https://example.invalid/recipe',
+          additional: [{ label: 'Build log', url: 'https://example.invalid/log' }]
+        }
+      }),
+      productName: 'Kizuna'
+    })
 
-  it('identifies the distributed binary by hash and links its exact source', () => {
     expect(markdown).toContain(`(SHA-256 \`${'c'.repeat(64)}\`)`)
     expect(markdown).toContain('[Exact source](https://example.invalid/mpv-source.zip)')
-  })
 
-  it('marks a copyleft component as carrying a source obligation', () => {
     expect(markdown).toContain('copyleft — source offer required')
-  })
 
-  it('links the build recipe and any additional source material', () => {
     expect(markdown).toContain('https://example.invalid/recipe')
     expect(markdown).toContain('[Build log](https://example.invalid/log)')
-  })
 
-  it('states that it is a compliance mechanism, not legal advice', () => {
     expect(markdown).toContain('compliance mechanism, not legal advice')
   })
 })
@@ -595,11 +540,12 @@ describe('generateNotices', () => {
 
   // Electron is a devDependency, so it never appears in the production package
   // list — but it is what the installer ships.
-  it('records the Electron version from the lockfile', async () => {
+  it('resolves Electron from the lockfile and preserves the pinned resource version', async () => {
     const repoRoot = await makeRepo(repoFiles)
     await run(repoRoot, noticesWith(MPV, ELECTRON))
     const markdown = await readFile(join(repoRoot, 'build/notices', NOTICES_FILE), 'utf-8')
     expect(markdown).toContain('- Version: `43.0.1`')
+    expect(markdown).toContain('- Version: `0.41.0`')
   })
 
   it('refuses to write a bundle whose notices no longer match the lock', async () => {
@@ -627,8 +573,6 @@ describe('generateNotices', () => {
     ).toBe('data licence')
   })
 
-  // The failure mode this catches: packaging before `npm run resources`, which
-  // would otherwise produce a notices directory with dangling references.
   it('refuses to write a bundle when a named licence text is absent', async () => {
     const { 'resources/mpv/LICENSE.GPLv3.txt': _omitted, ...withoutMpvLicense } = repoFiles
     const repoRoot = await makeRepo(withoutMpvLicense)

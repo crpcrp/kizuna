@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-// Writes the third-party notices and corresponding-source bundle that
-// `electron-builder.cjs` installs beside the application (as `notices/`) and
-// that the release workflow attaches to the GitHub Release. `npm run dist`
-// runs it first, so an installer can never be built without one.
-//
-// Usage:
-//   node scripts/generate-notices.mjs                         # select host platform
-//   node scripts/generate-notices.mjs --platform linux-x64    # explicit target
-//   node scripts/generate-notices.mjs --out DIR               # write somewhere else
-//
-// It reads `third-party.json`, `resources.lock.json`, `package-lock.json`, the
-// staged `resources/` tree, and `node_modules/`, and fails closed: a licence
-// text that is named but absent, or notices that no longer match the pinned
-// binaries, abort the run.
-//
-// All process-level concerns (argv, reading files, exit codes) live here; the
-// tested logic lives in `scripts/notices.mjs`.
 
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
@@ -26,7 +9,6 @@ import { platformKeyFor, readFlag } from './vendorResources.mjs'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Default bundle location. Gitignored — it is build output, not a source file. */
 const DEFAULT_OUT_DIR = join('build', 'notices')
 
 /** @param {string} name @returns {Promise<any>} */
