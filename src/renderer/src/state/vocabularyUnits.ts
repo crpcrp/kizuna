@@ -19,9 +19,7 @@ export interface VocabularyUnit {
   /** Aggregation identity: the projected dictionary expression when the track
    * has one for this lemma, otherwise token.lemma. */
   key: string
-  /** Surface of the first occurrence, for display. */
   surface: string
-  /** First occurrence, with its cue context. */
   token: Token
   sentence: string
   cueStart?: number
@@ -46,7 +44,6 @@ interface UnitMetadata {
 
 const metadataByUnit = new WeakMap<VocabularyUnit, UnitMetadata>()
 
-/** Returns the per-token levels accumulated while deriving a vocabulary unit. */
 export function vocabularyUnitTokenLevels(unit: VocabularyUnit): UnitLevelCounts {
   return (
     metadataByUnit.get(unit)?.tokenLevels ?? {
@@ -59,7 +56,6 @@ export function vocabularyUnitTokenLevels(unit: VocabularyUnit): UnitLevelCounts
   )
 }
 
-/** Returns every knowledge identity observed for a unit's occurrences. */
 export function vocabularyUnitIdentities(unit: VocabularyUnit): string[] {
   return [...(metadataByUnit.get(unit)?.identities ?? new Set([unit.key, unit.surface]))]
 }
@@ -111,29 +107,19 @@ function acceptedSpans(cue: VocabularyUnitCue): AcceptedSpan[] {
     })
 }
 
-/** Resolves one identity — dictionary expression, lemma, or surface — to its level. */
 type KnowledgeLevelLookup = (identity: string) => KnowledgeLevel
 
-/** One vocabulary occurrence: an accepted span's members, or a single token. */
 interface VocabularyOccurrence {
   key: string
   surface: string
   token: Token
-  /** Non-symbol tokens the occurrence covers, in cue order. */
   members: Token[]
   level: KnowledgeLevel
   grammar: boolean
   identities: string[]
 }
 
-/**
- * The one word-understanding rule: a grammatical function word is never
- * vocabulary to learn and counts as wellKnown, while every other occurrence
- * takes the best level any of its identities resolves to — starting from the
- * level of the span covering it, when one does. A multi-token dictionary span
- * is one vocabulary item: its member tokens are not evidence that the
- * compound itself is known.
- */
+// Function words count as wellKnown; a compound must be known as a whole, not through its members.
 function occurrenceLevel(
   identities: string[],
   grammar: boolean,
@@ -147,11 +133,7 @@ function occurrenceLevel(
   )
 }
 
-/**
- * Returns the knowledge identities that speak for one dictionary span.
- * Multi-token spans are words in their own right; a single-token span is the
- * same word seen through a dictionary projection.
- */
+// Single-token projections retain token aliases; multi-token spans are independent words.
 function spanIdentities(span: VocabularySpan, members: Token[]): string[] {
   const identities = [span.expression, span.matchedSurface]
   return members.length > 1
@@ -159,11 +141,6 @@ function spanIdentities(span: VocabularySpan, members: Token[]): string[] {
     : [...identities, ...members.flatMap((member) => [member.lemma, member.surface])]
 }
 
-/**
- * Walks one cue's vocabulary occurrences: each accepted span once, covering its
- * members, then every token no span covers. The single place a word occurrence
- * is identified and levelled, shared by every consumer below.
- */
 function cueOccurrences(
   { cue, spans }: PreparedCue,
   levelOf: KnowledgeLevelLookup,
@@ -184,10 +161,7 @@ function cueOccurrences(
       if (processedSpans.has(accepted)) continue
       processedSpans.add(accepted)
       const { span, members } = accepted
-      // A dictionary span can join MeCab tokens into one displayed word. Do
-      // not let knowledge of a member (e.g. 人間) promote the compound
-      // (e.g. 棒人間); only single-token projections need their token's lemma
-      // and surface as aliases for the dictionary expression.
+      // Member knowledge (人間) must not promote a compound (棒人間); only single-token projections use token aliases.
       const identities = spanIdentities(span, members)
       // A compound is grammar only when every member is a function word (のに),
       // never because one member happens to be (の in 気の毒).
@@ -250,10 +224,6 @@ function createUnit(
   return unit
 }
 
-/**
- * Derives the vocabulary units used by both the word report and bulk mining.
- * A span is processed once, while its member tokens contribute to tokenCount.
- */
 export function deriveVocabularyUnits(
   cues: VocabularyUnitCue[],
   details: Record<string, KnowledgeDetails>
@@ -261,11 +231,7 @@ export function deriveVocabularyUnits(
   const preparedCues: PreparedCue[] = cues.map((cue) => ({ cue, spans: acceptedSpans(cue) }))
   const lemmaExpressions = new Map<string, string>()
 
-  // Build the projection map before aggregating tokens so a bare occurrence can
-  // use a projection discovered later in the track. Only a single-token
-  // projection (ヤツ resolved as 奴) speaks for the token's lemma: a compound's
-  // member is not the compound, so a standalone 様 must stay its own word
-  // rather than being filed under — and counted as known through — 神様.
+  // Build projections first so earlier tokens can use later discoveries; compound members must stay independent.
   for (const { spans } of preparedCues) {
     for (const { span, members } of spans) {
       if (members.length !== 1) continue
@@ -310,13 +276,7 @@ export function deriveVocabularyUnits(
   return [...units.values()]
 }
 
-/**
- * Per-token knowledge levels for one cue's rendered tokens, resolved through
- * the same span acceptance and occurrence rules as `deriveVocabularyUnits`, so
- * subtitle underlining never disagrees with the word report or bulk mining.
- * Symbol tokens carry no vocabulary and stay out of the map. `levels` is the
- * renderer's lemma cache; an identity it does not know resolves to 'unknown'.
- */
+// Resolve token colors through the same occurrence rules as vocabulary counts; symbols have no vocabulary.
 export function vocabularyLevelsByToken(
   cue: VocabularyUnitCue,
   levels: Record<string, KnowledgeLevel>
@@ -333,7 +293,6 @@ export function vocabularyLevelsByToken(
   return byOffset
 }
 
-/** Whether one cue contains an accepted vocabulary occurrence at exactly the unknown level. */
 export function cueHasUnknownVocabulary(
   cue: VocabularyUnitCue,
   levels: Record<string, KnowledgeLevel>

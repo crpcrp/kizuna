@@ -51,11 +51,7 @@ export interface WholeTrackVocabularyCoordinator {
   invalidate(): void
 }
 
-/**
- * Owns the complete vocabulary snapshot used by whole-track consumers. The
- * key deliberately excludes Anki configuration: it changes mining behavior,
- * not tokenization, dictionary ranking, or knowledge-derived vocabulary.
- */
+// Exclude Anki configuration from the snapshot key: it affects mining, not vocabulary preparation.
 export function createWholeTrackVocabularyCoordinator(
   spanController: VocabularySpanController = createVocabularySpanController()
 ): WholeTrackVocabularyCoordinator {
@@ -188,11 +184,6 @@ export interface WholeTrackVocabularyDependencies {
   knowledgeEpoch: number
 }
 
-/**
- * Identifies inputs that can change a whole-track vocabulary snapshot.
- * Anki configuration deliberately does not appear here: it only changes how
- * selected candidates are mined, never the vocabulary being prepared.
- */
 export function wholeTrackVocabularyDependencyKey(input: WholeTrackVocabularyDependencies): string {
   return JSON.stringify({
     filePath: input.filePath,

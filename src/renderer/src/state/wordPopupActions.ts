@@ -16,7 +16,6 @@ export interface PopupRequestToken {
   invalidate(): void
 }
 
-/** Owns popup requests so late dictionary or Anki responses cannot update a newer popup. */
 function createPopupRequestToken(): PopupRequestToken {
   let current = 0
   return {
@@ -36,9 +35,7 @@ export interface WordPopupPayload {
   sentence: string
   /** Cue-independent text instance that owns the popup, such as an OCR box. */
   textId?: string
-  /** Media-clock start/end of the cue this popup was opened from, retained so
-   * a later mine can clip its audio. Absent when the popup was
-   * opened with no active cue. */
+  // Retain media-clock cue timing so mining later uses the original sentence audio.
   cueStart?: number
   cueEnd?: number
   provenanceByExpression?: Record<string, KnowledgeDetails>
@@ -110,9 +107,7 @@ export function createWordPopupActions(callbacks: {
         cueStart: input.cueStart,
         cueEnd: input.cueEnd
       })
-      // A lookup may expand a clicked token into a longer dictionary headword.
-      // Resolve provenance by each displayed headword, not by the clicked
-      // token's lemma, otherwise a card for 地獄 is shown on a 地獄耳 row.
+      // Match provenance to each displayed headword; a 地獄 card must not appear on a 地獄耳 row.
       const provenanceExpressions = [
         ...new Set(popup.results.map((result) => result.expression || input.token.lemma))
       ]

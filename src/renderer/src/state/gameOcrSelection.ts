@@ -1,4 +1,3 @@
-/** The current text selection when it belongs to one live OCR box. */
 export interface GameOcrSelection {
   text: string
   box: HTMLElement
@@ -15,11 +14,7 @@ export function selectedGameOcrText(selection: Selection | null): string {
   return text || selection.toString()
 }
 
-/**
- * Reads a browser selection without changing it. A selection is usable only
- * when its complete range is still inside one visible OCR box in the live
- * document, which prevents stale or cross-box text from reaching translation.
- */
+// Require the whole selection inside one live OCR box to exclude stale or cross-box translation text.
 export function readGameOcrSelection(selection: Selection | null): GameOcrSelection | null {
   if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null
 

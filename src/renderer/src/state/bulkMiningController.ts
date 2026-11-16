@@ -63,7 +63,6 @@ export interface BulkMiningOpenInput {
 
 interface BulkMiningCandidatesOpenInput {
   bridges: Pick<BulkMiningOpenInput['bridges'], 'dict' | 'anki'>
-  /** Candidates already derived by a caller-specific vocabulary source. */
   candidates: MiningCandidate[]
   frequencyDictId: number | null
   sortOrder?: 'auto' | FrequencyMode
@@ -92,8 +91,6 @@ export interface BulkMiningController {
   setHideTargetDeckMatches(hide: boolean): void
   selectAllVisible(frequencyDictConfigured: boolean): void
   selectNoneVisible(frequencyDictConfigured: boolean): void
-  /** Mines the selected rows. `media` is the loaded file each candidate's
-   * sentence audio can be clipped from; omit it to mine without clips. */
   start(bridges: BulkMineBridges, media?: MineMediaSource): Promise<void>
   backToList(bridges: Pick<BulkMiningOpenInput['bridges'], 'anki'>): Promise<void>
   cancel(): void
@@ -103,7 +100,6 @@ export interface BulkMiningController {
 
 const IDLE: BulkMiningPhase = { kind: 'idle' }
 
-/** Owns the mining panel's stale-safe resolution and sequential mining state. */
 export function createBulkMiningController(): BulkMiningController {
   let state: BulkMiningPhase = IDLE
   const listeners = new Set<() => void>()
@@ -181,7 +177,6 @@ export function createBulkMiningController(): BulkMiningController {
     })
   }
 
-  /** Batches membership lookups for `identities` into the live ready phase. */
   const refreshTargetDeckMembership = async (
     request: number,
     identities: string[],
@@ -313,9 +308,7 @@ export function createBulkMiningController(): BulkMiningController {
       set({ ...ready, selected })
     },
     async start(bridges, media): Promise<void> {
-      // Refuse to mine until dictionary resolution finishes: mining an
-      // unresolved row would force a second lookup in the runner and leave
-      // holes in the snapshot the word list is later restored from.
+      // Wait for resolution so every mined row has the identities needed for the restored snapshot.
       if (state.kind !== 'ready' || state.resolving) return
       const ready = state
       lastReady = ready
@@ -366,9 +359,6 @@ export function createBulkMiningController(): BulkMiningController {
       if (state.kind !== 'done' || lastReady === null) return
       const statuses = state.statuses
       const restored = restoreReadyAfterRun(lastReady, statuses)
-      // The Mine button (and start()) are gated on resolution finishing, so
-      // every mined row already has a resolved entry — its exact identities
-      // are available from the retained snapshot for the deck re-check.
       const minedIdentities = [
         ...new Set(
           restored.candidates
@@ -468,10 +458,7 @@ function summaryText(summary: MiningSummary): string {
   return detail.length > 0 ? `Mining complete: ${detail}.` : 'Mining complete.'
 }
 
-/**
- * Converts controller phase transitions into one stable completion event per
- * run. Presentation changes deliberately never reach this coordinator.
- */
+// Emit completion once per run; presentation changes must not trigger it again.
 export function createBulkMiningCompletionTracker(): BulkMiningCompletionTracker {
   let previousKind: BulkMiningPhase['kind'] = 'idle'
   let activeRunId = 0

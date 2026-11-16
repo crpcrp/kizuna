@@ -44,7 +44,6 @@ export interface UseVocabularyMiningInput {
   state: VocabularyMiningState
   /** Latest pause flag, so a finished mine only pauses playback that is running. */
   pausedRef: RefObject<boolean>
-  /** The cue the overlay is currently showing, and its `cueKey`. */
   activeCue: Cue | undefined
   activeCueKey: string | undefined
   /** False for a non-Japanese (or no) subtitle track: every workflow here is
@@ -53,13 +52,10 @@ export interface UseVocabularyMiningInput {
   /** Whether the all-subtitles panel is open — it is the only consumer of the
    * whole-track tokenization, so it gates that work. */
   sidebarOpen: boolean
-  /** The Options dialog's cached integration data, refreshed by the dictionary
-   * and knowledge actions below. */
   optionsData: OptionsDataController
   /** Cached dictionary settings; part of the whole-track vocabulary key, since
    * enabling or reordering a dictionary changes the resolved entries. */
   dictionarySettings: unknown
-  /** Anki's configured target deck, shown in bulk mining's duplicate filter. */
   targetDeckName: string | undefined
 }
 
@@ -84,30 +80,12 @@ export interface UseVocabularyMiningResult {
   vocabularyMenu: VocabularyMenuProps
   report: SubtitleReportProps
   mining: BulkMiningViewModel
-  /** The Options rows whose effect is to invalidate or rebuild the caches this
-   * feature owns; the rest of the dialog's wiring is not this feature's. */
   knowledgeOptions: VocabularyKnowledgeOptions
-  /** Rebuilds local knowledge after a bulk export changes Anki. */
   syncNow(source: KnowledgeSource, force?: boolean): Promise<SyncStatus>
-  /** True while one of this feature's modals owns keyboard input, so the
-   * composition root can suspend the global shortcuts. */
   modalOpen: boolean
 }
 
-/**
- * Composes the renderer's vocabulary and mining lifecycle from the five hooks
- * that own its parts — `useSubtitleReport`, `useVocabularyPipeline`,
- * `useWordPopup`, `useKnowledgeOptions` and `useBulkMining` — plus the two
- * pieces that belong to none of them: the mined-line media source both mining
- * paths share, and the all-subtitles panel's copy and translate actions. The
- * returned groups match their UI consumers instead of exposing one flat
- * application-controller contract.
- *
- * The declaration order below is load-bearing. The report owns the flag that
- * gates whole-track work, so it is declared first; the caches produce the
- * snapshot the report's retry recomputes from, which is why `retry` takes that
- * snapshot as an argument instead of capturing it.
- */
+// Declare the report before the pipeline because it gates whole-track work; retry takes a fresh cache snapshot.
 export function useVocabularyMining({
   bridge,
   dispatch,
@@ -122,10 +100,7 @@ export function useVocabularyMining({
   dictionarySettings,
   targetDeckName
 }: UseVocabularyMiningInput): UseVocabularyMiningResult {
-  // Where a mined line's audio could be clipped from. `mineMediaContext`
-  // rejects an unsupported source, a missing audio selection, and unusable cue timing,
-  // so this can be passed unconditionally. Stable identity, since both the
-  // popup's mine and bulk mining's onStart hold on to it.
+  // Keep media context identity stable because popup and bulk mining callbacks retain it.
   const mineMediaSource = useLatestCallback((): MineMediaSource => ({
     filePath: state.filePath,
     audioStreamIndex: state.selectedAudioId,

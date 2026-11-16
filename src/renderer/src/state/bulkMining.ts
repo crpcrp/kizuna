@@ -11,9 +11,7 @@ export interface MiningCandidate {
   count: number
   /** Original cue-order position, retained for deterministic display ties. */
   firstOccurrence?: number
-  /** Media-clock start/end of the cue this candidate first occurred in,
-   * retained so a bulk mine can clip its sentence audio.
-   * Undefined when the cue carried no timing. */
+  // Cue times are media-clock seconds; absent timing means mining without sentence audio.
   cueStart?: number
   cueEnd?: number
 }
@@ -25,7 +23,6 @@ export interface ResolvedEntry {
   frequency: number | null
 }
 
-/** The complete, shared definition of a row that may be shown or mined. */
 export interface BulkMiningFilters {
   maximumFrequency: number | null
   minimumCount: number | null
@@ -34,7 +31,6 @@ export interface BulkMiningFilters {
   hideTargetDeckMatches: boolean
 }
 
-/** Returns the exact Word-field values that this resolved candidate can mine. */
 export function membershipIdentities(
   candidate: MiningCandidate,
   resolved: Record<string, ResolvedEntry>
@@ -44,7 +40,6 @@ export function membershipIdentities(
   return [...new Set([entry.expression, candidate.lemma].filter(Boolean))]
 }
 
-/** A candidate is in the target deck when any of its exact mining identities matches. */
 export function hasTargetDeckMatch(
   candidate: MiningCandidate,
   resolved: Record<string, ResolvedEntry>,
@@ -72,7 +67,6 @@ export interface MiningSummary {
   cancelled: number
 }
 
-/** The interactive word-list phase, shared with the controller's phase union. */
 export interface BulkMiningReadyPhase {
   kind: 'ready'
   candidates: MiningCandidate[]
@@ -88,13 +82,7 @@ export interface BulkMiningReadyPhase {
   advisoryWarning?: string
 }
 
-/**
- * Rebuilds the ready phase from a run's retained snapshot. Rows that are now
- * unmineable — `added`, `updated`, or `duplicate` — are deselected so Mine
- * never retries them; `error`/`cancelled` selections are kept for a retry.
- * `start()` only retains a ready phase after resolution completes, so the
- * restored phase is always fully resolved.
- */
+// Deselect completed rows so restoring the list cannot mine them twice; keep failed selections for retry.
 export function restoreReadyAfterRun(
   lastReady: BulkMiningReadyPhase,
   statuses: Record<string, MiningWordStatus>
@@ -117,7 +105,6 @@ export interface MiningCueTokens extends Omit<VocabularyUnitCue, 'cueKey'> {
   end?: number
 }
 
-/** Derives uncapped unknown vocabulary candidates in cue order. */
 export function deriveMiningCandidates(
   cueTokens: MiningCueTokens[],
   details: Record<string, KnowledgeDetails>
@@ -143,7 +130,7 @@ export function deriveMiningCandidates(
     }))
 }
 
-/** Applies every bulk-mining filter to one candidate. Unresolved frequency rows remain visible. */
+// Unresolved frequency rows stay visible until their lookup finishes.
 function isCandidateVisible(
   candidate: MiningCandidate,
   resolved: Record<string, ResolvedEntry>,
@@ -163,7 +150,6 @@ function isCandidateVisible(
   )
 }
 
-/** Returns candidates that pass the one shared visible-set predicate. */
 export function visibleCandidates(
   candidates: MiningCandidate[],
   resolved: Record<string, ResolvedEntry>,
@@ -172,7 +158,6 @@ export function visibleCandidates(
   return candidates.filter((candidate) => isCandidateVisible(candidate, resolved, filters))
 }
 
-/** Filters candidates, then orders them with explicit first-occurrence tie breaks. */
 export function displayedCandidates(
   candidates: MiningCandidate[],
   resolved: Record<string, ResolvedEntry>,
@@ -234,7 +219,6 @@ export function miningSet(
   )
 }
 
-/** Counts candidates hidden because any exact mining identity is already in the target deck. */
 export function hiddenTargetDeckMatchCount(
   candidates: MiningCandidate[],
   resolved: Record<string, ResolvedEntry>,
@@ -276,7 +260,6 @@ export function parseThreshold(raw: string): number | null {
   return parsePositiveInteger(raw)
 }
 
-/** Parses the count floor without changing maximum-frequency semantics. */
 export function parseMinimumCount(raw: string): number | null {
   return parsePositiveInteger(raw)
 }

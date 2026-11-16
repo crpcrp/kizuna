@@ -1,7 +1,3 @@
-// MeCab tokenization and knowledge-level resolution for subtitle cues: the
-// active cue (interactive path) and whole-track batches (sidebar/report path).
-// Both are guarded by a shared request token so a superseded run never lands.
-
 import { type Cue } from '../../../shared/cue'
 import { type KnowledgeLevel, maxKnowledgeLevel } from '../../../shared/knowledge'
 import { displayTextProjection } from '../../../shared/textProjection'
@@ -33,37 +29,19 @@ export function createVocabularyCaches(): VocabularyCaches {
   }
 }
 
-/** Subset of the preload `kizuna.mecab` bridge that tokenizeActiveCue needs. */
 export interface MecabBridge {
   tokenize(text: string): Promise<Token[]>
 }
 
-/** Stable identity for a cue, used both as a cache key and to detect that the
- * active cue changed (vs. the same cue still being active on a later tick). */
 export function cueKey(cue: Cue): string {
   return `${cue.start}|${cue.end}|${cue.text}`
 }
 
-/**
- * The text one cue is tokenized as: its lines joined with no separator, the
- * same continuous view Game OCR analyzes a grouped text block through (see
- * `shared/textProjection.ts`). A subtitle wraps mid-word, so MeCab must see
- * 描かれている rather than 描か and れている on two lines — and every token
- * offset that follows is an offset into this text, which
- * `InteractiveText` projects back onto the displayed lines.
- */
+// Join wrapped lines without separators so MeCab sees complete words and offsets remain continuous.
 function cueAnalysisText(cue: Cue): string {
   return displayTextProjection(cue.text).analysisText
 }
 
-/**
- * Tokenizes the currently-active cue via MeCab, lazily and with caching: a
- * cue already tokenized (by `cueKey`) is served from `cache` without calling
- * the bridge again, so scrubbing back to a previously-active cue is free.
- * `tokenizeToken` guards against stale resolutions the same way
- * `SubtitleRequestToken` guards subtitle loads — the caller (App.tsx) should
- * share one instance across calls for the same player instance.
- */
 export async function tokenizeActiveCue(
   bridge: MecabBridge,
   dispatch: Dispatch,
@@ -83,42 +61,22 @@ export async function tokenizeActiveCue(
     return cached
   }
 
-  // Cache miss: clear stale tokens from the previously-active cue synchronously
-  // (before awaiting the bridge) so SubtitleOverlay falls back to this cue's
-  // plain text while tokenizing is in flight, instead of rendering leftover
-  // token spans from whatever cue was active before.
+  // Clear old tokens before awaiting MeCab so the new cue displays plain text rather than stale spans.
   dispatch({ type: 'activeTokensLoaded', tokens: [] })
 
   const requestId = ++tokenizeToken.current
   const tokens = await bridge.tokenize(cueAnalysisText(cue))
-  // Stale: don't dispatch, and return [] rather than these (now-superseded)
-  // tokens so a chained caller (e.g. resolveKnownLevels in App.tsx) treats
-  // this resolution as a no-op too, instead of resolving levels for a cue
-  // that's no longer active.
+  // Return no stale tokens so chained knowledge resolution cannot process a superseded cue.
   if (tokenizeToken.current !== requestId) return []
   cache.set(key, tokens)
   dispatch({ type: 'activeTokensLoaded', tokens })
   return tokens
 }
 
-/** Subset of the preload `kizuna.knowledge` bridge that resolveKnownLevels needs. */
 export interface KnowledgeBridge {
   levelsFor(lemmas: string[]): Promise<Record<string, KnowledgeLevel>>
 }
 
-/**
- * Resolves knowledge levels (unknown/inDeck/learning/known/wellKnown) for a cue's
- * tokens, lazily and with caching — the same shape as `tokenizeActiveCue`.
- * Only lemmas not already present in `cache` are queried, together with each
- * distinct surface that differs from its lemma. A cue repeating a word costs
- * one lookup per distinct key; already-cached lemmas are simply
- * skipped, since `cache` and the reducer's `knownLevels` accumulate over the
- * whole episode rather than resetting per cue (unlike `activeTokens`). If
- * every lemma is already cached (or `tokens` is empty), this is a no-op: no
- * bridge call, no dispatch. `requestToken` guards against a stale resolution
- * the same way `tokenizeActiveCue`'s does — the caller (App.tsx) should share
- * one instance across calls for the same player instance.
- */
 export async function resolveKnownLevels(
   bridge: KnowledgeBridge,
   dispatch: Dispatch,
@@ -160,26 +118,10 @@ export async function resolveKnownLevels(
   dispatch({ type: 'knownLevelsLoaded', levels: resolved })
 }
 
-/** Subset of the preload `kizuna.mecab` bridge that tokenizeAllCues needs. */
 export interface MecabBatchBridge {
   tokenizeBatch(texts: string[]): Promise<Token[][]>
 }
 
-/**
- * Tokenizes *every* cue of a track (for the subtitle sidebar's per-word
- * coloring), reusing the same per-cue `tokenCache` (keyed by `cueKey`) that
- * `tokenizeActiveCue` warms — so cues already tokenized while playing are not
- * re-sent to MeCab. Only the cache-miss cues are batch-tokenized in one bridge
- * round-trip (`tokenizeBatch`). Dispatches `allCueTokensLoaded` with the full
- * `cueKey -> Token[]` map, then resolves knowledge levels for every lemma in
- * the track via the shared `resolveKnownLevels` primitive (which itself only
- * queries lemmas missing from `knownLevelsCache`). `requestToken` guards
- * against a stale resolution the same way the other orchestration functions do
- * — if the track changes mid-flight, the superseded call neither dispatches nor
- * resolves levels. Returns the complete snapshot used for a current request;
- * a stale request returns `undefined`. No-op (empty dispatch) for an empty cue
- * list.
- */
 export async function tokenizeAllCues(
   mecab: MecabBatchBridge,
   knowledge: KnowledgeBridge,
@@ -195,8 +137,6 @@ export async function tokenizeAllCues(
   const missing = cues.filter((cue) => !tokenCache.has(cueKey(cue)))
   if (missing.length > 0) {
     const batches = await mecab.tokenizeBatch(missing.map(cueAnalysisText))
-    // A newer request started while MeCab was running: discard this result
-    // rather than writing a superseded track's tokens into state.
     if (requestToken.current !== requestId) return undefined
     missing.forEach((cue, i) => tokenCache.set(cueKey(cue), batches[i] ?? []))
   }

@@ -8,18 +8,11 @@ import type { GameOcrTextSnapshot } from './gameOcrTextPipeline'
 export interface GameOcrBoxRegionsInput {
   result: OcrResult
   viewportSize: GameOcrLayoutSize
-  /** Grouped line regions; omitted for callers that only have raw OCR output. */
   blocks?: readonly GameOcrTextBlock[]
-  /** Tokens, knowledge levels, and vocabulary spans, when they have resolved. */
   text?: GameOcrTextSnapshot
 }
 
-/**
- * Pairs each accepted line-level OCR region with the exact rectangle it was
- * detected at and, once text processing catches up, its interactive tokens.
- * Text from a superseded capture is ignored rather than mixed into the current
- * frame; plain OCR text stays selectable in the meantime.
- */
+// Ignore superseded text processing; plain OCR text stays selectable until current tokens arrive.
 export function buildGameOcrBoxRegions({
   result,
   viewportSize,
@@ -85,21 +78,13 @@ const MIN_FONT_SIZE = 6
 const MAX_FONT_SIZE = 64
 const WIDTH_SAFETY_FACTOR = 0.95
 
-/** Typography that fits the detector rectangle without changing its bounds. */
 export interface GameOcrTextFit {
   fontSize: number
   /** Unitless CSS line height, spreading the lines over the whole rectangle. */
   lineHeight: number
 }
 
-/**
- * Fits replacement glyphs inside the detector rectangle without growing it.
- *
- * A block's rectangle spans its source lines, so the leading between them is
- * part of the measurement: the fitted lines are spread back over that height
- * instead of being packed at the top, which keeps each replacement line over
- * the line it replaces and keeps the gap the reader saw in the game.
- */
+// Spread replacement lines over the measured block height to preserve their source positions.
 export function fitGameOcrText(text: string, boxWidth: number, boxHeight: number): GameOcrTextFit {
   const lines = text.split('\n')
   const availableWidth = Math.max(0, boxWidth - BOX_HORIZONTAL_INSET)

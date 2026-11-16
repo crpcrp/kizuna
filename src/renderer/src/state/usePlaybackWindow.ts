@@ -38,20 +38,14 @@ type PlaybackWindowState = Pick<
   | 'tracks'
 >
 
-/** The persisted per-file (and app-wide picture) values this feature applies to
- * mpv. Held in refs, not state: they are read and written outside the render
- * path, and only the current file's entry ever needs to reach the reducer. */
+// Keep persisted per-file values in refs; only the current file needs to reach the reducer.
 export interface PerFileValueRefs {
-  /** Per-file subtitle offsets (ms), keyed by file path. */
   subtitleOffsetsRef: RefObject<Record<string, number>>
   /** Per-folder subtitle offsets (ms), the fallback for any file in the folder
    * with no per-file entry — written by the Subtitle menu's "Apply to folder". */
   folderSubtitleOffsetsRef: RefObject<Record<string, number>>
-  /** Per-file audio delays (ms), keyed by file path. */
   audioDelaysRef: RefObject<Record<string, number>>
-  /** Latest app-wide picture adjustments, mirrored here so the per-load
-   * re-apply can read them without depending on the state value (which would
-   * re-fire it on every slider drag). */
+  // Read picture adjustments through a ref so slider changes do not retrigger per-load restoration.
   videoAdjustmentsRef: RefObject<VideoAdjustments>
 }
 
@@ -72,20 +66,12 @@ export interface UsePlaybackWindowInput {
   /** False until `settings.json` has been read (or failed to read): the
    * per-load restore and the window-size baseline both wait for it. */
   settingsReady: boolean
-  /** Side-panel visibility, restored by `useSettingsLifecycle` and persisted by
-   * the toggles returned below. */
   panels: PlaybackWindowPanels
-  /** Bulk mining's presentation, which reserves right-stack width like a panel. */
   miningPresentation: BulkMiningPresentation
-  /** Initially-known mpv outputs, for deterministic renderer integration tests. */
   initialAudioDevices?: AudioDevice[]
-  /** Reports playback-operation failures through the media banner. */
   reportError: (message: string) => void
 }
 
-/** Refs the composition root attaches to the chrome and side-panel elements.
- * Their measured sizes drive mpv's video margins, the mini-player rectangle,
- * and both window-sizing paths. */
 export interface PlaybackWindowLayoutRefs {
   topBar: RefObject<HTMLDivElement | null>
   bottomBar: RefObject<HTMLDivElement | null>
@@ -99,7 +85,6 @@ export interface PanelToggles {
 }
 
 export interface MiniPlayerViewModel {
-  /** Gates the reduced chrome across the whole layout. */
   active: boolean
   toggle(): void
 }
@@ -151,22 +136,13 @@ export interface UsePlaybackWindowResult {
     KeyboardShortcutContext,
     'onFrameBack' | 'onFrameStep' | 'onToggleMiniPlayer' | 'windowControls'
   >
-  /** The mini-player bindings mpv/window event pushes drive directly. */
   playerEvents: Pick<
     UsePlayerEventsInput,
     'applyMiniPlayerEffect' | 'miniPlayerRef' | 'setAlwaysOnTop' | 'setMiniPlayer'
   >
-  /** Whether the seekbar can show frame previews for the current media. */
   thumbnailsEnabled: boolean
 }
 
-/**
- * Owns the renderer's playback and window lifecycle: audio/subtitle menu
- * commands, the per-file values applied after every load, side-panel sizing,
- * the Video ▸ Size presets, fullscreen, the mini player, and picture
- * adjustments. The returned groups match their UI consumers instead of
- * exposing one flat application-controller contract.
- */
 export function usePlaybackWindow({
   bridge,
   dispatch,
@@ -189,26 +165,18 @@ export function usePlaybackWindow({
   // The shared right-side stack is measured once to keep mpv out from under
   // either (or both) sidebar surfaces.
   const rightSidebarStackRef = useRef<HTMLElement>(null)
-  // The left-side stack holds the playlist; measured so mpv stays out from
-  // under it too, exactly like the right stack.
   const leftSidebarStackRef = useRef<HTMLElement>(null)
   // Drops frame-step presses while a previous step's IPC invoke is still in
   // flight, so holding the key down can't flood mpv's command queue.
   const frameStepGuard = useRef<FrameStepGuard>({ inFlight: false })
   const [videoAdjustmentsOpen, setVideoAdjustmentsOpen] = useState(false)
-  // Native pixel resolution of the current file's video stream, used by the
-  // Video menu's size presets; undefined until fetched (or if there's no
-  // video stream).
   const [videoDimensions, setVideoDimensions] = useState<VideoDimensions | undefined>(undefined)
   const [alwaysOnTop, setAlwaysOnTop] = useState(false)
-  // Compact mini-player (picture-in-picture) mode. `miniPlayer.active` gates the
-  // reduced chrome; the ref mirror lets the toggle-fullscreen wrapper read the
-  // current mode without re-subscribing. See `state/miniPlayer.ts`.
+  // Mirror mini-player mode in a ref so fullscreen toggling reads it without resubscribing.
   const [miniPlayer, setMiniPlayer] = useState<MiniPlayerState>(INACTIVE_MINI_PLAYER)
   const miniPlayerRef = useLatestRef(miniPlayer)
   const miniPlayerActive = miniPlayer.active
 
-  // mpv output selection (list refresh, explicit picks, per-load re-apply).
   const audioDeviceController = useAudioDevices({
     player: bridge.player,
     dispatch,
@@ -241,11 +209,6 @@ export function usePlaybackWindow({
     player: bridge.player
   })
 
-  // Applies the current file's persisted subtitle offset (its own entry, else
-  // its folder's — see subtitleOffsetForFile) and fetches its video stream's
-  // native resolution (for the Video menu's size presets) whenever a new file
-  // loads. Both offset refs are populated by the settings-load effect (or
-  // already hold this file's entry if it was set earlier this session).
   usePerFileRestore({
     dispatch,
     bridge,
@@ -277,8 +240,6 @@ export function usePlaybackWindow({
     setWindowSize: (width, height) => bridge.windowControls.setSize(width, height)
   })
 
-  // Updates the current subtitle offset immediately and persists it keyed by
-  // the current file path, so re-opening the file later re-applies it.
   const handleSubtitleOffsetChange = (valueMs: number): void => {
     dispatch({ type: 'set', patch: { subtitleOffsetMs: valueMs } })
     if (!state.filePath) return
@@ -298,8 +259,6 @@ export function usePlaybackWindow({
     settingsPersistenceRef.current.schedule({ subtitleOffsets: subtitleOffsetsRef.current })
   }
 
-  // Applies the audio delay immediately and persists it keyed by the current
-  // file path, mirroring handleSubtitleOffsetChange.
   const handleAudioDelayChange = (valueMs: number): void => {
     dispatch({ type: 'set', patch: { audioDelayMs: valueMs } })
     void bridge.player.setAudioDelay(valueMs)
@@ -308,8 +267,6 @@ export function usePlaybackWindow({
     settingsPersistenceRef.current.schedule({ audioDelays: audioDelaysRef.current })
   }
 
-  // Subtitle menu > "Apply to folder": makes the current offset the default for
-  // every video in this file's folder, present and future.
   const handleApplyOffsetToFolder = (): void => {
     if (!state.filePath) return
     applyOffsetToFolder(
@@ -320,8 +277,6 @@ export function usePlaybackWindow({
     )
   }
 
-  // Audio menu > track list. Ignores ids with no matching audio track, and
-  // does nothing without a loaded file (there is no stream to switch).
   const handleSelectAudio = (id: number): void => {
     const track = state.tracks.find((t) => t.kind === 'audio' && t.id === id)
     if (state.filePath && track) selectAudio(bridge, dispatch, state.filePath, track)
@@ -333,15 +288,10 @@ export function usePlaybackWindow({
     void bridge.player.setLoudnessNorm(next)
   }
 
-  // Video menu > frame stepping, shared by the menu rows and the shortcut keys.
-  // The guard drops repeat presses while a step is still in flight.
   const handleFrameStep = (direction: 'forward' | 'back'): void => {
     frameStepAction(bridge.player, direction, state.filePath !== undefined, frameStepGuard.current)
   }
 
-  // Video menu > "Adjustments…" panel: applies the new picture-adjustments block
-  // to mpv live and persists it app-wide (not per file). The ref is updated in
-  // lockstep so the per-load re-apply reads the latest value.
   const handleChangeVideoAdjustments = (next: VideoAdjustments): void => {
     videoAdjustmentsRef.current = next
     dispatch({ type: 'set', patch: { videoAdjustments: next } })

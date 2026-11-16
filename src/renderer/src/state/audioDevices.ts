@@ -1,11 +1,4 @@
-// mpv output-device selection: the pure refresh/apply transitions plus the
-// hook that owns their renderer state. mpv's device list is live (Bluetooth
-// headphones and HDMI sinks come and go while the app runs) and its device
-// choice resets with a fresh mpv process, so the same two operations are
-// needed from three places: the Options > Playback tab opening, an explicit
-// user pick, and every new file load. Keeping all of it here means the refresh
-// version counter and the "recovery left mpv muted" flag stay private to the
-// one module that reasons about them.
+// mpv output devices can disappear at runtime; a fresh mpv process resets the selected device.
 
 import { useCallback, useRef, useState, type Dispatch, type RefObject } from 'react'
 import {
@@ -16,20 +9,13 @@ import {
 import type { PlayerAction } from './playerState'
 import { useLatestRef } from './useLatestRef'
 
-/** Minimal player surface needed to refresh and recover an output device. */
 export interface AudioDevicePlayer {
   getAudioDevices: () => Promise<AudioDevice[]>
   setAudioDevice: (name: string) => Promise<unknown>
   setMuted: (muted: boolean) => Promise<unknown>
 }
 
-/**
- * Refreshes mpv's output list and applies only the necessary device change.
- * The persisted preference stays in `stored`; an unavailable preference is
- * applied as `auto` for this session and the output is explicitly unmuted.
- * `reapplyStored` is used after a new mpv load, where an available preference
- * must be sent again even though it did not change during the refresh.
- */
+// Keep an unavailable device as the saved preference, but use auto and unmute for this session.
 async function refreshAudioDevice(
   stored: string,
   player: AudioDevicePlayer,
@@ -54,7 +40,6 @@ async function refreshAudioDevice(
   return recovered
 }
 
-/** Applies a user-selected output. */
 async function applySelectedAudioDevice(
   name: string,
   player: Pick<AudioDevicePlayer, 'setAudioDevice'>
@@ -62,7 +47,6 @@ async function applySelectedAudioDevice(
   await player.setAudioDevice(name)
 }
 
-/** Restores sound after a device was selected following fallback recovery. */
 async function recoverAudioDeviceMute(player: Pick<AudioDevicePlayer, 'setMuted'>): Promise<void> {
   await player.setMuted(false)
 }
@@ -73,33 +57,21 @@ export interface UseAudioDevicesInput {
   /** Live view of the persisted preference, read at call time so none of the
    * callbacks below have to change identity when the setting does. */
   storedDeviceRef: RefObject<{ audioDevice: string }>
-  /** Initially-known outputs, for deterministic renderer integration tests. */
   initialDevices?: AudioDevice[]
-  /** Reports device-operation failures through the app's media banner. */
   reportError: (message: string) => void
 }
 
 export interface AudioDevicesController {
-  /** Outputs from mpv's `audio-device-list`; empty until first fetched. */
   devices: AudioDevice[]
-  /** Re-reads the device list without re-sending an unchanged preference.
-   * Called when Options > Playback becomes active. */
   requestDevices: () => void
-  /** Commits an explicit user pick. */
   selectDevice: (name: string) => void
-  /** True while mpv is applying an explicit user pick. */
   selectionPending: boolean
   /** Re-reads the list and re-sends the stored preference, for use after a new
    * mpv load has reset the device. */
   reapplyAfterLoad: () => void
 }
 
-/**
- * Owns the renderer's output-device state. Every returned callback is
- * identity-stable: `requestDevices` is called from an effect in OptionsMenu
- * keyed on the prop, and `reapplyAfterLoad` sits in usePerFileRestore's effect
- * deps, so a per-render function would re-refresh on every render.
- */
+// Keep callbacks stable: effects depend on them and must not refresh devices on every render.
 export function useAudioDevices({
   player,
   dispatch,
@@ -151,9 +123,6 @@ export function useAudioDevices({
   const requestDevices = useCallback((): void => refresh(false), [refresh])
   const reapplyAfterLoad = useCallback((): void => refresh(true), [refresh])
 
-  // Bumps the version counter first so an in-flight refresh cannot clobber
-  // this explicit pick, then clears any mute left behind by an earlier
-  // device recovery.
   const selectDevice = useCallback(
     (name: string): void => {
       if (selectionPendingRef.current) return
@@ -173,9 +142,7 @@ export function useAudioDevices({
           return
         }
 
-        // Do not claim or persist the new setting until mpv accepted it. A
-        // later request may have superseded this one while the command was in
-        // flight, so stale completions must not update the reducer or flags.
+        // Only persist a selection accepted by mpv, and ignore completions superseded by a newer pick.
         if (!isCurrent()) return
         dispatch({ type: 'set', patch: { audioDevice: name } })
         if (!recoverMute) return

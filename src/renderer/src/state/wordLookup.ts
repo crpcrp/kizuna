@@ -1,8 +1,3 @@
-// Dictionary lookup for the word popup: building the lookup request from a
-// clicked token, resolving which characters the popup should highlight, and the
-// two lookup entry points (a clicked word, and a cross-reference link inside an
-// already-open popup).
-
 import { clamp } from '../../../shared/math'
 import { type FrequencyMode, type LookupResult } from '../../../shared/dictionary'
 import { type Token } from '../../../shared/token'
@@ -14,7 +9,6 @@ export interface WordPopupPosition {
   placement?: 'above' | 'below'
 }
 
-/** The part of a DOMRect needed to anchor a popup to interactive text. */
 export interface WordPopupAnchorRect {
   left: number
   top: number
@@ -28,27 +22,17 @@ export interface WordPopupTextContext {
   textId: string
   /** Every token in that text instance, never tokens from a neighboring box. */
   tokens: Token[]
-  /** The original text used as dictionary sentence context. */
   sentence: string
   /** The hovered/clicked text element's viewport rectangle, when measurable. */
   anchorRect?: WordPopupAnchorRect
 }
 
-/**
- * Maximum popup dimensions from WordPopup.css. Keeping the worst-case box
- * inside the viewport also keeps a short result inside it.
- */
+// Use the maximum WordPopup.css dimensions so even the largest popup stays inside the viewport.
 const WORD_POPUP_MAX_WIDTH = 440
 const GAME_OCR_WORD_POPUP_MAX_HEIGHT_RATIO = 0.28
 const WORD_POPUP_GAP = 14
 
-/**
- * Pure: computes the word popup's anchor position. Prefers the subtitle
- * box's own rect (so the popup anchors above the whole subtitle line,
- * staying stable across every token in it) and falls back to the
- * triggering mouse event's coordinates when the box isn't available, then
- * to {0,0} when neither is (e.g. hover fired with no event).
- */
+// Anchor above the whole subtitle box so moving between tokens does not move the popup.
 export function wordPopupPosition(
   subtitleRect: WordPopupAnchorRect | undefined,
   event?: { clientX: number; clientY: number }
@@ -58,11 +42,6 @@ export function wordPopupPosition(
   return { x: 0, y: 0 }
 }
 
-/**
- * Places a Game OCR popup on the side of the complete text box with enough
- * room, preferring below upper-screen text and above lower-screen text. The
- * anchor is clamped for edge boxes; ordinary subtitle placement is unchanged.
- */
 export function gameOcrWordPopupPosition(
   anchorRect: WordPopupAnchorRect | undefined,
   event: { clientX: number; clientY: number } | undefined,
@@ -95,7 +74,6 @@ export function gameOcrWordPopupPosition(
   }
 }
 
-/** Subset of the preload `kizuna.dict` bridge that lookupWordPopup needs. */
 export interface DictLookupBridge {
   lookup(
     lemma: string,
@@ -107,7 +85,6 @@ export interface DictLookupBridge {
   ): Promise<LookupResult[]>
 }
 
-/** The complete, serializable input to one dictionary lookup. */
 export interface WordLookupRequest {
   lemma: string
   reading: string | undefined
@@ -117,21 +94,7 @@ export interface WordLookupRequest {
   surface: string
 }
 
-/**
- * Builds longest-match compound candidates for a clicked/hovered token,
- * given the full token list for the cue it belongs to. MeCab segments purely
- * by its own grammar rules, so a dictionary headword that's a compound of
- * several MeCab tokens (e.g. 閻魔大王 segmented as 閻魔/大王) is invisible to a
- * lookup keyed on just `clickedToken`'s own lemma. Returns merged-surface
- * strings and, for multi-token spans whose final token is inflected, a
- * final-token lemma variant. Both start at `clickedToken`, longest (up to
- * `maxTokens`) down to the clicked token itself. It then appends shorter prefixes within the
- * clicked token, longest first. `Array.from` keeps those prefixes on Unicode
- * code-point boundaries, so supplementary characters are never split. This
- * lets a dictionary entry such as `閻` be found when MeCab emits `閻魔`.
- * Returns `[]` if `clickedToken` isn't found in `cueTokens` (matched by
- * `startOffset`, which is unique within a cue).
- */
+// MeCab can split dictionary compounds (閻魔/大王); try merged spans and code-point-safe internal prefixes.
 export function buildLongestMatchCandidates(
   cueTokens: Token[],
   clickedToken: Token,
@@ -158,13 +121,7 @@ export function buildLongestMatchCandidates(
     }
   }
 
-  // Internal prefixes only hold up as plausible word boundaries when the
-  // surface's conjugated tail beyond the lemma is short (e.g. 食べた's -た,
-  // or 良かろう's archaic -かろう). A heavily conjugated form like
-  // 行きたければ (lemma 行く, four characters of tail beyond it) doesn't trim
-  // down to real word boundaries -- 行き, 行 are just fragments of the
-  // conjugation and must not outrank the complete surface or the MeCab lemma
-  // in the popup.
+  // Only trim short conjugated tails: prefixes of 行きたければ are fragments, not plausible word boundaries.
   const codePoints = Array.from(clickedToken.surface)
   const lemmaLength = Array.from(clickedToken.lemma).length
   if (codePoints.length - lemmaLength <= 2) {
@@ -175,7 +132,6 @@ export function buildLongestMatchCandidates(
   return [...candidates]
 }
 
-/** Builds the dictionary request shared by popup and whole-track lookups. */
 export function buildWordLookupRequest(
   token: Token,
   freqDictId: number | null,
@@ -197,7 +153,6 @@ export function buildWordLookupRequest(
   }
 }
 
-/** Performs a previously built dictionary request. */
 export function lookupWord(
   bridge: DictLookupBridge,
   request: WordLookupRequest
@@ -212,17 +167,7 @@ export function lookupWord(
   )
 }
 
-/**
- * Given the resolved `expression` a lookup matched on (e.g. `results[0].expression`),
- * finds the contiguous run of tokens starting at `clickedToken` whose
- * concatenated surface or lemmas equal it — so the UI can visually highlight the same
- * compound the popup's content actually describes (e.g. highlight both 閻魔
- * and 大王 when the popup is showing the 閻魔大王 entry, even though the click
- * landed on the 閻魔 token alone). Falls back to `[clickedToken]` when
- * `expression` doesn't correspond to any prefix run of `cueTokens`' surfaces
- * — the ordinary case where the match came from `token.lemma` itself (with or
- * without deinflection), not a `buildLongestMatchCandidates` compound hit.
- */
+// Highlight the full matched compound, even when the click landed on just its first MeCab token.
 export function matchedTokenSpan(
   cueTokens: Token[],
   clickedToken: Token,
@@ -246,7 +191,6 @@ export function matchedTokenSpan(
 
 const INFLECTION_CONTINUATIONS = new Set(['て', 'で', 'ば', 'たり', 'だり', 'そう'])
 
-/** Resolves the subtitle span described by a popup result, including split inflections. */
 export function resolvePopupHighlightSpan(
   cueTokens: Token[],
   clickedToken: Token,
@@ -305,19 +249,7 @@ export function resolvePopupHighlightSpan(
   return span
 }
 
-/**
- * Looks up `token`'s dictionary entries and resolves the popup payload
- * (results + the already-computed anchor position + which tokens to visually
- * highlight) for the caller to store in state. Shared by both App.tsx's
- * hover-settle callback and its click handler, so both paths open the same
- * popup shape. `sortOrder: 'auto'` (or omitted) forwards no override, so the
- * main-process lookup falls back to the frequency dictionary's own
- * rank-based/occurrence-based mode. `cueTokens` (the full token list for the
- * active cue, if available) is used both to build longest-match compound
- * candidates (`buildLongestMatchCandidates`) and, once results come back, to
- * resolve `highlightedTokens` (`matchedTokenSpan`) — so the highlighted span
- * always matches whichever word the popup ends up displaying.
- */
+// With auto sort order, omit the override so the dictionary chooses its rank or occurrence mode.
 export async function lookupWordPopup(
   bridge: DictLookupBridge,
   token: Token,
@@ -335,13 +267,7 @@ export async function lookupWordPopup(
   return { results, position, highlightedTokens }
 }
 
-/**
- * Looks up a glossary cross-reference link's target term directly (see
- * WordPopup.tsx's `onLinkClick`/`parseInternalLinkQuery`) — unlike
- * `lookupWordPopup`, `expression` isn't a subtitle `Token`, so there are no
- * `cueTokens` to build longest-match candidates from or highlight; it's
- * looked up as-is, same as a single-token `lookup()` fallback.
- */
+// Glossary links have no cue tokens; look up the target as-is without compound expansion.
 export async function lookupLinkedWord(
   bridge: DictLookupBridge,
   expression: string,

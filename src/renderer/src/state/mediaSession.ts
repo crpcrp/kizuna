@@ -1,11 +1,3 @@
-// Contracts shared by the renderer's media orchestration: the slice of the
-// preload bridge these actions need, the reducer dispatch alias, the request
-// token that invalidates superseded async work, and the open-session bundle the
-// load/open paths thread through, plus the error-message helper they use.
-//
-// Every module in this group takes an injected `bridge` and `dispatch`, so it is
-// unit-testable with a fake bridge — no Electron, no window, no mpv.
-
 import { type Cue } from '../../../shared/cue'
 import {
   type MediaPlaybackHistory,
@@ -18,7 +10,6 @@ import { type Track } from '../../../shared/track'
 import { type PlayerAction } from './playerState'
 import type { SubtitleSelectionSnapshot } from './trackSelection'
 
-/** Subset of the preload `kizuna` bridge that orchestration needs. */
 export interface PlayerBridge {
   media: {
     openFile(): Promise<string | undefined>
@@ -40,7 +31,6 @@ export interface PlayerBridge {
   }
 }
 
-/** The media-history operations needed before opening a recent path. */
 export interface RecentMediaBridge extends PlayerBridge {
   mediaHistory: PlayerBridge['mediaHistory'] & {
     checkFileAvailability(path: string): Promise<FileAvailability>
@@ -50,11 +40,7 @@ export interface RecentMediaBridge extends PlayerBridge {
 
 export type Dispatch = (action: PlayerAction) => void
 
-/**
- * Finds the current stream corresponding to a saved selection. An ID is used
- * only within the requested kind; otherwise stable stream metadata provides a
- * deterministic fallback when a remux changed stream indexes.
- */
+// Stream indexes may change after remuxing; fall back to stable metadata within the requested track kind.
 export function matchStoredTrack(
   tracks: Track[],
   kind: Track['kind'],
@@ -90,29 +76,12 @@ function comparableMetadata(value: string | undefined): string | undefined {
   return normalized || undefined
 }
 
-/**
- * Shared mutable counter used to sequence subtitle-load requests. Subtitle
- * loads go through an async ffmpeg extraction, so two in-flight requests
- * (e.g. openAndLoad's auto-selected default racing a manual pick the user
- * makes before it resolves) can resolve out of request order. Every caller
- * bumps `current` when it starts and only applies its result if `current`
- * still matches — i.e. no newer request has started since. Callers should
- * share one token across openAndLoad/selectSubtitle calls for the same
- * player instance (App.tsx holds it in a ref); tests get a fresh default
- * token per call, which is equivalent to no guarding.
- */
+// Share one request counter across automatic and manual subtitle loads so late extraction cannot overwrite a newer pick.
 export interface SubtitleRequestToken {
   current: number
 }
 
-/**
- * Typed outcome of `loadPath`/`openAndLoad`/`openRecentFile`, so App can show
- * accurate errors without parsing exceptions. `opened.warnings` collects
- * non-fatal audio/resume restoration failures that don't prevent the file
- * from playing. Subtitle extraction completes independently so it cannot
- * delay an otherwise successful open — its own non-fatal failure arrives
- * later, through `OpenWarningSink`, instead of in `warnings`.
- */
+// Subtitle restoration finishes independently; its warnings arrive through OpenWarningSink after opening.
 export type OpenMediaResult =
   | { status: 'cancelled' }
   | { status: 'opened'; filePath: string; warnings: string[] }
@@ -121,24 +90,11 @@ export type OpenMediaResult =
   | { status: 'stale' }
   | { status: 'busy' }
 
-/**
- * Receives a sanitized restoration warning that lands *after* the open result
- * resolved — today only subtitle restoration, which finishes independently of
- * the file opening (see `loadPath`). Only warnings for the file that is still
- * the current request are delivered; a superseded open reports nothing.
- */
+// Deliver late restoration warnings only while their file request is current.
 export type OpenWarningSink = (message: string) => void
 
 export const noWarningSink: OpenWarningSink = () => {}
 
-/**
- * Everything a file-open needs besides the path itself: the bridge and
- * dispatch it drives, the request tokens and cue cache shared across one
- * player instance (App.tsx holds them in refs), and where a late, non-fatal
- * restoration warning goes. Bundling them keeps the open pipeline's
- * signatures short instead of growing another positional parameter each time
- * a slice needs one more piece of per-player state.
- */
 export interface OpenSession {
   bridge: PlayerBridge
   dispatch: Dispatch
@@ -161,8 +117,6 @@ export interface OpenSession {
   onSubtitleRestoreStarted?: () => void
   onSubtitleRestoreSettled?: () => void
   onWarning?: OpenWarningSink
-  /** Fires when "Open file…" (via openAndLoad) picks a path, with the entries
-   * that pick replaces the queue with — a playlist's expanded entries, or the
-   * single picked media file — before the pipeline loads entries[0]. */
+  // Replace the queue before loading the picked file or the first expanded playlist entry.
   onPlaylistPicked?: (paths: string[]) => void
 }
