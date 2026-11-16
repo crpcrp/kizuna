@@ -13,5 +13,5 @@ Each major subtree adds a short scoped file with the rules specific to it:
 [`scripts/AGENTS.md`](scripts/AGENTS.md).
 
 Use [docs/codebase-map.md](docs/codebase-map.md) to locate a subsystem and
-[docs/architecture-plan.md](docs/architecture-plan.md) for the boundaries a
+[docs/architecture.md](docs/architecture.md) for the boundaries a
 change must preserve. Both are authoritative; do not restate them here.

@@ -1,7 +1,7 @@
 # Agent guidelines
 
 Kizuna is a Windows and Linux Electron/TypeScript application. Use
-`docs/codebase-map.md` to locate subsystems and `docs/architecture-plan.md` for
+`docs/codebase-map.md` to locate subsystems and `docs/architecture.md` for
 architectural changes.
 
 ## Output
@@ -9,12 +9,8 @@ architectural changes.
 - Keep every response and generated output laconic. Include only information
   needed for correctness or action.
 - Be accurate. State material uncertainty or verification limits directly.
-- Minimize output and token usage without omitting information needed for
-  correctness.
 - Lead with the answer or result. Skip preambles, restatements, routine work
   narration, and discarded alternatives.
-- Avoid hedging unless uncertainty matters. Do not repeat known context or
-  earlier results.
 - Prefer concise prose; use lists only when they are shorter or clearer.
 - When showing code, put it before any explanation and explain only non-obvious
   details.
@@ -36,11 +32,6 @@ architectural changes.
   and other external boundaries. Automated tests must not require live accounts,
   network services, or bundled binaries. Test local filesystem behavior in a
   temporary directory, with spies only for specific failure cases.
-- Keep tests independent of the host OS. Pass an explicit platform to code that
-  derives filesystem paths and assert both variants (see "Derive a filesystem
-  path" in `docs/codebase-map.md`). Skipping a case for the running platform is
-  a last resort, and each skip must name the technical reason and its
-  counterpart coverage.
 - Update documentation only when setup, user-visible behavior, architecture, or
   a public interface changes.
 
@@ -58,8 +49,6 @@ npm test
 
 Run one file with `npm test -- run test\<path>.test.ts`; `npm test` runs
 Vitest under Electron's Node ABI, which `better-sqlite3` requires.
-
-Do not call live external integrations from tests.
 
 ## Git and pull requests
 

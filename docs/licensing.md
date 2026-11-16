@@ -57,14 +57,8 @@ drift is caught before release.
 
 ## Updating packaged software
 
-When updating a pinned runtime component:
-
-1. Publish the reviewed files, license texts, source reference, and build recipe
-   to the [vendor mirror](https://github.com/crpcrp/kizuna-vendor).
-2. Update `resources.lock.json` with the new mirror commit and file hashes.
-3. Update `third-party.json` with the new version and licensing/source
-   metadata.
-4. Run `npm run resources`, `npm run notices`, and `npm test`.
+Follow [Updating a pinned binary](binaries.md#updating-a-pinned-binary) for runtime
+components, including source references, licence texts, and notice verification.
 
 For npm dependencies, keep `package.json` and `package-lock.json` in sync;
 the notice generator reads production packages from the lockfile.

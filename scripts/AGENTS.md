@@ -1,11 +1,5 @@
 # Scripts
 
-Rules that differ inside `scripts/`. The repository-wide principles stay in
-[AGENTS.md](../AGENTS.md); the surrounding workflows are in
-[docs/binaries.md](../docs/binaries.md),
-[docs/licensing.md](../docs/licensing.md), and
-[docs/releasing.md](../docs/releasing.md).
-
 - Plain ESM `.mjs` runnable with bare `node`, before any build step exists. No
   TypeScript, no bundler, no dependency on `src/`.
 - Entry points own argv, environment, I/O, and exit codes. Extract an importable

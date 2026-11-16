@@ -1,14 +1,10 @@
 # Releasing
 
-Kizuna's Windows and Linux x64 pre-releases are built unsigned by GitHub
-Actions from a `main` commit, which CI has already checked. Separate platform
-jobs build and smoke-test the packages before one draft release is created with
-checksums and build provenance. The release workflow does not rerun
-typecheck, lint, formatting, or tests.
-
-Windows may show an unknown-publisher or Microsoft Defender SmartScreen
-warning. The Linux AppImage and deb are also unsigned. Signing is planned only
-after the project is accepted by an open-source signing service.
+GitHub Actions builds unsigned Windows/Linux x64 packages from a CI-checked `main`
+commit. Separate platform jobs smoke-test before creating one draft pre-release
+with checksums and provenance; release jobs do not rerun quality checks.
+Windows may warn about an unknown publisher/SmartScreen; Linux packages are also
+unsigned. Signing awaits acceptance by an open-source signing service.
 
 ## Upgrade floor
 
@@ -62,29 +58,18 @@ build succeeds.
 
 ## Automated package coverage
 
-The Windows job installs the NSIS package into a clean directory, runs the
-packaged resource probe through the installed executable, checks the
-`better-sqlite3` Electron ABI, and uninstalls it.
+Windows installs NSIS into a clean directory, runs the packaged resource probe,
+checks `better-sqlite3` ABI, and uninstalls. Ubuntu 24.04 builds AppImage/deb and checks:
 
-On a clean Ubuntu 24.04 runner, `npm run dist:linux` produces the AppImage and
-deb and `npm run smoke:linux` verifies that:
+- Linux resources, notices, icons, executable modes, and absence of Windows binaries;
+- mpv, FFmpeg/ffprobe, MeCab startup and IPADIC tokenization;
+- exact deb dependencies, install/reinstall, desktop/icon registration, and clean uninstall;
+- X11 selection for embedded `--wid`, including Wayland desktops through XWayland;
+- AppImage startup in clean user data via `--appimage-extract-and-run` without FUSE;
+- offline GUI startup under `xvfb-run` with generated media, reaching window/mpv IPC/renderer milestones.
 
-- both artifacts contain the Linux resources, notices, and icons, no Windows
-  binaries, and the required executable modes;
-- bundled mpv, FFmpeg/ffprobe, and MeCab start, and MeCab tokenizes with the
-  bundled IPADIC;
-- the deb declares the exact mpv and FFmpeg dependencies, installs, reinstalls,
-  registers its desktop entry and icons, and uninstalls without package files;
-- the deb and AppImage launchers select X11 automatically, which mpv's embedded
-  `--wid` surface requires even when the desktop session is Wayland;
-- the AppImage runs from a clean user directory through the supported
-  `--appimage-extract-and-run` no-FUSE path;
-- the application starts under `xvfb-run` with isolated user data and generated
-  local media, reaching the window, mpv IPC, and renderer milestones offline.
-
-Failures upload one log per failed Linux check as `linux-packaging-logs`.
-Packaging stays out of per-commit CI. Either release platform failing or being
-cancelled prevents the tag and draft.
+Failed Linux checks upload individual logs as `linux-packaging-logs`. Packaging
+runs only in releases; either platform failing/cancelling prevents the tag and draft.
 
 To run the Linux package checks locally on Ubuntu 24.04:
 
