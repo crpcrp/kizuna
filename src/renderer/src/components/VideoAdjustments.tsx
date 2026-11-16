@@ -9,14 +9,6 @@ import {
   type VideoRotate
 } from '../../../shared/playerSettings'
 
-// Non-modal picture-adjustments panel (Video menu → "Adjustments…"). Five
-// equalizer sliders plus a rotate cycle button, a deinterlace checkbox, and
-// "Reset all". Fully controlled: every change hands the caller a whole new
-// adjustments object (App pushes it to mpv live and persists it). Always
-// rendered so the panel is testable without a live DOM; CSS hides it unless
-// `open`, the same pattern as MenuBar/OptionsMenu.
-
-/** The five equalizer sliders, in display order, with their labels. */
 const EQ_SLIDERS: { name: VideoEqProperty; label: string }[] = [
   { name: 'brightness', label: 'Brightness' },
   { name: 'contrast', label: 'Contrast' },
@@ -25,13 +17,11 @@ const EQ_SLIDERS: { name: VideoEqProperty; label: string }[] = [
   { name: 'hue', label: 'Hue' }
 ]
 
-/** Advances rotation to the next of mpv's four values, wrapping 270 → 0. */
 function cycleRotate(current: VideoRotate): VideoRotate {
   const index = VIDEO_ROTATE_VALUES.indexOf(current)
   return VIDEO_ROTATE_VALUES[(index + 1) % VIDEO_ROTATE_VALUES.length]
 }
 
-/** True when nothing is set away from its neutral default (drives Reset's disabled state). */
 function isNeutral(adjustments: VideoAdjustmentsValue): boolean {
   return (
     EQ_SLIDERS.every(({ name }) => adjustments[name] === 0) &&
@@ -43,7 +33,6 @@ function isNeutral(adjustments: VideoAdjustmentsValue): boolean {
 interface VideoAdjustmentsProps {
   open: boolean
   adjustments: VideoAdjustmentsValue
-  /** Receives the full next block on any slider/rotate/deinterlace/reset change. */
   onChange: (next: VideoAdjustmentsValue) => void
   onClose: () => void
 }

@@ -1,26 +1,13 @@
 import './ModalOverlay.css'
 import { useEffect, useRef } from 'react'
 
-// Shared chrome for the app's centered modal dialogs: the backdrop, the panel,
-// a header with a title and caller-supplied actions, and a scrolling body.
-// Owns the behaviors every one of them needs and none of them should
-// re-implement: Escape closes, a backdrop click closes, keyboard focus stays in
-// the dialog and returns to its previous owner, and the whole overlay is hidden
-// from assistive tech while closed.
-//
-// Always rendered (CSS toggles visibility via the `open` class) so callers stay
-// testable without a live DOM — the same pattern MenuBar's dropdown panels and
-// OptionsMenu use.
-
 /** Which gesture asked the dialog to close. */
 export type ModalCloseSource = 'escape' | 'backdrop' | 'button'
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-// Modal dialogs can be rendered above a surface that owns the window's drag
-// region (the splash screen does this for the startup update prompt). Opt the
-// whole overlay out so mouse input reaches the backdrop and its controls.
+// Opt out of any underlying window drag region so modal controls receive mouse input.
 const noDragStyle = { WebkitAppRegion: 'no-drag' } as React.CSSProperties
 
 export interface ModalOverlayProps {
@@ -29,18 +16,9 @@ export interface ModalOverlayProps {
   label: string
   /** Header title text. Defaults to `label`, which is what most dialogs want. */
   title?: string
-  /**
-   * Asked to close. Wired to Escape, to a backdrop click, and — unless
-   * `headerActions` replaces it — to the header's ✕ button. The source is
-   * passed because dialogs do not all treat the gestures alike: bulk mining
-   * discards on Escape but ignores a backdrop click, so a stray click outside a
-   * running session cannot throw it away.
-   */
+  /** Report the close gesture so callers can ignore accidental backdrop clicks during a running task. */
   onClose: (source: ModalCloseSource) => void
-  /**
-   * Replaces the default ✕ button. Use when the dialog needs a different
-   * affordance in that corner (e.g. "Hide to sidebar" while a run is going).
-   */
+  /** Replaces the default close button, for example with Hide to sidebar. */
   headerActions?: React.ReactNode
   /** Optional DOM id on the overlay element, for tests and CSS hooks. */
   id?: string
@@ -74,8 +52,6 @@ export default function ModalOverlay({
     }
   }, [open])
 
-  // Escape-to-close, active only while open — same pattern as MenuBar's
-  // outside-click/Escape listener. Not exercisable under SSR (no jsdom).
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {

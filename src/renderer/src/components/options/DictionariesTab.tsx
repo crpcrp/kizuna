@@ -5,7 +5,6 @@ import type { McDict } from '../../../../shared/mecab'
 import type { DictInfo, ImportProgress } from '../../../../shared/dictionary'
 import type { SettingEntry } from './types'
 
-/** Progress shown by the "please wait" overlay while importing dictionaries. */
 interface ImportStatus {
   fileName: string
   current: number
@@ -15,37 +14,23 @@ interface ImportStatus {
   terms?: ImportProgress
 }
 
-/**
- * Formats an advisory import progress reading as "1,000 / 5,000 rows", or null
- * when there's nothing worth showing yet (no rows, or done reached total so the
- * overlay is about to close anyway).
- *
- * "rows", not "terms": the total now counts frequency rows too. A frequency
- * dictionary has no term rows at all, so totalling only those meant BCCWJ's
- * million-row import displayed no progress for its entire duration.
- */
+/** Progress counts both term and frequency rows; frequency-only dictionaries have no term rows. */
 function formatImportProgress(progress: ImportProgress | undefined): string | null {
   if (!progress || progress.total <= 0 || progress.done >= progress.total) return null
   return `${progress.done.toLocaleString()} / ${progress.total.toLocaleString()} rows`
 }
 
-/** Maps the "Frequency dictionary" select's raw value ("" or a dict id
- * string) to the partial PopupSettings update it should apply. */
 function frequencyDictSelection(rawValue: string): Partial<PopupSettings> {
   return { frequencyDictId: rawValue === '' ? null : Number(rawValue) }
 }
 
-/** Maps the "Sort order" select's raw value to the partial PopupSettings
- * update it should apply, falling back to 'auto' for any unrecognized value. */
 function sortOrderSelection(rawValue: string): Partial<PopupSettings> {
   return {
     sortOrder: rawValue === 'rank-based' || rawValue === 'occurrence-based' ? rawValue : 'auto'
   }
 }
 
-/** Parses a number-input's raw string value into a valid popup-settings
- * count (finite, >= 1), or null when the input isn't a valid count yet
- * (e.g. mid-edit empty string) — callers should skip dispatching on null. */
+/** Invalid or mid-edit input returns null; callers must skip the update. */
 export function parsePopupCountInput(rawValue: string): number | null {
   const value = Number(rawValue)
   return Number.isFinite(value) && value >= 1 ? value : null
@@ -63,9 +48,7 @@ export interface DictionariesTabProps extends SettingsTabProps {
   /** Imports a picked zip; the caller resolves its on-disk path, so the
    * archive is never read into renderer memory. */
   onImportYomitanDict: (file: File) => Promise<void>
-  /** Subscribes to advisory term-row progress for the in-flight import;
-   * returns an unsubscribe function. Optional — omitting it just leaves the
-   * file-count overlay without a terms line (e.g. in tests). */
+  /** Optional advisory row-progress subscription; returns an unsubscribe function. */
   subscribeImportProgress?: (cb: (progress: ImportProgress) => void) => () => void
   onSetYomitanEnabled: (id: number, enabled: boolean) => void
   onSetYomitanFallbackOnly: (id: number, fallbackOnly: boolean) => void
@@ -117,10 +100,6 @@ export const DICTIONARIES_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** "Parser & Dictionaries" options tab: MeCab dictionary selection, Yomitan
- * dictionary import/management, and word-popup display settings. Owns its
- * own import-progress overlay state — App/OptionsMenu don't need to know a
- * multi-file import is in flight. */
 export default function DictionariesTab({
   settings,
   onChange,
@@ -142,10 +121,7 @@ export default function DictionariesTab({
   const unidicInstallPath = mecabDicts.find((dict) => dict.id === 'unidic')?.dicdir
   const [importStatus, setImportStatus] = useState<ImportStatus | null>(null)
 
-  // Imports one or more selected files in sequence, updating the "please
-  // wait" overlay's progress between each so a large batch doesn't look
-  // frozen. Sequential (not Promise.all) because importDictFile writes to the
-  // same SQLite file — concurrent writes would just serialize anyway.
+  // Import sequentially: all dictionaries write to the same SQLite file.
   const handleImportFiles = async (files: File[]): Promise<void> => {
     if (files.length === 0) return
     const total = files.length
@@ -260,10 +236,7 @@ export default function DictionariesTab({
             accept=".zip"
             multiple
             onChange={async (e) => {
-              // Snapshot into a plain array before resetting the input —
-              // e.target.files is a live FileList tied to the input, so
-              // clearing .value right after reading it would empty this
-              // reference too.
+              // Snapshot the live FileList before clearing the input value.
               const files = Array.from(e.target.files ?? [])
               e.target.value = ''
               await handleImportFiles(files)

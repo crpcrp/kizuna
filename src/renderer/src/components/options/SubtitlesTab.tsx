@@ -180,7 +180,6 @@ export const SUBTITLES_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** Subtitle placement, appearance, and experimental translation settings. */
 export default function SubtitlesTab({
   settings,
   onChange,

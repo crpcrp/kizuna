@@ -58,7 +58,6 @@ function currentCandidate(phase: Extract<BulkMiningPhase, { kind: 'running' | 'd
   return { surface: 'No words', status: undefined, label: 'Current' }
 }
 
-/** Compact, non-destructive surface for an active or completed mining session. */
 export default function BulkMiningSidebar({
   phase,
   onReopen,

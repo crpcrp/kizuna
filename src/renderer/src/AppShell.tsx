@@ -85,12 +85,7 @@ export default function AppShell({ bridge }: { bridge?: KizunaApi }): React.JSX.
   return <AppSurfaces api={api} />
 }
 
-/**
- * The surface router, and the one owner of the updater. It mounts for every
- * start mode, so the startup check runs once whether Kizuna opened on the
- * splash, in Game OCR, or straight into the player, and the resulting offer
- * survives a switch between those surfaces.
- */
+/** Own the updater above all surfaces so startup runs once and offers survive surface switches. */
 function AppSurfaces({ api }: { api: KizunaApi }): React.JSX.Element {
   const { surface, error, requestSurface } = useSurface(api)
   const updates = useUpdates(api)

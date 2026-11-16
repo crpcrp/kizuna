@@ -6,12 +6,7 @@ import {
 } from '../state/seekPreview'
 import { formatTime } from './playbackTime'
 
-// Floating seekbar hover preview: a small frame image plus the hovered
-// timestamp, centered above the cursor where space permits. Purely
-// presentational — the parent
-// (BottomBar) owns the SeekPreviewController and feeds it the current state.
-// The whole box is `pointer-events: none` so it never steals the hover it
-// depends on (see SeekPreview.css).
+// Pointer events must pass through the preview so it cannot steal its own hover.
 
 export interface SeekPreviewProps {
   state: SeekPreviewState

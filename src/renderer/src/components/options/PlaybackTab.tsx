@@ -108,7 +108,6 @@ export const PLAYBACK_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** Playback behavior, audio output, and advanced mpv settings. */
 export default function PlaybackTab({
   settings,
   onChange,

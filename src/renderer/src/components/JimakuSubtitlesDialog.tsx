@@ -34,15 +34,11 @@ export interface JimakuSubtitlesDialogProps extends JimakuControllerState {
   onRememberTitleChange?(remember: boolean): void | Promise<void>
   onClearRememberedTitle?(): void | Promise<void>
   onChangeTitle?(): void
-  /** Supplied by the settings entry point; omitted until that slice is wired. */
   onOpenSettings?(): void
-  /** Supplied by the subtitle timing controls; omitted until that slice is wired. */
   onAdjustTiming?(): void
   subtitleOffsetMs?: number
   onChangeSubtitleOffset?: (value: number) => void
-  /** Existing local subtitle picker, supplied by the media-session owner. */
   onLoadLocalFile?(): void
-  /** Optional retry timestamp when the controller exposes one. */
   retryAt?: string
 }
 

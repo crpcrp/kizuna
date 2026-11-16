@@ -16,10 +16,6 @@ import {
 } from '../../../shared/structuredGlossary'
 import type { Token } from '../../../shared/token'
 
-// Word lookup popup: shown near a token the user clicked/hovered while a
-// video is playing. It takes data as props and remains mounted while CSS
-// controls visibility, which keeps rendering deterministic in tests.
-
 export interface WordPopupProps {
   results: LookupResult[]
   /** Anchor position (e.g. viewport px) near the token that was clicked/hovered. */
@@ -33,52 +29,27 @@ export interface WordPopupProps {
   token?: Token
   /** The active cue's text — forwarded verbatim in the mine request. */
   sentence?: string
-  /**
-   * Mines `result` into Anki (via App.tsx's injected bridge). The component
-   * stays IPC-free per its own doc comment above — this is the only hook out.
-   * The "＋ Anki" button only renders when this is supplied.
-   */
+  /** Omit to hide the Anki action. */
   onAddToAnki?: (result: LookupResult) => void | Promise<void>
-  /**
-   * Transient state of the most recent `onAddToAnki` call, owned by App.tsx
-   * (not local component state, so this component stays a pure function of
-   * its props). Shown in place of the button on every row while not 'idle'.
-   */
+  /** Shared mining status replaces every row action while non-idle. */
   ankiStatus?: 'idle' | 'adding' | 'added' | 'updated' | 'error'
   ankiError?: string
   /** Shows the overwrite action when a matching card exists. */
   duplicatePolicy?: 'prevent-global' | 'prevent-deck' | 'overwrite' | 'allow'
-  /**
-   * When the looked-up word already has a note in Anki, App.tsx passes the
-   * matching card's id here — the row then renders an "Open in Anki" button
-   * (calling `onOpenAnkiCard`) instead of the "＋ Anki" button/status.
-   */
+  /** An existing card replaces the add action with an Open in Anki action. */
   ankiExisting?: Readonly<Record<string, { cardId: number }>>
   /** Opens `ankiExisting`'s card in Anki's Browse window. Only used when `ankiExisting` is set. */
   onOpenAnkiCard?: (cardId: number) => void | Promise<void>
-  /**
-   * Called with the target term when the user clicks a glossary
-   * cross-reference link whose `href` resolves to one (see
-   * `parseInternalLinkQuery`). Omitted (or a link whose `href` doesn't
-   * resolve) renders the link as the old non-interactive chip.
-   */
+  /** Without a resolvable target and this callback, glossary links remain non-interactive chips. */
   onLinkClick?: (term: string) => void
-  /** Shows a back arrow (top-left) that calls this when clicked. Only
-   * rendered when both this and `canGoBack` are set — see `onLinkClick`. */
+  /** Shown only when canGoBack is also true. */
   onBack?: () => void
-  /** Whether a previous word is available to go back to. See `onBack`. */
   canGoBack?: boolean
   /** Supplemental knowledge-source details for the word that opened this popup. */
   provenanceByExpression?: Readonly<Record<string, KnowledgeDetails>>
 }
 
-/**
- * Splits a glossary blob (senses joined with '\n' at import time, see
- * lookup.ts) into individual sense strings, trimming whitespace and dropping
- * any empty lines that result from stray/duplicate separators. Also the
- * fallback sense list for results imported before `glossaryJson` existed
- * (schema < 2).
- */
+/** Plain glossaries store senses separated by newlines. */
 function splitSenses(glossary: string): string[] {
   return glossary
     .split('\n')
@@ -86,11 +57,7 @@ function splitSenses(glossary: string): string[] {
     .filter((sense) => sense.length > 0)
 }
 
-/**
- * True when the space-separated `termTags` or `defTags` contains a known
- * common-word marker, including Jitendex's ★ definition tag. Tokens are
- * matched exactly, not as substrings, so e.g. 'newsflash1' would not match.
- */
+/** Common-word markers are exact tags, including Jitendex's ★, not substrings. */
 function isHighPriority(termTags: string, defTags = ''): boolean {
   return priorityWeight(termTags, defTags) > 0
 }
@@ -123,13 +90,6 @@ function labelForToken(token: string): string | null {
   return null
 }
 
-/**
- * Unions the space-separated tokens of `rules` and `defTags`, maps each
- * known part-of-speech/conjugation code to a human-readable label (see
- * POS_LABELS / labelForToken), drops unknown codes, and dedupes labels while
- * preserving first-seen order (e.g. 'v5r' from rules and 'v5r vt' from
- * defTags both map 'v5r' -> 'godan verb', which only appears once).
- */
 function posAttributes(rules: string, defTags: string): string[] {
   const tokens = [...rules.split(' '), ...defTags.split(' ')].filter((t) => t.length > 0)
   const labels: string[] = []
@@ -234,16 +194,7 @@ function renderGlossaryNode(
   )
 }
 
-/**
- * One `<style>` block per distinct dictionary among `results` that shipped
- * its own `styles.css` (see yomitanImport.ts's `readStylesCss` and
- * lookup.ts's `stylesCss` field), deduped by `dictId` and keeping first-seen
- * order. A dictionary's glossary markup (structured-content spans/divs
- * marked with `data-sc-*` attributes) often
- * relies entirely on this CSS for visual separation between sibling tag
- * chips; Yomitan itself injects no default spacing for them, so without
- * this the chips render squashed together with no gap at all.
- */
+/** Dictionary CSS supplies spacing for structured-content chips; emit it once per dictionary. */
 function dictStylesheets(
   results: Pick<LookupResult, 'dictId' | 'stylesCss'>[]
 ): Array<{ dictId: number; css: string }> {
@@ -257,21 +208,7 @@ function dictStylesheets(
   return sheets
 }
 
-/**
- * Scopes a dictionary's CSS to only that dictionary's own rows. The raw
- * stylesheet comes from an untrusted, third-party dictionary zip, so it is
- * first run through `sanitizeGlossaryCss` — the same rule-by-rule sanitizer
- * the Anki-export path uses — which restricts declarations to a safe property
- * allowlist, drops `url()`/`@import`/`expression()`/`<>`, and only emits
- * `selector{decls}` for `[data-sc-*]` selectors. Because that output is parsed
- * rule-by-rule it contains no stray `}`, so wrapping it in `@scope` can no
- * longer be brace-escaped to inject app-wide rules. `@scope` (Baseline in
- * Electron's bundled Chromium) then keeps the surviving rules from leaking
- * into another dictionary's rows or the rest of the app's UI.
- *
- * Returns `''` when nothing survives sanitization, so the caller can skip
- * emitting an empty `<style>`.
- */
+/** Sanitize untrusted CSS before @scope wrapping: stray braces could escape into app-wide rules. */
 function scopeDictCss(dictId: number, css: string): string {
   const safe = sanitizeGlossaryCss(css)
   if (safe === '') return ''
@@ -441,10 +378,7 @@ export default function WordPopup({
                       onLinkClick
                     )
                     if (content === null) return null
-                    // A single entry (the common case for a rich structured-content
-                    // row that already encodes its own sense numbering internally)
-                    // renders bare, so it isn't double-numbered against the dict's
-                    // own numbering; multiple entries get our own badge per sense.
+                    // A structured-content entry may number its own senses; do not double-number it.
                     return entries.length > 1 ? (
                       <div className="word-popup-sense-group" key={senseIndex}>
                         <span className="word-popup-sense-number">{senseIndex + 1}</span>

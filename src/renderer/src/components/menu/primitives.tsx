@@ -102,7 +102,6 @@ export interface OffsetRowProps {
   onChange?: (value: number) => void
 }
 
-/** A millisecond offset editor: step buttons, a typed value, and Reset. */
 export function OffsetRow({
   id,
   label,

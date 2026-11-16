@@ -10,20 +10,11 @@ import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import { vocabularyLevelsByToken } from '../state/vocabularyUnits'
 
-/**
- * Cue-independent Japanese text data. The id is exposed as a data attribute
- * so multiple interactive text instances can coexist without a singleton DOM
- * id.
- */
+/** The id identifies text via a data attribute, not a singleton DOM id. */
 export interface InteractiveText {
   id: string
   text: string
-  /**
-   * The projection `tokens` was produced from. Optional: an equal projection
-   * is derived from `text`, since display line breaks are the only difference
-   * between the two views. Callers that already hold one pass it to avoid
-   * rebuilding it on every render.
-   */
+  /** Tokenization projection; pass the existing one to avoid rebuilding it during render. */
   projection?: TextProjection
   tokens?: Token[]
   highlightedTokens?: Token[]
@@ -60,15 +51,7 @@ type TokenSpanItem =
   | { type: 'break' }
   | { type: 'text'; text: string; displayStartOffset: number }
 
-/**
- * Pure helper: turns text and ordered tokens into token items and line breaks.
- *
- * Token offsets are analysis offsets (see `shared/textProjection.ts`), so a
- * word split by a line break is one token rendered as several fragments; every
- * fragment keeps the same Token object and semantic data attributes. Text
- * gaps come from the display text rather than from token surfaces, so
- * whitespace omitted by MeCab remains visible without becoming a token.
- */
+/** Analysis offsets ignore line breaks; fragments share a token and gaps preserve display whitespace. */
 function tokenSpans(
   text: string,
   tokens: Token[],
@@ -110,11 +93,7 @@ function tokenSpans(
   return items
 }
 
-/**
- * Pure: resolves the knowledge level for each token without requiring cue
- * timing. `id` is only the vocabulary-span identity used by the existing
- * compound projection; it is not rendered as a DOM id.
- */
+/** The id identifies vocabulary spans, not a DOM element. */
 function tokenLevels(
   id: string,
   tokens: Token[],

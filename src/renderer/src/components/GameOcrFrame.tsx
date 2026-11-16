@@ -5,7 +5,6 @@ import './GameOcrFrame.css'
 
 export interface GameOcrFrameProps {
   presentation?: GameOcrPresentation
-  /** The canvas the capture draws into; owned by the capture hook. */
   canvasRef?: React.RefObject<HTMLCanvasElement | null>
   onClose: () => void
   children?: ReactNode
@@ -16,18 +15,12 @@ const GameOcrFrameCloseContext = createContext<
   ((handler: GameOcrFrameCloseHandler) => () => void) | null
 >(null)
 
-/** Registers renderer-owned cleanup for every background/Escape close path. */
 export function useGameOcrFrameClose(handler: GameOcrFrameCloseHandler): void {
   const register = useContext(GameOcrFrameCloseContext)
   useEffect(() => register?.(handler), [handler, register])
 }
 
-/**
- * Full-display frozen frame. The image is deliberately stretched to the
- * window's exact client rectangle: the native window uses the selected
- * display's logical bounds and the capture carries the matching physical
- * aspect ratio, so object-fit must not introduce a crop or letterbox.
- */
+/** Match display bounds exactly: cropping or letterboxing would misalign OCR boxes. */
 export default function GameOcrFrame({
   presentation,
   canvasRef,
@@ -90,11 +83,7 @@ export default function GameOcrFrame({
             : undefined
         }
       >
-        {/* Always mounted, because capture draws before the first presentation;
-            a canvas that only appeared with presentation state would not exist
-            yet at the moment there is something to draw. It is
-            hidden rather than unmounted between frames so the last screenshot
-            cannot flash back on the next capture. */}
+        {/* Keep the canvas mounted before capture draws; hide it between frames to prevent stale-image flashes. */}
         <canvas
           ref={canvasRef}
           className="game-ocr-frame__image"

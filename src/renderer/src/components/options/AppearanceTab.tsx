@@ -9,7 +9,6 @@ const APPEARANCE_ROWS: { value: Appearance; label: string; description: string }
   { value: 'dark', label: 'Dark', description: 'Always use the dark theme' }
 ]
 
-/** Knowledge levels with configurable subtitle underline/report colors. */
 const UNDERLINE_COLOR_ROWS: { level: UnderlineLevel; label: string }[] = [
   { level: 'unknown', label: 'Unknown' },
   { level: 'inDeck', label: 'In deck' },
@@ -79,7 +78,6 @@ function UnderlineColorRows({
   )
 }
 
-/** Theme selection and knowledge-level underline colors. */
 export default function AppearanceTab({
   settings,
   onChange,

@@ -54,22 +54,8 @@ import type { Cue } from '../../shared/cue'
 import type { JlptLevel } from '../../shared/jlpt'
 import { type AudioDevice } from '../../shared/audioDevice'
 
-// Root React component: the runnable player shell. Wires the reducer + the
-// feature hooks that own each workflow (state/useMediaSession.ts for media,
-// state/usePlaybackWindow.ts for playback and window,
-// state/useVocabularyMining.ts for vocabulary and mining,
-// state/useOptionsDialog.ts for settings and optional integrations, and their
-// siblings) into the presentational components
-// (WindowChrome/MenuBar/BottomBar/SubtitleOverlay).
-//
-// SSR-safety: the render path never touches `window` directly. All bridge
-// access is deferred to event handlers or to the useEffect subscriptions
-// below (effects don't run during renderToStaticMarkup).
-
 export interface AppProps {
-  /** Optional render seed for deterministic renderer integration tests. */
   initialState?: PlayerState
-  /** Optional initially-known mpv outputs for deterministic renderer integration tests. */
   initialAudioDevices?: AudioDevice[]
 }
 
@@ -77,19 +63,9 @@ export default function App({
   initialState = initialPlayerState,
   initialAudioDevices = []
 }: AppProps): React.JSX.Element {
-  // `window.kizuna` doesn't exist during SSR (renderToStaticMarkup has no
-  // `window` at all, not even an empty stub) — every other reference to it in
-  // this component lives inside an effect/callback, deferred until the
-  // browser actually calls it, but a few hook calls below need the bridge (or
-  // a piece of it) as a plain argument value, evaluated immediately at render
-  // time. The `{}` SSR stand-in makes property reads on it (`.player`,
-  // `.windowControls`, …) resolve to `undefined` instead of throwing; that's
-  // fine since those hooks only ever call through the bridge from inside an
-  // effect, which never runs server-side.
+  // SSR has no window; hooks defer bridge calls to effects and callbacks, so an empty stand-in is safe.
   const kizuna = typeof window === 'undefined' ? ({} as unknown as KizunaApi) : window.kizuna
   useLinuxWindowShape(kizuna.windowControls)
-  // Whether the side panels are shown. The shared Options controller restores
-  // these values for the player, while standalone Options supplies no-op setters.
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [playlistOpen, setPlaylistOpen] = useState(false)
   const reportErrorRef = useRef<(message: string) => void>(() => undefined)
@@ -130,18 +106,12 @@ export default function App({
   )
   const pausedRef = useLatestRef(state.paused)
   const cursorHidden = useFullscreenCursor(state.fullscreen)
-  // The per-cue loop is stored together with the cue list it was picked from,
-  // so a new list (file or subtitle-track switch) drops it by derivation
-  // instead of through a reset effect.
+  // Pair the loop with its cue list so replacing the track invalidates it without a reset effect.
   const [loopSelection, setLoopSelection] = useState<LoopSelection | null>(null)
   const loopCue = activeLoopCue(loopSelection, state.cues)
   const setLoopCue = (cue: Cue | null): void =>
     setLoopSelection(cue ? { cues: state.cues, cue } : null)
-  // True while a MenuBar dropdown is open. In fullscreen, edgeReveal only
-  // tracks pointer Y against the top-controls bar's own height, so moving
-  // the cursor down into a dropdown panel (which extends below that band)
-  // would otherwise slide the bar away mid-click. Keeping it revealed here
-  // is OR'd into the top-controls reveal below.
+  // Keep fullscreen controls visible while the pointer enters a dropdown below the top-edge reveal band.
   const [menuBarOpen, setMenuBarOpen] = useState(false)
   const stateRef = useLatestRef(state)
   const getFileSubtitleOffset = (): number =>
@@ -209,8 +179,6 @@ export default function App({
     !mediaSession.subtitleRestoring &&
     !noJapanesePromptDismissed &&
     !hasExplicitJapaneseSubtitle
-  // Known-word underlines are painted only for a Japanese subtitle track, and
-  // only while the Known-words option has coloring switched on.
   const coloredLevels =
     japaneseSubtitleSelected && options.data.knowledgeSettings.coloringEnabled
       ? state.knownLevels
@@ -218,9 +186,6 @@ export default function App({
 
   const jlptCoverage = useJlptCoverageReport({ bridge: kizuna })
 
-  // Vocabulary and mining lifecycle: tokenization/knowledge caches, the word
-  // popup and its Anki mine, the subtitle report, bulk mining, and the
-  // sidebar's copy/translate actions — see state/useVocabularyMining.ts.
   const vocabulary = useVocabularyMining({
     bridge: kizuna,
     dispatch,
@@ -292,9 +257,6 @@ export default function App({
       ? 'sidebar'
       : miningPresentation
 
-  // Playback and window lifecycle: audio/subtitle menu commands, per-file
-  // values, panel sizing, video scale, fullscreen, mini player, and picture
-  // adjustments — see state/usePlaybackWindow.ts.
   const playbackWindow = usePlaybackWindow({
     bridge: kizuna,
     dispatch,
@@ -308,8 +270,6 @@ export default function App({
     initialAudioDevices,
     reportError: mediaSession.banner.reportError
   })
-  // Attached to the chrome and side-panel elements this component renders;
-  // usePlaybackWindow measures them for mpv's video margins and window sizing.
   const {
     topBar: topBarRef,
     bottomBar: bottomBarRef,
@@ -319,8 +279,6 @@ export default function App({
   const miniPlayerActive = playbackWindow.miniPlayer.active
   const reveal = useFullscreenReveal(state.fullscreen, bottomBarRef)
 
-  // mpv/window event pushes (time/duration/pause/EOF/fullscreen/media keys)
-  // and file-association launch delivery.
   usePlayerEvents({
     dispatch,
     timePosStore,
@@ -331,9 +289,6 @@ export default function App({
     ...playbackWindow.playerEvents
   })
 
-  // Drag-to-reposition: started by SubtitleOverlay's onDragStart (mousedown on
-  // the subtitle box background, not a word), tracked against #content's rect
-  // so the box follows the pointer until mouseup. See state/useSubtitleDrag.ts.
   const { handleSubtitleDragStart } = useSubtitleDrag({
     contentRef,
     dispatch,
@@ -357,26 +312,19 @@ export default function App({
     }
     const cue = replayCue(state.cues, timePosStore.get(), state.subtitleOffsetMs)
     if (!cue) return
-    // Engaging the per-cue loop clears any armed A–B loop: the two fighting over
-    // playback position produces stutter (see media-player-features-plan #3).
+    // Clear the competing loop to prevent conflicting seeks and playback stutter.
     if (state.abLoopState.a !== null) {
       void window.kizuna.player.setAbLoop(null, null)
       dispatch({ type: 'set', patch: { abLoopState: { a: null, b: null } } })
     }
     setLoopCue(cue)
   }
-  // Advances the A–B loop cycle (no-loop → A → B → clear); engaging it clears any
-  // active per-cue loop so the two loops never fight over the playback position.
   const handleCycleAbLoop = (): void => {
     cycleAbLoopAction(window.kizuna.player, dispatch, state.abLoopState, timePosStore.get(), () =>
       setLoopCue(null)
     )
   }
-  // Captures the current frame via mpv (main-side). The saved path reuses the
-  // media-error banner but auto-dismisses after 1s (see recentFilesController
-  // .reportTransient) — a success is worth a glance, not a manual dismiss. A
-  // failure keeps the banner's normal sticky, manually-dismissible lifetime so
-  // actionable details don't vanish before they can be read.
+  // Dismiss screenshot success automatically; keep failures visible until the user acknowledges them.
   const handleScreenshot = async (): Promise<void> => {
     if (!state.filePath) return
     try {
@@ -403,7 +351,7 @@ export default function App({
     speed: state.speed,
     cues: state.cues,
     chapters: state.chapters,
-    // Read at keypress time: App no longer re-renders on every position tick.
+    // Read position at keypress time because playback ticks do not re-render App.
     get timePos() {
       return timePosStore.get()
     },
@@ -454,9 +402,6 @@ export default function App({
     vocabulary.modalOpen
   ])
 
-  // SubtitleSidebar row click: jumps playback to the clicked cue's start,
-  // respecting the current subtitle offset the same way the overlay's active
-  // cue is resolved (see seekTargetForCue).
   const handleSelectSidebarCue = (cue: Cue): void => {
     void playerAdapter.seek(seekTargetForCue(cue, state.subtitleOffsetMs), true)
   }
@@ -484,9 +429,6 @@ export default function App({
     closeJimaku()
     options.openDialog('subtitles')
   })
-  // The Options dialog's props, assembled from their owners: reducer-backed
-  // settings, the dialog's own integration data/actions, the playback feature's
-  // mpv-output rows, and the vocabulary feature's cache-invalidating rows.
   const optionsMenu = buildOptionsMenuProps({
     open: optionsOpen,
     requestedCategory: options.requestedCategory,

@@ -20,12 +20,6 @@ import {
   type ThumbnailFetch
 } from '../state/seekPreview'
 
-// Bottom transport bar: play/pause, seek slider with time readout, volume
-// slider with a % readout + mute toggle, and a fullscreen button — all driving
-// the mpv player bridge. Presentational state comes from the parent; this
-// component only issues commands. In fullscreen it auto-hides until the mouse
-// nears the bottom edge (visibility is owned by App via a CSS class).
-
 export interface PlayerApi {
   setPause: (paused: boolean) => Promise<unknown>
   seek: (seconds: number, absolute?: boolean) => Promise<unknown>
@@ -34,14 +28,10 @@ export interface PlayerApi {
   setMuted: (muted: boolean) => Promise<unknown>
 }
 
-/** One vector path per control icon, all drawn in the same 24x24 grid (a
- * consistent Material-style glyph set) so every transport, volume, and window
- * button renders in the same visual style rather than a mix of svg + emoji. */
+/** Icons share a 24×24 view box. */
 const ICON_PATHS = {
   toStart: 'M6 6h2v12H6zm3.5 6l8.5 6V6z',
-  // Skip back/ahead are looping circular arrows (a near-closed ring with an
-  // arrowhead at the open end, mirrored), leaving the ring hollow so the skip
-  // amount can be printed in the middle — see SkipIcon.
+  // The hollow ring leaves room for the skip amount.
   skipBack:
     'M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z',
   play: 'M8 5v14l11-7z',
@@ -49,19 +39,14 @@ const ICON_PATHS = {
   skipAhead:
     'M18 13c0 3.31-2.69 6-6 6s-6-2.69-6-6 2.69-6 6-6v4l5-5-5-5v4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8h-2z',
   toEnd: 'M6 18l8.5-6L6 6v12zM16 6v12h2V6z',
-  // Subtitle panel: a framed panel with caption lines (the subtitle sidebar).
   subtitlePanel:
     'M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 12h4v2H4v-2zm10 6H4v-2h10v2zm6 0h-4v-2h4v2zm0-4H10v-2h10v2z',
-  // Playlist panel: stacked list rows with a play triangle (the playlist sidebar).
   playlistPanel: 'M3 10h11v2H3v-2zm0-4h11v2H3V6zm0 8h7v2H3v-2zm13-1v8l6-4-6-4z',
-  // Speaker with sound waves (unmuted) / speaker crossed out (muted).
   volumeHigh:
     'M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z',
   volumeMuted:
     'M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z',
-  // Four corner brackets pushing outward — expand to fullscreen.
   fullscreen: 'M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z',
-  // Window "restore down" glyph: a small rectangle popping back out to a larger one.
   restore: 'M8 8h11v11H8zM5 5h11v2H7v9H5z'
 } as const
 
@@ -73,11 +58,7 @@ function Icon({ name }: { name: keyof typeof ICON_PATHS }): React.JSX.Element {
   )
 }
 
-/**
- * The skip-back/skip-ahead looping arrow with the jump amount printed inside
- * the ring, so the button states how far it jumps without a separate label.
- * Falls back to the bare ring when the amount has too many digits to fit.
- */
+/** Omit the skip amount when its digits would overflow the ring. */
 function SkipIcon({
   name,
   seconds
@@ -113,28 +94,19 @@ export interface BottomBarProps {
   duration: number
   volume: number
   muted: boolean
-  /** Seconds the skip-back/skip-ahead buttons jump; see DEFAULT_SKIP_SECONDS. */
   skipSeconds: number
-  /** Current playback speed multiplier. */
   speed: number
   chapters?: Chapter[]
   /** Armed A–B loop endpoints (seconds); shades the seek range and shows a badge. */
   abLoop?: AbLoopState
-  /** In compact mini-player mode the transport is reduced to seek + play/pause +
-   * volume + a restore button; the extra jump buttons and fullscreen are hidden. */
   miniPlayer?: boolean
-  /** Restore-button handler: leaves mini-player mode. */
   onExitMiniPlayer?: () => void
-  /** Speed-button handler; the same path the Playback menu's presets use. */
   onSetSpeed?: (speed: number) => void
-  /** Whether the subtitle sidebar is open (drives the toggle's pressed state). */
   sidebarOpen?: boolean
-  /** Whether the playlist side panel is open (drives the toggle's pressed state). */
   playlistOpen?: boolean
   onToggleSidebar?: () => void
   onTogglePlaylist?: () => void
   onToggleFullscreen: () => void
-  /** Injectable for tests; defaults to the preload bridge at call time. */
   player?: PlayerApi
   /** Attached to the root element so App can measure its height for mpv's video margins. */
   containerRef?: React.RefObject<HTMLDivElement | null>
@@ -143,7 +115,6 @@ export interface BottomBarProps {
   /** Whether hover previews are available — false for audio-only files (no
    * video stream) and unsupported sources. Off disables the hover fetch entirely. */
   thumbnailsEnabled?: boolean
-  /** Injectable thumbnail fetch (tests); defaults to the preload bridge. */
   thumbnailFetch?: ThumbnailFetch
 }
 
@@ -152,35 +123,27 @@ export interface BottomBarProps {
 const defaultThumbnailFetch: ThumbnailFetch = (path, timeSec, durationSec) =>
   window.kizuna.media.getThumbnail(path, timeSec, durationSec)
 
-/**
- * Picks the injected player or falls back to the preload bridge.
- * Resolved lazily (at call time) so SSR tests never need `window`.
- */
+/** Resolve lazily so server-side renders do not need `window`. */
 function resolvePlayer(player?: PlayerApi): PlayerApi {
   return player ?? window.kizuna.player
 }
 
-/** Play/pause button handler: flips the current paused state. */
 export function togglePause(player: PlayerApi | undefined, paused: boolean): void {
   resolvePlayer(player).setPause(!paused)
 }
 
-/** Seek-slider handler: absolute seek to the given position in seconds. */
 function seekTo(player: PlayerApi | undefined, seconds: number): void {
   resolvePlayer(player).seek(seconds, true)
 }
 
-/** Go-to-beginning button handler: absolute seek to time 0. */
 function goToStart(player: PlayerApi | undefined): void {
   resolvePlayer(player).seek(0, true)
 }
 
-/** Go-to-end button handler: absolute seek to the loaded media's duration. */
 function goToEnd(player: PlayerApi | undefined, duration: number): void {
   resolvePlayer(player).seek(duration, true)
 }
 
-/** Skip-back button/shortcut handler: relative seek `seconds` backward. */
 export function skipBack(
   player: PlayerApi | undefined,
   seconds: number = DEFAULT_SKIP_SECONDS
@@ -188,7 +151,6 @@ export function skipBack(
   resolvePlayer(player).seek(-seconds, false)
 }
 
-/** Skip-ahead button/shortcut handler: relative seek `seconds` forward. */
 export function skipAhead(
   player: PlayerApi | undefined,
   seconds: number = DEFAULT_SKIP_SECONDS
@@ -196,40 +158,29 @@ export function skipAhead(
   resolvePlayer(player).seek(seconds, false)
 }
 
-/**
- * Volume-slider handler. Dragging the volume while muted also unmutes, which
- * is what users expect (the slider is dead otherwise).
- */
+/** Unmute on volume changes so the slider never appears unresponsive. */
 function changeVolume(player: PlayerApi | undefined, volume: number, muted = false): void {
   const p = resolvePlayer(player)
   p.setVolume(volume)
   if (muted) p.setMuted(false)
 }
 
-/** Mute button handler: flips the current muted state. */
 function toggleMute(player: PlayerApi | undefined, muted: boolean): void {
   resolvePlayer(player).setMuted(!muted)
 }
 
-/** Clamps a playback speed to the shared mpv/UI range; malformed input resets to 1×. */
 export function clampSpeed(speed: number): number {
   const finiteSpeed = Number.isFinite(speed) ? speed : 1
   return Math.max(SPEED_MIN, Math.min(SPEED_MAX, finiteSpeed))
 }
 
-/**
- * The preset the speed button cycles to next: the first shared `SPEED_PRESETS`
- * entry above the current speed, wrapping back to the slowest once past the
- * fastest. Off-preset speeds (set by the ±step shortcuts) land on the next
- * preset above them, and the result is clamped to the shared mpv/UI range.
- */
+/** Off-preset speeds advance to the next higher preset; the last preset wraps. */
 function nextSpeedPreset(speed: number): number {
   const current = clampSpeed(speed)
   const next = SPEED_PRESETS.find((preset) => preset > current) ?? SPEED_PRESETS[0]
   return clampSpeed(next)
 }
 
-/** Speed shown on the transport bar's speed button — `1×`, `1.5×`. */
 function formatSpeedLabel(speed: number): string {
   return `${clampSpeed(speed)}×`
 }
@@ -239,12 +190,7 @@ function chapterMarkerPercents(chapters: Chapter[], duration: number): number[] 
   return chapters.map((chapter) => Math.max(0, Math.min(100, (chapter.start / duration) * 100)))
 }
 
-/**
- * Pure: the seekbar overlay geometry (`left`/`width` in % of duration) shading
- * the armed A–B range, or `null` when no full range is set or the duration is
- * unknown. Trusts `a <= b` (the renderer normalizes the pair before storing —
- * see `cycleAbLoop`), so the width is never negative.
- */
+/** A–B geometry in percent of duration; endpoints must satisfy a <= b. */
 function abLoopRangePercent(
   abLoop: AbLoopState | undefined,
   duration: number
@@ -257,7 +203,6 @@ function abLoopRangePercent(
   return { left, width: Math.max(0, right - left) }
 }
 
-/** Whether the A–B loop badge should show: A is set (loop armed or active). */
 function abLoopArmed(abLoop: AbLoopState | undefined): boolean {
   return abLoop?.a != null
 }
@@ -267,7 +212,6 @@ function volumeSliderMax(): number {
   return 200
 }
 
-/** True once volume is in the >100% software-boost range (drives the boost tint). */
 function isVolumeBoosted(volume: number): boolean {
   return volume > 100
 }
@@ -299,8 +243,6 @@ export default function BottomBar({
   const markers = chapterMarkerPercents(chapters, duration)
   const abLoopRange = abLoopRangePercent(abLoop, duration)
 
-  // Seekbar hover preview: the controller owns the debounce/stale-drop logic;
-  // this component only forwards cursor moves and renders the pushed state.
   const [preview, setPreview] = useState<SeekPreviewState>(HIDDEN_PREVIEW)
   const previewRef = useRef<SeekPreviewController | null>(null)
   if (previewRef.current === null) {
@@ -512,10 +454,7 @@ export default function BottomBar({
   )
 }
 
-/**
- * BottomBar fed from the time-pos store: playback ticks re-render only this
- * bar, and only when the slider or time readout would visibly change.
- */
+/** Isolate playback ticks here so they do not re-render the player tree. */
 export function LiveBottomBar({
   timePosStore,
   ...props

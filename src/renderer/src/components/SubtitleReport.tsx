@@ -11,11 +11,6 @@ import {
   type SubtitleReport as Report
 } from '../state/subtitleReport'
 
-// Presentational modal for the word report. Always rendered, visibility toggled by
-// the `open` class — same testable-without-a-live-DOM pattern as
-// OptionsMenu. All data arrives via props; subtitleReportController.ts owns
-// every async/staleness concern.
-
 export interface SubtitleReportProps {
   open: boolean
   phase: SubtitleReportPhase
@@ -74,7 +69,6 @@ function LevelLegend({
   )
 }
 
-/** Mined-but-not-yet-learned share, appended to a "…% known" line; nothing when zero. */
 function InDeckShare({ levels }: { levels: LevelCounts }): React.JSX.Element | null {
   const pct = inDeckPct(levels)
   if (pct === 0) return null

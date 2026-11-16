@@ -19,7 +19,6 @@ export interface SplashScreenProps {
 
 type PendingChoice = 'gameOcr' | 'player' | 'options' | null
 
-/** The lightweight startup surface. It deliberately does not render App. */
 export default function SplashScreen({
   gameOcrSupported,
   onGameOcr,
