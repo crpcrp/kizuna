@@ -1,8 +1,3 @@
-// Opening and loading media: the mpv load itself plus the per-file restoration
-// (audio track, subtitle track, resume position) that follows a successful
-// load, and the three entry points that reach it — the file picker, a playlist
-// pick, and a recent-files entry.
-
 import { classifyMediaFileName, isRemoteUrl } from '../../../shared/mediaFileTypes'
 import { type MediaPlaybackHistory, getResumePosition } from '../../../shared/mediaHistory'
 import { type FileAvailability } from '../../../shared/preloadApi'
@@ -20,16 +15,7 @@ import { externalSubtitleTrack } from './trackSelection'
 
 const LOCAL_MEDIA_ONLY_MESSAGE = 'URL playback is not supported.'
 
-/**
- * Enumerates `filePath`'s tracks, loads it into the player, and auto-loads
- * the default subtitle track (if any). The supplied path starts a new file
- * request immediately, before its first await.
- *
- * Only the default subtitle track is extracted while opening a file. Other
- * tracks are extracted on their first manual selection and then retained in
- * `cueCache` by `selectSubtitle`.
- *
- */
+// Extract only the default subtitle on open; other tracks load lazily on selection.
 export async function loadPath(
   session: OpenSession,
   filePath: string,
@@ -74,14 +60,7 @@ async function runLoadPath(
   cueCache.clear()
   dispatch({ type: 'fileLoaded', filePath, tracks, ...(history ? { history } : {}) })
 
-  // Subtitle extraction goes through ffmpeg and can take several seconds.
-  // It must not keep the open action (and therefore the recent-files refresh
-  // and menu's opening guard) pending after mpv has accepted the new file.
-  // restoreSubtitle catches its own failure and remains gated by both request
-  // tokens, so it is safe to finish independently in the background — its
-  // warning reaches the caller through `onWarning` rather than `warnings`,
-  // and the file token is re-checked at delivery so a warning from a
-  // superseded open never reaches the file the user now has open.
+  // Subtitle extraction can take seconds; finish opening independently and deliver token-guarded warnings later.
   session.onSubtitleRestoreStarted?.()
   void restoreSubtitle(session, filePath, { tracks, history }, loadId)
     .then((warning) => {
@@ -101,12 +80,6 @@ async function runLoadPath(
   return { status: 'opened', filePath, warnings }
 }
 
-/**
- * Restores the file's saved audio track, if any. Reads its bridge, dispatch,
- * and file token from the open session; only the enumerated tracks, the
- * history entry, and this open's load id stay positional, since they belong to
- * one `loadPath` run rather than to the player instance.
- */
 async function restoreAudio(
   session: OpenSession,
   tracks: Track[],
@@ -130,13 +103,6 @@ async function restoreAudio(
   return undefined
 }
 
-/**
- * Restores the file's saved subtitle selection. Reads its bridge, dispatch,
- * subtitle/file tokens, cue cache, and external-subtitle encoding from the
- * open session; only the enumerated tracks and history (bundled, since they
- * always arrive together from `runLoadPath`'s probe) plus this open's file
- * path and load id stay positional.
- */
 async function restoreSubtitle(
   session: OpenSession,
   filePath: string,
@@ -221,9 +187,7 @@ async function restoreSubtitle(
       return undefined
     } catch (err) {
       if (superseded()) return undefined
-      // The sidecar moved, was deleted, or no longer parses. Fall back to the
-      // file's own default stream rather than leaving it with no subtitles,
-      // and let the caller surface why the saved one didn't come back.
+      // If the saved sidecar is unavailable, restore embedded subtitles and report the failure.
       await restoreEmbedded(defaultSubtitleId(tracks))
       return errorMessage(err)
     }
@@ -237,15 +201,7 @@ async function restoreSubtitle(
   return restoreEmbedded(sid)
 }
 
-/**
- * Applies the smart-resume seek (see `getResumePosition`) for a freshly
- * loaded file. No-ops (no seek) when there is no history or the saved
- * position doesn't clear the resume thresholds. Runs independently of
- * `restoreSubtitle`'s slower ffmpeg extraction — a stale success after a
- * newer file request began reports nothing, matching the other restore
- * branches' token gating. Takes its bridge and file token from the open
- * session, matching `restoreAudio`.
- */
+// Resume independently of subtitle extraction so slow ffmpeg work cannot delay playback.
 async function restoreResume(
   session: OpenSession,
   history: MediaPlaybackHistory | undefined,
@@ -266,12 +222,6 @@ async function restoreResume(
   return undefined
 }
 
-/**
- * Opens a file picker and delegates a selected path to `loadPath`. Either kind
- * of pick replaces the queue via `onPlaylistPicked` first. Resolves
- * `{ status: 'cancelled' }` if the picker is cancelled. Current caller:
- * `recentFilesController.openViaPicker`.
- */
 export async function openAndLoad(session: OpenSession): Promise<OpenMediaResult> {
   return runOpenAndLoad(session)
 }
@@ -282,21 +232,11 @@ async function runOpenAndLoad(session: OpenSession): Promise<OpenMediaResult> {
   if (classifyMediaFileName(filePath) === 'playlist') {
     return openPlaylistPick(session, filePath)
   }
-  // A picked plain media file replaces the queue too, through the same seam as
-  // the playlist branch: a one-path "playlist" so the stale queue can't keep
-  // driving next/previous or EOF advance. Fired before loadPath, matching
-  // openPlaylistPick's order.
+  // A plain file pick also replaces the queue, or stale entries could drive next/previous and EOF advance.
   session.onPlaylistPicked?.([filePath])
   return loadPath(session, filePath)
 }
 
-/**
- * Expands a picked playlist path into its entries, replaces the queue via
- * `onPlaylistPicked`, and loads entry 0 — "Open file…" replaces what's
- * playing, unlike "Add files…"'s append semantics. `readPlaylist` is
- * optional-chained since it's optional on `PlayerBridge` (many test fakes
- * omit it), which this treats the same as an empty playlist.
- */
 async function openPlaylistPick(session: OpenSession, filePath: string): Promise<OpenMediaResult> {
   const entries = ((await session.bridge.media.readPlaylist?.(filePath)) ?? []).filter(
     (entry) => !isRemoteUrl(entry)

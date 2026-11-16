@@ -1,7 +1,3 @@
-// Audio and subtitle track selection: applying a track to mpv, reflecting it in
-// state, persisting the choice against the file, and building the synthetic
-// tracks that external subtitle files are represented by.
-
 import { type Cue } from '../../../shared/cue'
 import {
   type JimakuSubtitleProvenance,
@@ -28,7 +24,6 @@ interface SubtitlePickerSessionDeps {
 }
 
 export interface SubtitleSelectionOptions {
-  /** Effective offset to restore after this selection succeeds. */
   offsetMs?: number
   /** Main-validated provenance for a downloaded external subtitle. */
   provenance?: JimakuSubtitleProvenance
@@ -56,7 +51,6 @@ export interface SubtitleSelectionSnapshotState {
   subtitleOffsetMs: number
 }
 
-/** Captures all renderer-owned information needed for one-step subtitle revert. */
 export function captureSubtitleSelectionSnapshot(
   state: SubtitleSelectionSnapshotState
 ): SubtitleSelectionSnapshot {
@@ -78,13 +72,7 @@ export function captureSubtitleSelectionSnapshot(
   return { selection, offsetMs: state.subtitleOffsetMs }
 }
 
-/**
- * Switches the active audio track in mpv, reflects it in state, then persists
- * the descriptor as the file's manually-chosen audio track. A persistence
- * failure is reported as a sanitized warning string but does not roll back
- * the already-applied player selection; a player failure still rejects
- * (nothing was applied, so nothing to persist).
- */
+// A persistence failure must not roll back an audio selection already accepted by mpv.
 export async function selectAudio(
   bridge: PlayerBridge,
   dispatch: Dispatch,
@@ -111,30 +99,7 @@ async function persistTrackSelection(
   }
 }
 
-/**
- * Switches the active subtitle track. `track === null` turns subtitles off
- * (clears cues, no ffmpeg extraction); otherwise loads and dispatches the
- * new track's cues. `subtitleToken` should be the same token passed to
- * `openAndLoad` for this player instance, so an in-flight auto-selected
- * default load can't clobber (or be clobbered by) this manual pick — see
- * `SubtitleRequestToken`.
- *
- * `cueCache` should also be shared with `openAndLoad` for this player
- * instance (App.tsx holds it in a ref, cleared by `openAndLoad` on every new
- * file). A track already extracted once for the current file is served from
- * the cache instead of re-running ffmpeg, so switching back to a
- * previously-picked track is instant rather than repeating the extraction.
- *
- * On success (real, cached, or Off) the selection is persisted as the file's
- * manually-chosen subtitle. A stale (superseded) extraction persists nothing.
- * A persistence failure is reported as a sanitized warning string but leaves
- * the already-applied selection visible; an extraction failure still rejects.
- *
- * `externalSubtitlePath` is the sidecar file the synthetic external track
- * stands for (App passes `state.externalSubtitlePath`); it is what re-picking
- * that track from the menu persists, since the track itself carries no stream
- * index to store.
- */
+// Share the request token and cue cache with media opening so auto-selection cannot overwrite a manual pick.
 export async function selectSubtitle(
   bridge: PlayerBridge,
   dispatch: Dispatch,
@@ -197,13 +162,7 @@ export async function selectSubtitle(
   return isCurrent() ? warning : undefined
 }
 
-/**
- * Persists a chosen subtitle track. The synthetic external-file track has no
- * stream index to store (`createStoredTrackSelection` rejects its negative
- * id), so it is persisted as `{ mode: 'external', path }` instead — and only
- * when the sidecar's path is known. Persisting it without one would fall
- * through to `{ mode: 'off' }` and silently turn subtitles off on reopen.
- */
+// External tracks have no stream index; persist their path or reopening would silently turn subtitles off.
 async function persistSubtitleTrack(
   bridge: PlayerBridge,
   filePath: string,
@@ -232,7 +191,6 @@ function subtitleSelection(track: Track): StoredSubtitleSelection {
 /** Kana, kanji (CJK unified ideographs), and CJK extension A. */
 const JAPANESE_CHARACTER_RE = /[぀-ヿ㐀-䶿一-鿿]/
 
-/** True when evenly distributed cue samples contain kana or kanji. */
 export function detectJapaneseCues(cues: Cue[], sampleSize = 50): boolean {
   if (cues.length === 0 || sampleSize <= 0) return false
 
@@ -250,13 +208,7 @@ export function detectJapaneseCues(cues: Cue[], sampleSize = 50): boolean {
   return false
 }
 
-/**
- * Builds the synthetic `Track` standing in for an external subtitle file in
- * the Subtitle menu and in state. Its `language` is set to 'jpn' only when the
- * cues actually look Japanese — that is what drives MeCab tokenization and
- * knowledge coloring through `isJapaneseSubtitleTrack`, so an English sidecar
- * must leave it undefined.
- */
+// Only Japanese sidecars may enable MeCab and knowledge coloring.
 export function externalSubtitleTrack(subtitlePath: string, cues: Cue[]): Track {
   const codec = subtitlePath.split('.').pop()?.toLowerCase() ?? ''
   return {
@@ -268,17 +220,7 @@ export function externalSubtitleTrack(subtitlePath: string, cues: Cue[]): Track 
   }
 }
 
-/**
- * Loads a standalone subtitle file (drag-and-drop, or the Subtitle menu's
- * picker) and makes it the active subtitle track of the video at `filePath`.
- * Token-guarded exactly like `selectSubtitle`, and seeds `cueCache` under the
- * synthetic track id so re-selecting the file from the menu doesn't re-read
- * it. The sidecar is then persisted as the video's subtitle selection, so
- * reopening the video brings it back (see `restoreSubtitle`). Never throws:
- * resolves a sanitized warning for the caller to surface — from a failed read
- * (having dispatched nothing) or a failed persist (selection still applied) —
- * or undefined on success.
- */
+// A parse failure leaves the selection untouched; a persistence failure leaves the applied selection visible.
 export async function loadExternalSubtitle(
   session: OpenSession,
   filePath: string,
@@ -295,7 +237,6 @@ export type ExternalSubtitleLoadResult =
   | { status: 'stale' }
   | { status: 'error'; message: string }
 
-/** Applies an external subtitle and reports whether it committed, failed, or went stale. */
 export async function loadExternalSubtitleResult(
   session: OpenSession,
   filePath: string,

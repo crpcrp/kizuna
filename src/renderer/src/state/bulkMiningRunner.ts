@@ -95,14 +95,7 @@ function cancelledStatuses(
 
 type BulkStatusListener = (lemma: string, status: MiningWordStatus) => void
 
-/**
- * Mines selected entries sequentially, retaining a complete summary even after
- * cancellation. `media` describes the loaded file every candidate's sentence
- * audio would be clipped from; each candidate forms its own context from its
- * first-occurrence cue timing through the shared `mineMediaContext` helper, so
- * a candidate with unusable timing is simply mined without a clip. Omitting
- * `media` entirely mines every candidate without sentence audio.
- */
+// Mine sequentially so cancellation retains a complete summary of the work already done.
 export async function runBulkMining(
   bridges: BulkMineBridges,
   words: MiningCandidate[],
@@ -149,9 +142,7 @@ export async function runBulkMining(
     statuses[candidate.lemma] = mining
     onStatus(candidate.lemma, mining)
 
-    // Callers only ever mine rows whose entry has already resolved
-    // (`miningSet` filters non-null entries, and mining is blocked while
-    // resolution runs). The null guard stays as exhaustive handling.
+    // Mining is gated on resolved entries; keep the null guard for exhaustive handling.
     const entry = resolved[candidate.lemma]?.entry ?? null
 
     let terminal: MiningWordStatus
@@ -192,7 +183,6 @@ export async function runBulkMining(
   return { kind: 'finished', statuses }
 }
 
-/** Resolves candidate entries in bounded sequential chunks without blocking a later mining run. */
 export async function resolveCandidateEntries(
   dict: DictLookupBridge,
   candidates: CandidateWithFrequencyFallback[],

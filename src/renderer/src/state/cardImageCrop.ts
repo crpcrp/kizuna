@@ -1,9 +1,3 @@
-// Crop math for the mined-card picture dialog. Pure: the drag rectangle the
-// user paints over the captured frame is normalized here, and mapped from CSS
-// display pixels to the frame's natural pixels, so the component only has to
-// report pointer positions. The one impure step (drawing to a canvas) takes an
-// injected canvas, keeping it testable without a real one.
-
 import { clamp } from '../../../shared/math'
 
 export interface Point {
@@ -23,21 +17,11 @@ export interface Rect {
   height: number
 }
 
-/**
- * Smallest drag, in CSS display pixels, that counts as a deliberate crop. A
- * click without a drag produces a degenerate rectangle; below this the crop
- * action stays disabled and the user takes the full frame instead.
- */
+// Ignore tiny drags so a click cannot accidentally select a crop.
 const MIN_CROP_DISPLAY_PX = 8
 
-/** Longest allowed edge for JPEGs attached to mined Anki cards. */
 const CARD_IMAGE_MAX_DIMENSION_PX = 1280
 
-/**
- * Fits an integer pixel size within `maxDimension` without upscaling. The
- * longer edge lands exactly on the cap when scaling is needed; the other edge
- * uses deterministic nearest-integer rounding and cannot collapse below one.
- */
 export function fitWithinMaxDimension(sourceSize: Size, maxDimension: number): Size | null {
   if (
     !Number.isInteger(sourceSize.width) ||
@@ -66,12 +50,6 @@ export function fitWithinMaxDimension(sourceSize: Size, maxDimension: number): S
   }
 }
 
-/**
- * The rectangle spanned by a drag from `start` to `end`, in display pixels.
- * A reverse drag (right-to-left or bottom-to-top) yields the same rectangle as
- * the forward one, and both corners are clamped into `bounds` so a pointer that
- * left the image never selects outside it.
- */
 export function normalizeSelection(start: Point, end: Point, bounds: Size): Rect {
   const x1 = clamp(Math.min(start.x, end.x), 0, bounds.width)
   const x2 = clamp(Math.max(start.x, end.x), 0, bounds.width)
@@ -80,7 +58,6 @@ export function normalizeSelection(start: Point, end: Point, bounds: Size): Rect
   return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 }
 }
 
-/** True when `selection` is at least `MIN_CROP_DISPLAY_PX` on both axes. */
 export function isSubmittableCrop(selection: Rect | null): boolean {
   return (
     selection !== null &&
@@ -89,13 +66,7 @@ export function isSubmittableCrop(selection: Rect | null): boolean {
   )
 }
 
-/**
- * Maps a display-pixel selection onto the frame's natural pixels. The image is
- * scaled to fit the dialog, so the scale is rarely integral; both edges round
- * *inward* (left/top up, right/bottom down) so the crop can never include a
- * pixel column the user did not cover. Returns null when the selection or the
- * geometry collapses to less than one natural pixel.
- */
+// Round both edges inward so the crop never includes pixels outside the selection.
 export function toNaturalRect(selection: Rect, display: Size, natural: Size): Rect | null {
   if (display.width <= 0 || display.height <= 0 || natural.width <= 0 || natural.height <= 0) {
     return null
@@ -111,12 +82,10 @@ export function toNaturalRect(selection: Rect, display: Size, natural: Size): Re
   return width >= 1 && height >= 1 ? { x: left, y: top, width, height } : null
 }
 
-/** The whole frame, in natural pixels — the "Add full frame" choice. */
 export function fullFrameRect(natural: Size): Rect {
   return { x: 0, y: 0, width: natural.width, height: natural.height }
 }
 
-/** The slice of `HTMLCanvasElement` the JPEG encoder needs (faked in tests). */
 export interface CanvasLike {
   width: number
   height: number
@@ -139,12 +108,7 @@ export interface CanvasLike {
 /** JPEG quality for mined pictures — visually clean at a fraction of PNG's size. */
 const CARD_IMAGE_JPEG_QUALITY = 0.85
 
-/**
- * Draws `rect` (natural pixels) of `image` into `canvas` and returns the result
- * as raw base64 JPEG — no `data:` URL prefix, which is what AnkiConnect's
- * `data` media attachment expects. Returns null when the canvas cannot produce
- * a JPEG (no 2D context, or an encoder that returned something else).
- */
+// AnkiConnect media data expects raw base64 JPEG, without a data: URL prefix.
 export function renderJpegBase64(
   image: CanvasImageSource,
   rect: Rect,

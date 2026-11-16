@@ -1,28 +1,15 @@
-// Seekbar hover thumbnails — renderer state.
-//
-// Owns the hover→preview lifecycle for the seekbar: it debounces the (cheap,
-// synchronous) cursor tracking from the (expensive, async) thumbnail fetch,
-// keeps a single request in flight, and drops stale responses by comparing the
-// bucket that was requested against the newest one. The timer and the fetch are
-// both injected so the whole thing is unit-testable without a clock, a browser,
-// or the preload bridge.
-
 import { thumbnailBucket } from '../../../shared/thumbnailBucket'
 
-/** Injected timer seam — mirrors `subtitleSearchDebounce`'s `SearchTimer`. */
 export interface PreviewTimer {
   set(callback: () => void, delayMs: number): unknown
   clear(handle: unknown): void
 }
 
-/** Production timer bound to the browser's `setTimeout`/`clearTimeout`. */
 const browserPreviewTimer: PreviewTimer = {
   set: (callback, delayMs) => window.setTimeout(callback, delayMs),
   clear: (handle) => window.clearTimeout(handle as number)
 }
 
-/** Fetches the preview frame for a hovered time — the preload
- * `media.getThumbnail` in production, a fake in tests. */
 export type ThumbnailFetch = (
   path: string,
   timeSec: number,
@@ -32,21 +19,16 @@ export type ThumbnailFetch = (
 /** Nominal outer width of the preview frame, including its border. */
 export const SEEK_PREVIEW_OUTER_WIDTH = 162
 
-/** The renderable preview state the controller pushes to React. */
 export interface SeekPreviewState {
-  /** Whether the floating preview is shown at all (true while hovering). */
   visible: boolean
-  /** The current frame image, or null while it is still being generated. */
   dataUrl: string | null
   /** Hovered time in seconds, for the timestamp label. */
   timeSec: number
   /** Horizontal cursor position across the seekbar, `0..1`. */
   positionRatio: number
-  /** Measured seekbar width used to keep the preview inside its container. */
   containerWidth?: number
 }
 
-/** The hidden/idle state — no box, no image. */
 export const HIDDEN_PREVIEW: SeekPreviewState = {
   visible: false,
   dataUrl: null,
@@ -54,21 +36,11 @@ export const HIDDEN_PREVIEW: SeekPreviewState = {
   positionRatio: 0
 }
 
-/**
- * Pure: the `0..1` horizontal ratio of `clientX` within a seekbar rectangle,
- * clamped to the edges. Isolated so BottomBar's pointer handler stays a
- * one-liner and the math is testable without a real DOM.
- */
 export function pointerRatio(clientX: number, rect: { left: number; width: number }): number {
   if (rect.width <= 0) return 0
   return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
 }
 
-/**
- * Left pixel offset for a preview centered on the pointer where possible and
- * clamped fully inside the available width. Invalid or negative measurements
- * safely collapse to the left edge.
- */
 export function previewLeftOffset(
   positionRatio: number,
   containerWidth: number,
@@ -81,12 +53,6 @@ export function previewLeftOffset(
   return Math.max(0, Math.min(desired, Math.max(0, containerWidth - previewWidth)))
 }
 
-/**
- * Drives the seekbar hover preview. `hover` tracks the cursor synchronously
- * (the box follows immediately, keeping the last frame until a fresh one
- * arrives) while debouncing the thumbnail fetch; `leave` hides it; `setSource`
- * swaps the loaded file (and disables previews for sources without dimensions).
- */
 export class SeekPreviewController {
   private path: string | null = null
   private duration = 0
@@ -96,10 +62,8 @@ export class SeekPreviewController {
   private generation = 0
   /** Bucket of the most recent scheduled fetch; a response for any other bucket is stale. */
   private requestBucket: number | null = null
-  /** Bucket whose frame is cached below, so re-hovering it skips the fetch. */
   private shownBucket: number | null = null
-  /** The cached frame for `shownBucket`; kept across `leave` so re-entering the
-   * same bucket re-shows it immediately instead of flashing the placeholder. */
+  // Keep the cached frame across leave/re-enter to avoid flashing a placeholder for the same bucket.
   private shownDataUrl: string | null = null
   private state: SeekPreviewState = HIDDEN_PREVIEW
 
@@ -110,11 +74,6 @@ export class SeekPreviewController {
     private readonly delayMs = 150
   ) {}
 
-  /**
-   * Point the controller at the loaded file. `enabled` is false for sources
-   * without previews (audio-only or unsupported sources); a null path disables too. Any
-   * pending work is cancelled and the preview hidden.
-   */
   setSource(path: string | null, duration: number, enabled: boolean): void {
     this.cancel()
     this.path = enabled ? path : null
@@ -125,7 +84,6 @@ export class SeekPreviewController {
     this.emit(HIDDEN_PREVIEW)
   }
 
-  /** Cursor moved to `positionRatio` (`0..1`) across the measured seekbar. */
   hover(positionRatio: number, containerWidth?: number): void {
     if (!this.enabled || this.path === null) return
     const ratio = Math.max(0, Math.min(1, positionRatio))
@@ -133,9 +91,7 @@ export class SeekPreviewController {
     const bucket = thumbnailBucket(timeSec, this.duration)
     if (bucket === null) return
 
-    // Follow the cursor now. Re-show this bucket's cached frame if we have one
-    // (covers re-entering after a leave); otherwise, while actively scrubbing,
-    // carry the last frame over so the box never flickers empty between buckets.
+    // Keep the last frame while fetching a new bucket so scrubbing does not flash empty previews.
     const dataUrl =
       bucket === this.shownBucket
         ? this.shownDataUrl
@@ -157,7 +113,6 @@ export class SeekPreviewController {
     this.schedule(bucket, timeSec)
   }
 
-  /** Cursor left the seekbar: cancel pending work and hide the preview. */
   leave(): void {
     this.cancel()
     this.emit(HIDDEN_PREVIEW)
@@ -173,14 +128,10 @@ export class SeekPreviewController {
       const duration = this.duration
       if (path === null) return
       void this.fetchThumbnail(path, timeSec, duration).then((result) => {
-        // Stale-drop: a new source/leave (generation) or a newer hover
-        // (requestBucket) has superseded this request.
         if (generation !== this.generation) return
         if (this.requestBucket !== bucket) return
         this.requestBucket = null
         if (result === null) return
-        // Cache the frame so re-entering this bucket (e.g. after a leave)
-        // re-shows it immediately without another round-trip.
         this.shownBucket = bucket
         this.shownDataUrl = result.dataUrl
         this.emit({ ...this.state, dataUrl: result.dataUrl })

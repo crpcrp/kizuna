@@ -40,10 +40,6 @@ export interface KnowledgeData {
   syncStatus: SyncStatus
 }
 
-/** The two live signals the read-only "Setup & integrations" tab needs and no
- * other tab already carries: which bundled binaries exist, and whether Anki is
- * answering right now. Everything else on that tab is derived from the
- * dictionaries/knowledge domains. */
 export interface SetupData {
   binaries: BundledBinaryStatus
   anki: AnkiPing
@@ -58,7 +54,6 @@ export interface OptionsDomainData {
   setup: SetupData
 }
 
-/** Subset of the preload bridge the options-data controller needs. */
 export interface OptionsDataBridge {
   mecab: {
     listDicts(): Promise<McDict[]>
@@ -90,15 +85,9 @@ export interface OptionsDataBridge {
 }
 
 export interface OptionsDataController {
-  /** Current cached state for `domain`; never throws, never triggers a fetch. */
   getState<D extends OptionsDomain>(domain: D): DomainState<OptionsDomainData[D]>
-  /**
-   * Loads `domain`. A `ready` domain is a no-op unless `force` is set; a load
-   * already in flight is joined rather than duplicated (unless `force`).
-   * One domain's rejection never touches another domain's state.
-   */
+  // Reuse ready or in-flight domains unless forced; one failed domain must not affect another.
   load(domain: OptionsDomain, options?: { force?: boolean }): Promise<void>
-  /** Registers `listener`, called after every state transition; returns an unsubscribe function. */
   subscribe(listener: () => void): () => void
 }
 
@@ -157,33 +146,17 @@ function idleState<T>(): DomainState<T> {
   return { status: 'idle', data: undefined, error: undefined }
 }
 
-/** Sentinel a fetcher returns to mean "a newer request for this domain has
- * since started" — runLoad leaves the domain's state exactly as-is rather
- * than committing a superseded result. */
+// A superseded fetch returns this sentinel so it cannot overwrite the newer domain state.
 const STALE = Symbol('stale')
 
-/**
- * What a fetcher commits: the domain's new data, plus a user-facing error when
- * the load only partially succeeded. `error` set means the state lands in
- * `'error'` while still committing the `data` that *did* load.
- */
+// Partial failures commit available data while exposing the error.
 interface FetchOutcome {
   data: unknown
   error?: string
 }
 
-/**
- * Owns the Options dialog's optional-integration data (MeCab/Yomitan
- * dictionaries, Anki connection + deck/model/field lists, knowledge sync
- * settings/status, and Jimaku credential status) behind a small per-domain
- * cache, so opening a tab that was already loaded is instant and a failing
- * domain (e.g. Anki not running) can't block the others from loading.
- */
 export function createOptionsDataController(bridge: OptionsDataBridge): OptionsDataController {
-  // Untyped-by-domain internally (TS can't correlate a mapped type's value
-  // with a generic key across an assignment — microsoft/TypeScript#30581);
-  // the public getState<D>() below is the one place that casts back to the
-  // domain-specific shape callers actually see.
+  // TypeScript cannot correlate a mapped value with a generic key on assignment (microsoft/TypeScript#30581).
   const states: Record<OptionsDomain, DomainState<unknown>> = {
     dictionaries: idleState(),
     anki: idleState(),
@@ -199,12 +172,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
     listeners.forEach((listener) => listener())
   }
 
-  // Bumped at the start of every anki-domain fetch attempt (before any
-  // await), so it reflects invocation order rather than resolution order.
-  // A fetch whose modelFieldNames() call is still in flight when a later
-  // attempt starts (e.g. the user picks a different note type before the
-  // first pick's field list has loaded) discards its own result instead of
-  // clobbering the newer attempt's fields.
+  // Increment before awaiting so stale model-field requests cannot overwrite a newer note-type selection.
   let ankiRequestSeq = 0
   let jimakuRequestSeq = 0
 
@@ -220,13 +188,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
       ])
       return { data: { mecabDicts, currentMecabDictId, yomitanDicts } }
     },
-    // `getSettings()` reads the local settings file; `deckNames`/`modelNames`/
-    // `modelFieldNames` all go over the wire to AnkiConnect. Awaiting them
-    // together would discard the settings whenever Anki is unreachable, so a
-    // change saved while Anki is down is persisted on disk but visually
-    // reverts in the dialog. The two halves are therefore settled
-    // independently: the settings are always committed, and a failing list
-    // call only keeps the previous lists and surfaces the error.
+    // Settle local settings separately from AnkiConnect lists so offline Anki cannot visually revert saved settings.
     anki: async (previous) => {
       const seq = ++ankiRequestSeq
       const prior = previous as AnkiData | undefined
@@ -245,12 +207,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
       const lists = await listsPromise
       if (seq !== ankiRequestSeq) return STALE
 
-      // Every cached list describes the endpoint it was read from, so it may
-      // only be reused while the connection-defining settings are unchanged.
-      // The dialog force-reloads this domain right after a URL or API-key
-      // save; if the new endpoint is unreachable, showing the old server's
-      // decks and note types under the new URL would let the user save
-      // selections that need not exist there at all.
+      // Reuse cached lists only for the same endpoint; old-server decks may not exist on a new server.
       const cached =
         prior !== undefined &&
         prior.settings.url === settings.url &&
@@ -261,9 +218,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
       const modelNames = lists.modelNames ?? cached?.modelNames ?? []
       const listsError = lists.error
 
-      // Cached fields carry the extra condition that the note type itself is
-      // unchanged — a reload that follows a note-type change must not show the
-      // previous model's fields under the new model's name.
+      // Cached fields also require the same note type; otherwise they describe the wrong model.
       const cachedModelFields =
         cached !== undefined && cached.settings.modelName === settings.modelName
           ? cached.modelFields
@@ -309,10 +264,7 @@ export function createOptionsDataController(bridge: OptionsDataBridge): OptionsD
         throw error
       }
     },
-    // A down Anki is the *normal* answer this tab exists to report, not a
-    // failure of the load: the ping's rejection is folded into an `ok: false`
-    // reading so the binary statuses still render and the tab never shows an
-    // error banner for something it is supposed to display as a status dot.
+    // Anki being offline is a setup status, not a tab-load failure; keep the other binary statuses visible.
     setup: async () => {
       const [binaries, anki] = await Promise.all([
         bridge.integration.binaryStatus(),

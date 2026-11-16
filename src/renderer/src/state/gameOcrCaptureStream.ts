@@ -1,13 +1,11 @@
 import type { GameOcrTargetKind } from '../../../shared/gameOcr'
 import type { OcrImageSize } from '../../../shared/ocr'
 
-/** The subset of `<video>` this module needs, so tests need no media stack. */
 export interface CaptureVideo {
   videoWidth: number
   videoHeight: number
 }
 
-/** The subset of `CanvasRenderingContext2D` this module needs. */
 export interface CaptureCanvasContext {
   drawImage(source: CaptureVideo, x: number, y: number): void
 }
@@ -15,7 +13,6 @@ export interface CaptureCanvasContext {
 export interface GameOcrCaptureSurface {
   video: CaptureVideo
   context: CaptureCanvasContext
-  /** Sizes the backing store before the first draw at a new resolution. */
   resize(size: OcrImageSize): void
 }
 
@@ -28,13 +25,7 @@ export interface FreezeOutcome {
   imageSize: OcrImageSize
 }
 
-/**
- * Draws the current stream frame into the frame's canvas.
- *
- * The frozen-frame window is excluded from Windows desktop capture, so this
- * draw can happen while the previous screenshot remains visible. The canvas
- * is replaced before React publishes the new capture identity.
- */
+// Windows capture excludes the frozen-frame window, so drawing can run while the old screenshot is visible.
 export async function freezeCurrentFrame({
   surface,
   imageSize
@@ -48,14 +39,12 @@ export async function freezeCurrentFrame({
   return { imageSize: size }
 }
 
-/** The subset of `MediaStreamTrack` the retention rules need. */
 export interface CaptureTrack {
   readyState: string
   stop(): void
   addEventListener?(type: 'ended', listener: () => void): void
 }
 
-/** The subset of `MediaStream` the retention rules need. */
 export interface CaptureStream {
   getTracks(): CaptureTrack[]
   getVideoTracks(): CaptureTrack[]
@@ -72,36 +61,19 @@ export interface CaptureStreamRequest {
 }
 
 export interface CaptureStreamRegistryOptions {
-  /** Opens a stream. Injected so the rules below need no media stack. */
   open(request: CaptureStreamRequest): Promise<CaptureStreamEntry>
 }
 
-/**
- * How many *window* streams stay open at once. One is enough: only the current
- * target is ever frozen, and a user who alt-tabs through a dozen programs must
- * not leave Kizuna holding capture access to all of them. Display streams are
- * not bounded — there are only ever a handful, and keeping them open is what
- * makes a warm capture one `drawImage`.
- */
+// Retain only one window stream to bound capture access; keep display streams warm for fast captures.
 const MAX_WINDOW_STREAMS = 1
 
 export interface CaptureStreamRegistry {
   acquire(request: CaptureStreamRequest): Promise<CaptureStreamEntry>
-  /** Stops and forgets every retained stream. */
   releaseAll(): void
-  /** Retained source ids, most recently used last. For tests and diagnostics. */
   retained(): string[]
 }
 
-/**
- * Keeps desktop capture streams open between captures, keyed by source id.
- *
- * The retained stream is the whole reason a capture costs one `drawImage`
- * rather than a stream open, so it is not thrown away at a frame boundary. It
- * is thrown away when it can no longer produce frames — a window that closed,
- * a display that went away, a track the user revoked — because such a stream
- * is indistinguishable from a working one until something tries to draw it.
- */
+// Retain streams between frames, but evict ended tracks so later captures cannot reuse a frozen image.
 export function createCaptureStreamRegistry(
   options: CaptureStreamRegistryOptions
 ): CaptureStreamRegistry {
@@ -129,7 +101,6 @@ export function createCaptureStreamRegistry(
   const isLive = (entry: CaptureStreamEntry): boolean =>
     entry.stream.getVideoTracks().some((track) => track.readyState === 'live')
 
-  /** Drops the oldest window streams once a new one has been added. */
   const enforceWindowLimit = (): void => {
     const windows = [...entries.entries()].filter(([, record]) => record.targetKind === 'window')
     for (const [sourceId] of windows.slice(0, Math.max(0, windows.length - MAX_WINDOW_STREAMS))) {
@@ -142,7 +113,6 @@ export function createCaptureStreamRegistry(
       if (released) throw new Error('The Game OCR capture streams have been released.')
       const existing = entries.get(request.sourceId)
       if (existing && isLive(existing.entry)) {
-        // Re-insert so this is the most recently used entry.
         entries.delete(request.sourceId)
         entries.set(request.sourceId, existing)
         return existing.entry
@@ -154,16 +124,12 @@ export function createCaptureStreamRegistry(
 
       const operation = (async (): Promise<CaptureStreamEntry> => {
         const entry = await options.open(request)
-        // Teardown can land while this open is still in flight. Retaining the
-        // stream now would leave a live capture behind a registry nothing
-        // holds any more — precisely the access this bounds.
+        // Teardown may race a stream open; stop late streams so capture access cannot outlive the registry.
         if (released) {
           stopEntry(entry)
           throw new Error('The Game OCR capture streams were released while opening.')
         }
         entries.set(request.sourceId, { entry, targetKind: request.targetKind })
-        // A stream whose track ends is evicted as soon as it says so, rather
-        // than on the next capture that would have drawn a frozen frame.
         for (const track of entry.stream.getVideoTracks()) {
           track.addEventListener?.('ended', () => {
             if (entries.get(request.sourceId)?.entry === entry) {
@@ -194,7 +160,6 @@ export function createCaptureStreamRegistry(
   }
 }
 
-/** Constraints for one window's or display's desktop capture stream. */
 export function desktopStreamConstraints(
   sourceId: string,
   maxFrameRate = 30
@@ -202,9 +167,7 @@ export function desktopStreamConstraints(
   return {
     audio: false,
     video: {
-      // Chromium's desktop-capture constraints, which Electron honours when it
-      // is given a source id from `desktopCapturer`. They are not standard
-      // getUserMedia constraints, hence the cast.
+      // Electron accepts Chromium desktop-capture constraints, which are absent from standard getUserMedia types.
       mandatory: {
         chromeMediaSource: 'desktop',
         chromeMediaSourceId: sourceId,

@@ -1,6 +1,3 @@
-// Pure renderer player state + reducer. Driven via React useReducer by App.
-// No React import here — kept framework-agnostic and directly unit-testable.
-
 import type { Track } from '../../../shared/track'
 import type { Chapter } from '../../../shared/chapter'
 import type { Cue } from '../../../shared/cue'
@@ -21,24 +18,17 @@ import type { SubtitleEncoding } from '../../../shared/subtitleEncoding'
 import { EXTERNAL_SUBTITLE_TRACK_ID } from '../../../shared/track'
 import { nextSubtitleVersionOffsets } from './perFileOffsets'
 
-/** The armed A–B loop endpoints (seconds), or `null` when that endpoint is
- * unset. When both are numbers mpv loops the range on its own. Normalized so
- * `a <= b` whenever both are set (see `cycleAbLoop`). */
+// A–B endpoints are media seconds; null is unset, and mpv owns looping once both are set.
 export interface AbLoopState {
   a: number | null
   b: number | null
 }
 
-/** No A–B loop armed. */
 export const EMPTY_AB_LOOP: AbLoopState = { a: null, b: null }
 
-/** Everything the player UI needs to render, in one immutable state object. */
 export interface PlayerState extends LoadedRendererSettings {
   filePath?: string
-  /** Increments on every `fileLoaded`, even when the same path is reopened.
-   * Per-file effects (speed reset, subtitle-offset/audio-delay restore,
-   * chapter fetch) key on this instead of `filePath` so reopening the current
-   * file re-runs them — a same-path reopen leaves `filePath` unchanged. */
+  // Increment even on same-path reopen so per-file effects run again.
   loadGeneration: number
   tracks: Track[]
   cues: Cue[]
@@ -47,48 +37,32 @@ export interface PlayerState extends LoadedRendererSettings {
   paused: boolean
   /** 0..100 */
   volume: number
-  /** Audio muted (independent of volume, so the level is restored on unmute). */
   muted: boolean
   /** Playback speed multiplier; session-only and reset on each file load. */
   speed: number
-  /** Window is in fullscreen mode (mirrors the OS/BrowserWindow state). */
   fullscreen: boolean
   selectedAudioId?: number
   selectedSubtitleId: number | null
-  /** Path of the external subtitle file currently loaded (see
-   * `EXTERNAL_SUBTITLE_TRACK_ID`); undefined when subtitles come from the
-   * video's own streams. */
   externalSubtitlePath?: string
-  /** Trusted Jimaku metadata for the active external subtitle, when any. */
   externalSubtitleProvenance?: JimakuSubtitleProvenance
-  /** MeCab tokens for the currently-active cue only; empty until tokenized. */
   activeTokens: Token[]
-  /** MeCab tokens for every cue of the current track, keyed by `cueKey`, for
-   * the subtitle sidebar's per-word coloring. Empty ({}) until the sidebar
-   * requests a whole-track tokenization; reset whenever the cues change. */
+  // Whole-track tokens are keyed by cueKey and cleared when cues change.
   allCueTokens: Record<string, Token[]>
-  /** Lemma -> resolved knowledge level, accumulated across cues (never reset
-   * on cue change) so previously-resolved words stay colored/cached. */
+  // Accumulate lemma levels across cues so revisiting a word reuses its known level.
   knownLevels: Record<string, KnowledgeLevel>
   /** Increments whenever cached knowledge levels are cleared, invalidating open derived views. */
   knowledgeEpoch: number
-  /** Decoder choice for the active external subtitle file. */
   externalSubtitleEncoding: SubtitleEncoding
-  /** Subtitle timing offset (ms) for the currently-loaded file; positive delays
-   * subtitles, negative shows them earlier. See `offsetTimePos` in shared/cue. */
+  // Subtitle offset in ms: positive delays subtitles, negative advances them.
   subtitleOffsetMs: number
-  /** Per-video offsets for downloaded subtitle content versions. */
   subtitleOffsetsByVersion: Record<string, number>
-  /** Audio delay (ms) for the currently-loaded file; positive delays audio,
-   * negative plays it earlier. Persisted per file like `subtitleOffsetMs`;
-   * see `MpvController.setAudioDelay`. */
+  // Audio delay in ms: positive delays audio, negative advances it; persisted per file.
   audioDelayMs: number
   /** Armed A–B loop for the currently-loaded file. Session-only (not persisted);
    * cleared on every file load, like the per-cue loop. */
   abLoopState: AbLoopState
 }
 
-/** Empty-file starting state. Volume defaults to full and is preserved across files. */
 export const initialPlayerState: PlayerState = {
   ...selectLoadedRendererSettings(DEFAULT_PLAYER_SETTINGS),
   filePath: undefined,
@@ -117,17 +91,14 @@ export const initialPlayerState: PlayerState = {
   abLoopState: EMPTY_AB_LOOP
 }
 
-/** Id of the first audio track in `tracks`, else undefined. */
 function defaultAudioId(tracks: Track[]): number | undefined {
   return tracks.find((t) => t.kind === 'audio')?.id
 }
 
-/** Id of the first subtitle track in `tracks`, else null. */
 export function defaultSubtitleId(tracks: Track[]): number | null {
   return tracks.find((t) => t.kind === 'subtitle')?.id ?? null
 }
 
-/** True only when the selected subtitle track is explicitly Japanese. */
 export function isJapaneseSubtitleTrack(
   tracks: Track[],
   selectedSubtitleId: number | null
@@ -147,7 +118,6 @@ export type PlayerAction =
   | { type: 'chaptersLoaded'; chapters: Chapter[] }
   | { type: 'selectAudio'; id: number }
   | { type: 'selectSubtitle'; id: number | null }
-  /** An external subtitle file became the active subtitle track. */
   | {
       type: 'externalSubtitleLoaded'
       path: string
@@ -160,9 +130,6 @@ export type PlayerAction =
   | { type: 'setSubtitleVersionOffset'; contentVersion: string; value: number }
   /** `color: null` clears the override, restoring the theme default. */
   | { type: 'setLevelColor'; level: UnderlineLevel; color: string | null }
-  /** Applies a freshly-loaded `settings.json` in one payload; its shape is the
-   * renderer's owned settings selection (see `state/rendererSettings.ts`), so
-   * the two cannot drift. */
   | { type: 'loadSettings'; settings: LoadedRendererSettings }
   | { type: 'activeTokensLoaded'; tokens: Token[] }
   | { type: 'allCueTokensLoaded'; tokens: Record<string, Token[]> }
@@ -172,7 +139,6 @@ export type PlayerAction =
   | { type: 'setPopupSettings'; value: Partial<PopupSettings> }
   | { type: 'setSubtitleStyle'; value: Partial<SubtitleStyleSettings> }
 
-/** True when two whole-track snapshots contain the same cue keys and token arrays. */
 function sameCueTokenSnapshot(
   current: Record<string, Token[]>,
   next: Record<string, Token[]>
@@ -184,7 +150,6 @@ function sameCueTokenSnapshot(
   )
 }
 
-/** Pure, immutable reducer. Unknown actions return the same state reference. */
 export function playerReducer(state: PlayerState, action: PlayerAction): PlayerState {
   switch (action.type) {
     case 'set':
@@ -202,8 +167,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         speed: 1,
         selectedAudioId: defaultAudioId(action.tracks),
         selectedSubtitleId: defaultSubtitleId(action.tracks),
-        // `tracks` is replaced wholesale, so the previous file's synthetic
-        // external track is gone with it — drop its path too.
         externalSubtitlePath: undefined,
         externalSubtitleProvenance:
           action.history?.subtitle?.mode === 'external'
@@ -213,16 +176,11 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         subtitleOffsetMs: 0,
         subtitleOffsetsByVersion: { ...(action.history?.subtitleOffsetsByVersion ?? {}) },
         audioDelayMs: 0,
-        // A–B loop is per-file; a new file starts with no loop armed. App also
-        // clears mpv's own ab-loop properties (they survive loadfile).
+        // mpv retains A–B properties across loadfile; clear both renderer and mpv loop state on a new file.
         abLoopState: EMPTY_AB_LOOP,
         allCueTokens: {}
       }
     case 'mediaClosed':
-      // A media load failed or otherwise ended. Drop the previous file's
-      // identity so the UI stops showing tracks/cues/chapters for media mpv is
-      // no longer playing.
-      // Persisted settings (volume, bindings, appearance, …) are untouched.
       return {
         ...state,
         filePath: undefined,
@@ -244,8 +202,6 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
         allCueTokens: {}
       }
     case 'cuesLoaded':
-      // New cue set → the whole-track tokenization is stale; clear it so the
-      // sidebar re-tokenizes rather than showing the previous track's spans.
       return { ...state, cues: action.cues, allCueTokens: {} }
     case 'chaptersLoaded':
       return { ...state, chapters: action.chapters }

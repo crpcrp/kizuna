@@ -28,12 +28,7 @@ export interface GameOcrLayoutResult {
   displayBounds: GameOcrLayoutBounds
 }
 
-/**
- * Converts OCR pixels into viewport CSS coordinates without changing the
- * detector's geometry. OCR boxes annotate pixels in the frozen frame, so
- * enlarging or collision-shifting them would point at pixels that were never
- * recognized as part of the text.
- */
+// Keep OCR boxes on their recognized pixels; enlarging or shifting them would misidentify the text.
 export function calculateGameOcrLayout(input: GameOcrLayoutInput): GameOcrLayoutResult[] {
   const viewport = {
     width: nonNegativeFinite(input.viewportSize.width),
@@ -72,7 +67,6 @@ function toCssBounds(bounds: OcrBounds, scaleX: number, scaleY: number): GameOcr
   }
 }
 
-/** Clip at an edge instead of translating the rectangle away from its pixels. */
 function clipBox(box: GameOcrLayoutBounds, viewport: GameOcrLayoutSize): GameOcrLayoutBounds {
   if (
     box.x >= 0 &&

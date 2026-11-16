@@ -49,7 +49,6 @@ interface ResolvedLookup {
   result: VocabularySpanLookup['result']
 }
 
-/** Resolves and caches whole-track compound spans without allowing stale work to publish. */
 export function createVocabularySpanController(): VocabularySpanController {
   let generation = 0
   let currentEpochKey: string | undefined
@@ -137,10 +136,7 @@ async function resolveSpans(
   await Promise.all(workers)
   if (getGeneration() !== requestGeneration) return { kind: 'stale' }
 
-  // A token's vocabulary identity is its top-ranked lookup result — the same
-  // entry the word popup displays first. A lower-ranked alternative headword
-  // (ヤツ or 八つ for a token whose top entry is 奴) must never drive the
-  // single-token projection, or a known word colors as unknown.
+  // Only the top-ranked headword may project a token; lower-ranked alternatives can change its knowledge level.
   const topLookups = new Map<string, ResolvedLookup>()
   for (const lookup of lookups) {
     const key = topLookupKey(lookup.cueKey, lookup.tokenOffset)
@@ -228,11 +224,7 @@ function topLookupKey(cueKey: string, tokenOffset: number): string {
   return `${cueKey}\u0000${tokenOffset}`
 }
 
-/**
- * The top-ranked lookup for one token, when it projects that token onto a
- * dictionary headword other than its own lemma (a fused にしても token whose
- * lemma is にして, or a katakana ヤツ surface whose entry is written 奴).
- */
+// A single-token projection may change the dictionary identity (e.g. ヤツ → 奴).
 function singleTokenProjection(
   cueKey: string,
   token: Token,

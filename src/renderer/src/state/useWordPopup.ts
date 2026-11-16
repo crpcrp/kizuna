@@ -21,13 +21,10 @@ import {
   type WordPopupTextContext
 } from './wordLookup'
 
-/** Hover-intent delay: onMouseEnter fires for every token the pointer passes
- * over, but only a token it rests on this long opens a popup. Click bypasses
- * it (an explicit action). */
+// Delay hover opens so passing over a token does not open it; explicit clicks bypass the delay.
 const HOVER_DELAY_MS = 250
 
 export interface CardImageDialogViewModel {
-  /** The captured frame awaiting the user's crop decision, if any. */
   imageBase64: string | undefined
   /** A base64 JPEG mines the card with it, null mines it without a picture. */
   onSubmit(jpegBase64: string | null): void
@@ -51,20 +48,15 @@ export interface WordPopupBridge {
 }
 
 export interface UseWordPopupInput {
-  /** Dictionary lookup, Anki mining, knowledge details, and mpv frame capture. */
   bridge: WordPopupBridge
   popupSettings: WordPopupSettings
-  /** The active cue's tokens, passed to the lookup as sentence context. */
   activeTokens: Token[]
   activeCue: Cue | undefined
   /** False for a non-Japanese (or no) subtitle track: the overlay handlers are
    * withheld entirely. */
   japaneseSubtitleSelected: boolean
-  /** True while a video file is loaded, so a card picture can be captured. */
   videoLoaded?: boolean
-  /** Where a mined line's audio could be clipped from. */
   mineMediaSource?: () => MineMediaSource
-  /** Replaces the current text surface and invalidates its popup work. */
   resetKey?: string | number
 }
 
@@ -78,18 +70,10 @@ export interface UseWordPopupResult {
   }
   props: Omit<WordPopupProps, 'maxEntries' | 'maxMeanings'>
   cardImageDialog: CardImageDialogViewModel
-  /** True while the crop dialog owns keyboard input. */
   cardImageOpen: boolean
-  /** Closes the popup and invalidates pending hover/dictionary work. */
   close(): void
 }
 
-/**
- * Owns the word popup: hover intent, the dictionary lookup that opens it,
- * glossary cross-reference navigation, its Anki mine, and the card-picture
- * crop dialog that mine can route through. Touches no vocabulary cache and no
- * controller other than its own.
- */
 export function useWordPopup({
   bridge,
   popupSettings,
@@ -100,7 +84,6 @@ export function useWordPopup({
   mineMediaSource = () => ({ subtitleOffsetMs: 0 }),
   resetKey
 }: UseWordPopupInput): UseWordPopupResult {
-  // Popup request/history/Anki-mining orchestration — see state/popupController.ts.
   const [popupController] = useState(createPopupController)
   const popupState = useSyncExternalStore(
     popupController.subscribe,
@@ -114,27 +97,17 @@ export function useWordPopup({
     ankiError,
     ankiExisting
   } = popupState
-  // A captured frame awaiting the user's crop decision, together with the
-  // dictionary entry whose mine triggered it (see handleAddToAnki).
   const [cardImageRequest, setCardImageRequest] = useState<{
     imageBase64: string
     result: LookupResult
   } | null>(null)
 
-  // Looks up a token's dictionary entries and opens/pins the word popup at the
-  // triggering mouse event's viewport coordinates. Shared by both hover (preview)
-  // and click (pin) — hover shows it as the mouse passes over a word, click
-  // re-fetches at the click position so a keyboard/touch-less pointer still gets
-  // an anchored popup even if hover never fired (e.g. touch input).
   const showWordPopup = async (
     token: Token,
     event?: React.MouseEvent,
     textContext?: WordPopupTextContext
   ): Promise<void> => {
-    // Anchor above the whole subtitle box (not the hovered word) so the
-    // popup never covers a different subtitle line than the one that was
-    // hovered. Read synchronously, before the await, since the DOM node's
-    // rect can change while the lookup is in flight.
+    // Read the subtitle box before awaiting lookup so DOM changes cannot move the popup anchor.
     const subtitleRect = textContext
       ? textContext.anchorRect
       : document.getElementById('subtitle')?.getBoundingClientRect()
@@ -157,8 +130,6 @@ export function useWordPopup({
     })
   }
 
-  // Navigates the open popup to a glossary cross-reference link's target
-  // term (WordPopup's onLinkClick) — see popupController.openLink.
   const handleWordLinkClick = async (term: string): Promise<void> => {
     await popupController.openLink(
       bridge.dict,
@@ -168,12 +139,7 @@ export function useWordPopup({
     )
   }
 
-  // Mines the clicked/selected dictionary entry into Anki. Word audio is
-  // derived entirely from `wordPopup.token` by the main-process note builder.
-  // A picture is different: it must be captured from mpv now, so when the user
-  // enabled screenshots and mapped a Picture field and a video is loaded, the
-  // frame is grabbed first and the mine waits on the crop dialog's decision. A
-  // failed capture (or an audio-only file) mines the card exactly as before.
+  // Capture the frame before mining and wait for the crop decision; failed capture still permits mining.
   const handleAddToAnki = async (result: LookupResult): Promise<void> => {
     const imageBase64 = await popupController.captureCardImage(bridge.player, videoLoaded)
     if (imageBase64) {
@@ -183,8 +149,6 @@ export function useWordPopup({
     await popupController.addToAnki(bridge.anki, result, undefined, mineMediaSource())
   }
 
-  // The crop dialog's outcome: a base64 JPEG mines the card with it, null mines
-  // it without a picture. Cancel closes the dialog without mining at all.
   const handleCardImageSubmit = (jpegBase64: string | null): void => {
     const request = cardImageRequest
     setCardImageRequest(null)
@@ -197,9 +161,7 @@ export function useWordPopup({
     )
   }
 
-  // Always call through this stable wrapper (not showWordPopup directly) from
-  // the hover debouncer below, so the debounced callback — created once and
-  // never recreated — still sees the latest popupSettings/state on every settle.
+  // The debouncer is created once; this stable wrapper must read the latest popup state.
   const showWordPopupLatest = useLatestCallback(showWordPopup)
 
   const [hoverDebouncer] = useState<
@@ -242,20 +204,12 @@ export function useWordPopup({
     void showWordPopup(token, event, textContext)
   }
 
-  // Shared by WordPopup's own close button and the outside-click effect
-  // below, so both paths tear down the same state (the pending hover timer,
-  // plus any link-navigation history) instead of drifting apart.
   const closeWordPopup = useLatestCallback((): void => {
     hoverDebouncer.cancel()
     popupController.close()
   })
 
-  // Closes the popup on a mousedown anywhere outside its own DOM node (e.g.
-  // on the video/subtitle area) — WordPopup always renders in the DOM (CSS
-  // toggles visibility), so '#word-popup' is a stable query target whether
-  // or not it's currently open. Only listens while a popup is actually open,
-  // and never while the mined-card picture dialog owns the interaction (see
-  // shouldClosePopupOnPointerDown).
+  // Suspend outside-click dismissal while the crop dialog owns the interaction.
   useEffect(() => {
     if (!wordPopup) return
     const handlePointerDown = (event: MouseEvent): void => {
@@ -295,7 +249,6 @@ export function useWordPopup({
       duplicatePolicy: popupState.duplicatePolicy,
       onOpenAnkiCard: (cardId) => popupController.openCard(bridge.anki, cardId),
       onLinkClick: handleWordLinkClick,
-      // Restores the previous popup payload pushed by handleWordLinkClick.
       onBack: () => popupController.back(),
       canGoBack: popupHistory.length > 0
     },
