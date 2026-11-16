@@ -1,21 +1,5 @@
-// Resolves bundled-binary paths for development and packaged runs.
-//
-// The logical resources layout is shared by Windows and Linux:
-//   resources/mpv/{mpv.exe|mpv}
-//   resources/ffmpeg/{ffmpeg.exe|ffmpeg,ffprobe.exe|ffprobe}
-//   resources/mecab/...
-//
-// MeCab is the one component whose internal layout differs. Windows is flat
-// (`mecab/mecab.exe` beside `mecab/libmecab.dll`). The Linux payload ships a
-// POSIX wrapper that resolves its shared library as `../lib` and its config as
-// `../etc/mecabrc`, both relative to the wrapper's own directory, so the
-// vendor's `bin/`, `lib/`, `etc/` tree is staged verbatim
-// (`mecab/bin/mecab`). Flattening it silently breaks tokenization: the wrapper
-// still starts, then `mecab.bin` fails to load `libmecab.so.2`.
-//
-// Unpackaged Linux development continues to use distribution tools. Packaged
-// Linux resolves the staged vendor payload so it never depends on a host tool
-// path.
+// Linux MeCab needs its bin/lib/etc layout: the wrapper resolves ../lib and ../etc/mecabrc.
+// Flattening it prevents mecab.bin from loading libmecab.so.2.
 
 import { posix, win32 } from 'node:path'
 import { pathApiFor } from './platformPath'
@@ -26,18 +10,16 @@ export interface BinaryPaths {
   ffmpegPath: string
   mecabPath: string
   ipadicDir: string
-  /** Optional - only present if bundled; UniDic may also be user-configured. */
+  /** The resolved path may not exist unless UniDic is installed. */
   unidicDir: string
 }
 
 export interface ResolveBinaryPathsOptions {
-  /** Electron's app.isPackaged. */
   isPackaged: boolean
   /** Electron's process.resourcesPath (only meaningful when packaged). */
   resourcesPath: string
   /** Project root in development (only meaningful when not packaged). */
   appRoot: string
-  /** Defaults to the host platform. Only Windows and Linux are supported. */
   platform?: NodeJS.Platform
 }
 
@@ -48,7 +30,6 @@ export interface RequiredPackagedResource {
 }
 
 export interface ResolveThirdPartyNoticesPathOptions {
-  /** Electron's app.isPackaged. */
   isPackaged: boolean
   /** Electron's process.resourcesPath. */
   resourcesPath: string
@@ -57,7 +38,6 @@ export interface ResolveThirdPartyNoticesPathOptions {
   platform?: NodeJS.Platform
 }
 
-/** Resolves the mutable UniDic folder owned by the user's app-data directory. */
 export function resolveUserUnidicDir(
   userDataPath: string,
   platform: NodeJS.Platform = process.platform
@@ -65,7 +45,6 @@ export function resolveUserUnidicDir(
   return pathApiFor(platform).join(userDataPath, 'mecab', 'unidic')
 }
 
-/** Resolves the notices file generated for development or copied into a build. */
 export function resolveThirdPartyNoticesPath({
   isPackaged,
   resourcesPath,
@@ -77,7 +56,6 @@ export function resolveThirdPartyNoticesPath({
   return pathApi.join(base, 'notices', 'THIRD_PARTY_NOTICES.md')
 }
 
-/** Pure. Lists the runtime files required by a packaged platform target. */
 export function requiredPackagedResources(
   resourcesPath: string,
   platform: NodeJS.Platform = process.platform
@@ -95,8 +73,6 @@ export function requiredPackagedResources(
     { label: 'MeCab', path: paths.mecabPath, kind: 'file' }
   ]
   const pathApi = platform === 'linux' ? posix : win32
-  // The component root: `<resources>/mecab` on both platforms. Linux's
-  // executable sits one level deeper, in the payload's own `bin/`.
   const mecabRoot =
     platform === 'linux'
       ? pathApi.dirname(pathApi.dirname(paths.mecabPath))
@@ -149,10 +125,6 @@ export function requiredPackagedResources(
       ipadic('char.bin'),
       ipadic('unk.dic')
     )
-    // Game OCR's payload is Windows-only and arrives from the same vendor
-    // archive, so the packaged smoke check covers it too: an installer that
-    // shipped without the worker or a model file fails the release build
-    // rather than the first capture.
     const gameOcr = resolveGameOcrPaths({
       isPackaged: true,
       resourcesPath,
@@ -164,24 +136,14 @@ export function requiredPackagedResources(
   return required
 }
 
-/**
- * The Windows-only Game OCR payload. It is staged into `resources/ppocr`
- * by the same vendor pipeline that stages mpv, FFmpeg, and MeCab, and
- * electron-builder copies it from `win.extraResources` only, so a Linux
- * artifact never contains it and these paths never exist there.
- */
 export interface GameOcrPaths {
-  /** The PP-OCR ONNX sidecar the worker adapter spawns. */
   workerPath: string
-  /** ONNX detection model file passed to the sidecar. */
   detectionModelPath: string
-  /** ONNX recognition model file passed to the sidecar. */
   recognitionModelPath: string
   /** Recognition dictionary extracted from the model metadata. */
   keysPath: string
 }
 
-/** Pure. Resolves the Game OCR payload for a run mode. Windows only. */
 export function resolveGameOcrPaths({
   isPackaged,
   resourcesPath,
@@ -201,7 +163,6 @@ export function resolveGameOcrPaths({
   }
 }
 
-/** Pure. Lists what must be on disk before Game OCR spawns its worker. */
 export function requiredGameOcrResources(paths: GameOcrPaths): RequiredPackagedResource[] {
   const runtimeRoot = win32.dirname(paths.workerPath)
   return [
@@ -227,10 +188,6 @@ export function requiredGameOcrResources(paths: GameOcrPaths): RequiredPackagedR
 /** What a probe found at a path; `missing` also covers an unreadable entry. */
 export type ResourceKindProbe = (path: string) => 'file' | 'directory' | 'missing'
 
-/**
- * Pure. Describes the first unusable resource so a caller can surface it as a
- * recoverable status error instead of letting a spawn fail with errno text.
- */
 export function missingResourceMessage(
   resources: readonly RequiredPackagedResource[],
   probe: ResourceKindProbe
@@ -244,7 +201,6 @@ export function missingResourceMessage(
   return undefined
 }
 
-/** Pure. Resolves runtime binary paths for the given run mode and platform. */
 export function resolveBinaryPaths({
   isPackaged,
   resourcesPath,
@@ -270,8 +226,6 @@ export function resolveBinaryPaths({
   const executable = platform === 'win32' ? 'mpv.exe' : 'mpv'
   const ffprobe = platform === 'win32' ? 'ffprobe.exe' : 'ffprobe'
   const ffmpeg = platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
-  // See the header note: Linux runs the payload's relative-loader wrapper from
-  // its own `bin/`, Windows the flat executable.
   const mecabPath =
     platform === 'win32'
       ? pathApi.join(base, 'mecab', 'mecab.exe')

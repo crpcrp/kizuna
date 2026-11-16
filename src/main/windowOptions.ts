@@ -1,7 +1,3 @@
-// Construction options + window-control IPC wiring. Windows keeps one
-// transparent frameless window; Linux uses the paired options below so mpv can
-// own an opaque host while the DOM stays in a transparent child overlay.
-
 import type { BrowserWindow, BrowserWindowConstructorOptions } from 'electron'
 import type { IpcMainLike } from './ipc'
 import { PRODUCT_NAME } from '../shared/appIdentity'
@@ -17,13 +13,7 @@ import { normalizeWindowShapeRects, type WindowShapeRect } from '../shared/windo
 
 export type { WindowBounds } from '../shared/windowBounds'
 
-/**
- * Options for the single Windows main window. Its load-bearing requirements:
- * `transparent: true` is REQUIRED — an opaque Chromium window paints its own
- * surface over mpv's embedded child window and hides the video. `frame: false`
- * follows (transparent windows cannot use the OS frame); custom WindowChrome
- * supplies drag/min/close later.
- */
+// Transparency keeps Chromium from covering embedded mpv; transparent windows need a custom frame.
 export function getMainWindowOptions(preloadPath: string): BrowserWindowConstructorOptions {
   return {
     width: 1280,
@@ -36,20 +26,13 @@ export function getMainWindowOptions(preloadPath: string): BrowserWindowConstruc
       preload: preloadPath,
       contextIsolation: true,
       nodeIntegration: false,
-      // OS-level Chromium sandbox on: the renderer holds a compromised bug to
-      // the IPC surface instead of the user's full privileges. The preload only
-      // uses contextBridge/ipcRenderer/webUtils, all of which work sandboxed.
+      // Keep compromised renderers confined to IPC; the preload APIs work sandboxed.
       sandbox: true
     }
   }
 }
 
-/**
- * Options for Linux's opaque mpv host. The host deliberately loads no
- * document: it is a bare X11 `--wid` target, and its black background is the
- * video's letterbox colour. It stays hidden until the overlay has finished
- * loading, so startup cannot expose an unpainted host.
- */
+// The bare X11 --wid host stays hidden until the overlay loads; black supplies letterboxing.
 export function getLinuxVideoHostOptions(): BrowserWindowConstructorOptions {
   return {
     width: 1280,
@@ -67,11 +50,7 @@ export function getLinuxVideoHostOptions(): BrowserWindowConstructorOptions {
   }
 }
 
-/**
- * Options for Linux's renderer-owning child. `parent` gives Electron ownership
- * of the stacking relationship; `skipTaskbar` keeps the transparent child from
- * becoming a second taskbar entry where the platform supports that distinction.
- */
+// Parent ownership maintains stacking; skipTaskbar avoids a second taskbar entry.
 export function getLinuxUiOverlayOptions(
   preloadPath: string,
   parent: BrowserWindow
@@ -95,12 +74,6 @@ export function getLinuxUiOverlayOptions(
   }
 }
 
-/**
- * The subset of a window's `webContents` the navigation guards touch: a
- * `will-navigate` listener registration, the current URL (to tell a same-page
- * reload apart from a real navigation away), and the window-open handler.
- * Injected so the guards are exercised with a fake instead of live Electron.
- */
 export interface NavigationGuardTarget {
   on(
     event: 'will-navigate',
@@ -110,15 +83,8 @@ export interface NavigationGuardTarget {
   setWindowOpenHandler(handler: () => { action: 'deny' } | { action: 'allow' }): unknown
 }
 
-/**
- * Locks the renderer to its bundled origin (Electron security checklist
- * #12/#13): denies any top-level navigation away from the currently-loaded URL
- * and refuses every `window.open`/`target=_blank` child window. The app renders
- * links from untrusted subtitle/dictionary content as inert spans, but nothing
- * at the `webContents` level enforced that until now — this is the enforcement.
- * External links, if ever needed, must go through `shell.openExternal` after an
- * explicit allowlist/scheme check, not through in-page navigation.
- */
+// Untrusted subtitle/dictionary content must not navigate or open windows.
+// External links require shell.openExternal with an explicit scheme/allowlist check.
 export function applyNavigationGuards(webContents: NavigationGuardTarget): void {
   webContents.on('will-navigate', (event, url) => {
     if (url !== webContents.getURL()) event.preventDefault()
@@ -126,8 +92,6 @@ export function applyNavigationGuards(webContents: NavigationGuardTarget): void 
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 }
 
-/** The subset of a window's `webContents` the reload guard touches: a
- * `before-input-event` listener registration, matching `applyNavigationGuards`. */
 export interface InputGuardTarget {
   on(
     event: 'before-input-event',
@@ -135,7 +99,6 @@ export interface InputGuardTarget {
   ): unknown
 }
 
-/** The subset of Electron's `Input` (from `before-input-event`) the reload guard reads. */
 export interface BeforeInputEventInput {
   type: string
   key: string
@@ -143,18 +106,8 @@ export interface BeforeInputEventInput {
   meta: boolean
 }
 
-/**
- * Chromium ships a built-in Ctrl+R / Cmd+R "reload this page" shortcut that
- * fires ahead of any renderer keydown listener, wiping the current app
- * session (playback position, sync state) with no warning. `before-input-event`
- * is the only boundary that can intercept it before Chromium's own handling,
- * so this is wired at window creation next to `applyNavigationGuards`. Only
- * the Ctrl/Cmd+R chord is swallowed: Electron reports the same `control` flag
- * for left and right Ctrl, so the right-Control chord is covered for free. A
- * bare `R` keydown is untouched and still reaches the renderer's Replay Line
- * binding (`src/shared/playerSettings.ts`), and every other modified shortcut
- * passes through unaffected.
- */
+// Chromium handles Ctrl/Cmd+R before renderer keydown, discarding the playback session.
+// Intercept it here while leaving bare R available for Replay Line.
 export function applyReloadGuard(webContents: InputGuardTarget): void {
   webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return
@@ -164,28 +117,17 @@ export function applyReloadGuard(webContents: InputGuardTarget): void {
   })
 }
 
-/** The subset of a window's `webContents` a safe send needs. */
 interface SendableWebContents {
   isDestroyed(): boolean
   send(channel: string, ...args: unknown[]): void
 }
 
-/** The subset of BrowserWindow a safe send needs: just enough to check
- * liveness and reach its `webContents`. Deliberately not the full Electron
- * `BrowserWindow` type, so tests exercise this with a plain fake object. */
 export interface SendTarget {
   isDestroyed(): boolean
   webContents: SendableWebContents
 }
 
-/**
- * Sends `channel` (with `args`) to `win`'s renderer, but only if both the
- * window and its `webContents` are still alive. Electron's `webContents.send`
- * throws/misbehaves once either side has been destroyed (e.g. the window
- * closed mid-async-operation), so this function centralizes the
- * `isDestroyed()` guard. No-ops
- * silently on a missing or destroyed window; never sends more than once.
- */
+// Async work may finish after the window closes; Electron cannot send to destroyed contents.
 export function sendToWindow(
   win: SendTarget | null | undefined,
   channel: string,
@@ -195,7 +137,6 @@ export function sendToWindow(
   win.webContents.send(channel, ...args)
 }
 
-/** The subset of BrowserWindow the window-control channels act on. */
 export interface WindowControlTarget {
   minimize(): void
   close(): void
@@ -206,36 +147,19 @@ export interface WindowControlTarget {
   setBounds(bounds: WindowBounds): void
   setAlwaysOnTop(flag: boolean): void
   setShape?(rects: WindowShapeRect[]): void
-  /**
-   * Pair-owned fullscreen bookkeeping. A frameless window's
-   * `setFullScreen(false)` does not reliably restore its prior size on
-   * Windows, so the owner captures bounds before entering fullscreen and
-   * re-applies them after leaving.
-   */
+  // Windows frameless windows need explicit bounds restoration after fullscreen.
   capturePreFullscreenBounds(): void
   hasPreFullscreenBounds(): boolean
 }
 
-/** One display's usable area (`Electron.Display`'s `workArea`). */
 interface DisplayLike {
   workArea: WindowBounds
 }
 
-/** The subset of Electron's `screen` module mini-player needs: resolve which
- * display a rectangle mostly sits on, so the mini window lands on the monitor
- * the window currently occupies rather than always the primary. */
 export interface ScreenLike {
   getDisplayMatching(rect: WindowBounds): DisplayLike
 }
 
-/**
- * Pure resolver for a `window:setBounds` request. An `explicit` request applies
- * its validated rectangle verbatim; a
- * `miniPlayer` request computes the bottom-right corner of the work area of the
- * display the window currently occupies — never the primary — via
- * `screen.getDisplayMatching(win.getBounds())`. Returns null for a malformed or
- * unrecognized request so the handler can no-op.
- */
 function resolveWindowBounds(
   win: Pick<WindowControlTarget, 'getBounds'>,
   screen: ScreenLike,
@@ -260,15 +184,6 @@ function resolveWindowBounds(
   return null
 }
 
-/**
- * Registers the window-control channels ('window:minimize' / 'window:close' /
- * 'window:setFullscreen' / 'window:toggleFullscreen'). Pure wiring: the
- * ipcMain-like object and the event→window resolver are injected so tests
- * exercise this with fakes instead of live Electron. The matching
- * 'window:fullscreenChanged' push (main→renderer) is wired by the window-pair
- * coordinator, which listens to the canonical native window and restores
- * bounds only after the OS-level transition finishes.
- */
 export function registerWindowControls<E, I>(
   ipc: IpcMainLike<E, I>,
   windowFromEvent: (event: E | I) => WindowControlTarget | null,
@@ -292,10 +207,8 @@ export function registerWindowControls<E, I>(
   ipc.on(WINDOW_CONTROL_CHANNELS.toggleFullscreen, (event) => {
     const win = windowFromEvent(event)
     if (!win) return
-    // Electron can transiently report windowed while the fullscreen transition
-    // is still active. A saved pre-fullscreen rectangle proves this window is
-    // in that cycle, so treat toggle as an exit instead of recapturing the
-    // fullscreen-sized bounds and requesting fullscreen again.
+    // During a native transition, isFullScreen may be false despite saved windowed bounds.
+    // Treat that cycle as an exit to avoid saving fullscreen-sized bounds.
     const next = !win.isFullScreen() && !win.hasPreFullscreenBounds()
     if (next) win.capturePreFullscreenBounds()
     win.setFullScreen(next)

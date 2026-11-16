@@ -8,7 +8,6 @@ import {
 } from './windowOptions'
 import type { WindowShapeRect } from '../shared/windowShape'
 
-/** Events used by the coordinator; close additionally carries its preventable event. */
 type WindowPairEvent =
   'close' | 'closed' | 'move' | 'resize' | 'enter-full-screen' | 'leave-full-screen'
 
@@ -16,7 +15,6 @@ export interface WindowCloseEvent {
   preventDefault(): void
 }
 
-/** A raw native window; the coordinator owns fullscreen bounds bookkeeping. */
 interface ManagedWindow extends Omit<
   WindowControlTarget,
   'capturePreFullscreenBounds' | 'hasPreFullscreenBounds'
@@ -35,15 +33,11 @@ export interface AppWindowSet {
   readonly videoHost: BrowserWindow
   /** Window containing the preload and React renderer. */
   readonly uiOverlay: BrowserWindow
-  /** The sole owner of logical window operations for this app window set. */
   readonly coordinator: AppWindowCoordinator
-  /** Resolves a renderer/native window to the maintained logical pair. */
   readonly controlsFor: (window: BrowserWindow | null) => WindowControlTarget | null
   /** Subscribes to deduplicated native fullscreen transitions. */
   readonly onFullscreenChanged: (listener: (fullscreen: boolean) => void) => () => void
-  /** Restores and focuses the logical app window after a second launch. */
   readonly activate: () => void
-  /** Closes both Linux windows with recursion protection; closes the one Windows window otherwise. */
   readonly close: () => void
 }
 
@@ -68,7 +62,7 @@ interface AppWindowCoordinatorOptions {
   clearTimeoutFn?: WindowPairClearTimeout
 }
 
-/** A rectangle comparison that avoids native writes which would create events. */
+// Avoid native writes that would generate redundant geometry events.
 function sameBounds(left: WindowBounds, right: WindowBounds): boolean {
   return (
     left.x === right.x &&
@@ -78,13 +72,7 @@ function sameBounds(left: WindowBounds, right: WindowBounds): boolean {
   )
 }
 
-/**
- * Owns every logical window mutation. On Linux, native move/resize events are
- * synchronized from the side that actually changed: normal title-bar dragging
- * and edge resizing originate in `uiOverlay`, while native fullscreen changes
- * originate in `videoHost`. Windows still uses one BrowserWindow, so every
- * operation reaches that native window once.
- */
+// Linux drag/resize originates in the overlay; native fullscreen belongs to the host.
 class AppWindowCoordinator implements WindowControlTarget {
   private readonly videoHost: ManagedWindow
   private readonly uiOverlay: ManagedWindow
@@ -125,28 +113,22 @@ class AppWindowCoordinator implements WindowControlTarget {
     if (paired) {
       videoHost.on('move', this.queueHostBoundsSync)
       videoHost.on('resize', this.queueHostBoundsSync)
-      // The renderer's native drag region and resize border belong to the
-      // overlay. Propagate those user-driven changes to the host instead of
-      // snapping the overlay back to the host's previous rectangle.
+      // Overlay drag/resize must update the host, not snap back to its old bounds.
       uiOverlay.on('move', this.queueOverlayBoundsSync)
       uiOverlay.on('resize', this.queueOverlayBoundsSync)
     }
 
-    // Only the canonical host participates in native fullscreen. Listening to
-    // both sides would produce duplicate renderer transitions and could make a
-    // child fullscreen independently of its video parent.
+    // Only the host owns native fullscreen; child events would duplicate transitions.
     videoHost.on('enter-full-screen', () => this.handleFullscreenChanged(true))
     videoHost.on('leave-full-screen', () => this.handleFullscreenChanged(false))
   }
 
-  /** Returns the bounds of the active geometry owner, falling back during teardown. */
   getBounds(): WindowBounds {
     const primary = this.isFullScreen() ? this.videoHost : this.uiOverlay
     const fallback = primary === this.videoHost ? this.uiOverlay : this.videoHost
     return this.readBounds(primary) ?? this.readBounds(fallback) ?? emptyBounds()
   }
 
-  /** Applies one logical rectangle to the host and overlay, if both are live. */
   setBounds(bounds: WindowBounds): void {
     this.overlayIndependent = false
     this.synchronizePair(bounds)
@@ -169,12 +151,10 @@ class AppWindowCoordinator implements WindowControlTarget {
     }
   }
 
-  /** Minimizes the logical pair, without calling the same BrowserWindow twice. */
   minimize(): void {
     this.forEachDistinctLive((window) => this.callSafely(window, () => window.minimize()))
   }
 
-  /** Restores every minimized side of the logical pair. */
   restore(): void {
     this.forEachDistinctLive((window) => {
       this.callSafely(window, () => {
@@ -183,20 +163,15 @@ class AppWindowCoordinator implements WindowControlTarget {
     })
   }
 
-  /** Focuses the host first, then leaves keyboard focus on the interactive overlay. */
   focus(): void {
     if (this.isLive(this.videoHost)) this.callSafely(this.videoHost, () => this.videoHost.focus())
     if (this.uiOverlay !== this.videoHost && this.isLive(this.uiOverlay)) {
-      // Focusing only the transparent overlay can leave an unrelated window
-      // between it and the opaque mpv host. Re-establish adjacency before the
-      // overlay receives keyboard focus so its shaped video region reveals the
-      // host, never the terminal or application that launched Kizuna.
+      // Raise the host beside the overlay so the shaped video region cannot expose another app.
       this.moveOverlayDirectlyAboveHost()
       this.callSafely(this.uiOverlay, () => this.uiOverlay.focus())
     }
   }
 
-  /** Second-instance activation treats the pair as one foreground application. */
   activate(): void {
     this.forEachDistinctLive((window) => this.callSafely(window, () => window.show()))
     this.restore()
@@ -213,7 +188,6 @@ class AppWindowCoordinator implements WindowControlTarget {
     }
   }
 
-  /** The host initiates native fullscreen; its child remains a child overlay. */
   setFullScreen(flag: boolean): void {
     if (!this.isLive(this.videoHost)) return
     if (flag) {
@@ -230,12 +204,10 @@ class AppWindowCoordinator implements WindowControlTarget {
     this.callSafely(this.videoHost, () => this.videoHost.setFullScreen(flag))
   }
 
-  /** Mini-player always-on-top applies to both native sides on Linux. */
   setAlwaysOnTop(flag: boolean): void {
     this.forEachDistinctLive((window) => this.callSafely(window, () => window.setAlwaysOnTop(flag)))
   }
 
-  /** Shapes only Linux's renderer overlay; Windows keeps its proven full window. */
   setShape(rects: WindowShapeRect[]): void {
     if (!this.paired || !this.isLive(this.uiOverlay)) return
     const setShape = this.uiOverlay.setShape
@@ -243,7 +215,6 @@ class AppWindowCoordinator implements WindowControlTarget {
     this.callSafely(this.uiOverlay, () => setShape.call(this.uiOverlay, rects))
   }
 
-  /** Closes the pair once and cancels any pending geometry callback. */
   close(force = false): void {
     this.cancelScheduledSync()
     this.closePair(force)
@@ -253,7 +224,6 @@ class AppWindowCoordinator implements WindowControlTarget {
     return !this.isLive(this.videoHost) && !this.isLive(this.uiOverlay)
   }
 
-  /** Captures the canonical windowed rectangle once per fullscreen cycle. */
   capturePreFullscreenBounds(): void {
     if (this.isFullScreen() || this.preFullscreenBounds) return
     const bounds = this.readBounds(this.videoHost)
@@ -264,7 +234,6 @@ class AppWindowCoordinator implements WindowControlTarget {
     return this.preFullscreenBounds !== undefined
   }
 
-  /** Restores both sides once, after the native host has left fullscreen. */
   restorePreFullscreenBounds(): void {
     const bounds = this.preFullscreenBounds
     if (!bounds) return
@@ -272,7 +241,6 @@ class AppWindowCoordinator implements WindowControlTarget {
     this.synchronizePair(bounds, false)
   }
 
-  /** Registers a renderer-facing listener for one logical fullscreen change. */
   onFullscreenChanged(listener: (fullscreen: boolean) => void): () => void {
     this.fullscreenListeners.add(listener)
     return () => this.fullscreenListeners.delete(listener)
@@ -326,9 +294,7 @@ class AppWindowCoordinator implements WindowControlTarget {
   private setIfDifferent(window: ManagedWindow, bounds: WindowBounds): void {
     const current = this.readBounds(window)
     if (!current || sameBounds(current, bounds) || !this.isLive(window)) return
-    // Electron may emit move/resize asynchronously after setBounds returns.
-    // Remember the requested rectangle so that delayed programmatic events do
-    // not overwrite a newer user drag/resize source in the coalesced queue.
+    // Electron emits delayed setBounds events; ignore them so they cannot overwrite a newer drag.
     this.expectedProgrammaticBounds.set(window, { ...bounds })
     this.callSafely(window, () => window.setBounds(bounds))
   }
@@ -342,9 +308,7 @@ class AppWindowCoordinator implements WindowControlTarget {
       this.reenterAfterFullscreenLeave = false
       this.fullscreenExitRequested = false
       if (reenter) {
-        // Keep the fullscreen rectangle in place while the native transition
-        // immediately starts again. The saved windowed bounds are restored on
-        // the eventual leave event.
+        // Keep fullscreen geometry during re-entry; restore windowed bounds on the eventual leave.
         this.callSafely(this.videoHost, () => this.videoHost.setFullScreen(true))
       } else {
         this.restorePreFullscreenBounds()
@@ -356,8 +320,7 @@ class AppWindowCoordinator implements WindowControlTarget {
       try {
         listener(fullscreen)
       } catch {
-        // A renderer notification must not prevent the other listeners from
-        // observing the native transition or break Electron's event handler.
+        // A failed renderer notification must not interrupt other listeners or native handling.
       }
     }
   }
@@ -413,12 +376,6 @@ function emptyBounds(): WindowBounds {
   return { x: 0, y: 0, width: 0, height: 0 }
 }
 
-/**
- * Creates the platform-specific application window model. Keeping the Windows
- * case in this function means the main process has one renderer target and one
- * mpv target on every platform, without spreading nullable overlay checks over
- * startup and IPC code.
- */
 export function createAppWindowSet({
   preloadPath,
   platform = process.platform,
@@ -476,7 +433,6 @@ export interface ContentBoundsWindow {
   setContentBounds(bounds: WindowBounds): void
 }
 
-/** Aligns the child overlay once, before either Linux window is presented. */
 function syncInitialWindowBounds(
   videoHost: ContentBoundsWindow,
   uiOverlay: ContentBoundsWindow
@@ -484,13 +440,11 @@ function syncInitialWindowBounds(
   uiOverlay.setContentBounds(videoHost.getContentBounds())
 }
 
-/** Maps the opaque video host only when a player surface is about to start. */
 export function preparePlayerAppWindowSet(windows: Pick<AppWindowSet, 'videoHost'>): void {
   if (windows.videoHost.isDestroyed()) return
   windows.videoHost.show()
 }
 
-/** Shows only the renderer surface and hides Linux's opaque mpv host. */
 export function showOverlayAppWindowSet(
   windows: Pick<AppWindowSet, 'videoHost' | 'uiOverlay'>
 ): void {
@@ -508,13 +462,8 @@ interface CloseableWindow {
   isDestroyed(): boolean
 }
 
-/**
- * Closes the other side when either side is closed or unexpectedly destroyed.
- * The guard is intentionally local to the pair: it prevents close handlers from
- * recursively closing each other while still allowing the app's normal
- * `window-all-closed`/`before-quit` path to run. A close guard can prevent a
- * user close while an app-owned forced close bypasses it.
- */
+// A local guard prevents recursive pair closes without suppressing app shutdown events.
+// App-owned forced closes bypass the user-close guard.
 function attachPairCloseHandlers(
   videoHost: CloseableWindow,
   uiOverlay: CloseableWindow,
@@ -562,7 +511,6 @@ export interface RendererWindowTarget {
   loadFile(path: string): Promise<unknown> | unknown
 }
 
-/** Loads the renderer only into the renderer-owning overlay window. */
 export function loadRendererWindow(
   uiOverlay: RendererWindowTarget,
   { devUrl, packagedHtmlPath }: RendererWindowLoadOptions
@@ -582,11 +530,7 @@ export function loadRendererWindow(
 
 const PRESENT_FALLBACK_MS = 2000
 
-/**
- * Presents only the renderer-owning window. On Linux this deliberately leaves
- * the opaque mpv host hidden; the player coordinator maps it immediately before
- * starting the player runtime.
- */
+// Keep the Linux video host hidden until the player runtime starts.
 export function presentOverlayAppWindowSet(
   windows: AppWindowSet,
   onRendererReady: (callback: () => void) => void = (callback) => {
@@ -621,12 +565,7 @@ export function presentOverlayAppWindowSet(
   onRendererReady(present)
 }
 
-/**
- * Presents a Linux pair once the renderer is ready or the safety-net timeout
- * elapses. Linux transparent windows do not reliably emit `ready-to-show`, so
- * `did-finish-load` and the timeout cover the same startup path without
- * exposing the host before the app can be seen.
- */
+// Linux transparent windows may never emit ready-to-show; use did-finish-load and a timeout.
 export function presentAppWindowSet(
   windows: AppWindowSet,
   onRendererReady: (callback: () => void) => void = (callback) => {
@@ -652,10 +591,8 @@ export function presentAppWindowSet(
       fallbackTimer = undefined
     }
     windows.videoHost.show()
-    // `moveTop` raises the opaque host above the terminal/file manager that
-    // launched Kizuna without stealing focus. `moveAbove` then places the
-    // shaped UI overlay immediately above that host; raising only the overlay
-    // creates a literal hole through to unrelated windows on some X11 WMs.
+    // Raise the host without stealing focus, then place the shaped overlay immediately above it.
+    // Raising only the overlay can expose unrelated windows through its hole on X11.
     windows.videoHost.moveTop()
     windows.uiOverlay.show()
     windows.uiOverlay.moveAbove(windows.videoHost.getMediaSourceId())
