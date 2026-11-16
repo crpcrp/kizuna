@@ -10,29 +10,14 @@ FFmpeg/ffprobe, and MeCab. These files are kept out of Git and staged under
 npm run resources
 ```
 
-The command selects the current host platform, reads
-[`resources.lock.json`](../resources.lock.json), downloads that platform's
-payload archive from the public
-[`crpcrp/kizuna-vendor`](https://github.com/crpcrp/kizuna-vendor) mirror, and
-verifies every file by SHA-256. No credentials, no git, and no Git LFS client
-are required.
-
-The archive is a release asset, not a clone. Cloning the mirror meant
-`git lfs pull`, which downloads every LFS object at the commit — both
-platforms' payloads, on every build that missed its cache — and Git LFS
-bandwidth is a metered monthly quota that a few releases exhaust. The asset
-carries one platform, compresses to roughly a third of the size, and is not
-metered. It is unpacked into `.vendor-cache/`, stamped with the archive hash so
-a second run skips the download, and re-verified from the lock every time
-regardless.
-
-Each platform lock owns its `requiredPaths`, `requiredExecutables`, and file
-map. Both locks must name the same immutable mirror commit, release, manifest,
-and checksum file; `source.archive` pins the asset by name, SHA-256, and byte
-length, and the download is rejected before unpacking if either disagrees.
-Windows sources live at the archive root; Linux sources live under
-`linux-x64/`. Both are copied into the platform-neutral `resources/` layout
-below, so runtime path selection does not leak vendor-mirror paths.
+The command selects the host's lock in [`resources.lock.json`](../resources.lock.json),
+downloads its payload from the public [vendor mirror](https://github.com/crpcrp/kizuna-vendor),
+and verifies SHA-256. No credentials, git, or Git LFS client are required. Archives
+cache in `.vendor-cache/` by hash; every run re-verifies files against the lock.
+Each lock owns required paths, executable modes, and file hashes. Both platforms
+pin one immutable mirror commit, release, manifest, and checksum file. Archive name,
+SHA-256, and byte length are checked before unpacking. Windows source paths start
+at archive root; Linux paths start under `linux-x64/`; both stage into `resources/`.
 
 For a CI cross-check or a foreign-platform staging run, pass an explicit lock
 key:
@@ -42,21 +27,16 @@ npm run resources -- --platform linux-x64
 npm run resources -- --platform win32-x64
 ```
 
-The platform override changes only the selected payload; it does not make
-Windows execute Linux binaries. The staging validation removes files managed by
-the other platform. First-party resource files are left alone.
-
-To stage from a local clone of the mirror instead of the release asset — the
-usual loop when a payload is being changed and not yet published:
+Overrides stage a payload, not foreign-platform execution. Staging removes files
+managed by the other platform and preserves first-party resources.
+To use an unpublished local mirror clone:
 
 ```powershell
 npm run resources -- --vendor-dir C:\path\to\kizuna-vendor
 ```
 
-The `KIZUNA_VENDOR_DIR` environment variable provides the same override. A
-directory supplied this way is used exactly as it is: nothing is downloaded,
-nothing is deleted, and the hashes still have to match. That clone is the one
-place a `git lfs pull` is still needed.
+`KIZUNA_VENDOR_DIR` is equivalent. Local clones are used unchanged: no downloads
+or deletions, but hashes must match. Run `git lfs pull` in that clone first.
 
 ## Required files
 
@@ -71,33 +51,17 @@ place a `git lfs pull` is still needed.
 | Linux x64 | ffprobe | `resources/ffmpeg/ffprobe` | Media, track, and chapter inspection |
 | Linux x64 | MeCab | `resources/mecab/bin/mecab` | Japanese tokenization via the relative-loader wrapper |
 
-Linux executable modes come from the lock and are restored during staging;
-packaging fails if a required executable loses its execute bit. The Linux
-MeCab payload keeps the mirror's own `bin/`, `lib/`, and `etc/`
-layout rather than being flattened like the other components. Its wrapper
-resolves `../lib` for `libmecab.so.2` and `../etc/mecabrc` for its
-configuration, both relative to the wrapper's own directory, and `mecabrc`
-in turn resolves `$(rcpath)/../ipadic`. Moving the wrapper next to those
-directories instead of above them leaves every file present and executable
-while `mecab.bin` fails to load its shared library at runtime.
-
-MeCab includes a UTF-8 IPADIC dictionary under `resources/mecab/ipadic/`.
-An optional UniDic dictionary belongs in Kizuna's persistent user-data folder,
-not under the package-managed resources directory:
-
-- Windows: `%APPDATA%\Kizuna\mecab\unidic`
-- Linux: `~/.config/Kizuna/mecab/unidic`
-
-Use Options > Parser & Dictionaries > Open UniDic folder to create and reveal
-the exact folder. Unpackaged Linux also uses the system UniDic. The persistent
-location survives package updates.
+Staging restores locked executable modes; packaging rejects missing execute bits.
+Linux MeCab preserves `bin/`, `lib/`, and `etc/`: its wrapper resolves `../lib`
+and `../etc/mecabrc`, which resolves `$(rcpath)/../ipadic`. Do not flatten it.
+UTF-8 IPADIC ships in `resources/mecab/ipadic/`. Optional
+[UniDic](../README.md#mecab-unidic) uses persistent user data; unpackaged Linux
+uses system dictionaries.
 
 The FFmpeg build must provide `libmp3lame` for mined sentence audio. If it does
 not, card creation continues without that audio clip.
 
 ### Game OCR (Windows only)
-
-The experimental feature itself is documented in [Game OCR](game-ocr.md).
 
 Game OCR spawns a PP-OCR sidecar backed by CPU-only ONNX Runtime, so its payload is staged under
 `resources/ppocr/` and bundled from `win.extraResources` alone. Linux
@@ -120,21 +84,14 @@ The same paths are in `requiredPackagedResources`, so an installer built
 without the worker or a model file fails the packaged smoke check rather than
 the first capture.
 
-The payload is roughly 40.5 MB unpacked. `resources/ppocr/` is flat at its
-runtime root so the worker resolves ONNX Runtime and the four VC runtime DLLs
-from the directory it sits in. OpenCV, Clipper, zlib, and libpng are linked
-statically into the worker. DirectML and the former inference runtime are not
-shipped.
+The ~40.5 MB payload has a flat runtime root so the worker finds ONNX Runtime
+and four VC runtime DLLs beside it. OpenCV, Clipper, zlib, and libpng link
+statically; DirectML and the former inference runtime do not ship.
 
-Game OCR's other native dependency is **not** a staged binary and is not in
-this lock. Selecting the foreground window calls Win32 APIs through Koffi, an
-MIT npm package that ships a prebuilt Node-API binary per platform, so there is
-nothing to download, hash-pin, or rebuild per Electron version. It is unpacked
-from the asar by `asarUnpack` because a `.node` cannot be loaded from inside
-one, and its licence reaches the notices bundle through the npm dependency
-path like any other package. See
-[architecture](architecture-plan.md#the-one-in-process-native-boundary) for why
-this boundary is linked rather than spawned.
+Foreground-window selection uses the MIT npm dependency Koffi, outside the vendor
+lock. Its prebuilt Node-API binary needs no Electron rebuild; `asarUnpack` keeps
+it loadable and npm notices cover its licence. See the
+[native boundary](architecture.md#the-one-in-process-native-boundary).
 
 `ppocr.exe` is GPL-3.0-or-later: its worker entrypoint adapts the first-party GPL
 worker, so the whole executable is conveyed under GPLv3 even though its engine

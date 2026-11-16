@@ -1,217 +1,93 @@
 # Kizuna Codebase Map
 
-Kizuna uses Electron, TypeScript, React, Vite, Vitest, and SQLite. Start here to
-find the owner of a change; use code search for the exact function or test.
+Kizuna uses Electron, TypeScript, React, Vite, Vitest, and SQLite.
+[Architecture](architecture.md) describes process boundaries; [AGENTS.md](../AGENTS.md)
+and scoped guidelines in `src/main/`, `src/renderer/`, `scripts/`, and `test/` govern changes.
 
-## Top-level layout
+## Layout
 
 | Path | Purpose |
 |---|---|
-| `src/main/` | Electron main process, IPC handlers, subprocesses, storage, and network services |
-| `src/preload/` | Typed bridge exposed to the renderer |
-| `src/renderer/src/` | React UI, renderer state, and styles |
-| `src/shared/` | Types, validation, constants, and IPC contracts shared across processes |
-| `test/` | Unit and integration tests |
-| `test/harness/` | Fakes for external processes and services |
-| `test/fixtures/` | Committed test data |
-| `scripts/` | Resource fetching, notice generation, Linux packaging verification, and test tooling |
-| `docs/` | Architecture, binaries, licensing, release, and Game OCR documentation |
-
-The complete renderer-facing API is `src/shared/preloadApi.ts`, implemented by
-`src/preload/index.ts`; the Game OCR window's subset is `src/preload/gameOcr.ts`. IPC channel names live in
-`src/shared/ipcChannels.ts`.
+| `src/main/` | IPC, subprocesses, storage, network, native windows |
+| `src/preload/` | Typed renderer bridges |
+| `src/renderer/src/` | React, state, CSS |
+| `src/shared/` | Contracts, validation, constants |
+| `test/` | Mirrored source tests, harness, fixtures |
+| `scripts/` | Resources, notices, packaging, test launcher |
+| `docs/` | Contributor and user references |
 
 ## Feature ownership
 
+Renderer paths are relative to `src/renderer/src/`, main paths to `src/main/`,
+and `shared/` paths to `src/`; `/` marks repository-root paths. Search tests by source basename.
+
 | Area | Renderer/shared | Main process |
 |---|---|---|
-| Application shell and window | `App.tsx`, `components/WindowChrome.tsx`, `state/usePlaybackWindow.ts`, `state/useVideoWindowSizing.ts`, `state/windowSizing.ts`, `state/useVideoMargins.ts`, `state/useMiniPlayer.ts`, `state/usePlayerEvents.ts`, `shared/windowBounds.ts` | `index.ts` (Electron lifecycle and the ordered `bootstrap()` that builds `AppRuntime`), `bootstrap/` (one composition module per feature taking an explicit deps object; `bootstrap/window.ts` creates the window set with its player runtime, Game OCR, and app shell), `appLifecycle.ts`, `windowOptions.ts`, `windowPair.ts` (window creation, source-aware host/overlay coordination, lifecycle, fullscreen, and IPC target mapping) |
+| Application shell and window | `App.tsx`, `components/WindowChrome.tsx`, `state/usePlaybackWindow.ts`, `state/useVideoWindowSizing.ts`, `state/windowSizing.ts`, `state/useVideoMargins.ts`, `state/useMiniPlayer.ts`, `state/usePlayerEvents.ts`, `shared/windowBounds.ts` | `index.ts`, `bootstrap/`, `bootstrap/window.ts`, `appLifecycle.ts`, `windowOptions.ts`, `windowPair.ts` |
 | Playback and player controls | `state/usePlaybackWindow.ts`, `state/useVideoWindowSizing.ts`, `components/BottomBar.tsx`, `components/MenuBar.tsx`, `state/playerAdapter.ts`, `state/playbackCommands.ts`, `state/keyActions.ts`, `state/perFileOffsets.ts`, `state/usePerFileRestore.ts`, `state/audioDevices.ts`, `shared/playerSettings.ts` | `playerBridge.ts`, `mpv/controller.ts`, `mpv/ipcClient.ts` |
-| Media loading and subtitles | `state/useMediaSession.ts`, `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts` (composition root), `media/mediaPicker.ts`, `media/subtitleService.ts`, `media/metadataService.ts`, `media/thumbnailPreview.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts`, subtitle parsers |
-| Jimaku subtitle discovery and export | `shared/jimaku.ts` (normalized entries, files, session results, prepared selections, export contracts, error results, credential status, and folder hints); `shared/jimakuMatching.ts` (local identity parsing and deterministic file ranking); `state/jimakuController.ts` (composes the controller and owns `useJimakuController`) over `state/jimaku/` (`core.ts` shared state and operation guards, `search.ts` title/file/archive and remembered-title phases, `prepare.ts` preparation, commit, replacement, and revert, `types.ts` public types); `state/useMediaSession.ts` and `components/menu/SubtitleMenu.tsx` (active-subtitle export command); `components/JimakuSubtitlesDialog.tsx` and `JimakuSubtitlesDialog.css` (presentation-only stage switch) over `components/jimaku/` (one file per stage: `IdentityEditor`, `TitleStage`, `FileStage`, `ArchiveStage`, `ErrorStage`, `SuccessActions`; shared pieces in `common.tsx`, formatting in `format.ts`); `components/NoJapaneseSubtitlePrompt.tsx` and its CSS (post-restore discovery prompt) | `services/jimaku/client.ts` (the fixed-origin, opt-in remote boundary), `services/jimaku/settings.ts` (encrypted credential and folder-hint owner), `services/jimaku/downloadStore.ts` (hash-named content storage, offline history reads, and cleanup) with `services/jimaku/download.ts` (bounded fixed-origin downloads and subtitle validation), `services/jimaku/archive.ts` (ZIP inspection and selected-member extraction), `services/jimaku/export.ts` (native Save As and byte-preserving destination write), `services/jimaku/service.ts` (main-owned sender-scoped search/download sessions and export validation), `services/jimaku/result.ts` (shared `ok`/`fail` result constructors); `jimakuSettingsBridge.ts`, `jimakuBridge.ts` |
-| Seekbar hover thumbnails | `state/seekPreview.ts`, `components/SeekPreview.tsx` | `media/thumbnailPreview.ts` (preview; async LRU cache sweep after renderer-ready and after writes), `services/thumbnails/generation.ts`, `services/thumbnails/cache.ts` |
+| Media loading and subtitles | `state/useMediaSession.ts`, `state/mediaOpen.ts`, `state/trackSelection.ts`, `state/dropHandling.ts`, `shared/track.ts`, `shared/cue.ts`, `shared/mediaFileTypes.ts` | `mediaBridge.ts`, `mediaService.ts`, `media/mediaPicker.ts`, `media/subtitleService.ts`, `media/metadataService.ts`, `media/thumbnailPreview.ts`, `media/ffprobe.ts`, `media/ffmpeg.ts` |
+| Jimaku subtitle discovery and export | `shared/jimaku.ts`, `shared/jimakuMatching.ts`, `state/jimakuController.ts`, `state/jimaku/`, `components/JimakuSubtitlesDialog.tsx`, `components/jimaku/`, `components/NoJapaneseSubtitlePrompt.tsx` | `services/jimaku/`, `jimakuBridge.ts`, `jimakuSettingsBridge.ts` |
+| Seekbar hover thumbnails | `state/seekPreview.ts`, `components/SeekPreview.tsx` | `media/thumbnailPreview.ts`, `services/thumbnails/generation.ts`, `services/thumbnails/cache.ts` |
 | Playlists and history | `state/useMediaSession.ts`, `components/PlaylistSidebar.tsx`, `state/playlistController.ts`, `state/recentFilesController.ts`, `shared/m3u.ts`, `shared/mediaHistory.ts` | `mediaHistoryBridge.ts`, `services/mediaHistory.ts`, `services/mediaHistoryStore.ts`, `services/folderNavigation.ts` |
-| Tokenization | `state/useVocabularyPipeline.ts`, `state/tokenization.ts`, `shared/token.ts`, `shared/mecab.ts`, `shared/textProjection.ts` (the display/analysis offset spaces every token offset lives in) | `mecabBridge.ts`, `services/mecab/` |
-| Dictionaries and word lookup | `state/useWordPopup.ts`, `components/WordPopup.tsx`, `state/popupController.ts`, `state/wordLookup.ts`, dictionary options, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
-| Knowledge tracking and JLPT coverage/export | `state/useKnowledgeOptions.ts`, `state/useVocabularyPipeline.ts`, subtitle components, `state/knowledgeActions.ts`, knowledge options, `shared/knowledge.ts`, `shared/jlptCoverage.ts`, `shared/jlptExport.ts` | `knowledgeBridge.ts` (IPC adapter), `services/knowledge/service.ts` (sync/settings/report/export orchestration), `services/knowledge/`, `services/jlpt/` |
-| Subtitle sidebar | `components/SubtitleSidebar.tsx` (cue rows and search), `components/SubtitleTranslationPopup.tsx`, `state/sidebarSearch.ts`, `state/subtitleSearchDebounce.ts`, `state/sidebarTranslation.ts`, `state/useSidebarTranslation.ts` | — |
-| Azure translation | `components/options/SubtitlesTab.tsx`, subtitle and Game OCR translation surfaces, `state/integrationActions.ts`, `state/optionsData.ts`, `shared/translation.ts` | `translateBridge.ts`, `translationSettingsBridge.ts`, `services/translate/azureTranslate.ts`, `services/translate/translationSettings.ts` |
-| Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, word and subtitle-report UI, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, Anki options, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/service.ts` (composition and ordinary card operations), `services/anki/jlptBackfillService.ts` (stateful JLPT preview/apply workflow) |
-| Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `state/optionsData.ts`, `state/integrationActions.ts`, `components/OptionsMenu.tsx`, `components/options/SubtitlesTab.tsx` (subtitle, translation, and Jimaku credential controls), `state/playerState.ts`, `state/rendererSettings.ts` (which persisted fields the renderer syncs, and who owns the rest), `state/useSettingsLifecycle.ts`, `state/settingsPersistence.ts`, `state/useAppearance.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
-| Game OCR (Windows, experimental) | `gameOcr.tsx` (the second renderer entry, loaded by `src/renderer/gameOcr.html`), `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrCaptureStream.ts` (retained capture streams), `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts` and `components/options/GameOcrTab.tsx` (the player window's controls), `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/controller.ts` (lifecycle facade: arm, stop, status; runtime service for Options), `services/gameOcr/shortcuts.ts` (accelerator ownership and repeat guard), `services/gameOcr/captureSession.ts` (sessions, recapture order, recognition), `services/gameOcr/captureTarget.ts` (focused window or display fallback), `services/gameOcr/foregroundWindow.ts` (the Win32 boundary), `services/gameOcr/windowCapture.ts` (source ids, physical-to-logical geometry), `services/gameOcr/displayCapture.ts`, `services/gameOcr/frozenFrameController.ts` (the `GameOcrWindow` contract: readiness, capture waiters, discard/dismiss/close; channel listeners and sender filtering), `services/gameOcr/frozenFrameElectron.ts` (BrowserWindow options, construction and loading, content protection, display events), `services/gameOcr/backgroundLifecycle.ts`, `bootstrap/gameOcr.ts` (wiring and the tray icon), `services/ocr/ppOcrWorker.ts` (process lifecycle), `services/ocr/ppOcrProtocol.ts` (JSONL protocol), `resourcePaths.ts` (bundled payload) |
-| Packaging and startup | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `startupDecision.ts`, `resourcePaths.ts`, `bootstrap/paths.ts` (userData, resources, and bundle-relative paths derived once at startup), `startupProbe.ts`, `electron-builder.cjs`, `scripts/linuxPackaging.mjs`, `scripts/smoke-linux-package.mjs` |
-| Application updates | `AppShell.tsx` (owns the one controller for every surface), `state/useUpdates.ts`, `state/updateController.ts`, `components/UpdateNotifications.tsx`, `components/UpdateDialog.tsx`, `shared/update.ts`, typed `preloadApi.ts` surface | `updateSupport.ts`, `electronUpdaterAdapter.ts`, `updaterErrors.ts`, `updateService.ts`, `updateBridge.ts`, `bootstrap/updates.ts` |
-
-Renderer paths in the table are relative to `src/renderer/src/`; shared and
-main paths are relative to `src/`. Both HTML entry points live one level up:
-`src/renderer/index.html` (→ `src/renderer/src/main.tsx`) and
-`src/renderer/gameOcr.html` (→ `src/renderer/src/gameOcr.tsx`).
-
-Each major subtree also carries a short scoped `AGENTS.md`
-(`src/main/`, `src/renderer/`, `test/`, `scripts/`) with the rules that differ
-there; the repository-wide rules stay in the root [AGENTS.md](../AGENTS.md).
-
-Jimaku's remote boundary is main-owned and opt-in. `services/jimaku/client.ts`
-is the only provider client and exposes no remote URLs to the renderer;
-`services/jimaku/service.ts` turns explicit search and selection actions into
-sender-scoped requests, while `services/jimaku/settings.ts` keeps the key and
-folder hints local. Startup and media-open code restore the managed cache
-without starting Jimaku requests.
-
-Tests normally mirror source ownership. Search `test/` for the source basename
-when several focused tests cover one area.
+| Tokenization | `state/useVocabularyPipeline.ts`, `state/tokenization.ts`, `shared/token.ts`, `shared/mecab.ts`, `shared/textProjection.ts` | `mecabBridge.ts`, `services/mecab/` |
+| Dictionaries and word lookup | `state/useWordPopup.ts`, `components/WordPopup.tsx`, `state/popupController.ts`, `state/wordLookup.ts`, `shared/dictionary.ts` | `dictBridge.ts`, `services/dict/` |
+| Knowledge tracking and JLPT coverage/export | `state/useKnowledgeOptions.ts`, `state/useVocabularyPipeline.ts`, `state/knowledgeActions.ts`, `shared/knowledge.ts`, `shared/jlptCoverage.ts`, `shared/jlptExport.ts` | `knowledgeBridge.ts`, `services/knowledge/service.ts`, `services/knowledge/`, `services/jlpt/` |
+| Subtitle sidebar | `components/SubtitleSidebar.tsx`, `components/SubtitleTranslationPopup.tsx`, `state/sidebarSearch.ts`, `state/subtitleSearchDebounce.ts`, `state/sidebarTranslation.ts`, `state/useSidebarTranslation.ts` | — |
+| Azure translation | `components/options/SubtitlesTab.tsx`, `state/integrationActions.ts`, `state/optionsData.ts`, `shared/translation.ts` | `translateBridge.ts`, `translationSettingsBridge.ts`, `services/translate/azureTranslate.ts`, `services/translate/translationSettings.ts` |
+| Anki card creation | `state/useWordPopup.ts`, `state/useBulkMining.ts`, `state/useSubtitleReport.ts`, `state/ankiMining.ts`, `state/bulkMiningController.ts`, `state/subtitleReportController.ts`, `shared/anki.ts` | `ankiBridge.ts`, `services/anki/service.ts`, `services/anki/jlptBackfillService.ts` |
+| Settings and appearance | `state/useOptionsDialog.ts`, `state/optionsMenuProps.ts`, `state/optionsData.ts`, `state/integrationActions.ts`, `components/OptionsMenu.tsx`, `components/options/SubtitlesTab.tsx`, `state/playerState.ts`, `state/rendererSettings.ts`, `state/useSettingsLifecycle.ts`, `state/settingsPersistence.ts`, `state/useAppearance.ts` | `playerSettingsBridge.ts`, `services/settings.ts`, `services/secrets.ts` |
+| Game OCR (Windows, experimental) | `gameOcr.tsx`, `state/useGameOcrSession.ts`, `state/gameOcrBoxRegions.ts`, `state/gameOcrLayout.ts`, `state/gameOcrCaptureStream.ts`, `state/gameOcrTextPipeline.ts`, `state/gameOcrSelection.ts`, `state/useGameOcrTranslation.ts`, `components/GameOcrFrame.tsx`, `components/GameOcrBoxes.tsx`, `components/GameOcrInteraction.tsx`, `state/useGameOcr.ts`, `components/options/GameOcrTab.tsx`, `shared/ocr.ts`, `shared/gameOcr.ts`, `shared/gameOcrSettings.ts` | `gameOcrBridge.ts`, `services/gameOcr/`, `services/ocr/`, `bootstrap/gameOcr.ts`, `resourcePaths.ts` |
+| Packaging and startup | `shared/appIdentity.json`, `shared/appIdentity.ts` | `appIdentity.ts`, `startupDecision.ts`, `resourcePaths.ts`, `bootstrap/paths.ts`, `startupProbe.ts`, `/electron-builder.cjs`, `/scripts/linuxPackaging.mjs`, `/scripts/smoke-linux-package.mjs` |
+| Application updates | `AppShell.tsx`, `state/useUpdates.ts`, `state/updateController.ts`, `components/UpdateNotifications.tsx`, `components/UpdateDialog.tsx`, `shared/update.ts`, `shared/preloadApi.ts` | `updateSupport.ts`, `electronUpdaterAdapter.ts`, `updaterErrors.ts`, `updateService.ts`, `updateBridge.ts`, `bootstrap/updates.ts` |
 
 ## Common changes
 
-Runtime type guards (`isRecord`, `isFiniteNumber`, …) live in
-`src/shared/guards.ts`; import them instead of redefining.
-
 ### Add an IPC operation
 
-1. Declare the channel in `src/shared/ipcChannels.ts`.
-2. Add request and response types or validation under `src/shared/`.
-3. Register the main-process handler in the owning bridge. Handler arguments
-   are `unknown`; narrow each with `expect(guard, channel)` from
-   `src/main/ipcValidation.ts` before delegating.
-4. Expose the smallest required method from `src/preload/index.ts`.
-5. Test the service, one malformed-input case per new guard shape
-   (`invokeRejection` and `expectUntouched` in `test/harness/fakeIpcMain.ts`),
-   and any logic the bridge owns (sender scoping, cancellation, progress pushes,
-   error mapping). Do not add a test that a handler forwards its arguments.
+1. Declare the channel in `src/shared/ipcChannels.ts` and types/guards in `src/shared/`.
+2. In the owning `*Bridge.ts`, narrow `unknown` arguments with `expect(guard, channel)`
+   from `ipcValidation.ts`, then delegate to a service callable without Electron.
+3. Expose the smallest method through `src/shared/preloadApi.ts` and `src/preload/index.ts`.
+4. Test service behavior, one malformed case per guard shape, and bridge-owned sender
+   scoping, cancellation, progress, or error mapping. Avoid forwarding-only tests.
 
 ### Add an external boundary
 
-Keep the production adapter in the main process behind a narrow injected
-interface. Tests should use a fake in `test/harness/` or a committed fixture,
-not a live binary, account, or network service.
-
-Reach for the shared harness before writing a local fake or fixture:
-`fakeIpcMain.ts` (records the handlers a bridge registers), `fakeSettingsIo.ts`
-(in-memory settings file), `deferred.ts` (a promise the test settles),
-`dictFixtures.ts` (`makeLookupResult`, `makeDictInfo`),
-`fakeKizunaApi.ts` (the typed preload API), and `platformPaths.ts`
-(Windows/Linux path cases). Extend one of these rather than copying it, so a
-change to the shape stays a single edit.
+Keep processes, network, SQLite, Win32, and updater adapters behind narrow injected
+interfaces in main. Use the shared harness listed in [test guidelines](../test/AGENTS.md)
+or committed fixtures. Test filesystem behavior in temporary directories.
 
 ### Derive a filesystem path
 
-Take an optional `platform: NodeJS.Platform` (or a `platform?` field on the
-deps object) defaulting to `process.platform`, and resolve the path API through
-`pathApiFor` in `src/main/platformPath.ts` instead of importing `join`,
-`dirname`, or `basename` straight from `node:path`. Production behavior is
-unchanged; tests then assert the Windows and Linux results on either host with
-`describe.each(PATH_PLATFORMS)` from `test/harness/platformPaths.ts`.
-
-Never hand a Windows-format fixture to the host's default `node:path`:
-`join('C:\\Users\\me', 'Kizuna')` yields `C:\Users\me/Kizuna` on Linux, so
-the assertion passes while describing a path no platform produces.
+Take `platform: NodeJS.Platform = process.platform` (or an optional dependency field)
+and use `pathApiFor` from `src/main/platformPath.ts` rather than host `node:path`.
+Assert both Windows and Linux with `describe.each(PATH_PLATFORMS)` from
+`test/harness/platformPaths.ts`. Never resolve Windows fixtures with the host's
+path API. Skip a platform only for a named technical reason with counterpart coverage.
 
 ### Add persisted settings
 
-Add the type/default in `shared/playerSettings.ts`, normalization in
-`main/services/settings.ts`, and a row in its settings test table. For a
-reducer-backed setting, add its key to `SYNCED_SETTING_KEYS` in
-`state/rendererSettings.ts`; its type, initial value, loading, and persistence
-follow automatically. Options tabs use `settings` and `onChange({ field: value })`.
-Keep named reducer actions for transitions that merge or validate data.
-
-### Add renderer behavior
-
-Put reusable components under `components/` and pure transitions or
-controllers under `state/`. Keep `App.tsx` focused on composition: add the
-behavior to the feature hook that already owns the workflow —
-`state/useMediaSession.ts` (opening media, playlists, subtitles),
-`state/usePlaybackWindow.ts` (playback commands, per-file values, panels,
-window sizing, mini player), `state/useVocabularyMining.ts` (which composes
-the vocabulary subjects — `state/useVocabularyPipeline.ts` for the
-tokenization/knowledge caches and pipeline, `state/useWordPopup.ts` for the popup and its
-Anki mine, `state/useSubtitleReport.ts`, `state/useBulkMining.ts`, and
-`state/useKnowledgeOptions.ts` for the Options rows that invalidate those
-caches), or
-`state/useOptionsDialog.ts` (the Options dialog, its optional-integration data,
-and the dictionary/Anki actions that refresh it) — rather than to the root
-component. A new Options row is wired in `state/optionsMenuProps.ts`, next to
-the rest of the dialog's props. Use semantic colors from `theme.css` rather
-than adding isolated color literals.
+Add type/default in `shared/playerSettings.ts`, normalization in `main/services/settings.ts`,
+and a settings-test row. For reducer-backed values, add the key to `SYNCED_SETTING_KEYS`
+in `state/rendererSettings.ts`; type, initial state, loading, and persistence follow.
+Options tabs use `settings` and `onChange({ field: value })`. Keep named reducer
+transitions for merging or validation. Reuse guards from `src/shared/guards.ts`.
 
 ### Change Game OCR
 
-The experimental Windows OCR flow spans two renderers. `src/renderer/index.html`
-owns only the Options tab and the Settings-menu command; the frozen frame is a
-separate entry point (`src/renderer/gameOcr.html` →
-`src/renderer/src/gameOcr.tsx`) that main loads into its own window, so a change
-to the player's React tree does not reach it. Anything renderer-facing has to be
-declared in `electron.vite.config.ts`'s renderer inputs to be built.
+- Player entry: `src/renderer/index.html` → `src/main.tsx`; frozen frame: `src/renderer/gameOcr.html` → `src/gameOcr.tsx` (paths after arrows relative to `src/renderer/`). Declare entries in `electron.vite.config.ts`.
+- Frozen-frame API: `KizunaGameOcrApi` in `src/shared/preloadApi.ts`, implemented by `src/preload/gameOcr.ts`; both preloads build as sandboxed single files.
+- Lifecycle and shortcuts: `services/gameOcr/controller.ts`, `shortcuts.ts`; sessions and stale-result rejection: `captureSession.ts`.
+- Target selection: `captureTarget.ts`, `foregroundWindow.ts`, `windowCapture.ts`, `displayCapture.ts`; native window: `frozenFrameController.ts`, `frozenFrameElectron.ts`.
+- User behavior, design constraints, and manual checks: [Game OCR](game-ocr.md).
 
-The frozen-frame window also has its own preload, `src/preload/gameOcr.ts`,
-exposing only `KizunaGameOcrApi` (`src/shared/preloadApi.ts`): the calls
-`gameOcr.tsx` makes, with no settings writers, file readers, dictionary
-management, or playback control. A new bridge call the window needs goes in
-that type and that preload; `test/preload/gameOcr.test.ts` pins its shape
-against `fakeGameOcrApi()`. Both preloads are sandboxed single files
-(`isolatedEntries` in the preload build config).
+### Change packaging or releases
 
-`services/gameOcr/controller.ts` is the lifecycle facade: arming, stopping, and
-the published status, plus the runtime service that joins it with the worker
-and the persisted shortcut for the Options surface. It composes two owners, and
-a change usually belongs to exactly one of them.
-`services/gameOcr/shortcuts.ts` owns every global shortcut
-— the capture accelerator, its key-repeat guard, and the Escape/Ctrl+C pair held
-only while a frame is up. `services/gameOcr/captureSession.ts` owns session
-identity and the invalidate → capture → move → replace canvas → recognize order,
-including the window-to-display fallback and stale-result rejection.
-The native window is excluded from Windows desktop capture, which keeps a recapture
-off Kizuna's own frozen screenshot without hiding it first. The capture
-coordinator retains one frozen-frame window for the whole armed run, so a frame
-ends by hiding rather than closing;
-`services/gameOcr/frozenFrameController.ts` separates that discard from the
-close that only stopping, a display change, or a dead renderer performs. Work that
-must not survive a recapture belongs behind the session ID, not behind a
-renderer-side guard, and anything a fresh renderer used to pick up at boot has
-to be refreshed per frame instead.
-
-What a shortcut captures is decided in `services/gameOcr/captureTarget.ts`,
-which composes the Win32 foreground query
-(`services/gameOcr/foregroundWindow.ts`), the physical-to-logical geometry
-(`services/gameOcr/windowCapture.ts`), and the display-under-pointer fallback
-(`services/gameOcr/displayCapture.ts`) into one discriminated target. Add a new
-reason a window cannot be used to `GameOcrFallbackReason` and its text table;
-every one of them has to end in a display capture rather than a failure, and
-nothing on that path may throw. Native calls belong behind
-`ForegroundWindowNative`, never in the rules above it, so tests keep running on
-Linux. See [Game OCR](game-ocr.md) for the user-visible behavior, the measured
-runtime facts the design rests on, and the manual verification matrix.
-
-### Update runtime binaries
-
-Platform selection and lock validation are in `scripts/vendorResources.mjs`;
-`scripts/fetch-resources.mjs` is the command-line entry point and stages the
-selected lock into `resources/`. Runtime lookup then lives in
-`src/main/resourcePaths.ts`. Update `resources.lock.json` and
-`third-party.json` together, then run the explicit platform staging commands,
-`npm run notices`, and `npm test`. See
-[Runtime binaries](binaries.md) and [Licensing](licensing.md).
-
-### Change CI or releases
-
-Keep third-party GitHub Actions pinned to commit SHAs. CI configuration is in
-`.github/workflows/ci.yml`; release packaging and verification are in
-`.github/workflows/release.yml`. See [Releasing](releasing.md) for the release
-procedure and current signing status.
-
-Windows and Linux packaging both live in `electron-builder.cjs`, driven by
-`npm run dist` and `npm run dist:linux`. Linux artifacts are verified by
-`npm run smoke:linux` (`scripts/smoke-linux-package.mjs`, with its pure
-assertions in `scripts/linuxPackaging.mjs`), which runs only in the release
-workflow.
-
-The packaged GUI check waits on `src/main/startupProbe.ts`, which reports
-startup milestones on stdout when `KIZUNA_STARTUP_PROBE=1`. Adding a startup
-step worth waiting for means marking a new milestone there.
-
-Use these owners when release behavior changes:
-
-| Concern | Source of truth | Regression coverage |
-|---|---|---|
-| Linux archive/install/startup smoke | `scripts/smoke-linux-package.mjs` and `scripts/linuxPackaging.mjs` | `test/scripts/linuxPackaging.test.ts` |
-| Cross-platform path expectations | `test/harness/platformPaths.ts` | owning main/shared tests |
+Runtime lookup belongs to `src/main/resourcePaths.ts`; staging and lock validation
+belong to `scripts/vendorResources.mjs` and `scripts/fetch-resources.mjs`.
+Follow [binary updates](binaries.md#updating-a-pinned-binary) and [licensing](licensing.md).
+CI and releases live in `.github/workflows/`; pin external Actions to full commit SHAs.
+`electron-builder.cjs` owns both packages. Linux smoke checks use
+`scripts/smoke-linux-package.mjs` and `scripts/linuxPackaging.mjs`.
+`src/main/startupProbe.ts` reports GUI startup milestones when `KIZUNA_STARTUP_PROBE=1`.
+See [Releasing](releasing.md) for commands and signing status.
