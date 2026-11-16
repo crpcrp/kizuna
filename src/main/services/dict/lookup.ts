@@ -1,9 +1,3 @@
-// The dictionary lookup entry point: owns the `terms`/`dictionaries` SQL and the
-// order the lookup stages run in. Each stage lives in its own module —
-// deinflect.ts (conjugation candidates), reading.ts (kana normalization),
-// termMetadata.ts (frequency/pitch enrichment), ranking.ts (result ordering), and
-// crossReference.ts (redirect resolution) — and none of them import back here.
-
 import type { FrequencyMode, LookupResult } from '../../../shared/dictionary'
 import type { LookupDb } from './lookupDb'
 import { deinflect, stemToDictionaryForms } from './deinflect'
@@ -27,11 +21,7 @@ interface TermJoinRow {
   score: number | null
 }
 
-/**
- * Dictionary order is `dictionaries.priority` ascending, then `dictionaries.id`
- * ascending for legacy rows with equal stored order. It is the final lookup
- * tie-breaker, not an override of match quality, priority tags, frequency, or score.
- */
+// Dictionary priority/id is the final tie-breaker, never an override of match quality.
 const SELECT_BY_EXPRESSION = `
 SELECT terms.expression AS expression, terms.reading AS reading,
        terms.glossary AS glossary, terms.glossary_json AS glossary_json,
@@ -81,41 +71,8 @@ function toResults(rows: unknown[]): LookupResult[] {
   }))
 }
 
-/**
- * Resolve a token to dictionary entries.
- *
- * If `query.longestMatchCandidates` is given (caller-supplied, longest-first —
- * see `buildLongestMatchCandidates` in state/wordLookup.ts), EVERY candidate that
- * hits `terms.expression` contributes its rows, longest candidate first — not
- * just the first one that hits. This lets a single MeCab token (e.g. 閻魔, split
- * apart from a sibling token 大王) resolve to the longer compound headword
- * (閻魔大王) a Yomitan-style dictionary indexes it under, while *also* still
- * surfacing the shorter compound/single-token headword (閻魔) below it when the
- * dictionary has both — the longest match leads, but it doesn't hide the rest.
- *
- * After whole-surface and compound candidates are tried, a direct match on
- * `query.lemma` itself (OR'd with `query.reading` if provided) is tried. It is
- * ranked ahead of intra-token prefix candidates, but behind longer candidates —
- * this is the "1-token" case `buildLongestMatchCandidates` deliberately
- * excludes. Only if
- * NONE of the above produced anything does `deinflect(query.lemma)` kick in,
- * trying each candidate in turn against `terms.expression` and stopping at (and
- * returning) the first one that hits — deinflection is a grammatical fallback,
- * not another "match length" to blend in.
- *
- * Duplicate rows (same dictionary id + expression + reading, which happens
- * when a candidate coincides with `query.lemma`) are collapsed, keeping the
- * first occurrence's position. Results are otherwise ordered by
- * match quality, then (when both entries have it) frequency, exact written form,
- * priority tags, remaining frequency presence, score, then stable dictionary order,
- * filtered to enabled dictionaries only. Dictionary order is stored as
- * `dictionaries.priority` ascending and breaks any equal stored values by id.
- * If `options.freqDictId` is given, the selected frequency dictionary provides
- * the frequency term above, using `options.sortMode` if given, otherwise its own
- * `frequency_mode` (see `frequencyModeForDict`). Each result's own dictionary
- * additionally supplies its `pitchAccent`, which is enrichment only and never
- * affects the order above (see `attachPitchAccents`).
- */
+// Keep all matching compounds longest-first, then the lemma ahead of shorter prefixes.
+// Deinflection is a fallback only when those candidates yield nothing.
 export function lookup(
   db: LookupDb,
   query: { lemma: string; reading?: string; surface?: string; longestMatchCandidates?: string[] },
@@ -125,9 +82,7 @@ export function lookup(
   const results: RankedResult[] = []
   let stableOrder = 0
 
-  // Both statements are re-run once per candidate branch below; compiling each
-  // one once per lookup keeps the SQL and parameters identical while avoiding
-  // repeated `prepare` calls. Deliberately scoped to this call — no cross-call cache.
+  // Prepare once per lookup to avoid recompiling SQL for every candidate.
   const byExpression = db.prepare(SELECT_BY_EXPRESSION)
   const byExpressionOnly = db.prepare(SELECT_BY_EXPRESSION_ONLY)
 
@@ -153,9 +108,7 @@ export function lookup(
   }
 
   const candidates = query.longestMatchCandidates ?? []
-  // The first candidate shorter than the clicked surface is an intra-token
-  // prefix. Compound and whole-surface candidates must still lead, while the
-  // token's own lemma should beat prefixes such as 生き for 生き返った.
+  // The lemma must beat intra-token prefixes such as 生き for 生き返った.
   const surfaceLength = query.surface?.length
   const firstPrefix =
     surfaceLength === undefined
@@ -163,10 +116,8 @@ export function lookup(
       : candidates.findIndex((candidate) => candidate.length < surfaceLength)
   const directGroup = firstPrefix === -1 ? candidates.length : firstPrefix
   for (const [index, candidate] of candidates.entries()) {
-    // A subtitle surface can be kana while a dictionary indexes its written
-    // headword in kanji (よかろう -> 良かろう). Querying the candidate reading here
-    // preserves longest-candidate ordering, so the full surface leads over a
-    // shorter reading-only match such as よか.
+    // A kana surface can have a kanji headword (よかろう -> 良かろう); query its reading
+    // here so the full surface still leads over shorter reading-only matches.
     const matchGroup = index < directGroup ? index : index + 1
     collect(
       byExpression.all(candidate, normalizeReading(candidate), katakanaReading(candidate)),
@@ -174,8 +125,7 @@ export function lookup(
       candidate,
       candidate
     )
-    // `そう` attaches to a verb's ren'youkei (何とかなりそう -> 何とかなる).
-    // Resolve only candidates ending exactly in the auxiliary: a longer
+    // そう attaches to the ren'youkei (何とかなりそう -> 何とかなる); a longer
     // candidate such as 何とかなりそうね must not claim the shorter phrase.
     if (candidate.endsWith('そう')) {
       const stem = candidate.slice(0, -'そう'.length)
@@ -188,9 +138,7 @@ export function lookup(
   const direct = query.reading
     ? byExpression.all(query.lemma, normalizeReading(query.reading), katakanaReading(query.reading))
     : byExpressionOnly.all(query.lemma)
-  // A direct lemma result describes the clicked inflected surface too.  Keep
-  // that surface provenance so the renderer can highlight the exact subtitle
-  // span instead of trying to reconstruct it from the dictionary headword.
+  // Retain the clicked surface so highlighting uses its subtitle span, not the headword.
   collect(
     direct,
     directGroup,
@@ -229,7 +177,6 @@ export function lookup(
         })()
       : sortRankedResults(results, mode)
 
-  // Pitch is attached after ranking, on purpose: it enriches the results the
-  // existing ordering already chose and never participates in that ordering.
+  // Pitch enriches results without affecting their rank.
   return attachPitchAccents(db, resolveCrossReferences(db, sorted))
 }

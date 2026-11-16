@@ -49,7 +49,6 @@ function tryDecode(bytes: Uint8Array, label: 'shift_jis' | 'euc-jp'): string | u
   }
 }
 
-/** Decodes standalone subtitle bytes without filesystem access or replacement characters. */
 export function decodeSubtitleBytes(bytes: Uint8Array, encoding: SubtitleEncoding): string {
   if (encoding !== 'auto') return decode(bytes, encoding)
 

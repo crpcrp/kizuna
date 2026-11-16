@@ -1,8 +1,3 @@
-// Owner of the renderer-facing seekbar preview: it turns the thumbnail
-// service's cache path into the base64 data URL that crosses IPC, and owns the
-// production wiring of generation + cache eviction for a configured cache
-// directory. The cache policy itself lives in services/thumbnails/.
-
 import { readFile } from 'node:fs/promises'
 import { createThumbnailService, type ThumbnailService } from '../services/thumbnails/generation'
 import {
@@ -15,11 +10,9 @@ import type { FfmpegExec } from './ffmpeg'
 /** Reads a generated thumbnail jpg into a base64 string (no `data:` prefix). */
 export type ReadThumbnailBase64 = (path: string) => Promise<string>
 
-/** Production adapter: reads a cached jpg directly as base64. */
 export const readThumbnailBase64: ReadThumbnailBase64 = (path) =>
   readFile(path, { encoding: 'base64' })
 
-/** The thumbnail slice of `MediaServiceLike`. */
 export interface ThumbnailPreview {
   getThumbnail(
     filePath: string,
@@ -28,16 +21,10 @@ export interface ThumbnailPreview {
   ): Promise<{ dataUrl: string } | null>
 }
 
-/**
- * Builds the production thumbnail service for `cacheDir`: real node:fs
- * adapters, plus a debounced post-write sweep that keeps the cache under
- * {@link THUMBNAIL_CACHE_MAX_BYTES}.
- */
 export function createCachedThumbnailService(deps: {
   cacheDir: string
   ffmpegPath: string
   execFfmpeg: FfmpegExec
-  /** Path semantics for the cache layout; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): ThumbnailService {
   return createThumbnailService({
@@ -56,16 +43,10 @@ export function createCachedThumbnailService(deps: {
   })
 }
 
-/**
- * Registers the startup LRU sweep of `cacheDir` to run once, after the player
- * renderer reports ready, so the (async) cache walk never competes with window
- * creation or mpv startup. Failures are logged, never thrown.
- */
+// Wait for renderer readiness so cache eviction does not compete with window/mpv startup.
 export function scheduleStartupThumbnailSweep(deps: {
-  /** Fires `listener` once the renderer reports ready (e.g. `ipcMain.once`). */
   onceRendererReady(listener: () => void): void
   cacheDir: string
-  /** Defaults to the real async node:fs sweep under {@link THUMBNAIL_CACHE_MAX_BYTES}. */
   sweep?: (cacheDir: string) => Promise<string[]>
   logger?: Pick<Console, 'log' | 'warn'>
 }): void {
@@ -87,14 +68,7 @@ export function scheduleStartupThumbnailSweep(deps: {
   })
 }
 
-/**
- * Resolves the cached frame to a base64 data URL — the renderer can't read
- * arbitrary file:// paths, so the encoded image crosses IPC inline. The service
- * memoizes the cache-key stat per path and caches misses/failures, so a cache
- * hit here never re-runs ffmpeg (see services/thumbnails/generation.ts).
- * Without a `thumbnails` service (no cache dir configured) previews are
- * disabled and every request resolves null.
- */
+// The renderer cannot read arbitrary file:// paths; send the image inline over IPC.
 export function createThumbnailPreview(deps: {
   thumbnails?: ThumbnailService
   readBase64: ReadThumbnailBase64
