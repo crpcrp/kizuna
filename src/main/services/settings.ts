@@ -1,8 +1,3 @@
-// JSON settings store. Pure merge/select logic is split from I/O so it's
-// unit-testable without touching real disk; the store is handed an
-// injected `{ read, write }` boundary, mirroring the Exec-injection pattern
-// used by mecab/runner.ts.
-
 import {
   DEFAULT_PLAYER_SETTINGS,
   normalizeAppearance,
@@ -102,17 +97,6 @@ export const defaultSettings: Settings = {
   jimaku: defaultJimakuSettings
 }
 
-/**
- * Merges arbitrary/untrusted `raw` (parsed JSON, possibly from an older
- * version or corrupted file) into a valid `Settings`, falling back to
- * `defaultSettings` fields for anything missing or malformed. Never throws.
- *
- * `options` forwards path-normalization rules (platform, cwd) to Jimaku folder
- * hints. Playback history lives in its own store (see mediaHistoryStore.ts);
- * a legacy `mediaHistory` key is dropped here. It defaults to the runtime platform, which is what
- * production wants; tests pass a platform explicitly so both variants are
- * covered on either host.
- */
 export function mergeSettings(raw: unknown, options: PathNormalizationOptions = {}): Settings {
   const obj = asRecord(raw)
 
@@ -153,7 +137,6 @@ const JIMAKU_FOLDER_HINT_MAX_SEASON = 999
 const JIMAKU_FOLDER_HINT_MAX_TIMESTAMP = 8_640_000_000_000_000
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/u
 
-/** Returns the canonical key for the media file's immediate parent folder. */
 export function jimakuFolderHintKey(
   mediaPath: unknown,
   season: number | undefined,
@@ -175,7 +158,7 @@ export function jimakuFolderHintKey(
     : `${folderKey}${JIMAKU_FOLDER_HINT_KEY_SEPARATOR}${season}`
 }
 
-/** Normalizes persisted folder hints; each malformed record is dropped alone. */
+// Drop malformed folder hints individually so valid records survive.
 function normalizeJimakuFolderHints(
   raw: unknown,
   options: PathNormalizationOptions = {}
@@ -317,7 +300,6 @@ function mergeUpdateSettings(raw: unknown): UpdateSettings {
   }
 }
 
-/** Deep-merges `raw.player` against `DEFAULT_PLAYER_SETTINGS`; never throws. */
 function mergePlayerSettings(raw: unknown): PlayerSettings {
   const obj = asRecord(raw)
 
@@ -364,10 +346,7 @@ function mergePlayerSettings(raw: unknown): PlayerSettings {
   }
 }
 
-/** Deep-merges `raw` into an offset map (`Record<string, number>`, ms);
- * non-numeric/non-finite entries are dropped rather than falling back
- * wholesale, so one corrupted entry doesn't discard every other file's stored
- * offset. Serves `subtitleOffsets`, `folderSubtitleOffsets`, and `audioDelays`. */
+// Discard malformed offsets individually so one corrupt entry cannot erase all saved offsets.
 function mergeOffsetMap(raw: unknown): Record<string, number> {
   if (!isRecord(raw)) return {}
   const result: Record<string, number> = {}
@@ -377,7 +356,6 @@ function mergeOffsetMap(raw: unknown): Record<string, number> {
   return result
 }
 
-/** Deep-merges `raw.knowledge` against `defaultKnowledgeSettings`; never throws. */
 function mergeKnowledgeSettings(raw: unknown): KnowledgeSettings {
   const obj = asRecord(raw)
 
@@ -404,23 +382,14 @@ function mergeKnowledgeSettings(raw: unknown): KnowledgeSettings {
   }
 }
 
-/** Falls back to `fallback` unless `value` is a finite number > 0. */
 function positiveNumberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
 }
 
-/** Falls back to `fallback` unless `value` is a finite number >= 0 (0 = "never"). */
 function nonNegativeNumberOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fallback
 }
 
-/**
- * Pure helper: picks the effective dict id, falling back to `'ipadic'` when
- * `id` isn't among `availableIds` (e.g. UniDic was selected previously but is
- * no longer installed). Kept standalone (not a store method) so it can be
- * reused wherever a dict id needs validating against availability, without
- * needing a store instance.
- */
 export function selectDict(id: 'ipadic' | 'unidic', availableIds: string[]): 'ipadic' | 'unidic' {
   return availableIds.includes(id) ? id : 'ipadic'
 }
@@ -432,20 +401,14 @@ export interface SettingsIO {
 
 export interface SettingsStore {
   get(): Settings
-  /**
-   * Merges `patch` into memory and tries to persist it. Never throws: a failed
-   * write is reported through `onWriteError` and retried on the next `set` or
-   * `flush`.
-   */
+  // Failed writes are reported through onWriteError and retried on the next set or flush; never throw.
   set(patch: Partial<Settings>): Settings
-  /** Retries a pending failed write. Returns true when nothing is left unsaved. */
   flush(): boolean
-  /** True while the in-memory settings differ from the last successful write. */
   hasPendingWrite(): boolean
 }
 
 export interface SettingsStoreOptions extends PathNormalizationOptions {
-  /** Called once per run of consecutive write failures. Defaults to `console.warn`. */
+  // Report once per run of consecutive write failures.
   onWriteError?: (error: unknown) => void
 }
 
@@ -453,11 +416,6 @@ function defaultOnWriteError(error: unknown): void {
   console.warn('[kizuna] failed to save settings; will retry', error)
 }
 
-/**
- * Creates a settings store backed by the injected `io`. Reads+merges once at
- * construction (so a missing/garbage file never throws); every `set` persists
- * the full merged settings via `io.write(JSON.stringify(...))`.
- */
 export function createSettingsStore(
   io: SettingsIO,
   options: SettingsStoreOptions = {}
@@ -480,7 +438,7 @@ export function createSettingsStore(
         try {
           onWriteError(error)
         } catch {
-          // Reporting must never turn a failed write back into a throw.
+          // Reporting failures must not make set throw.
         }
       }
       return false

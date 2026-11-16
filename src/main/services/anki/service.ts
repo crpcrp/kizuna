@@ -1,11 +1,3 @@
-// Anki service composition: client creation and the top-level operations the
-// bridge forwards to, including the addNote orchestration that ties note
-// building together with search, attachments, and overwrite handling.
-//
-// Word audio stays a JapanesePod101 URL AnkiConnect fetches itself; only
-// sentence audio reaches for ffmpeg, through the injected `sentenceAudio`
-// service.
-
 import {
   ANKI_MEMBERSHIP_BATCH_LIMIT,
   type AnkiExistingMatch,
@@ -33,22 +25,12 @@ import { createJlptBackfillService } from './jlptBackfillService'
 export interface CreateAnkiServiceDeps {
   settings: SettingsStore
   fetch: HttpFetch
-  /**
-   * Clips the mined line's audio out of the loaded media file. Required, not
-   * optional: sentence audio is a user-visible setting, and an optional
-   * dependency would let production wiring silently drop it while every test
-   * still passed. Tests inject a fake that resolves `null`.
-   */
   sentenceAudio: SentenceAudioService
-  /** Defaults to the bundled JLPT classifier; tests inject a small fixture. */
   jlptClassifier?: JlptClassifier
-  /** Token factory is injectable only to make stale-preview tests deterministic. */
   createBackfillToken?: () => string
-  /** Clock for mined-picture filenames; defaults to `Date.now` (injected in tests). */
   now?: () => number
 }
 
-/** Builds a fresh AnkiClient against the currently-configured URL. */
 function client(deps: CreateAnkiServiceDeps): ReturnType<typeof createAnkiClient> {
   const anki = deps.settings.get().anki
   return createAnkiClient({ url: anki.url, apiKey: anki.apiKey, fetch: deps.fetch })
@@ -256,8 +238,6 @@ export function createAnkiService(deps: CreateAnkiServiceDeps) {
       const anki = client(deps)
       const word = req.result.expression || req.token.lemma
       const pictureField = settings.fieldMap.picture
-      // The renderer sends raw base64 JPEG bytes; AnkiConnect writes them into
-      // its media folder under the name chosen here (`data` attachment).
       const picture =
         req.screenshot && pictureField !== ''
           ? {
@@ -266,11 +246,7 @@ export function createAnkiService(deps: CreateAnkiServiceDeps) {
               fields: [pictureField]
             }
           : undefined
-      // Sentence audio needs ffmpeg and the loaded file, so it is resolved
-      // here and handed to the pure builder. A mapped Sentence audio field is
-      // the only switch (see AnkiSettings.fieldMap). Extraction is
-      // best-effort: a null result simply mines the note without a clip
-      // when no clip can be extracted.
+      // Sentence audio is best-effort; a missing clip must not prevent mining the note.
       const sentenceAudioField = settings.fieldMap.sentenceAudio
       const sentenceAudioData =
         sentenceAudioField !== '' && req.media ? await deps.sentenceAudio.extract(req.media) : null

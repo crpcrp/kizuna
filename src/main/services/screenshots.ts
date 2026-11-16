@@ -1,21 +1,12 @@
-// mpv and filesystem operations are injected so screenshot tests do not need a
-// live player or real disk.
-
 import { pathApiFor, uniqueTempName } from '../platformPath'
 
-/** Characters Windows forbids in a filename (`<>:"/\|?*`), plus ASCII control
- * chars — matched globally so `sanitizeScreenshotName` can replace them. */
+// Windows forbids these filename characters and ASCII controls.
 const INVALID_FILENAME_CHARS = /[<>:"/\\|?*\u0000-\u001f]/g
 
-/**
- * Replaces Windows-invalid filename characters (`<>:"/\|?*` and control
- * chars) with '-'; trims trailing dots/spaces.
- */
 function sanitizeScreenshotName(name: string): string {
   return name.replace(INVALID_FILENAME_CHARS, '-').replace(/[. ]+$/, '')
 }
 
-/** `h-mm-ss` from a position in seconds (floor; h unpadded, mm/ss 2-digit). */
 export function formatScreenshotTimestamp(timePos: number): string {
   const total = Math.max(0, Math.floor(Number.isFinite(timePos) ? timePos : 0))
   const hours = Math.floor(total / 3600)
@@ -25,9 +16,6 @@ export function formatScreenshotTimestamp(timePos: number): string {
   return `${hours}-${pad(minutes)}-${pad(seconds)}`
 }
 
-/** Filename stem (basename minus extension) of a media path, sanitized.
- * Falls back to `screenshot` when sanitizing leaves nothing (a basename of
- * only invalid characters), so we never emit a `-0-00-00.png` with no stem. */
 function screenshotStem(mediaPath: string): string {
   const base = mediaPath.split(/[\\/]/).pop() ?? mediaPath
   const dot = base.lastIndexOf('.')
@@ -35,11 +23,6 @@ function screenshotStem(mediaPath: string): string {
   return sanitizeScreenshotName(stem) || 'screenshot'
 }
 
-/**
- * Pure given the injected `exists`: `<dir>/<stem>-<h-mm-ss>.png`, with `-2`,
- * `-3`… appended before `.png` until the name is free. `stem` is the media
- * basename minus its extension, sanitized.
- */
 function screenshotPath(
   dir: string,
   mediaPath: string,
@@ -50,8 +33,6 @@ function screenshotPath(
   const stem = screenshotStem(mediaPath)
   const timestamp = formatScreenshotTimestamp(timePos)
   const base = `${stem}-${timestamp}`
-  // Join through the platform's path API so the separator matches the target —
-  // a raw `/` produced mixed separators in the success banner on Windows.
   const { join } = pathApiFor(platform)
   const build = (name: string): string => join(dir, `${name}.png`)
 
@@ -65,14 +46,10 @@ function screenshotPath(
 }
 
 export interface ScreenshotService {
-  /**
-   * Resolves the saved file's absolute path; rejects with a sanitized Error
-   * on mpv/filesystem failure.
-   */
+  // Returns an absolute path; failures reject with a sanitized Error.
   capture(mediaPath: string, timePos: number): Promise<string>
 }
 
-/** A configured screenshot directory could not be created or reached. */
 export class ScreenshotFolderError extends Error {
   constructor(folder: string) {
     super(`Screenshot folder "${folder}" is invalid or unreachable.`)
@@ -80,30 +57,17 @@ export class ScreenshotFolderError extends Error {
   }
 }
 
-/** Captures the current frame as base64 PNG bytes instead of a saved file. */
 export interface FrameCaptureService {
-  /**
-   * Resolves the current frame as raw base64 PNG data (no data: URL prefix).
-   * Rejects when mpv or the temporary file cannot deliver one; the temporary
-   * file is removed either way.
-   */
+  // Returns raw base64 PNG without a data URL prefix; always removes the temporary file.
   captureFrameData(): Promise<string>
 }
 
-/**
- * The Anki "Picture" flow needs frame *bytes*, not a file in the user's
- * screenshot folder. mpv can only write a screenshot to a path, so this reuses
- * that same path (`takeScreenshot`) against an injected temporary directory and
- * deletes the file in `finally` — on success and on failure alike. Every
- * boundary (mpv, temp dir, read, delete) is injected so the flow
- * is unit-testable without a live mpv or real disk.
- */
+// mpv can only capture to a path; use a temporary file to obtain bytes for Anki.
 export function createFrameCaptureService(deps: {
   takeScreenshot(path: string): Promise<unknown> // real impl: controller.screenshotToFile
   tempDir(): string
   readBase64(path: string): Promise<string>
   remove(path: string): Promise<void>
-  /** Path semantics for the temp file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): FrameCaptureService {
   const { join } = pathApiFor(deps.platform)
@@ -114,8 +78,7 @@ export function createFrameCaptureService(deps: {
         await deps.takeScreenshot(path)
         return await deps.readBase64(path)
       } finally {
-        // The frame lives only long enough to be read; a failed delete must not
-        // mask the capture error (or turn a good capture into a failure).
+        // Cleanup failure must not mask a capture error or discard a successfully captured frame.
         await deps.remove(path).catch(() => undefined)
       }
     }
@@ -127,13 +90,9 @@ export function createScreenshotService(deps: {
   folder(): string // resolves the setting or the Pictures default per call
   exists(path: string): boolean
   mkdir(path: string): void // recursive
-  /** Path semantics for the saved file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }): ScreenshotService {
-  // Paths chosen by an in-flight capture but not yet written to disk. Two
-  // captures in the same media second would otherwise both see the same
-  // `exists()`-free name and the second would overwrite the first; treating a
-  // reserved path as taken makes concurrent captures pick distinct names.
+  // Reserve names before writing so concurrent captures in the same second cannot overwrite each other.
   const reserved = new Set<string>()
   return {
     async capture(mediaPath: string, timePos: number): Promise<string> {

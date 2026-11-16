@@ -1,7 +1,3 @@
-// Owns mpv.exe's lifecycle and translates high-level playback calls into mpv
-// JSON IPC command arrays. Dependencies (spawn, IPC client) are injected so
-// tests use fakes instead of a real mpv process.
-
 import {
   isVideoRotate,
   SPEED_MAX,
@@ -16,14 +12,7 @@ import { unlinkSync } from 'node:fs'
 import { MpvIpcClient, type ConnectOptions, type MpvMessage } from './ipcClient'
 import { createMpvIpcEndpoint, removeMpvIpcEndpoint, type UnlinkFn } from './ipcEndpoint'
 
-/**
- * `loadFile` rejection for the case where mpv accepted the `loadfile` command
- * but the file itself could not be demuxed/decoded (`end-file` reason `error`).
- * mpv has dropped to idle, so nothing is playing. This is distinct from a
- * command-send rejection (the `loadfile` command never reached/was accepted by
- * mpv), where a previously playing file keeps going — callers use the type to
- * tell "mpv is idle now" apart from "the old file is still up".
- */
+// A failed demux/decode leaves mpv idle; a rejected command may leave the old file playing.
 export class MpvLoadError extends Error {
   constructor(message: string) {
     super(message)
@@ -32,48 +21,25 @@ export class MpvLoadError extends Error {
 }
 
 export interface BuildMpvArgsOptions {
-  /** Host windowing/video-output platform. */
   platform: NodeJS.Platform
-  /** Native window ID mpv should render into. */
   windowId: bigint | string
-  /** Complete named-pipe or Unix-domain-socket endpoint for mpv IPC. */
   ipcEndpoint: string
-  /**
-   * Kizuna-owned mpv config dir (`<userData>/mpv`). When set, mpv reads
-   * `mpv.conf`/`input.conf`/`scripts/`/`shaders/` from it
-   * (`--config=yes --config-dir=<dir>`). When undefined (the default),
-   * `--no-config` is emitted instead, which blocks mpv from reading the user's
-   * *global* config — the accidental behavior this option makes explicit.
-   */
+  // Only this app-owned directory may supply config; otherwise global mpv config is disabled.
   userConfigDir?: string
-  /**
-   * Advanced user escape-hatch args, inserted before the forced embedding args
-   * (which always win, since for a repeated mpv option the later one wins).
-   * Passed through `sanitizeExtraMpvArgs`, which drops bare tokens and the
-   * reserved `--config`/`--config-dir` options.
-   */
+  // Forced embedding args follow user args because the last repeated mpv option wins.
   extraArgs?: string[]
 }
 
-/** Options Kizuna sets itself before user args, so a user arg would override them. */
+// These options precede user args, so they must not be overridable.
 const RESERVED_EXTRA_ARGS: ReadonlySet<string> = new Set(['config', 'config-dir'])
 
-/**
- * Pure. Reduces one raw token to the mpv option name it sets, or `null` if it
- * is not an option at all. `--hwdec=auto`, `--hwdec`, and the boolean negation
- * `--no-osc` all name `hwdec`/`osc`; a bare token yields `null` so it can never
- * sneak in as a positional file mpv would try to play.
- */
 function extraArgName(arg: string): string | null {
   if (!arg.startsWith('--')) return null
   const name = arg.slice(2).split('=', 1)[0]
   return name.startsWith('no-') ? name.slice(3) : name
 }
 
-/**
- * Pure. Keeps every `--option` except the config-selection ones Kizuna owns;
- * bare tokens are dropped so mpv never treats them as files to play.
- */
+// Reject bare tokens so mpv cannot treat them as files to play.
 export function sanitizeExtraMpvArgs(args: string[]): string[] {
   return args.filter((arg) => {
     const name = extraArgName(arg)
@@ -81,12 +47,7 @@ export function sanitizeExtraMpvArgs(args: string[]): string[] {
   })
 }
 
-/**
- * Pure. Builds the mpv.exe argv for embedded, DOM-subtitled playback. Argv
- * order is load-bearing: the config block comes first, the user's sanitized
- * `extraArgs` next, and the non-negotiable embedding args last so nothing a
- * user drops in can break the integration.
- */
+// Embedding args must come last so user options cannot override them.
 export function buildMpvArgs({
   platform,
   windowId,
@@ -94,17 +55,12 @@ export function buildMpvArgs({
   userConfigDir,
   extraArgs = []
 }: BuildMpvArgsOptions): string[] {
-  // Hardware decoding is only a default for the built-in config: a command-line
-  // option would override a user mpv.conf, and extraArgs come later so they win.
+  // Keep hwdec off the command line when using mpv.conf so the user config can override it.
   const configArgs =
     userConfigDir === undefined
       ? ['--no-config', '--hwdec=auto-safe'] // block mpv from reading the user's global config
       : ['--config=yes', `--config-dir=${userConfigDir}`]
-  // Linux embedding runs through Electron's X11 path under X11/XWayland.
-  // The legacy X11 output is intentionally the correctness baseline: unlike
-  // x11egl it renders in software-only/Xvfb sessions and on machines whose EGL
-  // context initializes but presents only black frames. A future accelerated
-  // path must pass the real-pixel visibility test before replacing it.
+  // X11 output works in software/Xvfb sessions where x11egl can initialize but display black frames.
   const linuxEmbeddingArgs = platform === 'linux' ? ['--vo=x11'] : []
   return [
     ...configArgs,
@@ -123,7 +79,6 @@ export function buildMpvArgs({
   ]
 }
 
-/** The slice of MpvIpcClient the controller needs (fakeable in tests). */
 export interface MpvClientLike {
   connect(endpoint: string, opts?: ConnectOptions): Promise<void>
   sendCommand(command: unknown[]): Promise<unknown>
@@ -133,7 +88,6 @@ export interface MpvClientLike {
   dispose(): void
 }
 
-/** The slice of ChildProcess the controller needs (fakeable in tests). */
 export interface MpvProcessLike {
   kill(): boolean
   on(event: string, listener: (...args: unknown[]) => void): unknown
@@ -144,11 +98,8 @@ export type SpawnFn = (command: string, args: string[]) => MpvProcessLike
 export interface MpvControllerDeps {
   spawnFn?: SpawnFn
   client?: MpvClientLike
-  /** Platform seam for endpoint and cleanup tests; defaults to the host platform. */
   platform?: NodeJS.Platform
-  /** Temp directory seam for deterministic Linux endpoint tests. */
   tempDir?: string
-  /** Filesystem seam for deterministic Linux endpoint cleanup tests. */
   unlinkFn?: UnlinkFn
 }
 
@@ -156,11 +107,7 @@ export interface StartOptions {
   mpvPath: string
   windowId: bigint | string
   connect?: ConnectOptions
-  /** Kizuna-owned mpv config dir; forwarded to `buildMpvArgs`. Undefined =
-   * `--no-config` (mpv ignores every config source). */
   userConfigDir?: string
-  /** User escape-hatch args; any `--option` except `--config`/`--config-dir`,
-   * forwarded to `buildMpvArgs`. */
   extraArgs?: string[]
 }
 
@@ -172,7 +119,6 @@ export class MpvController {
   private readonly unlinkFn: UnlinkFn
   private proc: MpvProcessLike | null = null
   private ipcEndpoint: string | null = null
-  /** Rejecters for `loadFile` promises still waiting on mpv. */
   private readonly pendingLoads = new Set<(error: Error) => void>()
   constructor(deps: MpvControllerDeps = {}) {
     this.spawnFn =
@@ -186,7 +132,6 @@ export class MpvController {
     this.unlinkFn = deps.unlinkFn ?? unlinkSync
   }
 
-  /** Removes the owned Linux endpoint and releases its ownership. */
   private cleanupIpcEndpoint(): void {
     const endpoint = this.ipcEndpoint
     if (endpoint === null) return
@@ -197,22 +142,15 @@ export class MpvController {
     }
   }
 
-  /** Rejects every in-flight `loadFile`; mpv is gone, so nothing is playing. */
   private abortPendingLoads(): void {
     const error = new MpvLoadError('MpvController: mpv exited while loading the file')
     for (const abort of [...this.pendingLoads]) abort(error)
     this.pendingLoads.clear()
   }
 
-  /**
-   * A native mpv exit is a complete controller teardown too. Without this
-   * path, a crash after startup leaves the Linux socket owned by Kizuna and
-   * the controller keeps sending commands to a dead IPC client until app quit.
-   */
+  // A native exit must also release the Linux socket and stop commands to the dead client.
   private handleProcessExit(proc: MpvProcessLike): void {
-    // A killed process may emit its exit event after a new start has already
-    // installed the next process. Never let a late event tear down that new
-    // controller instance.
+    // Ignore a late exit from an old process after a new start.
     if (this.proc !== proc) return
     this.abortPendingLoads()
     this.proc = null
@@ -223,7 +161,6 @@ export class MpvController {
     }
   }
 
-  /** Spawns mpv rendering into `windowId` and connects the IPC client to its endpoint. */
   async start({
     mpvPath,
     windowId,
@@ -236,8 +173,7 @@ export class MpvController {
     this.ipcEndpoint = ipcEndpoint
 
     try {
-      // mpv normally creates the endpoint itself. Remove a leftover Linux
-      // socket before spawning so a previous crash cannot block startup.
+      // Remove a leftover Linux socket so a previous crash cannot block startup.
       removeMpvIpcEndpoint(ipcEndpoint, this.platform, this.unlinkFn)
     } catch (err) {
       this.ipcEndpoint = null
@@ -270,8 +206,7 @@ export class MpvController {
       })
       await this.client.connect(ipcEndpoint, connect)
     } catch (err) {
-      // connect failed: don't leak the spawned mpv process or leave a
-      // half-started controller stuck behind the "already started" guard.
+      // Failed connection must release the process and the already-started guard.
       try {
         this.proc?.kill()
       } finally {
@@ -282,18 +217,8 @@ export class MpvController {
     }
   }
 
-  /**
-   * Resolves only after mpv has accepted the command and finished loading the
-   * file, so callers can safely restore tracks or seek immediately afterward.
-   * Rejects if mpv reports the file could not be opened: mpv acknowledges
-   * `loadfile` immediately, then — when the file fails to demux/decode — emits
-   * `end-file` (reason `error`) and never `file-loaded`. Without watching for
-   * that, the promise would never settle and the caller's open lock would never
-   * release, silently wedging every later open. Only reason `error` rejects:
-   * replacing a playing file makes mpv emit `end-file` (reason `stop`) for the
-   * outgoing file before `file-loaded` for the new one, and that must not be
-   * mistaken for a failure.
-   */
+  // mpv acknowledges loadfile before decoding; wait for file-loaded before restoring tracks or seeking.
+  // Reject end-file/error; end-file/stop belongs to the outgoing file during replacement.
   loadFile(path: string): Promise<unknown> {
     return new Promise((resolve, reject) => {
       let commandResult: unknown
@@ -305,8 +230,7 @@ export class MpvController {
         this.client.off('end-file', onEndFile)
         this.pendingLoads.delete(abort)
       }
-      // mpv exiting after acknowledging loadfile drops the event listeners
-      // without either firing; the controller rejects through this instead.
+      // Process exit can drop both event listeners without firing either; abort the pending load explicitly.
       const abort = (error: Error): void => {
         if (settled) return
         settled = true
@@ -319,11 +243,7 @@ export class MpvController {
         resolveWhenReady()
       }
       const onEndFile = (msg: MpvMessage): void => {
-        // Only reason `error` before file-loaded means this load actually
-        // failed (bad codec, truncated file, missing stream). Other endings —
-        // `stop` for the outgoing file when a new load replaces it, `eof`/`quit`
-        // for the previous file, or an ending after this file already loaded —
-        // are not failures of this load and must be ignored.
+        // Only error before file-loaded fails this load; stop/eof/quit may belong to the outgoing file.
         if (settled || fileLoaded || msg.reason !== 'error') return
         settled = true
         cleanup()
@@ -336,8 +256,7 @@ export class MpvController {
         resolve(commandResult)
       }
 
-      // Subscribe before issuing loadfile: a fast local file may emit
-      // file-loaded before the command acknowledgement is delivered.
+      // Subscribe before loadfile: file-loaded may arrive before the command acknowledgement.
       this.client.on('file-loaded', onFileLoaded)
       this.client.on('end-file', onEndFile)
       void this.client.sendCommand(['loadfile', path]).then(
@@ -360,7 +279,6 @@ export class MpvController {
     return this.client.sendCommand(['set_property', 'pause', paused])
   }
 
-  /** Unloads the current file while keeping the idle player ready for a later launch. */
   stopPlayback(): Promise<unknown> {
     return this.client.sendCommand(['stop'])
   }
@@ -369,17 +287,12 @@ export class MpvController {
     return this.client.sendCommand(['seek', seconds, absolute ? 'absolute' : 'relative'])
   }
 
-  /**
-   * Volume is clamped to 0–200. mpv's default ceiling is 100, but `buildMpvArgs`
-   * launches with `--volume-max=200`, so values above 100 apply software boost
-   * (the BottomBar exposes the same range unconditionally).
-   */
+  // Values above 100 use software boost, enabled by --volume-max=200.
   setVolume(volume: number): Promise<unknown> {
     const v = Math.max(0, Math.min(200, volume))
     return this.client.sendCommand(['set_property', 'volume', v])
   }
 
-  /** Playback speed is clamped to the shared UI/mpv bounds; malformed input resets to 1×. */
   setSpeed(speed: number): Promise<unknown> {
     const finiteSpeed = Number.isFinite(speed) ? speed : 1
     const clamped = Math.max(SPEED_MIN, Math.min(SPEED_MAX, finiteSpeed))
@@ -390,24 +303,13 @@ export class MpvController {
     return this.client.sendCommand(['set_property', 'mute', muted])
   }
 
-  /**
-   * Audio/video sync delay. Everything above this controller speaks
-   * milliseconds; mpv's `audio-delay` property is in seconds, so the ms→s
-   * conversion happens only here. Non-finite input (NaN/Infinity) resets to 0.
-   */
+  // The application uses milliseconds; mpv audio-delay uses seconds.
   setAudioDelay(delayMs: number): Promise<unknown> {
     const finiteMs = Number.isFinite(delayMs) ? delayMs : 0
     return this.client.sendCommand(['set_property', 'audio-delay', finiteMs / 1000])
   }
 
-  /**
-   * Insets the rendered picture by `top`/`bottom`/`right`/`left` ratios (0..1
-   * of the window height, height, width, and width respectively) so it no
-   * longer sits under the DOM's top/bottom chrome bars, the right-side
-   * subtitle/mining sidebars, or the left-side playlist — mpv fills the freed
-   * strip with its own background instead of video. `right` and `left` default
-   * to 0 for callers that only manage the top/bottom bars.
-   */
+  // Margins are fractions of window height (top/bottom) or width (left/right), reserving space for DOM chrome.
   setVideoMargins(top: number, bottom: number, right = 0, left = 0): Promise<unknown> {
     return Promise.all([
       this.client.sendCommand(['set_property', 'video-margin-ratio-top', top]),
@@ -421,23 +323,13 @@ export class MpvController {
     return this.client.sendCommand(['set_property', 'aid', aid])
   }
 
-  /**
-   * Reads mpv's `audio-device-list` (the output devices it can switch to, plus
-   * the always-present `'auto'`). The reply is parsed defensively — a
-   * non-array/garbage payload yields `[]` rather than throwing — so the caller
-   * always gets a usable list for the device menu.
-   */
   async getAudioDevices(): Promise<AudioDevice[]> {
     const raw = await this.client.sendCommand(['get_property', 'audio-device-list'])
     return parseAudioDeviceList(raw)
   }
 
-  /** Switches the active output device live (`audio-device`); `'auto'` follows
-   * the OS default. The name comes straight from `getAudioDevices`. mpv can be
-   * left without an active audio output after a failed reinitialization, so the
-   * internal `ao-reload` command follows the completed device write to recover it.
-   * Older bundled mpv builds may not provide that internal command; reloading the
-   * current playlist item is the documented compatibility fallback. */
+  // Failed device reinitialization can leave mpv silent; ao-reload recovers output.
+  // Older mpv builds require reloading the current playlist item instead.
   async setAudioDevice(name: string): Promise<unknown> {
     await this.client.sendCommand(['set_property', 'audio-device', name])
     try {
@@ -447,12 +339,7 @@ export class MpvController {
     }
   }
 
-  /**
-   * Toggles loudness normalization via mpv's `af` (audio filter) command. The
-   * `@kizuna-norm:` label makes `remove` idempotent and scoped to our filter,
-   * so it never disturbs a user-script filter chain. `dynaudnorm=f=200` is
-   * ffmpeg's dynamic normalizer with a 200 ms frame.
-   */
+  // The label scopes removal to our filter, preserving user filters; f=200 selects a 200 ms frame.
   setLoudnessNormalization(on: boolean): Promise<unknown> {
     return this.client.sendCommand([
       'af',
@@ -461,14 +348,7 @@ export class MpvController {
     ])
   }
 
-  /**
-   * Sets mpv's native A–B loop endpoints (`ab-loop-a` / `ab-loop-b`, both in
-   * seconds). `null` clears an endpoint (mpv's special `'no'` value); a numeric
-   * endpoint is clamped to a non-negative time. Once both are set mpv loops the
-   * range on its own — no renderer timer needed, unlike the per-cue loop. The
-   * pair is passed through exactly as given: the renderer normalizes an inverted
-   * range (B before A) before calling, so the stored state and mpv always agree.
-   */
+  // mpv uses "no" to clear a loop endpoint; the renderer normalizes inverted ranges.
   setAbLoop(a: number | null, b: number | null): Promise<unknown> {
     const encode = (value: number | null): number | string =>
       value === null ? 'no' : Math.max(0, value)
@@ -478,47 +358,30 @@ export class MpvController {
     ])
   }
 
-  /**
-   * Writes the current frame to `path` as an image. The `video` flag captures
-   * the pristine decoded frame with no OSD — explicit even though our OSD is
-   * off, since subtitles live in the DOM and must never bleed into the file.
-   */
+  // The video flag excludes OSD and subtitles from the captured frame.
   screenshotToFile(path: string): Promise<unknown> {
     return this.client.sendCommand(['screenshot-to-file', path, 'video'])
   }
 
-  /**
-   * Sets one mpv equalizer property (`brightness`/`contrast`/`saturation`/
-   * `gamma`/`hue`). The value is rounded to an integer and clamped to mpv's
-   * −100…100 range here, so a caller can never push the property out of bounds;
-   * non-finite input (NaN/Infinity) resets it to the neutral 0.
-   */
   setVideoAdjustment(name: VideoEqProperty, value: number): Promise<unknown> {
     const finite = Number.isFinite(value) ? Math.round(value) : 0
     const clamped = Math.max(VIDEO_EQ_MIN, Math.min(VIDEO_EQ_MAX, finite))
     return this.client.sendCommand(['set_property', name, clamped])
   }
 
-  /**
-   * Rotates the video (`video-rotate`, degrees clockwise). Only mpv's four
-   * accepted values (0/90/180/270) are allowed; anything else falls back to 0.
-   */
   setVideoRotate(deg: number): Promise<unknown> {
     const normalized = isVideoRotate(deg) ? deg : 0
     return this.client.sendCommand(['set_property', 'video-rotate', normalized])
   }
 
-  /** Toggles mpv's `deinterlace` filter (a flag property, so a boolean is exact). */
   setDeinterlace(on: boolean): Promise<unknown> {
     return this.client.sendCommand(['set_property', 'deinterlace', on])
   }
 
-  /** Advances exactly one frame, then pauses (mpv's `frame-step` behavior). */
   frameStep(): Promise<unknown> {
     return this.client.sendCommand(['frame-step'])
   }
 
-  /** Steps back one frame (decoder-expensive but built into mpv), then pauses. */
   frameBackStep(): Promise<unknown> {
     return this.client.sendCommand(['frame-back-step'])
   }
@@ -527,7 +390,6 @@ export class MpvController {
     return this.client.observeProperty('time-pos', cb)
   }
 
-  /** Current media identity; used to attribute progress across load races. */
   observePath(cb: (value: unknown) => void): Promise<number> {
     return this.client.observeProperty('path', cb)
   }
@@ -536,17 +398,16 @@ export class MpvController {
     return this.client.observeProperty('duration', cb)
   }
 
-  /** Source of truth for pause state, including mpv's own self-pause at EOF. */
+  // mpv can pause itself at EOF.
   observePause(cb: (value: unknown) => void): Promise<number> {
     return this.client.observeProperty('pause', cb)
   }
 
-  /** Source of truth for EOF, including user seeks to the end. */
+  // Seeking to the end can also reach EOF.
   observeEofReached(cb: (value: unknown) => void): Promise<number> {
     return this.client.observeProperty('eof-reached', cb)
   }
 
-  /** Passthrough for mpv events like 'file-loaded' / 'end-file'. */
   onEvent(event: string, listener: (msg: MpvMessage) => void): void {
     this.client.on(event, listener)
   }
@@ -555,17 +416,15 @@ export class MpvController {
     this.client.off(event, listener)
   }
 
-  /** Asks mpv to quit politely, then tears everything down. */
   async quit(): Promise<void> {
     try {
       await this.client.sendCommand(['quit'])
     } catch {
-      // not connected / already dead — dispose() below still cleans up
+      // dispose() must still clean up when mpv is disconnected or dead.
     }
     this.dispose()
   }
 
-  /** Hard teardown: drops the IPC client and kills the mpv process. */
   dispose(): void {
     this.abortPendingLoads()
     const proc = this.proc
