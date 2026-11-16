@@ -1,7 +1,3 @@
-// Shared track descriptor for ffprobe-enumerated audio/subtitle streams.
-// Pure data — no I/O.
-
-/** One audio or subtitle stream enumerated by ffprobe. */
 export interface Track {
   /** ffprobe stream `index`; also the mpv track id for this stream. */
   id: number
@@ -14,10 +10,7 @@ export interface Track {
   title?: string
 }
 
-/**
- * Synthetic track id for a user-supplied external subtitle file. Never
- * collides with an ffprobe stream index (those are >= 0).
- */
+/** Negative IDs cannot collide with ffprobe stream indices. */
 export const EXTERNAL_SUBTITLE_TRACK_ID = -1
 
 /** Native pixel resolution of a file's (first) video stream. */

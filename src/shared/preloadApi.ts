@@ -1,7 +1,3 @@
-// Shared preload API contract, crossing preload/renderer. Pure type — the
-// preload implementation is checked against this with `satisfies`, and the
-// renderer's `window.kizuna` uses the same type, so the two can never drift.
-
 import type { Track, VideoDimensions } from './track'
 import type { Chapter } from './chapter'
 import type { Cue } from './cue'
@@ -121,9 +117,7 @@ export interface KizunaApi {
     /** Captures the current frame to a PNG under the screenshot folder;
      * resolves the saved file's absolute path. */
     screenshot(mediaPath: string, timePos: number): Promise<string>
-    /** Captures the current frame as raw base64 PNG data for the Anki picture
-     * flow (nothing is written to the screenshot folder); null when no frame
-     * could be captured. */
+    /** Raw base64 PNG, without a file write; null if no frame is available. */
     captureFrame(): Promise<string | null>
     onTimePos(cb: (value: number) => void): () => void
     onDuration(cb: (value: number) => void): () => void
@@ -169,11 +163,7 @@ export interface KizunaApi {
     onRecognitionState(cb: (recognizing: boolean) => void): () => void
     /** The accepted OCR regions for the screenshot currently presented. */
     onRegions(cb: (result: OcrResult) => void): () => void
-    /**
-     * Copy the frame's current text selection. The frozen frame is never
-     * focused, so Ctrl+C arrives as a global shortcut rather than as a key
-     * event the page could handle itself.
-     */
+    /** The frozen frame never gains focus, so copy arrives through a global shortcut. */
     onCopySelection(cb: () => void): () => void
     rendererReady(): void
     close(): void
@@ -197,9 +187,7 @@ export interface KizunaApi {
     getVideoDimensions(filePath: string): Promise<VideoDimensions | undefined>
     getChapters(filePath: string): Promise<Chapter[]>
     folderNeighbors(filePath: string): Promise<{ prev?: string; next?: string }>
-    /** Seekbar hover preview for `timeSec`: a base64 `data:image/jpeg` payload,
-     * or null when no preview is available (short/unknown duration, no video
-     * stream, or ffmpeg failure). */
+    /** Inline JPEG data URL because the renderer cannot read arbitrary files; null if unavailable. */
     getThumbnail(
       filePath: string,
       timeSec: number,
@@ -354,13 +342,7 @@ export interface KizunaApi {
   }
 }
 
-/**
- * The bridge the Game OCR frozen-frame window gets (`src/preload/gameOcr.ts`):
- * only what `gameOcr.tsx` reads. The window renders text recognised from
- * arbitrary screenshots, so it never sees settings writers, file readers,
- * dictionary management, or playback control. Anki keeps the word popup's
- * mining calls.
- */
+/** Untrusted OCR text gets a restricted bridge: no settings writes, file reads, dictionary management, or playback. */
 export interface KizunaGameOcrApi {
   gameOcr: Pick<
     KizunaApi['gameOcr'],

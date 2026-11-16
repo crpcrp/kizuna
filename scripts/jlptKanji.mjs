@@ -1,8 +1,3 @@
-/**
- * Pure transformation helpers for the pinned OpenJLPT kanji snapshot.
- * Network access and filesystem writes belong in update-jlpt.mjs.
- */
-
 import {
   createSnapshot,
   isRecord,

@@ -1,8 +1,3 @@
-/**
- * Pure transformation helpers for the pinned OpenJLPT vocabulary snapshot.
- * Network access and filesystem writes belong in update-jlpt.mjs.
- */
-
 export const JLPT_LEVELS = Object.freeze(['N5', 'N4', 'N3', 'N2', 'N1'])
 
 export const VOCABULARY_SOURCE = Object.freeze({

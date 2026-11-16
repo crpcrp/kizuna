@@ -11,10 +11,7 @@ export type UpdateUnsupportedReason =
 
 export type UpdateErrorStage = 'check' | 'download' | 'install'
 
-/**
- * Why an update check could not produce a result. `noPublishedRelease` is the
- * expected outcome for a draft-only repository/channel and is not an error.
- */
+/** `noPublishedRelease` is expected for a draft-only channel, not an error. */
 export type UpdateCheckFailureReason =
   'noPublishedRelease' | 'network' | 'rateLimited' | 'permission' | 'metadata' | 'unknown'
 
@@ -52,11 +49,6 @@ export type UpdateState =
       cancelled?: boolean
     }
 
-/**
- * True while the update state is a decision waiting for the person: a release
- * to download, or a downloaded release to install. Everything else is either
- * progress or an outcome they do not have to answer.
- */
 export function isUpdateOffer(state: UpdateState): boolean {
   return state.status === 'available' || state.status === 'downloaded'
 }

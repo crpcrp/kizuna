@@ -41,11 +41,7 @@ const NAMED_KEYS = new Set([
   ELECTRON_INTL_BACKSLASH
 ])
 
-/**
- * Normalizes the user-editable Electron accelerator and falls back to the
- * default for malformed persisted data. The accepted shape is zero or more
- * distinct modifiers followed by one ordinary key.
- */
+/** Accelerators allow distinct modifiers followed by one ordinary key. */
 export function normalizeGameOcrShortcut(raw: unknown): string {
   if (typeof raw !== 'string') return DEFAULT_GAME_OCR_SHORTCUT
   const parts = raw

@@ -8,10 +8,6 @@ const SPLASH_SURFACE_HEIGHT = 360
 const APPLICATION_SURFACE_WIDTH = 1280
 const APPLICATION_SURFACE_HEIGHT = 720
 
-/**
- * Centers a surface in a display work area, shrinking it when the work area is
- * smaller than the requested size so the whole surface remains visible.
- */
 export function centeredSurfaceBounds(
   workArea: WindowBounds,
   width = SPLASH_SURFACE_WIDTH,

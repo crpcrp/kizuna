@@ -143,8 +143,7 @@ function generateMediaFixture(ffmpegPath, intoDir) {
       'lavfi',
       '-i',
       'testsrc=size=320x240:rate=10:duration=1',
-      // mpeg4 is built into every ffmpeg configuration, so the fixture does
-      // not depend on which external encoders this build carries.
+      // mpeg4 is built into FFmpeg, so the fixture needs no external encoder.
       '-c:v',
       'mpeg4',
       fixture
@@ -160,8 +159,7 @@ function checkBundledToolsRun(step, installRoot) {
   for (const tool of RUNNABLE_TOOLS) {
     const toolPath = join(installRoot, tool.path)
     const result = run(toolPath, tool.args, { timeout: 60_000 })
-    // MeCab's `-v` and the FFmpeg tools' `-version` exit 0; mpv's `--version`
-    // does too. Any non-zero exit here is a real packaging failure.
+
     if (!result.ok) {
       problems.push(
         `${tool.label} (${tool.path}) exited with ${result.status}: ` +
@@ -262,15 +260,13 @@ function checkAppImage(distDir, artifactName) {
   }
   log(`\n${step}: ${artifactName}`)
 
-  // "A clean location": a fresh directory outside the build tree, so nothing
-  // resolves against the repository checkout by accident.
+  // Use a fresh directory outside the build tree to catch accidental checkout-relative paths.
   const cleanDir = makeTempDir('kizuna-appimage-')
   const appImage = join(cleanDir, artifactName)
   runOrThrow('cp', [source, appImage])
   runOrThrow('chmod', ['+x', appImage])
 
-  // `--appimage-extract` is served by the AppImage runtime itself and needs no
-  // FUSE, so the contents are always inspectable even where mounting is not.
+  // AppImage extraction works without FUSE.
   const extract = run(appImage, ['--appimage-extract'], { cwd: cleanDir, timeout: 300_000 })
   if (!extract.ok) {
     reportFailure(step, [
@@ -288,9 +284,7 @@ function checkAppImage(distDir, artifactName) {
     reportFailure(`${step}: desktop icon`, ['missing root PNG icon'])
   }
 
-  // Exercise the AppImage runtime from the copied artifact while asking it to
-  // extract and run. This is the runtime's supported no-FUSE path and works on
-  // locked-down CI runners as well as on a normal desktop.
+  // Exercise the copied AppImage through its no-FUSE extract-and-run path.
   const resourcesPath = join(extracted, 'resources')
 
   const appExecutable = join(extracted, identity.executableName)
@@ -414,8 +408,7 @@ function checkDebMetadata(debPath) {
 function installDeb(debPath) {
   const install = runAsRoot('dpkg', ['-i', debPath], { timeout: 600_000 })
   if (install.ok) return true
-  // `dpkg -i` fails on unmet dependencies by design; apt resolves them and
-  // finishes configuring the package. A second failure is a real one.
+  // dpkg leaves unmet dependencies unresolved; apt completes installation or reports failure.
   log('  ..  resolving declared dependencies with apt')
   const fix = runAsRoot('apt-get', ['-f', 'install', '-y'], {
     timeout: 900_000,
@@ -473,9 +466,7 @@ function checkDeb(distDir, artifactName) {
   const fixture = generateMediaFixture(join(resourcesPath, 'ffmpeg', 'ffmpeg'), workDir)
   if (!checkGuiStartup(step, appExecutable, makeTempDir('kizuna-deb-userdata-'), fixture)) return
 
-  // Reinstalling the same version is the upgrade path a user hits when a
-  // release is re-published, and the one that exposes a broken postrm/postinst
-  // pair (removed launcher, orphaned icon cache) as clearly as a version bump.
+  // Reinstalling catches upgrade-hook failures such as removed launchers or stale icon caches.
   log('  ..  reinstalling over the existing installation')
   if (!installDeb(debPath)) return
   if (!existsSync(appExecutable) || !existsSync(DESKTOP_FILE)) {
@@ -541,8 +532,7 @@ try {
   main()
 } catch (error) {
   console.error(`\n${error instanceof Error ? error.message : error}\n`)
-  // Checks that already failed before the aborting error still have to reach
-  // the log directory, or the release run reports only the last problem.
+  // Persist earlier check failures even if a later check aborts.
   writeFailureLogs()
   process.exitCode = 1
 } finally {
@@ -550,8 +540,7 @@ try {
     try {
       cleanup()
     } catch {
-      // Cleanup is best-effort: a temp directory left behind on a CI runner
-      // must not mask the result the run already reported.
+      // Cleanup failures must not mask the smoke-test result.
     }
   }
 }

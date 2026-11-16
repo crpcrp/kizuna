@@ -227,12 +227,7 @@ function kebabCase(value: string): string {
 
 const SAFE_CSS_PROPERTIES = new Set([...SAFE_STYLE_PROPERTIES].map(kebabCase))
 
-/**
- * Keeps only dictionary rules that target structured-content attributes in
- * this glossary. This brings Yomitan's badges, example boxes, tables, and
- * reference cards to Anki without allowing a dictionary stylesheet to affect
- * the rest of an Anki card or load external content.
- */
+/** Scope dictionary CSS to glossary attributes so it cannot affect the rest of a card or load external content. */
 export function sanitizeGlossaryCss(stylesCss: string | null | undefined): string {
   if (!stylesCss) return ''
   const rules: string[] = []

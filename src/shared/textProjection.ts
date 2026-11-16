@@ -1,16 +1,8 @@
-// One text, two views: the display text a viewer reads (with its line breaks)
-// and the continuous analysis text MeCab and the dictionary see (with those
-// breaks removed). Japanese wraps mid-word, so a word split by a line break —
-// an OCR block's second line, or a subtitle cue's second line — is one word,
-// and every token offset in this codebase is an offset into the analysis text.
-// This module is the only place the two offset spaces are converted.
+// Japanese wraps mid-word: analysis removes line breaks; display retains them. Token offsets use analysis text.
 
 import { clamp } from './math'
 
-/**
- * A half-open range using JavaScript string offsets (UTF-16 code units), the
- * same convention used by `Token.startOffset` and `InteractiveText`.
- */
+/** Half-open range in UTF-16 code units. */
 export interface TextOffsetRange {
   readonly startOffset: number
   readonly endOffset: number
@@ -30,13 +22,7 @@ export interface TextProjection {
   readonly lines: readonly TextLineProjection[]
 }
 
-/**
- * Builds the display/analysis projection for ordered source lines.
- *
- * Source lines must not contain newline characters. Empty lines are preserved
- * in `displayText`, contribute one display boundary each, and contribute no
- * characters to `analysisText`. All offsets remain UTF-16 code-unit offsets.
- */
+/** Source lines must contain no newlines; empty lines retain display boundaries but add no analysis characters. */
 export function createTextProjection(sourceLines: readonly string[]): TextProjection {
   let displayStartOffset = 0
   let analysisStartOffset = 0
@@ -66,19 +52,11 @@ export function createTextProjection(sourceLines: readonly string[]): TextProjec
   })
 }
 
-/**
- * Projection for text that already carries its display line breaks — a
- * subtitle cue, or an OCR block's joined lines. The inverse of
- * `createTextProjection`, since source lines never contain a newline.
- */
 export function displayTextProjection(displayText: string): TextProjection {
   return createTextProjection(displayText.split('\n'))
 }
 
-/**
- * Maps one continuous analysis range to ordered visible segments. Inserted
- * newlines are never included in the returned ranges.
- */
+/** Returned display ranges exclude inserted newlines. */
 export function mapAnalysisRangeToDisplayRanges(
   projection: TextProjection,
   range: TextOffsetRange
@@ -100,13 +78,7 @@ export function mapAnalysisRangeToDisplayRanges(
   })
 }
 
-/**
- * Same mapping as `mapAnalysisRangeToDisplayRanges` for a range that may not
- * belong to this text at all — a token list rendered one frame before its
- * replacement lands, or a sentence recorded from a different capture. The
- * range is clipped to the analysis text instead of rejected, so a transient
- * mismatch renders fewer segments rather than throwing.
- */
+/** Clip stale token ranges so a transient text mismatch renders fewer segments instead of throwing. */
 export function clipAnalysisRangeToDisplayRanges(
   projection: TextProjection,
   range: TextOffsetRange

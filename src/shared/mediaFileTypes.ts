@@ -1,19 +1,10 @@
-// Single source of truth for the file extensions Kizuna opens: the main
-// process's open-file dialog filter and the renderer's drag-and-drop
-// classification both read them from here. Pure — no I/O, no Electron.
-
 export const VIDEO_EXTENSIONS = ['mkv', 'mp4', 'webm', 'avi', 'mov'] as const
 export const SUBTITLE_EXTENSIONS = ['srt', 'ass', 'ssa'] as const
 export const PLAYLIST_EXTENSIONS = ['m3u', 'm3u8'] as const
 
 export type DroppedFileKind = 'video' | 'subtitle' | 'playlist' | 'unknown'
 
-/**
- * True when `path` begins with a URL scheme rather than naming a local
- * filesystem path. Every playback entry point uses this check before probing,
- * normalizing, or passing a path to mpv. Windows drive paths are explicitly
- * excluded because their leading letter and colon are not a URL scheme.
- */
+/** Windows drive-letter prefixes are paths, not URL schemes. */
 export function isRemoteUrl(path: unknown): boolean {
   if (typeof path !== 'string') return false
   const trimmed = path.trim()
@@ -42,13 +33,7 @@ export function classifyMediaFileName(fileName: string): DroppedFileKind {
   return 'unknown'
 }
 
-/**
- * Picks what a multi-file drop should act on. Precedence: the first video (it
- * always wins — dropping a video next to its subtitle should play the video,
- * with the subtitle handled as a sidecar), else the first `.m3u`/`.m3u8`
- * playlist (its entries are appended to the queue), else the first
- * subtitle, else undefined.
- */
+/** A dropped video wins over its subtitle, which is loaded as a sidecar. */
 export function pickDropTarget(
   fileNames: string[]
 ):

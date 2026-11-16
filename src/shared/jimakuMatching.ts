@@ -172,10 +172,6 @@ export function parseJimakuVideoIdentityFromPath(
   return parseJimakuVideoIdentity({ videoBasename, folderBasename: parts.at(-2) })
 }
 
-/**
- * Orders files for one already-selected Jimaku entry. The returned list keeps
- * the input names verbatim and never mutates the input array.
- */
 export function rankJimakuFiles(
   entry: { flags: Pick<JimakuEntry['flags'], 'movie'> },
   identity: JimakuVideoIdentity,

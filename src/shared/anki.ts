@@ -1,6 +1,3 @@
-// Shared AnkiConnect DTOs, crossing main/preload/renderer. Pure data + a
-// validating merge (mirrors shared/playerSettings.ts's normalize functions).
-
 import { isToken, type Token } from './token'
 import {
   isFiniteNumber,
@@ -31,17 +28,7 @@ export interface AnkiSettings {
   apiKey: string
   deckName: string
   modelName: string
-  /**
-   * Which note field each mined value goes into; `''` means unmapped. For the
-   * two media fields (`picture`, `sentenceAudio`) the mapping *is* the switch:
-   * a mapped field means "put a picture / sentence clip on my cards", and an
-   * unmapped one means the capture never runs. They deliberately have no
-   * separate include-toggle: the earlier `includeScreenshot` /
-   * `includeSentenceAudio` toggles defaulted off, so mapping the field and
-   * mining still produced a card with no picture and no clip. `frequency` and
-   * `pitchAccent` and `jlptLevel` follow the same rule: mapping the row *is*
-   * the opt-in.
-   */
+  /** An empty mapping disables that value, including picture/audio capture; mapping is the opt-in. */
   fieldMap: Record<AnkiField, string>
   tags: string[]
   includeWordAudio: boolean
@@ -232,13 +219,7 @@ export interface MineScreenshot {
   dataBase64: string
 }
 
-/**
- * Where the mined sentence's audio can be clipped from, resolved by the
- * renderer before the mine. Present only for a loaded *local* file with a
- * selected audio stream and usable cue timing; the window is already in
- * media-clock seconds (the user's subtitle offset has been applied), so the
- * main process never re-derives subtitle timing.
- */
+/** Local-media audio bounds already include the subtitle offset; main must not apply it again. */
 export interface MineMediaContext {
   /** Absolute path of the loaded local media file. Never a remote URL. */
   path: string
@@ -295,11 +276,7 @@ function isMineMediaContext(value: unknown): value is MineMediaContext {
   )
 }
 
-/**
- * Shape check for a renderer-supplied mine request. The lookup result is
- * checked only for the fields every note is built from; its optional display
- * fields only feed note text.
- */
+/** Only required note fields are validated here; optional lookup display fields feed note text. */
 export function isMineRequest(value: unknown): value is MineRequest {
   if (!isRecord(value) || !isToken(value.token) || !isString(value.sentence)) return false
   const result = value.result

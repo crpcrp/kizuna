@@ -1,23 +1,8 @@
-// Single source of truth for the application's published identity.
-//
-// The values themselves live in `appIdentity.json` rather than in this module
-// because two consumers with incompatible module systems must read the same
-// bytes: this TypeScript module (bundled into main / preload / renderer by
-// electron-vite) and `electron-builder.cjs` at the repository root, which is
-// plain CommonJS executed by `electron-builder` before any build step exists.
-// A JSON file is the only format both can read without a code generator, so
-// packaging identity and runtime identity cannot drift apart.
-//
-// Nothing here touches `node:path` or any other Node built-in: the renderer
-// imports this module (via `appInfo.ts`), and a Node built-in in that graph
-// would break the browser-targeted bundle. Path derivation from these values
-// lives main-side in `src/main/appIdentity.ts`.
+// JSON lets runtime bundles and the CommonJS packager read the same identity before a build.
 
 import identity from './appIdentity.json'
 
-/** The shape of `appIdentity.json`. */
 export interface AppIdentity {
-  /** Human-readable product name: window title, installer, Start menu entry. */
   productName: string
   /** Base name of the packaged Windows executable, without `.exe`. */
   executableName: string
@@ -25,11 +10,11 @@ export interface AppIdentity {
   appId: string
   /** Directory name under `%APPDATA%` holding settings and databases. */
   userDataDirName: string
-  /** Copyright line shown in product information. */
+
   copyright: string
-  /** Canonical public source repository. */
+
   repositoryUrl: string
-  /** Repository mirroring the pinned runtime binaries (see resources.lock.json). */
+  /** Repository mirroring the pinned runtime binaries. */
   vendorRepositoryUrl: string
 }
 

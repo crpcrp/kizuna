@@ -40,11 +40,7 @@ export interface OcrRegion {
   confidence: number
 }
 
-/**
- * The small identity shared by capture, OCR, and session coordination. Both
- * IDs are local numeric counters; neither is a path, process identifier, or
- * native object.
- */
+/** Session and capture IDs are local counters, not native handles or paths. */
 export interface OcrCaptureIdentity {
   sessionId: number
   captureId: number
@@ -74,10 +70,7 @@ const MAX_OCR_REGION_ID_LENGTH = 128
 /** Maximum safe counter value for a session or capture identity. */
 export const MAX_OCR_IDENTIFIER = 2_147_483_647
 
-/**
- * Rounding can put an OCR rectangle a pixel or two beyond the screenshot.
- * Larger overflows are treated as malformed rather than silently hidden.
- */
+/** Allow small rounding overflow; larger out-of-bounds rectangles are malformed. */
 const MAX_OCR_CLIP_OVERFLOW = 2
 
 export interface OcrNormalizationSuccess {
@@ -98,13 +91,7 @@ const IMAGE_SIZE_KEYS = ['width', 'height'] as const
 const REGION_KEYS = ['id', 'text', 'bounds', 'confidence'] as const
 const BOUNDS_KEYS = ['x', 'y', 'width', 'height'] as const
 
-/**
- * Validates and normalizes an untrusted OCR result without touching any
- * Electron, native, filesystem, or OCR APIs.
- *
- * Unknown fields are rejected so PP-OCR quadrilaterals, executable paths,
- * and backend options cannot cross this public contract accidentally.
- */
+/** Reject unknown fields so backend paths, options, and quadrilaterals cannot cross the public contract. */
 export function normalizeOcrResult(value: unknown): OcrNormalizationResult {
   if (!isRecord(value) || !hasOnlyKeys(value, RESULT_KEYS)) {
     return failure('OCR result must be an object containing only contract fields')

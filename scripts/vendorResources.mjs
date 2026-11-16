@@ -66,9 +66,7 @@ export const SUPPORTED_PLATFORM_KEYS = Object.freeze(['win32-x64', 'linux-x64'])
 
 const supportedPlatformSet = new Set(SUPPORTED_PLATFORM_KEYS)
 
-/**
- * PP-OCR is Windows-only; staging it on Linux would ship a large unusable runtime.
- */
+/** PP-OCR is Windows-only; Linux must not ship its unusable runtime. */
 const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'ppocr/': 'win32-x64' })
 
 /** Managed payload roots removed after a runtime migration. */
@@ -289,8 +287,7 @@ export function vendorFetchPlan(selected) {
     asset: archive.asset,
     sha256: archive.sha256,
     size: archive.size,
-    // Written into the unpacked directory so a warm cache can be recognised
-    // without rehashing several hundred megabytes of payload.
+    // Stamp the archive identity to avoid rehashing hundreds of megabytes in a warm cache.
     stamp: VENDOR_STAMP_FILE
   }
 }
@@ -433,10 +430,7 @@ export async function verifyVendorFiles({ lock, platformKey, vendorDir }) {
         ...(component.files ?? []),
         ...(component.licenseFiles ?? []).map((path) => ({ path }))
       ]
-      // A platform archive may temporarily contain a replacement and the
-      // runtime it supersedes. The lock selects a component by naming any of
-      // its files; once selected, it must name all of them so a partial runtime
-      // or incomplete licence set still fails closed.
+      // The lock may select one of several archived runtimes, but must include its complete file/licence set.
       if (!componentFiles.some((file) => lockedBySource.has(file.path))) continue
       for (const manifestFile of componentFiles) {
         const locked = lockedBySource.get(manifestFile.path)
@@ -627,9 +621,7 @@ export async function stagedResourceProblems({ lock, platformKey, resourcesDir }
         const details = await stat(target)
         if ((details.mode & 0o111) === 0)
           problems.push('required executable is not executable: ' + path)
-      } catch {
-        // The missing path was already reported above.
-      }
+      } catch {}
     }
   }
 
