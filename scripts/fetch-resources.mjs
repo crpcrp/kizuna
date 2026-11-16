@@ -35,9 +35,7 @@ async function runTar(staging, asset, dir) {
     try {
       await stat(native)
       bin = native
-    } catch {
-      // Fall back to whatever is on PATH.
-    }
+    } catch {}
   }
   return new Promise((resolvePromise, reject) => {
     const child = spawn(bin, ['-xzf', asset, '-C', dir], {
@@ -69,9 +67,7 @@ async function downloadAndUnpack(plan, dir, log) {
       log('Cached ' + plan.asset + ' is already unpacked; skipping the download')
       return
     }
-  } catch {
-    // No stamp, or an unreadable one: fetch.
-  }
+  } catch {}
 
   const staging = await mkdtemp(join(tmpdir(), 'kizuna-vendor-'))
   const archivePath = join(staging, plan.asset)
@@ -86,7 +82,7 @@ async function downloadAndUnpack(plan, dir, log) {
     }
     await pipeline(Readable.fromWeb(response.body), createWriteStream(archivePath))
 
-    // Size first: it is free, and a truncated download is the common failure.
+    // Check size before hashing to cheaply reject truncated downloads.
     const written = (await stat(archivePath)).size
     if (written !== plan.size) {
       throw new Error(`${plan.asset} is ${written} bytes, expected ${plan.size}`)
@@ -124,9 +120,7 @@ async function main() {
     platformKey,
     vendorDir,
     resourcesDir: join(repoRoot, 'resources'),
-    // A caller-supplied directory is used as-is: it may be the developer's own
-    // clone of the mirror, and this script must never rewrite a directory it
-    // did not create.
+    // Never rewrite a caller-supplied directory; it may be a developer-owned mirror clone.
     materialize: existingCheckout
       ? undefined
       : (plan, dir) => downloadAndUnpack(plan, dir, (message) => console.log(message)),

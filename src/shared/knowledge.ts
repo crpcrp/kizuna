@@ -1,10 +1,4 @@
-// Knowledge-level vocabulary shared by main, preload, and renderer. Pure
-// type + const, no imports.
-//
-// `inDeck` = the word has an Anki card in a configured known deck, but the card
-// is still new or buried — mined, not yet learned. It outranks
-// 'unknown' so mined words stop being offered for mining, and is outranked by
-// any real learning progress from another deck or from WaniKani.
+// `inDeck` means mined but not learned; real progress from any deck or WaniKani outranks it.
 
 export type KnowledgeLevel = 'unknown' | 'inDeck' | 'learning' | 'known' | 'wellKnown'
 
@@ -80,13 +74,7 @@ export function isKnowledgeSourceDetail(value: unknown): value is KnowledgeSourc
 /** Result of the most recent explicit sync attempt for a source. */
 export type SyncOutcome = 'synced' | 'cooldown' | 'unconfigured' | 'error'
 
-/**
- * The user-tunable part of the knowledge settings — everything except the
- * WaniKani token, which the two processes represent differently (main stores
- * it encrypted, the renderer only learns whether one is set). Both the stored
- * `KnowledgeSettings` and the renderer-facing `PublicKnowledgeSettings` build
- * on this, so the fields and their defaults are declared once.
- */
+/** WaniKani secrets stay main-side; renderer settings expose only whether a token is set. */
 export interface KnowledgeTuning {
   ankiKnownDecks: string[]
   ankiKnownField: string
@@ -108,11 +96,7 @@ export const DEFAULT_KNOWLEDGE_TUNING: KnowledgeTuning = {
 /** `knowledge` settings as exposed to preload/renderer — never the raw encrypted token. */
 export interface PublicKnowledgeSettings extends KnowledgeTuning {
   hasWanikaniToken: boolean
-  /** Whether the OS secure store backs secret encryption — drives the honest
-   * "encrypted at rest" vs "saved unencrypted" copy on the WaniKani token.
-   * Always set by the main process; `undefined` only in the renderer's
-   * not-yet-loaded fallback, where the UI must make no encryption claim at all
-   * rather than defaulting to the alarming (and usually wrong) "unencrypted". */
+  /** Main reports OS-backed encryption; undefined means not loaded, so the UI must make no encryption claim. */
   encryptionAvailable?: boolean
 }
 

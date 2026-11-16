@@ -35,9 +35,7 @@ import { isRecord, isFiniteNumber, isPositiveSafeInteger } from './guards'
 export type StoredSubtitleSelection =
   | { mode: 'off' }
   | { mode: 'track'; track: StoredTrackSelection }
-  /** A standalone subtitle file the user dropped in or picked; `path`
-   *  is the sidecar file, not the video. Its synthetic track has no stream
-   *  index, so it cannot be stored as a `track` selection. */
+  /** External subtitle paths identify sidecars; they have no ffprobe stream index. */
   | {
       mode: 'external'
       path: string
@@ -80,10 +78,6 @@ function runtimeCwd(platform: PathPlatform): string {
   return platform === 'win32' ? cwd.replaceAll('/', '\\') : cwd.replaceAll('\\', '/')
 }
 
-/**
- * Lexically normalizes a path without touching the filesystem. `cwd` makes
- * relative-path behavior deterministic in tests.
- */
 export function normalizeMediaPath(
   path: unknown,
   options: PathNormalizationOptions = {}
@@ -192,11 +186,7 @@ export function normalizeSubtitleOffsetsByVersion(
   return Object.fromEntries(retained)
 }
 
-/**
- * Returns a bounded copy of playback history. Protected keys always survive;
- * remaining entries are selected by newest update, then lexical key order so
- * histories with equal timestamps prune identically on every machine.
- */
+/** Protected keys survive; lexical tie-breaking makes equal-timestamp pruning deterministic. */
 export function prunePlaybackHistory(
   playbackByPath: Record<string, MediaPlaybackHistory>,
   protectedKeys: Iterable<string> = []
@@ -232,12 +222,7 @@ function normalizeRecentFiles(
     .slice(0, MAX_RECENT_FILES)
 }
 
-/**
- * Renderer-safe display name for a stored path: the last `/`- or
- * `\`-separated segment, ignoring trailing separators. Falls back to the
- * full path if it has no separator or the trimmed result is empty (e.g. a
- * bare drive root), since the menu should never show a blank label.
- */
+/** Use the full path when its basename is empty so menus never show a blank label. */
 export function mediaFileBasename(path: string): string {
   const trimmed = path.replace(/[/\\]+$/, '')
   const cut = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'))
@@ -294,13 +279,6 @@ function comparePlaybackEntries(
   return leftPath < rightPath ? -1 : leftPath > rightPath ? 1 : 0
 }
 
-/**
- * Validates a stored (or renderer-supplied) subtitle selection. An `external`
- * selection keeps its sidecar path only when it normalizes like any other
- * media path; a `track` one only when its stream index survives
- * `normalizeStoredTrackSelection`. Anything else is dropped, leaving the file
- * with no stored subtitle rather than a corrupt one.
- */
 export function normalizeSubtitleSelection(
   value: unknown,
   options: PathNormalizationOptions = {}
@@ -353,9 +331,7 @@ function normalizePosixPath(path: string, cwd: string): string {
 function driveRoot(cwd: string): string {
   const normalized = cwd.replaceAll('/', '\\')
   if (/^[A-Za-z]:\\/.test(normalized)) return normalized.slice(0, 3)
-  // A UNC cwd (`\\server\share`) has the `\\` prefix as its root; without this
-  // a relative path resolved against a UNC folder would lose one backslash and
-  // become a drive-rooted `\server\share\...` instead of the UNC path.
+  // Preserve the UNC root prefix so relative resolution cannot turn a network path into a drive-rooted path.
   return normalized.startsWith('\\\\') ? '\\\\' : '\\'
 }
 

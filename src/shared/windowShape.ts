@@ -8,12 +8,7 @@ export interface WindowShapeRect {
 
 const MAX_SHAPE_RECTS = 512
 
-/**
- * Validates an untrusted renderer payload and clips it to the logical window.
- * Electron's experimental `setShape` API accepts integer rectangles only; a
- * bounded list also prevents a compromised renderer from making main allocate
- * an arbitrary native X11 region.
- */
+/** Electron setShape requires integer rectangles; bound the list to prevent arbitrary native X11 region allocation. */
 export function normalizeWindowShapeRects(
   value: unknown,
   windowWidth: number,

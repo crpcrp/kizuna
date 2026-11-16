@@ -8,8 +8,6 @@ export interface McDict {
   label: string
   dicdir: string
   flavor: DictFlavor
-  /** Whether the dictionary's directory is actually on disk. Uninstalled dicts
-   * are still listed (so Options can show them as "Missing") but must never be
-   * selected — their `dicdir` is empty or unusable. */
+  /** Missing dictionaries remain visible in Options but cannot be selected. */
   installed: boolean
 }

@@ -22,6 +22,10 @@ architectural changes.
 
 ## Working principles
 
+- Comment only what the code cannot say: a non-obvious reason, constraint, or
+  external fact. One or two lines. No history, no restating the code or a type,
+  no pointers to how another file does it.
+
 - This is a hobby project, not an enterprise application. Never overengineer a
   task; choose the smallest practical solution and avoid enterprise ceremony.
 - Keep changes focused on the requested outcome and preserve unrelated work.

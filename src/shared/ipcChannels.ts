@@ -1,36 +1,18 @@
-// IPC channel names shared between main and preload. Every channel string
-// lives here so the two processes can never drift apart on a literal.
-
-/** Custom window chrome controls (frameless window has no OS buttons). */
+// Window chrome
 export const WINDOW_CONTROL_CHANNELS = {
   minimize: 'window:minimize',
   close: 'window:close',
-  /** renderer→main: set fullscreen on/off (payload: boolean). */
   setFullscreen: 'window:setFullscreen',
-  /** renderer→main: flip fullscreen. */
   toggleFullscreen: 'window:toggleFullscreen',
-  /** main→renderer push: the window's fullscreen state changed (boolean). */
   fullscreenChanged: 'window:fullscreenChanged',
-  /** renderer→main: resize the window's content area (payload: width, height). */
   setSize: 'window:setSize',
-  /** renderer→main: set/clear always-on-top (payload: boolean). */
   setAlwaysOnTop: 'window:setAlwaysOnTop',
-  /** renderer→main: visible/input rectangles for Linux's transparent UI overlay. */
   setShape: 'window:setShape',
-  /** renderer→main invoke: the window's current bounds `{x,y,width,height}`
-   * (used by mini-player to save the pre-mini rectangle). */
   getBounds: 'window:getBounds',
-  /** renderer→main invoke: set the window bounds. Payload is a
-   * `SetWindowBoundsRequest`: an explicit rectangle, or a mini-player request
-   * whose bottom-right corner main computes from the current display's work
-   * area. Resolves the applied bounds (or null when no window resolves). */
   setBounds: 'window:setBounds'
 } as const
 
-/**
- * mpv playback bridge: command channels are renderer→main invoke/handle;
- * observation channels are main→renderer pushes (mpv property observers).
- */
+// mpv playback
 export const PLAYER_CHANNELS = {
   load: 'player:load',
   setPause: 'player:setPause',
@@ -40,88 +22,41 @@ export const PLAYER_CHANNELS = {
   setMuted: 'player:setMuted',
   setAudioDelay: 'player:setAudioDelay',
   setAudioTrack: 'player:setAudioTrack',
-  /** renderer→main: read mpv's `audio-device-list` for the Audio > Device menu. */
   getAudioDevices: 'player:getAudioDevices',
-  /** renderer→main: switch the active output device live (payload: device name). */
   setAudioDevice: 'player:setAudioDevice',
-  /** renderer→main: toggle the dynaudnorm loudness filter (payload: boolean). */
   setLoudnessNorm: 'player:setLoudnessNorm',
-  /** renderer→main: set/clear the native A–B loop (payload: a, b in seconds or null). */
   setAbLoop: 'player:setAbLoop',
   setVideoMargins: 'player:setVideoMargins',
-  /** renderer→main: apply the whole video-adjustments block (equalizer values,
-   * rotate, deinterlace) in one call; the bridge fans it out to mpv properties. */
   setVideoAdjustments: 'player:setVideoAdjustments',
-  /** renderer→main: advance one frame then pause (mpv `frame-step`). */
   frameStep: 'player:frameStep',
-  /** renderer→main: step back one frame then pause (mpv `frame-back-step`). */
   frameBackStep: 'player:frameBackStep',
-  /** renderer→main: capture the current frame to a PNG; resolves the saved path. */
   screenshot: 'player:screenshot',
-  /** renderer→main: capture the current frame as raw base64 PNG data for the
-   * Anki picture flow; resolves null when no frame could be captured. Nothing
-   * is written to the user's screenshot folder. */
   captureFrame: 'player:captureFrame',
   timePos: 'player:timePos',
   duration: 'player:duration',
   eofReached: 'player:eofReached',
-  /** main→renderer push: mpv's pause property changed (boolean). The renderer's
-   * authoritative pause state — mpv self-pauses (frame-step, EOF with
-   * keep-open) that the renderer never commanded arrive through here. */
   pause: 'player:pause',
-  /** main→renderer push: a system media surface (a keyboard media key or a
-   * taskbar thumbnail-toolbar button) was activated. Payload is a
-   * `MediaKeyCommand` (`'playPause' | 'next' | 'prev' | 'stop'`); the renderer
-   * routes it through the same handlers the in-window keys use. */
   mediaKey: 'player:mediaKey'
 } as const
 
-/**
- * Media/file-selection bridge: renderer→main invoke/handle channels for
- * picking a file, enumerating its ffprobe tracks, and loading a subtitle
- * stream's cues.
- */
+// Media files and subtitles
 export const MEDIA_CHANNELS = {
   openFile: 'media:openFile',
-  /** Multi-select open-file dialog (Media > "Add files…"): resolves the chosen
-   * paths (empty when cancelled) so several files can be queued at once. */
   openFiles: 'media:openFiles',
-  /** Directory-picker (Media > "Add folder…"): resolves every video in the
-   * chosen folder, naturally sorted (empty when cancelled). */
   openFolder: 'media:openFolder',
-  /** Reads an `.m3u`/`.m3u8` file into absolute media paths (relative entries
-   * resolved against the playlist file's folder). */
   readPlaylist: 'media:readPlaylist',
-  /** Save-file dialog for exporting the queue as `.m3u`; writes the paths and
-   * resolves the saved file path (undefined when cancelled). */
   savePlaylist: 'media:savePlaylist',
-  /** Open-file dialog filtered to subtitle files (Subtitle menu > "Load
-   * subtitle file…"); the chosen path then goes through loadExternalSubtitle. */
   openSubtitleFile: 'media:openSubtitleFile',
   enumerateTracks: 'media:enumerateTracks',
   loadSubtitle: 'media:loadSubtitle',
-  /** Reads a standalone subtitle file (dropped or picked) into cues — no
-   * ffmpeg, the parsers read the file directly. */
   loadExternalSubtitle: 'media:loadExternalSubtitle',
-  /** Native pixel resolution of the file's video stream, for the Video
-   * menu's size presets (undefined if there's no video stream). */
   getVideoDimensions: 'media:getVideoDimensions',
-  /** Chapter markers/list metadata for the loaded media. */
   getChapters: 'media:getChapters',
-  /** Natural-sorted previous/next video paths in the same folder. */
   folderNeighbors: 'media:folderNeighbors',
-  /** Seekbar hover thumbnail: `(path, timeSec, durationSec)` → a base64
-   * `data:image/jpeg` preview for the hovered time, or null when unavailable
-   * (short/unknown duration, ffmpeg failure). The renderer can't read arbitrary
-   * `file://` paths, so main returns the encoded image inline. */
   thumbnail: 'media:thumbnail'
 } as const
 
-/**
- * Media-history bridge: renderer-to-main commands for reading and mutating
- * durable media history. Progress recording remains main-owned by the player
- * bridge and is intentionally not exposed here.
- */
+// Media history
 export const MEDIA_HISTORY_CHANNELS = {
   getRecentFiles: 'mediaHistory:getRecentFiles',
   getPlaybackHistory: 'mediaHistory:getPlaybackHistory',
@@ -133,16 +68,14 @@ export const MEDIA_HISTORY_CHANNELS = {
   setSubtitleVersionOffset: 'mediaHistory:setSubtitleVersionOffset'
 } as const
 
-/** File-association launch bridge: main pushes explicit paths after the renderer subscribes. */
+// File-association launches
 export const LAUNCH_CHANNELS = {
   openPath: 'launch:openPath',
   rendererReady: 'launch:rendererReady',
-  /** main→renderer push: a queued launch file couldn't be opened because the
-   * playback engine failed to start (payload: sanitized message string). */
   error: 'launch:error'
 } as const
 
-/** Main-owned application-surface commands and state push. */
+// Application surfaces
 export const APP_SHELL_CHANNELS = {
   getSurface: 'appShell:getSurface',
   showSplash: 'appShell:showSplash',
@@ -153,72 +86,37 @@ export const APP_SHELL_CHANNELS = {
   surfaceChanged: 'appShell:surfaceChanged'
 } as const
 
-/** Dedicated Windows Game OCR frozen-frame renderer channels. */
+// Game OCR frozen frame
 export const GAME_OCR_CHANNELS = {
-  /** renderer→main invoke: read the persisted Game OCR settings. */
   getSettings: 'gameOcr:getSettings',
-  /** renderer→main invoke: update the persisted Game OCR settings. */
   setSettings: 'gameOcr:setSettings',
-  /** renderer→main invoke: read the current worker/coordinator status. */
   getStatus: 'gameOcr:getStatus',
-  /** renderer→main invoke: initialize the worker and arm the shortcut. */
   start: 'gameOcr:start',
-  /** renderer→main invoke: stop the worker and disarm the shortcut. */
   stop: 'gameOcr:stop',
-  /** renderer→main invoke: retry a failed worker/coordinator start. */
   retry: 'gameOcr:retry',
-  /** main→renderer push: current worker/coordinator status. */
   statusChanged: 'gameOcr:statusChanged',
-  /**
-   * main→renderer: freeze the display the frame is streaming. The screenshot
-   * travels the other way; the renderer is the one holding the capture stream.
-   */
   freeze: 'gameOcr:freeze',
-  /** renderer→main: the frozen frame is drawn and ready to be shown. */
   frozen: 'gameOcr:frozen',
-  /** renderer→main: the encoded screenshot, for the OCR worker only. */
   captureBytes: 'gameOcr:captureBytes',
-  /** main→renderer: clear screenshot, boxes, selection, and indicator state. */
   discard: 'gameOcr:discard',
-  /** main→renderer: update the processing indicator after OCR settles. */
   recognitionState: 'gameOcr:recognitionState',
-  /** main→renderer: the accepted OCR regions for the presented screenshot. */
   regions: 'gameOcr:regions',
-  /**
-   * main→renderer: copy the frame's current text selection. The frozen frame
-   * never holds keyboard focus, so Ctrl+C reaches it as a global shortcut
-   * rather than as a key event the page could handle itself.
-   */
   copySelection: 'gameOcr:copySelection',
-  /** renderer→main: close the whole frozen frame. */
   close: 'gameOcr:close',
-  /** renderer→main: the dedicated page has subscribed to presentation pushes. */
   rendererReady: 'gameOcr:rendererReady'
 } as const
 
-/**
- * MeCab tokenization bridge: renderer→main invoke/handle channels for
- * tokenizing text, listing available dictionaries, and switching the active
- * dictionary (persisted via the settings store, see services/settings.ts).
- */
+// MeCab tokenization
 export const MECAB_CHANNELS = {
   tokenize: 'mecab:tokenize',
-  /** Tokenize many texts in one round-trip (e.g. every cue of a track for the
-   * subtitle sidebar / report); returns one Token[] per input text, in order. */
   tokenizeBatch: 'mecab:tokenizeBatch',
   listDicts: 'mecab:listDicts',
   selectDict: 'mecab:selectDict',
   currentDict: 'mecab:currentDict',
-  /** Creates/reveals the persistent user-UniDic folder. */
   openUserUnidicDir: 'mecab:openUserUnidicDir'
 } as const
 
-/**
- * Yomitan dictionary bridge: renderer→main invoke/handle channels for
- * importing a dictionary zip, looking up a term, listing installed
- * dictionaries, enabling/disabling one, reordering their priority, and
- * removing one, or marking one as a fallback-only dictionary.
- */
+// Yomitan dictionaries
 export const DICT_CHANNELS = {
   importDictFile: 'dict:importDictFile',
   lookup: 'dict:lookup',
@@ -227,17 +125,10 @@ export const DICT_CHANNELS = {
   setFallbackOnly: 'dict:setFallbackOnly',
   reorder: 'dict:reorder',
   remove: 'dict:remove',
-  /** main→renderer push: periodic { done, total } while importDictFile runs. */
   importProgress: 'dict:importProgress'
 } as const
 
-/**
- * AnkiConnect bridge: renderer→main invoke/handle channels for testing the
- * connection, populating Options selects (decks/models/fields), adding a
- * note from the WordPopup, setting up the optional JLPT field/template block,
- * backfilling JLPT levels on existing notes, and reading/writing the `anki`
- * settings block.
- */
+// AnkiConnect
 export const ANKI_CHANNELS = {
   ping: 'anki:ping',
   deckNames: 'anki:deckNames',
@@ -246,7 +137,6 @@ export const ANKI_CHANNELS = {
   setupJlptField: 'anki:setupJlptField',
   previewJlptBackfill: 'anki:previewJlptBackfill',
   applyJlptBackfill: 'anki:applyJlptBackfill',
-  /** main→renderer push: progress while JLPT backfill updates notes. */
   jlptBackfillProgress: 'anki:jlptBackfillProgress',
   addNote: 'anki:addNote',
   findExisting: 'anki:findExisting',
@@ -256,14 +146,7 @@ export const ANKI_CHANNELS = {
   setSettings: 'anki:setSettings'
 } as const
 
-/**
- * Knowledge bridge: renderer→main invoke/handle channels for querying known-
- * word levels, building the local JLPT coverage report/export candidates, triggering a
- * WaniKani/Anki sync, reading sync status, and reading/writing the `knowledge`
- * settings block (WaniKani token encrypted at rest, see knowledgeBridge.ts).
- * `syncIfStale` is not a channel — it runs once from index.ts at startup, never
- * from the renderer.
- */
+// Vocabulary knowledge
 export const KNOWLEDGE_CHANNELS = {
   levelsFor: 'knowledge:levelsFor',
   detailsFor: 'knowledge:detailsFor',
@@ -275,38 +158,26 @@ export const KNOWLEDGE_CHANNELS = {
   setSettings: 'knowledge:setSettings'
 } as const
 
-/**
- * Player-settings bridge: renderer→main invoke/handle channels for reading/
- * writing the `player` settings block (keybindings, skip amount, popup and
- * subtitle display settings — the Options menu's contents). Persisted to
- * settings.json alongside anki/knowledge instead of the renderer's
- * localStorage, which is scoped to the dev-server's origin/port.
- */
+// Player settings
 export const PLAYER_SETTINGS_CHANNELS = {
   getSettings: 'playerSettings:getSettings',
   setSettings: 'playerSettings:setSettings',
-  /** renderer→main: create (if needed) and reveal Kizuna's mpv config folder
-   * in the OS file manager (Options → Playback → "Open mpv config folder"). */
   openMpvConfigDir: 'playerSettings:openMpvConfigDir'
 } as const
 
-/**
- * Integration-status bridge: one read-only query behind the Options dialog's
- * "Setup & integrations" tab, reporting whether each optional bundled binary
- * exists on disk. Diagnostics only — nothing here installs or configures.
- */
+// Integration diagnostics
 export const INTEGRATION_CHANNELS = {
   binaryStatus: 'integration:binaryStatus'
 } as const
 
-/** Product-information bridge: read identity data and open approved destinations. */
+// Product information
 export const APP_INFO_CHANNELS = {
   get: 'appInfo:get',
   openLink: 'appInfo:openLink',
   openNotices: 'appInfo:openNotices'
 } as const
 
-/** Main-owned application updater commands and state push. */
+// Application updates
 export const UPDATE_CHANNELS = {
   getState: 'update:getState',
   getSettings: 'update:getSettings',
@@ -317,14 +188,12 @@ export const UPDATE_CHANNELS = {
   stateChanged: 'update:stateChanged'
 } as const
 
-/** Clipboard bridge: renderer-to-main writes through Electron's clipboard
- * implementation rather than browser clipboard permissions. */
+// Clipboard
 export const CLIPBOARD_CHANNELS = {
   writeText: 'clipboard:writeText'
 } as const
 
-/** Translation bridge: renderer requests are forwarded to the configured
- * main-process translator so the renderer never performs network access. */
+// Translation
 export const TRANSLATE_CHANNELS = {
   translate: 'translate:translate',
   cancel: 'translate:cancel',
@@ -332,7 +201,7 @@ export const TRANSLATE_CHANNELS = {
   setSettings: 'translate:setSettings'
 } as const
 
-/** Jimaku credential setup and sender-scoped search/download bridge. */
+// Jimaku subtitles
 export const JIMAKU_CHANNELS = {
   getStatus: 'jimaku:getStatus',
   setApiKey: 'jimaku:setApiKey',

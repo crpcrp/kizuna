@@ -476,16 +476,12 @@ export function licenseCopyPlan({
   const plan = []
   for (const component of notices.components) {
     for (const path of component.licenseFiles ?? []) {
-      // `resources` paths are staged by resources.lock.json; `optional` and
-      // `source` components point at texts committed in the repository because
-      // their files are not staged under resources/.
+      // Optional/source licence texts are committed locally rather than staged under resources/.
       const base = component.bundled === 'resources' ? resourcesDir : repoRoot
       plan.push({ from: join(base, path), to: componentLicensePath(component, path) })
     }
     if (component.bundled === 'node_modules' && component.packageName) {
-      // Read from the same node_modules listing as the npm dependencies, so
-      // Electron's licence cannot be named in third-party.json and then be
-      // silently absent from the bundle.
+      // Resolve Electron's licence from the installed tree so missing texts fail the bundle.
       for (const name of packageLicenseNames[`node_modules/${component.packageName}`] ?? []) {
         plan.push({
           from: join(repoRoot, 'node_modules', component.packageName, name),
@@ -646,8 +642,7 @@ export async function generateNotices({
     }
   }
   for (const component of notices.components) {
-    // Electron is a devDependency — electron-builder ships it, npm's production
-    // tree does not list it — so its licence is resolved separately.
+    // Electron ships despite being a devDependency, so resolve its licence outside the production tree.
     if (component.bundled !== 'node_modules') continue
     const path = `node_modules/${component.packageName}`
     packageLicenseNames[path] ??= await findPackageLicenses({

@@ -1,6 +1,4 @@
-// Runs Vitest under Electron's Node ABI (ELECTRON_RUN_AS_NODE=1), which the
-// better-sqlite3 binding is rebuilt for by `postinstall`. Arguments pass
-// through to Vitest; with none, it runs the suite once.
+// Use Electron's Node ABI to match the better-sqlite3 postinstall rebuild.
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 

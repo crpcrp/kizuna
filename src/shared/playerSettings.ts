@@ -27,13 +27,7 @@ export type PlayerKeyAction =
   | 'subtitleFontScaleUp'
   | 'subtitleFontScaleDown'
 
-/**
- * Left-side modifier keys a binding may be prefixed with. Only the left-hand
- * Ctrl/Shift are bindable: a `KeyboardEvent` for a non-modifier key reports
- * only *that* Ctrl/Shift is down, never which one, so the side is knowable
- * solely by tracking the modifier's own keydown/keyup (see
- * `createModifierTracker` in the renderer's `keyBindings` module).
- */
+/** Only modifier key events reveal left/right identity; ordinary key events report aggregate Ctrl/Shift state. */
 const MODIFIER_CODES = ['ControlLeft', 'ShiftLeft'] as const
 
 export type KeyModifier = (typeof MODIFIER_CODES)[number]
@@ -42,13 +36,7 @@ export function isKeyModifier(code: string): code is KeyModifier {
   return (MODIFIER_CODES as readonly string[]).includes(code)
 }
 
-/**
- * An input identifier a player action is bound to, optionally prefixed with
- * one modifier code — `Space`, `ControlLeft+ArrowUp`, `ShiftLeft+KeyR`. The
- * `MouseWheelUp`/`MouseWheelDown` pseudo-codes are used for the subtitle-size
- * wheel bindings. Matching is exact, so a bare `ArrowLeft` binding does *not*
- * fire on Ctrl+ArrowLeft (which is what lets the two be bound separately).
- */
+/** Bindings match exactly, including modifiers; MouseWheelUp/Down are synthetic key codes. */
 export type KeyBinding = string
 
 /** Pseudo-codes used by the editable, direction-aware mouse-wheel bindings. */
@@ -84,12 +72,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   subtitleFontScaleDown: 'ShiftLeft+MouseWheelDown'
 }
 
-/**
- * Validates one stored binding: a non-empty `code`, or `modifier+code` with a
- * bindable modifier. Returns null for anything else — a non-string, an empty
- * or multi-modifier chord, or a modifier bound on its own (which could never
- * fire, since a lone modifier press produces no binding).
- */
+/** Lone modifiers cannot fire a binding; only one modifier prefix is supported. */
 function normalizeKeyBinding(raw: unknown): KeyBinding | null {
   if (typeof raw !== 'string') return null
   const parts = raw.split('+')
@@ -100,10 +83,6 @@ function normalizeKeyBinding(raw: unknown): KeyBinding | null {
   return raw
 }
 
-/**
- * Validates a stored `keyBindings` object against the current action list,
- * falling back to `DEFAULT_KEY_BINDINGS` per action. Unknown keys are dropped.
- */
 export function normalizeKeyBindings(raw: unknown): KeyBindings {
   const stored = isRecord(raw) ? raw : {}
   const bindings = { ...DEFAULT_KEY_BINDINGS }
@@ -124,9 +103,7 @@ export function normalizeAppearance(raw: unknown, fallback: Appearance): Appeara
   return raw === 'system' || raw === 'light' || raw === 'dark' ? raw : fallback
 }
 
-/** Knowledge levels with configurable subtitle/report colors. For the four
- * ordinary levels, an absent key uses the theme color; for `wellKnown`, it
- * means no subtitle underline and a white report swatch. */
+/** Absent ordinary colors use the theme; absent wellKnown means no underline and a white report swatch. */
 export type UnderlineLevel = 'unknown' | 'inDeck' | 'learning' | 'known' | 'wellKnown'
 
 export const UNDERLINE_LEVELS: readonly UnderlineLevel[] = [
@@ -228,11 +205,7 @@ export type VideoRotate = (typeof VIDEO_ROTATE_VALUES)[number]
 export const VIDEO_EQ_MIN = -100
 export const VIDEO_EQ_MAX = 100
 
-/**
- * App-wide (not per-file) picture adjustments: the five mpv equalizer values,
- * a rotation, and a deinterlace toggle. Re-applied after every load and mpv
- * (re)start, since mpv resets these per process/file.
- */
+/** Reapply app-wide adjustments after each load/restart because mpv resets them per file/process. */
 export interface VideoAdjustments {
   brightness: number
   contrast: number
@@ -258,13 +231,6 @@ export function isVideoRotate(value: unknown): value is VideoRotate {
   return (VIDEO_ROTATE_VALUES as readonly unknown[]).includes(value)
 }
 
-/**
- * Validates a stored `videoAdjustments` value field-by-field: each equalizer
- * value is a finite integer clamped to −100…100 (a malformed one drops to 0,
- * matching the neutral default), `rotate` must be one of the four accepted
- * degrees, and `deinterlace` must be a boolean — anything else falls back to
- * the corresponding default. Never trusts stored JSON.
- */
 export function normalizeVideoAdjustments(
   raw: unknown,
   defaults: VideoAdjustments = DEFAULT_VIDEO_ADJUSTMENTS
@@ -316,13 +282,9 @@ export interface PlayerSettings {
   /** Whether auto-pause applies to every subtitle line or unknown-word lines only. */
   subtitleAutoPauseScope: SubtitleAutoPauseScope
   subtitleOffsets: Record<string, number>
-  /** Per-folder subtitle offsets (ms), keyed by `subtitleOffsetFolderKey`. Used
-   * for any file in that folder without its own `subtitleOffsets` entry — see
-   * `subtitleOffsetForFile`. */
+  /** Folder subtitle offsets apply only when the file has no individual offset. */
   folderSubtitleOffsets: Record<string, number>
-  /** Per-file audio delay (ms), keyed by `subtitleOffsetKey` (a generic lexical
-   * path canonicalizer despite its name — reused here on purpose). Positive
-   * delays audio; see `MpvController.setAudioDelay`. */
+  /** Per-file audio delay in milliseconds; positive values delay audio. Keys use `subtitleOffsetKey`. */
   audioDelays: Record<string, number>
   /** UI theme: light, dark, or follow the OS ('system'). */
   appearance: Appearance
@@ -332,26 +294,18 @@ export interface PlayerSettings {
   playlistOpen: boolean
   /** Whether right-clicked subtitle text may be sent to the experimental online translator. */
   translationEnabled: boolean
-  /** User overrides for the subtitle/report color of each knowledge level. An
-   * absent ordinary level keeps the theme default; absent wellKnown means no
-   * underline and a white report swatch. Overrides apply to both themes. */
+  /** Color overrides apply to both themes. */
   levelColors: LevelColors
   /** Folder screenshots are saved to. null = `<Pictures>/Kizuna`, resolved main-side. */
   screenshotFolder: string | null
-  /** When true, mpv reads Kizuna's own config dir (`<userData>/mpv`: mpv.conf,
-   * input.conf, scripts/, shaders/). When false (default), mpv runs with
-   * `--no-config`. Changing it needs an mpv relaunch. */
+  /** Opt into `<userData>/mpv` config/scripts instead of `--no-config`; changes require an mpv relaunch. */
   mpvUserConfig: boolean
-  /** Advanced escape-hatch: extra mpv command-line args, one per entry. Applied
-   * before the forced embedding args; sanitized at launch (see
-   * `sanitizeExtraMpvArgs`). Changing it needs an mpv relaunch. */
+  /** Extra arguments are sanitized before forced embedding arguments; changes require an mpv relaunch. */
   mpvExtraArgs: string[]
   /** App-wide picture adjustments (equalizer, rotate, deinterlace). Re-applied
    * after every load and mpv (re)start — see `MpvController.setVideoAdjustment`. */
   videoAdjustments: VideoAdjustments
-  /** Preferred mpv output device name (`audio-device`); `'auto'` follows the OS
-   * default. Re-applied after mpv start; falls back to `'auto'` for the session
-   * if the stored device is no longer present (see `effectiveAudioDevice`). */
+  /** Preferred mpv device; an unavailable device falls back to 'auto' for the session. */
   audioDevice: string
   /** When true mpv runs the dynaudnorm loudness-normalization filter; re-applied
    * after mpv start — see `MpvController.setLoudnessNormalization`. */
@@ -388,12 +342,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
 /** Max length of a stored `audioDevice` name; a longer value is untrusted junk. */
 const AUDIO_DEVICE_NAME_MAX_LENGTH = 256
 
-/**
- * Validates a stored `audioDevice`: a non-empty string ≤`AUDIO_DEVICE_NAME_MAX_LENGTH`
- * chars, used verbatim (mpv device names are opaque and case-sensitive — no
- * trimming or folding). Anything else falls back to `'auto'`. Whether the device
- * still exists is decided at apply time by `effectiveAudioDevice`, not here.
- */
+/** mpv device names are opaque and case-sensitive; do not trim or fold them. */
 export function normalizeAudioDevice(raw: unknown): string {
   if (typeof raw !== 'string') return AUTO_AUDIO_DEVICE
   if (raw === '' || raw.length > AUDIO_DEVICE_NAME_MAX_LENGTH) return AUTO_AUDIO_DEVICE
@@ -403,15 +352,7 @@ export function normalizeAudioDevice(raw: unknown): string {
 /** Max length of a single stored mpv extra-arg; anything longer is dropped. */
 export const MPV_EXTRA_ARG_MAX_LENGTH = 256
 
-/**
- * Validates a stored `mpvExtraArgs` value: an array of trimmed, non-empty
- * strings each ≤`MPV_EXTRA_ARG_MAX_LENGTH` chars. Non-array input, or any
- * entry that isn't a usable string, yields `[]` — never trust stored JSON.
- * Individual bad entries are dropped rather than discarding the whole list,
- * so one over-long line doesn't wipe every other arg. Note this only shapes
- * the values; the launch-time `sanitizeExtraMpvArgs` still strips
- * bare tokens and the reserved `--config`/`--config-dir` options.
- */
+/** This only normalizes stored strings; launch-time sanitization still removes unsafe mpv options. */
 export function normalizeMpvExtraArgs(raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
   const result: string[] = []
@@ -428,24 +369,12 @@ function isWindowsStylePath(path: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(path) || path.startsWith('\\\\') || path.includes('\\')
 }
 
-/**
- * Canonical map key for per-file subtitle offsets. Windows-style paths get
- * `/` → `\` separator folding plus lowercasing (NTFS is case-insensitive), so
- * the same file opened from the picker (`E:\Video\a.mkv`) and from recent files
- * (which store lowercase paths) resolves to one entry; POSIX paths are used
- * as-is. Purely lexical — no filesystem or `process` access, so the renderer
- * can call it.
- */
+/** Fold Windows separators/case so picker and history paths share offsets; preserve POSIX paths. */
 export function subtitleOffsetKey(path: string): string {
   if (!isWindowsStylePath(path)) return path
   return path.replace(/\//g, '\\').toLowerCase()
 }
 
-/**
- * Canonical key of `path`'s parent folder: `subtitleOffsetKey` minus the last
- * separator-delimited segment. Returns `''` when the canonical key holds no
- * separator at all.
- */
 export function subtitleOffsetFolderKey(path: string): string {
   const key = subtitleOffsetKey(path)
   const lastSeparator = Math.max(key.lastIndexOf('\\'), key.lastIndexOf('/'))

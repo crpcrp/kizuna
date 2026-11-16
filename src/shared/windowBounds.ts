@@ -1,8 +1,4 @@
-// Window geometry types shared across main, preload, and renderer. The mpv
-// video lives in the OS window itself, so mini-player mode moves/resizes the
-// *window* — these types cross the `window:getBounds`/`window:setBounds`
-// bridge, and the corner math is pure so it can be unit-tested without a
-// display attached.
+// mpv lives in the native window, so mini-player geometry moves the window itself.
 
 /** A plain rectangle, matching Electron's `Rectangle` shape. */
 export interface WindowBounds {
@@ -12,13 +8,7 @@ export interface WindowBounds {
   height: number
 }
 
-/**
- * Payload of the `window:setBounds` channel. `explicit` sets an exact
- * rectangle (for restoring saved pre-mini window bounds); `miniPlayer`
- * asks main to compute the bottom-right corner of the *current* display's work
- * area itself (only main has `screen`), fitting a 480×270 video plus the
- * measured top and bottom chrome heights.
- */
+/** Main computes mini-player placement because only main can read the current display work area. */
 export type SetWindowBoundsRequest =
   | { mode: 'explicit'; bounds: WindowBounds }
   | { mode: 'miniPlayer'; topBarHeight: number; bottomBarHeight: number }
@@ -27,13 +17,7 @@ export type SetWindowBoundsRequest =
 const MINI_PLAYER_WIDTH = 480
 const MINI_PLAYER_VIDEO_HEIGHT = 270
 
-/**
- * Pure: the mini-player window rectangle, flushed to the bottom-right corner of
- * `workArea` (the display's usable area, taskbar excluded). The measured top
- * and bottom chrome heights are added around the 480×270 video so mpv's
- * matching video margins leave the full picture visible. Non-finite or
- * negative heights clamp to 0. All coordinates are rounded to whole pixels.
- */
+/** Add measured chrome around the 480×270 video so mpv margins preserve the full picture. */
 export function miniPlayerBounds(
   workArea: WindowBounds,
   topBarHeight: number,

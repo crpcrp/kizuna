@@ -20,34 +20,18 @@ export interface GameOcrRuntimeStatus {
 /** Whether a capture covers one focused window or a whole display. */
 export type GameOcrTargetKind = 'window' | 'display'
 
-/**
- * Asks the frozen-frame renderer to freeze what it is already streaming. The
- * screenshot is not sent to it, because the renderer is what takes it: it
- * holds a desktop capture stream for as long as Game OCR is armed, so a
- * capture is one `drawImage` from the frame it already has rather than a
- * fresh `desktopCapturer.getSources` read.
- */
+/** Freeze the existing renderer capture stream to avoid reopening desktop capture. */
 export interface GameOcrFreezeRequest {
   sessionId: number
   captureId: number
   /** The Electron desktop-capture source for the window or display frozen. */
   sourceId: string
-  /**
-   * Carried so the renderer can bound what it retains without inferring
-   * meaning from the source id's shape. Display streams stay open because
-   * there are few of them and reopening one is the expensive path; window
-   * streams do not, because a user who alt-tabs through ten programs must not
-   * leave Kizuna holding capture access to all ten.
-   */
+  /** Display streams stay open to avoid capture startup cost; window streams close to bound capture access. */
   targetKind: GameOcrTargetKind
   imageSize: OcrImageSize
 }
 
-/**
- * The renderer has drawn the frozen frame and is showing it. Sent before the
- * screenshot is encoded, because the encode belongs after the pixels are on
- * screen: the user is waiting for the frame, not for the OCR input.
- */
+/** Sent before PNG encoding so the frozen frame can appear immediately. */
 export interface GameOcrFrozenFrame {
   sessionId: number
   captureId: number
@@ -55,11 +39,7 @@ export interface GameOcrFrozenFrame {
   error?: string
 }
 
-/**
- * The encoded screenshot, produced once the frame is already visible and
- * handed to the main process for the OCR worker alone. Nothing in the frozen
- * frame's own presentation depends on it.
- */
+/** Encoded after presentation, for the OCR worker only. */
 export interface GameOcrCaptureBytes {
   sessionId: number
   captureId: number
