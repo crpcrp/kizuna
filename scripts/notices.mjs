@@ -507,7 +507,7 @@ export function licenseCopyPlan({
  * @param {{ packages?: Record<string, { version?: string }> }} packageLock
  * @returns {NoticesFile}
  */
-export function resolveComponentVersions(notices, packageLock) {
+function resolveComponentVersions(notices, packageLock) {
   return {
     ...notices,
     components: notices.components.map((component) => {
