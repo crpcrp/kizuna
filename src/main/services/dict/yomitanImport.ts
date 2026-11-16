@@ -1,9 +1,3 @@
-// Import coordinator. Drives the two other stages — `yomitanArchive.ts` to
-// stream a dictionary zip's entries under size caps, `yomitanBanks.ts` to turn
-// each entry into rows — and owns the persistence side: the `dictionaries` /
-// `terms` / `term_meta` inserts, per-bank id ranges, progress reporting, and
-// the single transaction the whole import runs in.
-
 import { initSchema, CURRENT_DICT_SCHEMA_VERSION, type DbLike } from './schema'
 import { parseJsonBytes, decodeUtf8, streamCappedUnzipSync } from './yomitanArchive'
 import {
@@ -20,20 +14,16 @@ import {
 } from './yomitanBanks'
 import type { ImportResult } from '../../../shared/dictionary'
 
-/** Structural subset of better-sqlite3's `Database` needed to run the import. */
 export interface ImportDb extends DbLike {
   prepare(sql: string): {
     run(...params: unknown[]): { lastInsertRowid: number | bigint }
-    // Optional so structurally-narrower callers (e.g. dictBridge's DictDb,
-    // which only declares run/all) still satisfy this interface — the real
-    // better-sqlite3 handle always has `.get()` at runtime regardless.
+    // Narrow callers may omit get; the runtime better-sqlite3 handle provides it.
     get?(...params: unknown[]): unknown
     all(...params: unknown[]): unknown[]
   }
   transaction(fn: () => number): () => number
 }
 
-/** Default number of inserted rows between `onProgress` calls (see `importDictionary`). */
 const DEFAULT_PROGRESS_BATCH_SIZE = 500
 
 /** Compare bank names numerically (so bank_10 sorts after bank_2). */
@@ -41,7 +31,6 @@ function compareBankNames(a: string, b: string): number {
   return Number(a.match(/\d+/)![0]) - Number(b.match(/\d+/)![0])
 }
 
-/** One bank of the archive and how many rows it contributes. */
 interface BankSummary {
   name: string
   rowCount: number
@@ -50,26 +39,14 @@ interface BankSummary {
 interface StreamedDictionarySummary {
   meta: DictMeta
   stylesCss: string | null
-  /** term_bank_N and kanji_bank_N banks, in the order their rows are inserted. */
   termBanks: BankSummary[]
   metaBanks: BankSummary[]
   termCount: number
   metaCount: number
 }
 
-/**
- * Establish stable progress totals and per-bank id ranges without retaining any
- * bank. Term and kanji banks are only *counted* here (`countTermBank` /
- * `countKanjiBank`); the rows themselves are built once, in the insert pass.
- * Frequency banks go through the full parser because their rows are five plain
- * fields with no glossary flattening or `JSON.stringify` to redo.
- *
- * A dictionary zip's optional root-level `styles.css` is picked up here too. It
- * was added to the Yomitan dictionary format so a dictionary can style its own
- * structured-content glossary markup — see yomidevs/yomitan#1080 — instead of
- * baking every gap/spacing/color choice into inline `style` attributes on each
- * glossary node.
- */
+// Count term/kanji rows without building glossaries twice. Frequency rows are cheap
+// enough to parse fully; also read optional root styles.css for structured glossaries.
 function summarizeStreamedDictionary(zipBytes: Uint8Array): StreamedDictionarySummary {
   let meta = parseIndex(undefined)
   let stylesCss: string | null = null
@@ -113,11 +90,7 @@ function summarizeStreamedDictionary(zipBytes: Uint8Array): StreamedDictionarySu
   }
 }
 
-/**
- * First row id for each bank, laid out contiguously from `firstId` in bank
- * order. The insert pass sees banks in archive order, so handing each one a
- * reserved range up front is what keeps ids in numeric bank order.
- */
+// Reserve ranges in numeric bank order because insertion follows archive order.
 function firstIdByBank(banks: BankSummary[], firstId: number): Map<string, number> {
   const ids = new Map<string, number>()
   let nextId = firstId
@@ -128,22 +101,8 @@ function firstIdByBank(banks: BankSummary[], firstId: number): Map<string, numbe
   return ids
 }
 
-/**
- * Import a Yomitan dictionary zip into `db`. Makes two capped streaming passes:
- * the first counts valid rows for stable progress totals, and the second
- * parses/inserts one term/kanji/meta bank at a time. Calls `initSchema(db)`
- * before database work so this is safe against a fresh DB handle, and after the
- * first pass so an unreadable archive aborts before any schema or row exists.
- *
- * `onProgress`, if given, is called with `(done, total)` every
- * `progressBatchSize` rows inserted, plus once more at the end with
- * `done === total` — advisory only, callers must still await the returned
- * result. `total` counts term/kanji rows *and* frequency rows: a frequency-only
- * dictionary has no term rows at all, so totalling only those left BCCWJ's
- * million-row import showing no progress whatsoever. `progressBatchSize`
- * defaults to `DEFAULT_PROGRESS_BATCH_SIZE`; a smaller value is mainly useful
- * in tests against small fixtures.
- */
+// Two capped passes keep memory to one bank and establish stable totals before writes.
+// Include metadata rows in progress so frequency-only dictionaries report activity.
 export function importDictionary(
   zipBytes: Uint8Array,
   db: ImportDb,

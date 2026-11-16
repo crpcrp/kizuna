@@ -1,8 +1,4 @@
-// Worker-backed `DictionaryImporter`. Runs each import in its own
-// node:worker_threads Worker (see importWorker.ts) so the unzip/parse/
-// insert transaction never blocks the Electron main loop. Worker creation is
-// injected as a `WorkerFactory` so tests never launch a real worker — see
-// test/harness/fakeWorker.ts.
+// Import in a worker so unzip, JSON parsing, and SQLite writes cannot block the main loop.
 
 import type { ImportResult } from '../../../shared/dictionary'
 import type { DictionaryImporter, DictZipSource } from './importer'
@@ -13,7 +9,6 @@ export type WorkerImportMessage =
   | { type: 'result'; result: ImportResult }
   | { type: 'error'; error: string }
 
-/** Structural subset of node:worker_threads' Worker this module needs. */
 export interface WorkerLike {
   on(event: 'message', listener: (value: WorkerImportMessage) => void): void
   on(event: 'error', listener: (err: Error) => void): void
@@ -29,25 +24,15 @@ export interface WorkerImportTimers {
 }
 
 export interface CreateWorkerImporterDeps {
-  /** Path to the dictionary SQLite file the worker should open. */
   dbPath: string
   /** Path to the compiled worker entry (importWorker.ts's build output). */
   workerPath: string
   createWorker: WorkerFactory
-  /**
-   * How long the worker may go **without reporting progress** before it is
-   * given up on. Defaults to five minutes. This is an inactivity watchdog, not
-   * an absolute deadline — see `runOne`.
-   */
+  /** Maximum silence between progress reports, not an absolute import deadline. */
   timeoutMs?: number
   timers?: WorkerImportTimers
 }
 
-/**
- * Silence allowed between two progress reports before the import is considered
- * hung. A large dictionary legitimately takes minutes of wall clock; what it
- * never does is go five minutes without inflating another few MiB.
- */
 const WORKER_IMPORT_TIMEOUT_MS = 5 * 60 * 1000
 
 const systemTimers: WorkerImportTimers = {
@@ -89,12 +74,7 @@ function runOne(
       reject(err)
     }
 
-    // Inactivity watchdog: armed once, then re-armed on every progress report,
-    // so `timeoutMs` bounds how long the import may go *silent* rather than how
-    // long it may take in total. As an absolute deadline this killed imports
-    // that were making steady progress — a large dictionary is minutes of
-    // honest work — and killing one mid-transaction leaves its rolled-back
-    // pages behind as permanent freelist bloat in dict.db.
+    // Reset on progress: large dictionaries can take minutes without being hung.
     const armWatchdog = (): void => {
       if (settled) return
       if (timer.handle !== undefined) timers.clearTimer(timer.handle)
@@ -122,13 +102,7 @@ function runOne(
   })
 }
 
-/**
- * Worker-thread-backed DictionaryImporter. Imports are serialized — only one
- * worker runs at a time, later calls queue behind earlier ones — so two
- * imports never race writes against the same dictionary DB file. The first
- * call (nothing in flight) starts its worker synchronously; later calls wait
- * for `queue` to settle, success or failure, before starting theirs.
- */
+/** Serialize imports so workers never race writes to the same database. */
 export function createWorkerImporter(deps: CreateWorkerImporterDeps): DictionaryImporter {
   const {
     dbPath,

@@ -1,8 +1,4 @@
-// Turns raw .ass/.ssa text into shared `Cue[]` (start/end in seconds). Pure,
-// synchronous, no I/O — the file is read and handed in as a string by the
-// caller. Only the `[Events]` section is parsed; the `Format:` line defines
-// the column order (we only care about Start/End/Text — Text is always the
-// last field and may itself contain commas, so it is never split on).
+// ASS Text is the final field and may contain commas; split only preceding fields.
 
 import type { Cue } from '../../shared/cue'
 
@@ -16,7 +12,6 @@ function timeToSeconds(raw: string): number | undefined {
   return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(cs.padEnd(2, '0')) / 100
 }
 
-/** Strips ASS override tags (`{...}`) and converts line-break escapes. */
 function cleanText(raw: string): string {
   return raw
     .replace(/\{[^}]*\}/g, '')
@@ -24,13 +19,6 @@ function cleanText(raw: string): string {
     .trim()
 }
 
-/**
- * Parses ASS/SSA content into cues. Finds the `[Events]` section, reads its
- * `Format:` line to locate the Start/End/Text columns, then parses each
- * `Dialogue:` line accordingly. `Comment:` lines and anything outside
- * `[Events]` are ignored. Malformed lines (bad timestamps, missing columns,
- * no Format line yet) are skipped rather than throwing.
- */
 export function parseAss(content: string): Cue[] {
   const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const lines = normalized.split('\n')

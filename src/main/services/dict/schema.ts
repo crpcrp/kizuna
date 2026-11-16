@@ -1,13 +1,3 @@
-// Pure DDL strings + an `initSchema(db)` that applies them. The DB handle is
-// injected (never constructed here) so tests can pass an in-memory
-// better-sqlite3 instance and production code passes the real file handle.
-
-/**
- * Structural subset of better-sqlite3's `Database` this module needs.
- * Kept minimal/structural since `better-sqlite3` ships no `.d.ts` and no
- * `@types/better-sqlite3` is installed — any object exposing `.exec()`
- * (real or fake) satisfies this.
- */
 export interface DbLike {
   exec(sql: string): unknown
 }
@@ -49,15 +39,8 @@ CREATE INDEX IF NOT EXISTS idx_terms_expression ON terms (expression)`
 const CREATE_TERMS_READING_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_terms_reading ON terms (reading)`
 
-/**
- * Frequency/pitch metadata rows (Yomitan `term_meta_bank_N.json`).
- *
- * `value`/`display` carry frequency data (`mode = 'freq'`). Pitch rows
- * (`mode = 'pitch'`) leave both null and instead store their drop positions in
- * `pitch_positions` as a JSON array of integers (e.g. `[0,3]`) — a pitch entry
- * can hold several positions, so it does not fit the single numeric `value`
- * column, and overloading it would break frequency queries.
- */
+// Pitch entries can have multiple drop positions, stored as a JSON integer array
+// in pitch_positions; value/display remain reserved for frequency data.
 const CREATE_TERM_META_TABLE = `
 CREATE TABLE IF NOT EXISTS term_meta (
   id INTEGER PRIMARY KEY,
@@ -73,7 +56,6 @@ CREATE TABLE IF NOT EXISTS term_meta (
 const CREATE_TERM_META_EXPRESSION_INDEX = `
 CREATE INDEX IF NOT EXISTS idx_term_meta_expr ON term_meta (dict_id, expression)`
 
-/** All DDL statements, in dependency order (tables before their indexes). */
 const SCHEMA_STATEMENTS = [
   CREATE_DICTIONARIES_TABLE,
   CREATE_TERMS_TABLE,
@@ -83,10 +65,6 @@ const SCHEMA_STATEMENTS = [
   CREATE_TERM_META_EXPRESSION_INDEX
 ]
 
-/**
- * Creates the dictionary/term tables and lookup indexes on `db` if they
- * don't already exist. Idempotent — safe to call on every startup.
- */
 export function initSchema(db: DbLike): void {
   for (const statement of SCHEMA_STATEMENTS) {
     db.exec(statement)

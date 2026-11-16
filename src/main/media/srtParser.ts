@@ -1,24 +1,12 @@
-// Turns raw .srt text into shared `Cue[]` (start/end in seconds). Pure,
-// synchronous, no I/O — the file is read and handed in as a string by the
-// caller.
-
 import type { Cue } from '../../shared/cue'
 
 const TIMING_RE =
   /(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{1,3})/
 
-/** Converts an SRT timestamp's captured groups to seconds. */
 function timeToSeconds(h: string, m: string, s: string, ms: string): number {
   return Number(h) * 3600 + Number(m) * 60 + Number(s) + Number(ms.padEnd(3, '0')) / 1000
 }
 
-/**
- * Parses standard .srt content into cues. Blocks are separated by a blank
- * line; each block is an optional numeric index line, a timing line
- * (`HH:MM:SS,mmm --> HH:MM:SS,mmm`), then one or more text lines. Handles
- * both CRLF and LF line endings. Malformed or empty blocks (no timing line
- * found, or no text) are skipped rather than throwing.
- */
 export function parseSrt(content: string): Cue[] {
   const normalized = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
   const blocks = normalized.split(/\n\s*\n/)

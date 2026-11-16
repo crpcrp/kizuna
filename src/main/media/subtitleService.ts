@@ -1,9 +1,3 @@
-// Owner of subtitle acquisition: extracting an embedded stream through ffmpeg
-// into a temp file and parsing it, and reading a standalone sidecar file. The
-// parsing/decoding primitives live in subtitleLoader.ts and
-// subtitleEncoding.ts; this module owns the temp-file lifecycle and the
-// file-type gate around them.
-
 import { readFile, unlink } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { loadSubtitleCues, pickParser, type ReadTextFile } from './subtitleLoader'
@@ -14,26 +8,8 @@ import { pathApiFor } from '../platformPath'
 import type { Cue } from '../../shared/cue'
 import type { SubtitleEncoding } from '../../shared/subtitleEncoding'
 
-/**
- * Builds the temp-extraction path for a subtitle stream:
- * `<tmpDir>/kizuna-sub-<basename(inputPath)>-<streamIndex>-<token>.<ext>`,
- * where `container` picks the extension ('ass' -> '.ass', 'srt' -> '.srt') and
- * `token` is an unguessable crypto-random hex suffix.
- *
- * The random token is the security-relevant part: the path used
- * to be fully predictable from the media filename, so on a shared temp dir a
- * local attacker could pre-create it as a symlink and have ffmpeg's `-y`
- * overwrite clobber a victim file (or read the subtitle another user left
- * behind). An unpredictable suffix defeats both. The token defaults to a fresh
- * 72-bit random value but is injectable so callers/tests can pin it. Pure and
- * side-effect free apart from drawing that randomness — does not touch the
- * filesystem.
- *
- * `platform` selects the path semantics: the media basename must be taken with
- * the same separators the input path actually uses, or a Windows path handed to
- * the POSIX implementation would embed the whole `C:\videos\ep.mkv` — drive
- * letter, backslashes and all — into the temp filename.
- */
+// An unpredictable 72-bit suffix prevents pre-created symlinks from redirecting
+// ffmpeg overwrite and avoids reading another user's extracted subtitles.
 function subtitleTempPath(
   tmpDir: string,
   inputPath: string,
@@ -50,17 +26,12 @@ function subtitleTempPath(
 /** Reads standalone subtitle bytes. Kept separate from ffmpeg's UTF-8 text reader. */
 export type ReadBinaryFile = (path: string) => Promise<Uint8Array>
 
-/** Production adapter for standalone external subtitle files. */
 export const readBinaryFile: ReadBinaryFile = (path) => readFile(path)
 
-/** Deletes an extracted subtitle temp file once its cues are parsed. Injected
- * so tests never touch a real file. */
 export type RemoveFile = (path: string) => Promise<void>
 
-/** Production adapter: unlinks the temp file. */
 export const removeFile: RemoveFile = (path) => unlink(path)
 
-/** The subtitle slice of `MediaServiceLike`. */
 export interface SubtitleService {
   loadSubtitle(filePath: string, streamIndex: number): Promise<Cue[]>
   loadExternalSubtitle(subtitlePath: string, encoding?: SubtitleEncoding): Promise<Cue[]>
@@ -75,17 +46,10 @@ export interface SubtitleServiceDeps {
   /** Byte reader for standalone external subtitle files. */
   readBinary: ReadBinaryFile
   removeFile: RemoveFile
-  /** Path semantics for the extraction temp file; defaults to the host platform. */
   platform?: NodeJS.Platform
 }
 
-/**
- * Subtitles are always extracted as '.ass': MKV's default subtitle codec is
- * ASS/SSA, and ffmpeg's subtitle conversion (see ffmpeg.ts's
- * `subtitleCodecForOutput`) losslessly re-muxes an ASS stream into a '.ass'
- * file, so defaulting to '.ass' avoids lossy ASS->SRT conversion for the common
- * case.
- */
+// Extract as ASS to avoid lossy ASS-to-SRT conversion for embedded ASS/SSA subtitles.
 export function createSubtitleService(deps: SubtitleServiceDeps): SubtitleService {
   return {
     async loadSubtitle(filePath: string, streamIndex: number): Promise<Cue[]> {
@@ -103,9 +67,7 @@ export function createSubtitleService(deps: SubtitleServiceDeps): SubtitleServic
           { exec: deps.execFfmpeg, readFile: deps.readText }
         )
       } finally {
-        // The extracted subtitle is only needed until it is parsed into cues;
-        // remove it so it does not linger in the temp dir. A missing/failed
-        // extraction leaves nothing to delete, so swallow unlink errors.
+        // Cleanup is best-effort: a failed extraction may leave no file to unlink.
         await deps.removeFile(outputPath).catch(() => {})
       }
     },
@@ -117,8 +79,6 @@ export function createSubtitleService(deps: SubtitleServiceDeps): SubtitleServic
       if (classifyMediaFileName(subtitlePath) !== 'subtitle') {
         throw new Error('Unsupported subtitle file type.')
       }
-      // No ffmpeg here: a standalone subtitle file is already in a format the
-      // parsers read, so it goes straight from disk through pickParser.
       const content = decodeSubtitleBytes(await deps.readBinary(subtitlePath), encoding)
       const cues = pickParser(subtitlePath)(content)
       if (cues.length === 0) throw new Error('No subtitles found in this file.')
