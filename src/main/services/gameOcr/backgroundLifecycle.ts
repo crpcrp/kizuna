@@ -39,13 +39,10 @@ export interface GameOcrBackgroundLifecycleOptions {
 }
 
 export interface GameOcrBackgroundLifecycle {
-  /** Returns false when the native close must be prevented. */
+  /** False prevents native close while Game OCR remains armed. */
   handleWindowClose(event: GameOcrWindowCloseEvent): boolean
-  /** Stops cleanly if the main renderer/native window is no longer usable. */
   handleWindowLost(): void
-  /** Presents the player for a media launch, or restores the current surface. */
   showFromSecondInstance(hasLaunchPath?: boolean): Promise<void>
-  /** Brings the tray-hidden window back so an update offer can be answered. */
   revealForUpdate(): Promise<void>
   dismissOptions(): Promise<boolean>
   stop(restoreSurface?: boolean): Promise<void>
@@ -60,11 +57,6 @@ const ARMED_STATES = new Set<GameOcrRuntimeStatus['game']['state']>([
 ])
 const TRAY_TOOLTIP = 'Kizuna — Game OCR armed'
 
-/**
- * Keeps the normal player window and the Windows tray in sync with Game OCR.
- * Electron surfaces are injected so the lifecycle can be tested without a
- * native tray or BrowserWindow.
- */
 export function createGameOcrBackgroundLifecycle(
   options: GameOcrBackgroundLifecycleOptions
 ): GameOcrBackgroundLifecycle {
@@ -232,10 +224,7 @@ export function createGameOcrBackgroundLifecycle(
       return Promise.resolve()
     },
 
-    // An update offer is worth interrupting the tray for: hidden behind a
-    // game, the prompt would otherwise wait until something else happened to
-    // show the window. Options is the surface every other armed reveal uses,
-    // and closing it hides back to the tray with Game OCR still armed.
+    // Reveal the tray-hidden window so the update prompt can be answered.
     revealForUpdate(): Promise<void> {
       if (disposed || !hiddenForOcr) return Promise.resolve()
       if (!ARMED_STATES.has(options.runtime.getStatus().game.state)) return Promise.resolve()

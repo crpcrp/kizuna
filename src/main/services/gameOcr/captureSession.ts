@@ -13,7 +13,6 @@ import {
 import type { GameOcrWindow } from './frozenFrameController'
 import type { GameOcrFrameShortcutHandlers } from './shortcuts'
 
-/** The OCR adapter may be a real PP-OCR worker or a fixture-backed fake. */
 export interface GameOcrRecognitionAdapter {
   start?(): Promise<void>
   recognize(request: {
@@ -25,16 +24,10 @@ export interface GameOcrRecognitionAdapter {
   stop(): Promise<void>
 }
 
-/** Longest failure detail carried into a status message. */
 const MAX_FAILURE_DETAIL_LENGTH = 200
 
-/** Shared zero-length replacement used to release captured image references. */
 const EMPTY_IMAGE_BYTES = new Uint8Array()
 
-/**
- * Joins a stage label to whatever the failing boundary said, so the Options
- * surface reports a cause rather than only the stage that hit it.
- */
 function describeFailure(stage: string, error: unknown): string {
   const message = error instanceof Error ? error.message.trim() : ''
   if (message === '') return `${stage}.`
@@ -49,18 +42,11 @@ interface Session extends OcrCaptureIdentity {
   valid: boolean
 }
 
-/** States the coordinator itself can move the controller into. */
 export type GameOcrCaptureState = 'capturing' | 'recognizing' | 'inspecting'
 
 export interface GameOcrCaptureCoordinatorOptions {
-  /** Resolves the focused window, or the display under the pointer. */
   targets: GameOcrCaptureTargets
-  /**
-   * Builds the frozen-frame window over the given logical desktop rectangle.
-   * Called once per armed run rather than once per capture: the coordinator
-   * retains the window between frames and only asks for a new one after the
-   * old one is gone, moving and resizing it onto each new target.
-   */
+  /** Retained between captures; rebuilt only after the previous window is gone. */
   createPresentation: (bounds: OcrDisplayBounds) => GameOcrWindow
   ocr: GameOcrRecognitionAdapter
   /** False once Game OCR is stopping or off; ends any session in flight. */
@@ -71,30 +57,19 @@ export interface GameOcrCaptureCoordinatorOptions {
   onFrameEnded: () => void
   /** Advances the lifecycle counter that decides arm/stop races. */
   onSessionInvalidated: () => void
-  /** Drops cached display sources after a display change. */
   invalidateDisplayCache: () => void
-  /** Claims Escape and Ctrl+C for as long as the frame handed here is up. */
+  /** Claims Escape and Ctrl+C only while the frozen frame is visible. */
   holdFrameShortcuts: (handlers: GameOcrFrameShortcutHandlers) => void
   releaseFrameShortcuts: () => void
   reportError: (message: string, error: unknown) => void
-  /** One development log line per resolved target or window fallback. */
   log: (message: string) => void
 }
 
-/**
- * Runs and invalidates the current capture/recognition session.
- *
- * One frozen-frame window serves every capture in an armed run. New captures
- * start immediately and supersede older sessions; per-capture identities keep
- * overlapping presentation and OCR replies from being accepted out of order.
- * Shortcut ownership and status bookkeeping live with their own owners and
- * reach this module as callbacks.
- */
+// Session/capture identities reject out-of-order replies while reusing one window.
 export interface GameOcrCaptureCoordinator {
   capture(): Promise<void>
   /** Drops the current session. The retained frame stays available. */
   invalidate(): void
-  /** Destroys the retained frozen-frame window. */
   close(): Promise<void>
 }
 
@@ -127,7 +102,6 @@ export function createGameOcrCaptureCoordinator(
     options.onFailure(message, error, session.sessionId)
   }
 
-  /** Ends the visible frame the way the renderer's own close request does. */
   const dismissFrame = (frame: GameOcrWindow): void => {
     if (presentation !== frame) return
     Promise.resolve(frame.dismiss()).catch((error) => {
@@ -135,12 +109,7 @@ export function createGameOcrCaptureCoordinator(
     })
   }
 
-  /**
-   * The frozen frame ended without the coordinator asking: the user dismissed
-   * it, a display change invalidated its placement, or its renderer died.
-   * `destroyed` distinguishes a window that must be rebuilt from one that is
-   * merely hidden and ready to serve the next capture.
-   */
+  // A hidden window can be reused; a destroyed one must be rebuilt.
   const handleFrameEnded = (target: GameOcrWindow, destroyed: boolean): void => {
     if (presentation !== target) return
     presentedTarget = undefined
@@ -152,11 +121,6 @@ export function createGameOcrCaptureCoordinator(
     options.onFrameEnded()
   }
 
-  /**
-   * Reuses the retained window, moved and resized onto the new target. A
-   * window target changes the rectangle on almost every alt-tab, so this is
-   * no longer only a multi-monitor case.
-   */
   const ensurePresentation = (bounds: OcrDisplayBounds): GameOcrWindow => {
     const retained = presentation
     if (retained) {
@@ -167,15 +131,13 @@ export function createGameOcrCaptureCoordinator(
     presentation = created
     created.onDismissed(() => handleFrameEnded(created, false))
     created.onClosed(() => {
-      // Native display-change events destroy the retained window. Resolve its
-      // replacement from fresh bounds and source ids on the next shortcut.
+      // Display changes invalidate both placement and cached source ids.
       if (options.isRunning()) options.invalidateDisplayCache()
       handleFrameEnded(created, true)
     })
     return created
   }
 
-  /** Ends a failed frame without destroying the retained renderer. */
   const discardPresentation = (): Promise<void> => {
     presentedTarget = undefined
     const target = presentation
@@ -210,12 +172,9 @@ export function createGameOcrCaptureCoordinator(
     if (!isCurrent(session)) return
     options.onStateChange('recognizing', session.sessionId)
     try {
-      // Encoded by the renderer after its frame was already on screen, so this
-      // wait is never something the user is looking at a blank display for.
+      // The renderer encodes after displaying the frozen frame.
       let imageBytes = await imageBytesPromise
-      // A resolved Promise retains its value. Drop both controller references
-      // before waiting on the much longer OCR operation; the worker adapter
-      // has synchronously taken ownership of the bytes by this point.
+      // Resolved promises retain their bytes; release both local references before awaiting OCR.
       imageBytesPromise = Promise.resolve(EMPTY_IMAGE_BYTES)
       if (!isCurrent(session)) return
       if (imageBytes.byteLength === 0)
@@ -235,36 +194,23 @@ export function createGameOcrCaptureCoordinator(
       ) {
         return
       }
-      // Boxes and indicator swap together: the sign is only meaningful while
-      // OCR runs, and the regions belong to the screenshot already presented.
       frame.setRegions(result)
       frame.setRecognizing(false)
       options.onStateChange('inspecting', session.sessionId)
     } catch (error) {
       if (!isCurrent(session)) return
       frame.setRecognizing(false)
-      // The reason travels with the message. "Recognition failed." on its own
-      // sends the user to a console that never had the worker's stderr in it.
       fail(session, describeFailure('Game OCR recognition failed', error), error)
     }
   }
 
-  /**
-   * One capture attempt against one resolved target.
-   *
-   * Returns `'window-capture-failed'` instead of throwing when a *window*
-   * target could not be frozen. That is not an error the user should see: an
-   * exclusive-fullscreen game, a protected surface, or a handle Chromium
-   * declines to capture all land here, and the answer to every one of them is
-   * the display capture Game OCR did before focused-window selection existed.
-   */
+  // Protected or exclusive-fullscreen windows may reject capture; retry on the display.
   const attemptCapture = async (
     session: Session,
     target: GameOcrCaptureTarget
   ): Promise<'presented' | 'superseded' | 'window-capture-failed'> => {
     const frame = ensurePresentation(target.bounds)
-    // Register the waiter before asking the renderer to draw. A very fast
-    // canvas encode can otherwise arrive before main is listening for it.
+    // Register first: a fast canvas encode can arrive before freeze resolves.
     const imageBytesPromise = frame.captureBytes(session.captureId)
     let imageSize: OcrImageSize
     try {
@@ -284,13 +230,11 @@ export function createGameOcrCaptureCoordinator(
       return 'window-capture-failed'
     }
     if (!isCurrent(session)) {
-      // A newer capture owns this retained window. It will replace this
-      // canvas next; hiding here would make the newer shortcut visibly flash.
+      // Hiding here would flash the newer capture that owns this window.
       return 'superseded'
     }
     presentedTarget = target
-    // Claimed only once the frame is actually up, so a capture that failed
-    // on its way here never leaves Escape taken away from the game.
+    // Claim only after presentation so a failed capture leaves Escape with the game.
     options.holdFrameShortcuts({
       dismiss: () => dismissFrame(frame),
       copySelection: () => frame.copySelection()
@@ -303,17 +247,12 @@ export function createGameOcrCaptureCoordinator(
     try {
       if (!isCurrent(session)) return
 
-      // Geometry only. The pixels come from the stream the frame already
-      // holds, so nothing here reads the screen.
       const targetOrPromise = options.targets.resolve()
-      // A warm target is deliberately synchronous. Awaiting an already-known
-      // value here would return control to Electron's global-shortcut dispatch,
-      // which can postpone the Promise continuation by seconds on Windows.
+      // Awaiting a warm target yields to Windows shortcut dispatch, which can delay
+      // the continuation by seconds. Keep the synchronous path synchronous.
       let target = isPromiseLike(targetOrPromise) ? await targetOrPromise : targetOrPromise
       if (!isCurrent(session)) return
-      // Focusing the OCR frame must not turn its next shortcut into a desktop
-      // capture. Only reuse its target when Kizuna is foreground AND this
-      // frame has focus; alt-tabbing to another application still retargets.
+      // Reuse the target only while this frame has focus; alt-tab must retarget.
       if (
         target.kind === 'display' &&
         target.fallbackReason === 'own-process' &&
@@ -327,9 +266,7 @@ export function createGameOcrCaptureCoordinator(
       const outcome = await attemptCapture(session, target)
       if (outcome !== 'window-capture-failed') return
 
-      // The window would not capture. Retry against the display under the
-      // pointer under a fresh capture identity, so the abandoned window
-      // capture's late reply cannot be mistaken for this one's.
+      // A fresh identity prevents late window-capture replies from satisfying the display retry.
       nextCaptureId = allocateIdentifier(nextCaptureId)
       session.captureId = nextCaptureId
       const retryOrPromise = options.targets.resolve({
@@ -350,19 +287,14 @@ export function createGameOcrCaptureCoordinator(
 
   return {
     capture() {
-      // Capture exclusion makes recapture safe while the retained overlay is
-      // visible. Do not serialize behind an obsolete freeze: session identity
-      // already makes this latest-request-wins, and the screenshot must begin
-      // in the shortcut callback rather than on the tail of a promise queue.
+      // Start inside the shortcut callback; queueing behind an obsolete freeze delays capture.
       return runCapture(beginSession())
     },
     invalidate: dropSession,
     close() {
       const target = presentation
       if (!target) return Promise.resolve()
-      // Dropped here rather than in the close notification: a window that is
-      // already destroyed resolves without emitting anything, and a retained
-      // reference to it would leave the next armed run without a usable frame.
+      // An already-destroyed window may close without emitting another notification.
       presentation = undefined
       presentedTarget = undefined
       try {

@@ -6,16 +6,13 @@ import {
 } from '../../../shared/ocr'
 import { isFiniteNumber } from '../../../shared/guards'
 
-/** Maximum number of physical pixels one display capture may cover. */
 export const MAX_DISPLAY_CAPTURE_PIXELS = 64 * 1024 * 1024
 
-/** Minimal screen surface needed to pick the display under the pointer. */
 export interface DisplayCaptureScreen {
   getCursorScreenPoint(): DisplayCapturePoint
   getDisplayNearestPoint(point: DisplayCapturePoint): DisplayCaptureDisplay
 }
 
-/** Minimal desktop-capture surface needed to enumerate capture sources. */
 export interface DisplayCapturer {
   getSources(options: DisplayCaptureSourceOptions): Promise<DisplayCaptureSource[]>
 }
@@ -38,27 +35,17 @@ export interface DisplayCaptureDisplay {
 }
 
 export interface DisplayCaptureSource {
-  /** Electron's capture-source handle, which the renderer opens a stream on. */
   id: string
   display_id: string
 }
 
-/** The display under the pointer, and the stream source that shows it. */
 export interface GameOcrDisplayTarget {
   metadata: OcrDisplayCaptureMetadata
   sourceId: string
 }
 
 export interface GameOcrDisplaySources {
-  /**
-   * Resolves the display containing the cursor and the capture source for it.
-   *
-   * Deliberately does **not** read any pixels. Reading them here would mean a
-   * `desktopCapturer.getSources` call with a real thumbnail size on every
-   * capture, which costs ~300 ms whatever size is asked for and never warms up;
-   * the frozen frame's renderer holds an open stream instead and draws from the
-   * frame it already has. Source ids are enumerated once and reused.
-   */
+  /** Source lookup only: thumbnail capture costs ~300 ms per call; the renderer uses an open stream. */
   /** Cache hits are synchronous so the shortcut callback does not yield. */
   cursorDisplay(): GameOcrDisplayTarget | Promise<GameOcrDisplayTarget>
   /** Drops cached source ids after a display change invalidates them. */
@@ -95,7 +82,6 @@ export interface DisplaySourcesDependencies {
   desktopCapturer: DisplayCapturer
 }
 
-/** Returns the physical pixel dimensions of one Electron display. */
 function displayCaptureImageSize(
   display: Pick<DisplayCaptureDisplay, 'bounds' | 'scaleFactor'>
 ): OcrImageSize {
@@ -105,12 +91,10 @@ function displayCaptureImageSize(
   }
 }
 
-/** Tests provide screen and source fakes instead of enumerating the desktop. */
 export function createGameOcrDisplaySources(
   deps: DisplaySourcesDependencies
 ): GameOcrDisplaySources {
-  // display_id -> source id. One enumeration serves every later capture, and
-  // the smallest legal thumbnail is requested because the pixels are unused.
+  // Thumbnails are unused; request the smallest size when enumerating source ids.
   let sources: Map<string, string> | undefined
   let lastTarget: GameOcrDisplayTarget | undefined
   const targets = new Map<string, GameOcrDisplayTarget>()
@@ -159,8 +143,7 @@ export function createGameOcrDisplaySources(
     let known = await enumerate()
     let sourceId = known.get(String(display.id))
     if (!sourceId && retryOnMiss) {
-      // A display attached during the first listing is the ordinary reason to
-      // miss, so refresh once before treating it as a capture failure.
+      // A display may have attached during enumeration; refresh once before failing.
       sources = undefined
       known = await enumerate()
       sourceId = known.get(String(display.id))
@@ -196,8 +179,6 @@ export function createGameOcrDisplaySources(
         const sourceId = known?.get(String(display.id))
         if (sourceId) return cacheTarget(display, sourceId)
 
-        // No cached id means actual Electron source enumeration is required.
-        // This is the only path that yields out of the shortcut callback.
         sources = undefined
         return resolveEnumeratedTarget(display, known === undefined)
       } catch (error) {

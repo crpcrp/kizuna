@@ -1,28 +1,6 @@
-// Turns a native foreground window into something Electron can capture: a
-// desktop-capture source id, and the logical desktop rectangle the frozen
-// frame has to cover.
-//
-// Two measurements on the pinned runtime (Electron 43.3.0, Windows 11 26200)
-// shape everything here.
-//
-// **Window source ids encode the HWND.** Electron documents the form as
-// `window:XX:YY`, and enumeration confirms it exactly: a foreground HWND of
-// 1902762 appears as `window:1902762:0`. The handle is the identity, so no
-// title text is involved in choosing a window.
-//
-// **Enumerating window sources costs ~3.2 seconds, every time.**
-// `desktopCapturer.getSources({ types: ['window'] })` measured 3152-3217 ms
-// across five consecutive calls and does not warm up, against ~304 ms for
-// `['screen']`. That is far beyond the whole shortcut-to-screenshot budget,
-// and it cannot be cached across shortcuts either, because the user may
-// alt-tab to a different game between two presses.
-//
-// So the id is constructed from the handle instead of looked up. Chromium
-// accepts a synthesized id: opening `window:<hwnd>:0` with no preceding
-// `getSources` call at all produced a live 1476x1036 stream of that window in
-// ~430 ms. A handle Chromium will not capture simply fails to open, which is
-// already a fallback branch — it costs one failed stream open rather than 3.2
-// seconds on every capture.
+// Electron 43.3.0 / Windows 11 26200: window enumeration took 3152–3217 ms
+// over five calls, versus ~304 ms for screens. A synthesized window:<hwnd>:0
+// opened a 1476x1036 stream in ~430 ms without enumeration; failures fall back to display.
 
 import {
   MAX_OCR_IMAGE_DIMENSION,
@@ -37,19 +15,12 @@ import {
 import type { PhysicalRect } from './foregroundWindow'
 import { isFiniteNumber } from '../../../shared/guards'
 
-/** Screen surface needed to place a physical window rectangle on a display. */
 export interface WindowCaptureScreen {
   getAllDisplays(): DisplayCaptureDisplay[]
-  /**
-   * Windows-only Electron API converting a logical point to physical desktop
-   * pixels. Used to learn each display's physical origin, which `Display`
-   * itself does not expose and which cannot be derived from the logical
-   * origin in a mixed-DPI layout.
-   */
+  /** Windows API: mixed-DPI display origins cannot be derived from logical coordinates alone. */
   dipToScreenPoint(point: DisplayCapturePoint): DisplayCapturePoint
 }
 
-/** Where a captured window sits, in the coordinates each consumer needs. */
 export interface WindowCaptureGeometry {
   /** Logical desktop rectangle for the frozen-frame window. */
   bounds: OcrDisplayBounds
@@ -60,26 +31,12 @@ export interface WindowCaptureGeometry {
   displayId: number
 }
 
-/**
- * Builds the capture-source id for a window handle.
- *
- * The trailing field is Electron's "belongs to the current process" flag, 0
- * for every other application. Kizuna's own windows are rejected at the
- * native boundary, so only 0 is ever produced here.
- */
+/** Electron's final field flags the current process; captured windows belong to other processes. */
 export function formatWindowSourceId(hwnd: string): string {
   return `window:${hwnd}:0`
 }
 
-/**
- * Reads the native handle back out of a capture-source id.
- *
- * Kept as the exact inverse of `formatWindowSourceId` and tested as a
- * round trip, so the one place that knows Electron's id shape is this pair.
- * The handle stays a string throughout: a 64-bit HWND does not fit in a
- * JavaScript number, and a rounded handle would compare equal to a different
- * window's.
- */
+/** Keep the HWND as a string: 64-bit handles may exceed JavaScript's safe integer range. */
 export function parseWindowSourceHandle(sourceId: unknown): string | undefined {
   if (typeof sourceId !== 'string') return undefined
   const parts = sourceId.split(':')
@@ -91,19 +48,7 @@ export function parseWindowSourceHandle(sourceId: unknown): string | undefined {
   return normalized === '0' ? undefined : normalized
 }
 
-/**
- * Places a window's physical rectangle on the display that owns it and
- * converts it to logical desktop coordinates.
- *
- * The owning display is chosen by largest overlap rather than by the window's
- * origin, so a window straddling two monitors is covered on the one showing
- * most of it. Negative desktop origins are carried through unchanged: on
- * Windows a secondary monitor left of the primary has a negative x, and
- * clamping it to zero would put the overlay on the wrong screen.
- *
- * Returns `undefined` when no display can own the rectangle or the result
- * would exceed the OCR image contract, both of which mean display capture.
- */
+// Use the display with the largest overlap; preserve negative desktop origins.
 export function resolveWindowCaptureGeometry(
   physicalBounds: PhysicalRect,
   screen: WindowCaptureScreen,
@@ -142,16 +87,12 @@ export function resolveWindowCaptureGeometry(
     const score = intersectionArea(physicalBounds, physicalDisplay)
     if (!best || score > best.score) best = { display, origin, score }
   }
-  // A window overlapping nothing still leaves `best` set to the first usable
-  // display, so its rectangle is mapped faithfully rather than discarded.
-  // Windows lets a window be dragged fully off screen; the overlay is then off
-  // screen too, which is correct — it is covering where the window actually is.
+  // Fully off-screen windows use the first usable display; the overlay stays off-screen too.
   if (!best) return undefined
 
   const { display, origin } = best
   const scaleFactor = display.scaleFactor
-  // Rounded as edges rather than as an origin plus a size, so the covered
-  // rectangle does not drift by a pixel at fractional scale factors.
+  // Round edges independently to avoid one-pixel drift at fractional scaling.
   const left = Math.round(display.bounds.x + (physicalBounds.x - origin.x) / scaleFactor)
   const top = Math.round(display.bounds.y + (physicalBounds.y - origin.y) / scaleFactor)
   const right = Math.round(
