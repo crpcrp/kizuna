@@ -41,9 +41,6 @@ import { isPlainObject, requireShape } from './manifestValidation.mjs'
  */
 
 /**
- * The pre-`platforms` lock shape, kept only so notices.mjs can still read an
- * old file and explain why it is unusable. It never carried an archive.
- *
  * @typedef {Omit<LockSource, 'archive'>} LegacyLockSource
  */
 
@@ -63,18 +60,14 @@ import { isPlainObject, requireShape } from './manifestValidation.mjs'
  * @property {string[]} skipped Destination paths that already had the locked contents.
  */
 
-/** Lock-file schema this module understands. A bump means a script update. */
 export const SUPPORTED_SCHEMA_VERSION = 3
 
-/** Platform keys supported by the vendor mirror and the application. */
 export const SUPPORTED_PLATFORM_KEYS = Object.freeze(['win32-x64', 'linux-x64'])
 
 const supportedPlatformSet = new Set(SUPPORTED_PLATFORM_KEYS)
 
 /**
- * Resource roots that only one platform may stage. Game OCR runs on Windows
- * alone, and its PP-OCR payload is large, so a lock entry that leaked it
- * into the Linux tree would inflate those artifacts with an unusable runtime.
+ * PP-OCR is Windows-only; staging it on Linux would ship a large unusable runtime.
  */
 const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'ppocr/': 'win32-x64' })
 
@@ -82,8 +75,6 @@ const PLATFORM_EXCLUSIVE_ROOTS = Object.freeze({ 'ppocr/': 'win32-x64' })
 const RETIRED_RESOURCE_ROOTS = Object.freeze(['paddleocr'])
 
 /**
- * Convert a Node platform/architecture pair into a validated lock key.
- *
  * @param {string} platform
  * @param {string} architecture
  * @returns {string}
@@ -102,8 +93,6 @@ export function platformKeyFor(platform = process.platform, architecture = proce
 }
 
 /**
- * Select one platform entry from a schema-v3 lock.
- *
  * @param {LockFile} lock
  * @param {string} platformKey
  * @returns {PlatformLock}
@@ -125,9 +114,7 @@ export function selectPlatformLock(lock, platformKey) {
 }
 
 /**
- * Parse a sha256sum-style checksum file into a path -> hash map. Blank lines
- * and comments are ignored; the leading * of binary-mode entries is stripped.
- *
+ * sha256sum prefixes binary-mode paths with an asterisk.
  * @param {string} text
  * @returns {Record<string, string>}
  */
@@ -142,9 +129,7 @@ export function parseChecksums(text) {
 }
 
 /**
- * Lock paths are repository-relative POSIX paths. Rejecting backslashes and
- * dot segments makes the same lock safe on both Windows and Linux.
- *
+ * Lock paths use POSIX separators; reject dot segments and backslashes on every host.
  * @param {unknown} value
  * @returns {boolean}
  */
@@ -156,8 +141,6 @@ export function isSafeRelativePath(value) {
 }
 
 /**
- * Resolve a validated lock path below a caller-selected root.
- *
  * @param {string} root
  * @param {string} relative
  * @param {string} label
@@ -177,11 +160,7 @@ function safePath(root, relative, label) {
 }
 
 /**
- * A release tag and an asset name both become path segments of the download
- * URL, so they are restricted to characters that cannot smuggle in a traversal,
- * a query string, or a different host. Git tags may legally contain slashes;
- * these deliberately may not.
- *
+ * URL path segments must not introduce traversal, queries, or another host.
  * @param {unknown} value
  * @returns {boolean}
  */
@@ -286,10 +265,6 @@ export function lockProblems(lock) {
 }
 
 /**
- * Anonymous HTTPS download URL for one release asset of the public mirror.
- * Every segment is validated by `lockProblems` before it reaches this function,
- * so the result cannot be steered off github.com by a lock-file edit.
- *
  * @param {{ repo: string, release: string, asset: string }} options
  * @returns {string}
  */
@@ -304,10 +279,6 @@ export function vendorArchiveUrl({ repo, release, asset }) {
 }
 
 /**
- * Everything the materialiser needs to turn a lock entry into a vendor
- * directory. Returned rather than executed so the plan is assertable in tests
- * without a network.
- *
  * @param {PlatformLock} selected
  * @returns {{ url: string, asset: string, sha256: string, size: number, stamp: string }}
  */
@@ -328,8 +299,7 @@ export function vendorFetchPlan(selected) {
 export const VENDOR_STAMP_FILE = '.kizuna-vendor-archive'
 
 /**
- * SHA-256 of a file, streamed so large ffmpeg builds never land in memory.
- *
+ * Stream large binaries instead of buffering them in memory.
  * @param {string} path
  * @returns {Promise<string>}
  */
@@ -350,9 +320,7 @@ async function exists(path) {
 }
 
 /**
- * A Git LFS pointer is deliberately identified before hashing so a failed
- * checkout explains the real repair instead of looking like a random mismatch.
- *
+ * Detect an unhydrated LFS checkout before reporting an opaque hash mismatch.
  * @param {string} path
  * @returns {Promise<boolean>}
  */
@@ -371,9 +339,6 @@ async function isLfsPointer(path) {
 }
 
 /**
- * Check the selected mirror payload against the lock, its checksum file, and
- * its platform-specific manifest.
- *
  * @param {{ lock: LockFile, platformKey: string, vendorDir: string }} options
  * @returns {Promise<{
  *   missing: string[],
@@ -498,8 +463,6 @@ export async function verifyVendorFiles({ lock, platformKey, vendorDir }) {
 }
 
 /**
- * Turn a verification result into the actionable error a caller should throw.
- *
  * @param {{
  *   missing: string[],
  *   mismatched: { path: string, expected: string, actual: string }[],
@@ -537,9 +500,6 @@ export function verificationError(result, commit) {
 }
 
 /**
- * Remove only files managed by a non-selected platform. First-party icons are
- * untouched.
- *
  * @param {{ lock: LockFile, platformKey: string, resourcesDir: string }} options
  * @returns {Promise<string[]>}
  */
@@ -579,9 +539,7 @@ async function removeStalePlatformFiles({ lock, platformKey, resourcesDir }) {
 }
 
 /**
- * Copy the selected platform files into resources/, verifying each one on the
- * way out. Executable mode comes from the lock so Linux keeps vendor 0755 bits.
- *
+ * The lock supplies executable modes even when the vendor checkout loses them.
  * @param {{ lock: LockFile, platformKey: string, vendorDir: string, resourcesDir: string }} options
  * @returns {Promise<StageReport>}
  */
@@ -620,9 +578,6 @@ export async function stageResources({ lock, platformKey, vendorDir, resourcesDi
 }
 
 /**
- * Final layout gate: required runtime files must exist and Linux executable
- * resources must still have an executable mode.
- *
  * @param {{ lock: LockFile, platformKey: string, resourcesDir: string }} options
  * @returns {Promise<string[]>}
  */
@@ -693,9 +648,6 @@ export async function stagedResourceProblems({ lock, platformKey, resourcesDir }
 }
 
 /**
- * Whole flow: validate the lock, materialise the pinned mirror, verify the
- * selected platform, stage resources, and re-check the resulting layout.
- *
  * @param {object} options
  * @param {LockFile} options.lock
  * @param {string} options.platformKey
@@ -754,8 +706,6 @@ export async function acquireResources({
 }
 
 /**
- * Read `--<name> <value>` / `--<name>=<value>` out of argv.
- *
  * @param {string[]} argv
  * @param {string} name
  * @returns {string | undefined}

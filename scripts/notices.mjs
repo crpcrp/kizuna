@@ -66,25 +66,14 @@ import {
  * @property {string} path Path relative to the repository root, e.g. `node_modules/react`.
  */
 
-/** `third-party.json` schema this module understands. A bump means a script update. */
 export const SUPPORTED_NOTICES_SCHEMA_VERSION = 1
 
-/** Bundle-relative name of the generated notices document. */
 export const NOTICES_FILE = 'THIRD_PARTY_NOTICES.md'
 
-/** Bundle-relative name of the generated corresponding-source document. */
 export const SOURCE_FILE = 'CORRESPONDING_SOURCE.md'
 
 /**
- * Resolve platform-specific component metadata without mutating the committed
- * notices object. Components without an override retain the common metadata.
- *
- * A `platformExclusive` component is dropped everywhere else. Game OCR's
- * PP-OCR payload ships on Windows alone — the same rule
- * `PLATFORM_EXCLUSIVE_ROOTS` enforces on the lock — and a notice for a
- * component the Linux artifact does not contain would name licence texts that
- * platform never stages.
- *
+ * Exclude licences for platform-exclusive binaries that this artifact does not ship.
  * @param {NoticesFile} notices
  * @param {string | undefined} platformKey
  * @returns {NoticesFile}
@@ -122,9 +111,6 @@ const isSafeSourceRoot = (value) =>
   isSafeRelativePath(value) && /** @type {string} */ (value).startsWith('src/')
 
 /**
- * Structural validation of `third-party.json`, independent of any other file.
- * Returns the reasons rather than throwing so callers can report them together.
- *
  * @param {unknown} notices
  * @returns {string[]} Empty when the file is usable.
  */
@@ -195,16 +181,6 @@ export function noticesProblems(notices) {
 }
 
 /**
- * The gate that makes a silent omission impossible: `third-party.json` must
- * describe exactly the tree `resources.lock.json` stages.
- *
- * Three separate ways to get this wrong are checked, because each has a
- * different cause. A stale `vendorCommit` means the binaries moved and the
- * notices did not. A licence file that is missing from the lock, or whose hash
- * differs, means the notices name a text the installer will not contain. An
- * uncovered lock path means a whole component was added to the tree with no
- * notice entry at all.
- *
  * @param {NoticesFile} notices
  * @param {import('./vendorResources.mjs').LockFile} lock
  * @param {string} [platformKey]
@@ -271,9 +247,7 @@ export function lockAgreementProblems(notices, lock, platformKey) {
 }
 
 /**
- * Does an npm `os`/`cpu` constraint admit this host? Entries may be negated
- * (`!win32`), and an absent or empty list means "any".
- *
+ * npm os/cpu constraints accept negated entries; an empty list allows any host.
  * @param {string[] | undefined} allowed
  * @param {string} actual
  * @returns {boolean}
@@ -286,18 +260,7 @@ function matchesHostConstraint(allowed, actual) {
 }
 
 /**
- * Production npm dependencies from a lockfileVersion-3 `package-lock.json`:
- * everything electron-builder keeps in the installed app, transitive deps
- * included. Dev-only packages and the root project entry are dropped.
- *
- * Optional dependencies restricted to a foreign platform are dropped too.
- * A package shipping one prebuilt binary per platform lists every one of them
- * in the lock while npm installs only the matching one, so keeping them would
- * demand licence texts for directories that do not exist on this host — and
- * would put licences for binaries this artifact does not contain into its
- * notices. Non-optional packages are never filtered, so a genuinely missing
- * licence is still a failure.
- *
+ * Only optional dependencies may be absent on a foreign platform; missing required licences must fail.
  * @param {{ packages?: Record<string, { version?: string, license?: string, dev?: boolean, optional?: boolean, os?: string[], cpu?: string[] }> }} packageLock
  * @param {{ platform?: string, arch?: string }} [host]
  * @returns {NpmPackage[]} Sorted by package path.
@@ -325,10 +288,6 @@ export function productionPackages(packageLock, host = {}) {
 }
 
 /**
- * Pick the licence texts out of a directory listing. npm packages are not
- * consistent about this — `LICENSE`, `LICENSE.md`, `LICENCE`, `COPYING`, and
- * `LICENSE-MIT` all occur — so the name is matched rather than assumed.
- *
  * @param {string[]} entries
  * @returns {string[]} Matching names, sorted.
  */
@@ -337,8 +296,6 @@ export function licenseFileNames(entries) {
 }
 
 /**
- * Locate one package's licence texts on disk.
- *
  * @param {{ repoRoot: string, pkg: NpmPackage }} options
  * @returns {Promise<string[]>} Names inside the package directory; empty if none.
  */
@@ -354,10 +311,7 @@ async function findPackageLicenses({ repoRoot, pkg }) {
 const link = (url, label) => `[${label ?? url}](${url})`
 
 /**
- * Where a component's licence text lands inside the bundle. Namespaced by
- * component id because mpv and FFmpeg both ship a file called
- * `LICENSE.GPLv3.txt`, and a flat layout would silently keep only one of them.
- *
+ * Namespace by component: mpv and FFmpeg both ship LICENSE.GPLv3.txt.
  * @param {{ id: string }} component
  * @param {string} sourcePath
  * @returns {string} Bundle-relative, POSIX-separated.
@@ -367,13 +321,7 @@ export function componentLicensePath(component, sourcePath) {
 }
 
 /**
- * Where an npm package's licence text lands. Derived from the lockfile path
- * rather than the bare package name, because npm legitimately installs the same
- * package at two versions in different nesting positions —
- * `bl/node_modules/readable-stream` and `tar-stream/node_modules/readable-stream`
- * are different code under different copyright years, and flattening both to
- * `readable-stream` would ship only one of the two licence texts.
- *
+ * Keep nested package copies separate: different versions can carry different licences.
  * @param {{ path: string }} pkg
  * @param {string} fileName
  * @returns {string} Bundle-relative, POSIX-separated.
@@ -391,10 +339,6 @@ function npmLicenseSource(repoRoot, pkg, name) {
 }
 
 /**
- * Render `THIRD_PARTY_NOTICES.md`: one section per bundled component, then the
- * npm dependency table. Every licence text named here is copied into the same
- * bundle by `writeNoticeBundle`, so the document is never a dangling reference.
- *
  * @param {object} options
  * @param {NoticesFile} options.notices
  * @param {NpmPackage[]} options.packages
@@ -462,10 +406,6 @@ export function renderThirdPartyNotices({ notices, packages, packageLicenseNames
 }
 
 /**
- * Render `CORRESPONDING_SOURCE.md`. Only components that actually carry a source
- * obligation, or that name a source location at all, appear — a table of "see
- * upstream" rows for permissive packages would bury the entries that matter.
- *
  * @param {{ notices: NoticesFile, productName: string }} options
  * @returns {string}
  */
@@ -518,10 +458,6 @@ export function renderCorrespondingSource({ notices, productName }) {
 }
 
 /**
- * Every licence text the bundle must contain, as source→destination pairs.
- * Resolved before anything is written so a missing file is reported as a list
- * rather than discovered halfway through.
- *
  * @param {object} options
  * @param {NoticesFile} options.notices
  * @param {string} options.repoRoot
@@ -567,10 +503,6 @@ export function licenseCopyPlan({
 }
 
 /**
- * Fill in versions that are only knowable from the installed dependency tree,
- * so `third-party.json` does not carry a second hand-maintained copy of
- * Electron's version. Returns a new object; the input is not mutated.
- *
  * @param {NoticesFile} notices
  * @param {{ packages?: Record<string, { version?: string }> }} packageLock
  * @returns {NoticesFile}
@@ -587,8 +519,6 @@ export function resolveComponentVersions(notices, packageLock) {
 }
 
 /**
- * Every file currently in the bundle directory, as bundle-relative POSIX paths.
- *
  * @param {string} outDir
  * @param {string} [prefix]
  * @returns {Promise<string[]>}
@@ -611,16 +541,7 @@ async function existingBundleFiles(outDir, prefix = '') {
 }
 
 /**
- * Copy the planned licence texts and write the two generated documents.
- * Destinations are deduplicated: two components can legitimately reference the
- * same GPLv3 text, and copying it twice under one name is not an error.
- *
- * Anything the bundle already held and this run did not write is deleted. The
- * bundle is per-platform, and generating one platform's after another's — a
- * local `npm run dist` then `npm run dist:linux` — otherwise leaves the first
- * platform's licence texts behind, so the Linux artifact would carry notices
- * for binaries it does not contain, PP-OCR's GPLv3 text among them.
- *
+ * Remove stale licences when switching platform bundles; duplicate destinations may share one text.
  * @param {object} options
  * @param {string} options.outDir
  * @param {{ from: string, to: string }[]} options.plan
@@ -650,10 +571,6 @@ export async function writeNoticeBundle({ outDir, plan, documents }) {
 }
 
 /**
- * Whole flow: validate `third-party.json`, check it against the lock, resolve
- * every licence text, and write the bundle. Throws on the first failure, so a
- * packaging run cannot continue with incomplete notices.
- *
  * @param {object} options
  * @param {NoticesFile} options.notices
  * @param {import('./vendorResources.mjs').LockFile} options.lock

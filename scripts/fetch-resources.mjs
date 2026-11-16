@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-// Populates the gitignored `resources/` tree from the pinned mirror named in
-// `resources.lock.json`. This is the only supported way to obtain the runtime
-// binaries: nothing here talks to mpv's, FFmpeg's, or MeCab's upstream release
-// pages, so a binary is only ever introduced by a reviewed lock-file diff.
-//
-// Usage:
-//   node scripts/fetch-resources.mjs                         # select host platform
-//   node scripts/fetch-resources.mjs --platform linux-x64    # explicit target
-//   node scripts/fetch-resources.mjs --vendor-dir D          # reuse a local mirror clone
-//
-// Environment:
-//   KIZUNA_VENDOR_DIR  same as --vendor-dir
-//
-// The mirror is public, so no token or credential is involved at any point.
-//
-// All process-level concerns (argv, env, HTTP, unpacking, exit codes) live
-// here; the tested logic lives in `scripts/vendorResources.mjs`.
 
 import { spawn } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -38,19 +21,8 @@ import {
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 /**
- * Unpack `asset` into `dir` with the system tar. Windows 10 and later ship
- * bsdtar as tar.exe and every supported Linux has GNU tar, so this needs no
- * dependency. Paths in the archive are mirror-relative and were produced by
- * scripts/publish-payloads.sh from a clean checkout.
- *
- * Two Windows quirks shape the call. Whichever tar is used, it runs from the
- * directory holding the archive and names it without a path, because GNU tar
- * reads a `-f` argument containing a colon as `host:path` and an absolute
- * Windows path like C:\... becomes an attempt to reach a machine called C.
- * And the tar on PATH is often Git for Windows' MSYS build, which rewrites the
- * `-C` argument into something it can no longer open, so the native bsdtar in
- * System32 is preferred when it is there.
- *
+ * Use an archive basename to avoid GNU tar interpreting C: as a remote host.
+ * Prefer native Windows tar because MSYS rewrites the destination path.
  * @param {string} staging Directory holding the downloaded archive.
  * @param {string} asset Archive file name, no path separators.
  * @param {string} dir Destination directory.
@@ -84,15 +56,7 @@ async function runTar(staging, asset, dir) {
 }
 
 /**
- * Download one release asset, prove it is the archive the lock names, and
- * unpack it over a clean directory.
- *
- * The stamp file makes a warm `.vendor-cache` free: if the directory already
- * holds the archive the lock asks for, nothing is downloaded and nothing is
- * rewritten. If it holds a different one, it is removed rather than merged,
- * because unpacking over a previous release would leave that release's files
- * behind and the result would match no commit at all.
- *
+ * Replace an outdated cache instead of merging files from different releases.
  * @param {{ url: string, asset: string, sha256: string, size: number }} plan
  * @param {string} dir
  * @param {(message: string) => void} log
@@ -172,7 +136,6 @@ async function main() {
   console.log('resources/ is ready.')
 }
 
-// Only run when invoked as a command.
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
     console.error(`\n${error.message}\n`)
