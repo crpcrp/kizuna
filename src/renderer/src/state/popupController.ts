@@ -148,14 +148,6 @@ export interface PopupController {
   close(): void
 }
 
-/**
- * Owns the word popup's request/history/Anki-mining orchestration: which
- * popup/history entry is shown,
- * and the transient "＋ Anki" add/existing-card state. Wraps
- * wordPopupActions' stale-response guarding with the state transitions App
- * previously drove via useState — see showWordPopup/handleWordLinkClick/
- * handleWordPopupBack/handleAddToAnki/handleOpenAnkiCard in App.tsx's history.
- */
 export function createPopupController(): PopupController {
   let state: PopupState = IDLE_STATE
   const listeners = new Set<() => void>()

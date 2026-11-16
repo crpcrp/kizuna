@@ -55,14 +55,7 @@ export interface KeyActionDeps {
   onAdjustSubtitleFontScale: (step: -1 | 1) => void
 }
 
-/**
- * Runs the side effect for a keyboard-shortcut `action` (from `keyToAction`) —
- * App.tsx's keydown effect boils down to `keyToAction` + this. Returns whether
- * the triggering key event should have `preventDefault()` called on it: true
- * for the play/pause and skip actions, whose bound keys (Space, arrows) would
- * otherwise also trigger the browser's own default handling; false for the
- * fullscreen actions, which have no conflicting default.
- */
+// Return whether to prevent browser defaults such as Space scrolling and arrow navigation.
 export function performKeyAction(action: PlayerKeyAction, deps: KeyActionDeps): boolean {
   switch (action) {
     case 'togglePause':
@@ -177,27 +170,12 @@ export function performFileNavigation(direction: 'prev' | 'next', deps: FileNavi
   else deps.onPrevFile()
 }
 
-/** Dependencies `performMediaKey` routes a system media command to.
- * `next`/`prev` split on `playlistActive`: when the play queue owns playback
- * (`playlistController.isPlaybackCurrent`, mirroring the EOF path) they advance
- * the queue via `onPlaylistNext`/`onPlaylistPrev`; otherwise they fall back to
- * App's same-folder `onNextFile`/`onPrevFile`. So a hardware media key or a
- * taskbar Next button advances the active playlist instead of leaving it for
- * the adjacent folder file. */
+// Media next/previous follows the active playlist, falling back to same-folder navigation.
 export interface MediaKeyDeps extends FileNavigationDeps {
   player: PlayerApi
   paused: boolean
 }
 
-/**
- * Pure: runs the side effect for a system media command (a keyboard media key
- * or a taskbar thumbnail-toolbar button — see `main/services/systemMedia.ts`).
- * `playPause` toggles pause through the same helper the play button uses;
- * `next`/`prev` advance the play queue when it owns playback, else the
- * same-folder neighbor (see `MediaKeyDeps`); `stop` pauses and seeks to the
- * start, matching a player's Stop button. Never throws: the player calls are
- * fire-and-forget like the other transport actions.
- */
 export function performMediaKey(command: MediaKeyCommand, deps: MediaKeyDeps): void {
   switch (command) {
     case 'playPause':

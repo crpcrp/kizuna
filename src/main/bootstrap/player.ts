@@ -88,13 +88,7 @@ function startMpvForWindow(deps: PlayerWindowDeps, windowId: bigint | string): P
   })
 }
 
-/**
- * Builds the system-media controller with the real Electron surfaces: the
- * video host owns taskbar progress/thumbnail buttons, while media-key and
- * thumbnail activations are pushed to the renderer-owning overlay. On Windows
- * both roles are the same window. Icons are first-party PNGs under
- * `resources/icons/`.
- */
+// Native media controls belong to the video host; events go to the renderer-owning overlay.
 function createSystemMediaForWindow(
   iconsDir: string,
   videoHost: BrowserWindow,

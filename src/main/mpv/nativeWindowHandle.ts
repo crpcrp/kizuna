@@ -1,12 +1,5 @@
-/**
- * Reads the native parent-window ID from Electron's
- * `BrowserWindow.getNativeWindowHandle()` buffer.
- *
- * Windows exposes an 8-byte HWND in the 64-bit builds Kizuna supports.
- * Electron documents Linux's native type as X11 `Window` (`unsigned long`),
- * but current Electron builds serialize the XID into a 4-byte Buffer on some
- * 64-bit Linux/Ozone configurations. Accept both observed representations.
- */
+// Windows x64 exposes an 8-byte HWND. Linux documents X11 Window as unsigned long,
+// but Electron/Ozone XID buffers have been observed as both 4 and 8 bytes on 64-bit hosts.
 export function windowIdFromHandleBuffer(
   buf: Buffer,
   platform: NodeJS.Platform = process.platform

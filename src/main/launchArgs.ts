@@ -1,15 +1,7 @@
 import { classifyMediaFileName } from '../shared/mediaFileTypes'
 import { pathApiFor } from './platformPath'
 
-/** First argv entry that names a video file: skips the executable and every
- *  `-`-prefixed flag, requires a video extension (shared list), resolves
- *  relative paths against `cwd`. Undefined when none qualifies.
- *
- *  Resolution goes through the *platform's* path implementation rather than
- *  the host's: a drive-qualified (`E:\anime\a.mkv`) or UNC (`\\nas\share\…`)
- *  argument is already absolute to `win32.resolve` and passes through
- *  unchanged, while the POSIX implementation would treat it as a relative
- *  name and glue it onto `cwd`. */
+// Use the target platform so Windows drive and UNC paths stay absolute on any host.
 export function videoPathFromArgv(
   argv: string[],
   cwd: string,

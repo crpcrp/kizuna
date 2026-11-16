@@ -45,13 +45,6 @@ interface UseMiniPlayerResult {
   toggleFullscreenFromKey: () => void
 }
 
-/**
- * Owns the compact mini-player (picture-in-picture) enter/exit orchestration:
- * applying a transition's window-bounds/always-on-top effect, the toggle
- * handler (fullscreen-wins guard, saved-bounds capture on entry), and the
- * fullscreen-key wrapper that tears mini down before a fullscreen request.
- * See `docs/codebase-map.md` for the invariants this preserves.
- */
 export function useMiniPlayer({
   miniPlayerRef,
   setMiniPlayer,

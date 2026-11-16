@@ -13,13 +13,7 @@ export type SettingsWriteErrorHandler = (error: unknown) => void
 export interface SettingsPersistence {
   /** Merges `patch` into the pending write and (re)starts the debounce timer. */
   schedule(patch: Partial<PlayerSettings>): void
-  /**
-   * Writes unsaved settings immediately; resolves once the attempt it triggered
-   * (and any still-outstanding earlier write) settles. A failed attempt is
-   * reported and remains unsaved for a later explicit flush or scheduled change;
-   * this call does not retry it again by itself. Resolves without writing if
-   * there is no unsaved work.
-   */
+  /** Starts unsaved writes now and waits; failures require a later flush or scheduled change to retry. */
   flush(): Promise<void>
   /** Drops pending and retained failed work (and its timer) without writing it. */
   cancel(): void
@@ -27,18 +21,7 @@ export interface SettingsPersistence {
 
 const DEFAULT_DELAY_MS = 250
 
-/**
- * Coalesces rapid `PlayerSettings` patches (e.g. subtitle-drag mousemove
- * ticks) into a single debounced `write` call, shallow-merging pending
- * patches so the latest value per top-level field wins.
- *
- * Actual `write` invocations are chained one-at-a-time rather than fired
- * concurrently. A write snapshots the aggregate only when it starts, so
- * changes made while an earlier write is in flight are included in the next
- * attempt. A successful snapshot clears only fields that still have the same
- * value; newer values remain unsaved. Rejected writes are reported and kept
- * retryable without poisoning later `schedule`/`flush` calls.
- */
+// Serialize writes and clear only values confirmed by a successful snapshot, retaining failures for retry.
 export function createSettingsPersistence(
   write: SettingsWriter,
   timers: TimerLike = {

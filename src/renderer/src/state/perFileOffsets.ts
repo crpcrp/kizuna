@@ -13,14 +13,7 @@ interface SubtitleOffsetRefs {
   folderSubtitleOffsets: { current: Record<string, number> }
 }
 
-/**
- * Looks up the stored subtitle offset (ms) for `filePath`: the file's own
- * `subtitleOffsets` entry wins; otherwise its folder's `folderSubtitleOffsets`
- * entry (set by `applySubtitleOffsetToFolder`) applies; otherwise 0 (no
- * offset). Keys are canonicalized with `subtitleOffsetKey` /
- * `subtitleOffsetFolderKey`, so the same file found via the picker and via
- * recent files (which stores lowercase paths on win32) resolves to one entry.
- */
+// Canonical keys make picker and recent-file paths share an offset; file values override folder values.
 export function subtitleOffsetForFile(
   offsets: Record<string, number>,
   folderOffsets: Record<string, number>,
@@ -55,16 +48,7 @@ export function subtitleOffsetForSelection(
   return subtitleOffsetForFile(offsets, folderOffsets, filePath)
 }
 
-/**
- * Pure: the result of "apply this offset to every video in `filePath`'s
- * folder". Stores `offsetMs` under the folder's key and drops every per-file
- * entry in that same folder — those would otherwise shadow the folder value
- * (see `subtitleOffsetForFile`), so dropping them is what makes the new offset
- * reach files that already had one of their own. Only the immediate folder is
- * affected: entries in subfolders keep their own offsets. Inputs are left
- * untouched; a `filePath` with no folder component (no separator) is a no-op
- * and returns the maps as they were.
- */
+// Clear immediate-folder file overrides so they cannot shadow the new folder offset.
 export function applySubtitleOffsetToFolder(
   offsets: Record<string, number>,
   folderOffsets: Record<string, number>,
@@ -103,13 +87,6 @@ export function applyOffsetToFolder(
   persist(next)
 }
 
-/**
- * Pure: returns a new offsets map with `filePath`'s entry set to `offsetMs`,
- * leaving every other file's stored offset untouched. Used both to update the
- * in-memory map App.tsx holds and to build the patch persisted via
- * `playerSettings.setSettings`. The entry is written under the canonical
- * `subtitleOffsetKey(filePath)`, matching `subtitleOffsetForFile`'s lookup.
- */
 export function nextSubtitleOffsets(
   offsets: Record<string, number>,
   filePath: string,
@@ -132,22 +109,11 @@ export function nextSubtitleVersionOffsets(
   return Object.fromEntries(entries.slice(-MAX_SUBTITLE_VERSION_OFFSETS))
 }
 
-/**
- * Looks up the stored audio delay (ms) for `filePath`, 0 when unset. Keys are
- * canonicalized with `subtitleOffsetKey` (a generic lexical path canonicalizer
- * despite its name — reused so the same file found via the picker and via
- * recent files resolves to one entry), matching `nextAudioDelays`' write.
- */
+// Reuse the lexical path key so picker and recent-file paths share an audio delay.
 export function audioDelayForFile(delays: Record<string, number>, filePath: string): number {
   return delays[subtitleOffsetKey(filePath)] ?? 0
 }
 
-/**
- * Pure: returns a new delays map with `filePath`'s entry set to `delayMs`,
- * leaving every other file's stored delay untouched. Written under the
- * canonical `subtitleOffsetKey(filePath)`, matching `audioDelayForFile`'s
- * lookup. Twin of `nextSubtitleOffsets`.
- */
 export function nextAudioDelays(
   delays: Record<string, number>,
   filePath: string,

@@ -28,16 +28,7 @@ const DEFAULT_PREFERENCES: GameOcrPreferences = {
   levelColors: {}
 }
 
-/**
- * Reads the preferences the player window persists. The frozen frame is a
- * second renderer, so it loads them itself rather than inheriting anything
- * from the player's React tree — including the theme and the knowledge-level
- * colors its boxes are drawn with.
- *
- * That renderer is retained across frames, so this re-reads them for every
- * screenshot main presents: the player window stays fully usable between two
- * captures, and a preference changed there has to reach the next frozen frame.
- */
+// The retained OCR renderer has its own React tree; reload player preferences for each new freeze.
 export function useGameOcrPreferences(bridge: GameOcrPreferencesBridge): GameOcrPreferences {
   const [preferences, setPreferences] = useState<GameOcrPreferences>(DEFAULT_PREFERENCES)
   const { playerSettings, gameOcr } = bridge
@@ -60,8 +51,6 @@ export function useGameOcrPreferences(bridge: GameOcrPreferencesBridge): GameOcr
       )
     }
     load()
-    // Re-read at every frame boundary. The freeze request is that boundary
-    // now that the screenshot no longer travels from main to the renderer.
     const unsubscribe = gameOcr.onFreeze(load)
     return () => {
       active = false

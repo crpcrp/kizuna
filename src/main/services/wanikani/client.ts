@@ -24,16 +24,7 @@ function buildUrl(path: string, params?: Record<string, string>): string {
   return `${base}?${new URLSearchParams(params).toString()}`
 }
 
-/**
- * Creates a `WaniKaniClient` that authenticates every request with
- * `deps.token` and follows `pages.next_url` until it is `null`. A `401`
- * throws `WaniKaniAuthError` rather than a generic HTTP error, so callers can
- * show "invalid WaniKani token" instead of a network failure. A `429` sleeps
- * until the `RateLimit-Reset` epoch-seconds header and retries once — `sleep`
- * is injected so tests never actually wait. Any other non-success status
- * rejects with an actionable HTTP error rather than letting a JSON parse or a
- * missing-`pages` access fail downstream.
- */
+// WaniKani rate-limit reset timestamps are epoch seconds; retry a 429 once after that deadline.
 export function createWaniKaniClient(deps: {
   token: string
   fetch: HttpFetch

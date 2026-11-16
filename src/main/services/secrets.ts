@@ -1,6 +1,3 @@
-// Secrets boundary. Keeps Electron's `safeStorage` out of the
-// services; a `SecretCodec` is injected exactly like `FfmpegExec`/`MecabExec`.
-
 export interface SecretCodec {
   encrypt(plain: string): string
   decrypt(blob: string): string
@@ -19,14 +16,7 @@ export const identityCodec: SecretCodec = {
   isAvailable: () => false
 }
 
-/**
- * Wraps Electron's `safeStorage` as a base64-string `SecretCodec`. Falls back
- * to `identityCodec` when encryption is unavailable (e.g. no OS keychain).
- * `decrypt` never throws: a token encrypted under a different Windows
- * account (or after a machine restore) yields garbage bytes rather than a
- * valid string, so a failed decrypt returns `''` and lets the UI show "not
- * configured" instead of crashing.
- */
+// Missing OS encryption uses plaintext; an undecryptable token reads as unconfigured.
 export function createSafeStorageCodec(safeStorage: {
   isEncryptionAvailable(): boolean
   encryptString(s: string): Buffer

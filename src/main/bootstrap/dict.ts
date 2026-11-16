@@ -38,16 +38,7 @@ export function startMecab(
   })
 }
 
-/**
- * Registers the dict IPC bridge (importDictFile/lookup/listDicts/setEnabled/
- * reorder), backed by a dict.db SQLite file in the user's app-data
- * directory. Imports run in a worker thread via
- * `createWorkerImporter`, which opens its own connection to the same file;
- * `configureDictConnection` sets this connection's pragmas (incremental
- * auto-vacuum, then WAL + a busy timeout so its reads don't block on — or get
- * blocked by — the worker's writes) and owns their order. Import progress is
- * pushed to the renderer-owning window; the Linux video host has no renderer.
- */
+// The import worker uses a separate connection; WAL and a busy timeout allow concurrent reads.
 export function startDict(deps: Pick<BootstrapDeps, 'ipcMain' | 'paths' | 'sendToMain'>): void {
   const dbPath = deps.paths.dictDb
   const db = new Database(dbPath)

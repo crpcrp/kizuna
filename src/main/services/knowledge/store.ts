@@ -43,13 +43,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks
 }
 
-/**
- * Full-replace sync for one source: deletes every existing `known_words` row
- * for `source`, then bulk-inserts `rows`, in a single transaction. Full
- * replace (not upsert) so a word demoted at the source (e.g. a WaniKani SRS
- * reset) loses its row instead of being stranded by a diff-based upsert.
- * Returns the number of rows inserted.
- */
+// Full replacement removes words demoted at the source, including WaniKani SRS resets.
 export function replaceSource(
   db: KnowledgeDb,
   source: string,
@@ -79,13 +73,7 @@ export function replaceSource(
   return run()
 }
 
-/**
- * Looks up every `known_words` row whose lemma is in `lemmas`, chunking the
- * `IN (...)` query at `LEMMA_CHUNK_SIZE` params. A lemma known from more
- * than one source merges to the higher-ranked level (`maxKnowledgeLevel`); a lemma
- * with no row anywhere is simply absent from the result (never 'unknown' —
- * absence *is* unknown, per the schema's design).
- */
+// Missing rows mean unknown; merge multiple sources at the highest knowledge level.
 export function levelsFor(db: KnowledgeDb, lemmas: string[]): Record<string, KnowledgeLevel> {
   const result: Record<string, KnowledgeLevel> = {}
   for (const batch of chunk(lemmas, LEMMA_CHUNK_SIZE)) {

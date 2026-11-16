@@ -28,13 +28,7 @@ function deckSearchTerm(deckName: string): string {
   return `deck:"${deckName.replace(/[\\"*_]/g, '\\$&')}"`
 }
 
-/**
- * Reduces an Anki field's raw HTML down to its bare headword: Anki fields
- * routinely carry `食[た]べる` furigana syntax, `<ruby>`/`<rt>`/`<rp>` markup,
- * `<div>`/`<br>` wrappers, and `&nbsp;`. A word that fails to normalize
- * silently never colors (an invisible bug), so this strips broadly rather
- * than trying to whitelist every input shape.
- */
+// Anki headwords can contain bracket furigana, ruby markup, wrappers, and HTML entities.
 export function normalizeAnkiField(html: string): string {
   const withoutRubyText = html.replace(/<rt>[^<]*<\/rt>/gi, '').replace(/<rp>[^<]*<\/rp>/gi, '')
   return stripTags(withoutRubyText)
@@ -44,20 +38,8 @@ export function normalizeAnkiField(html: string): string {
     .trim()
 }
 
-/**
- * Pulls every card in any of `deckNames` (OR'd together in one `findCards`
- * query), stores new/buried cards as 'inDeck' rows and suspended cards as
- * 'wellKnown' (see `levelFromAnkiCard`) rather than dropping them, normalizes
- * each card's `wordField` to a bare lemma, and full-replaces the 'anki' source. The
- * row count therefore covers every card in the selected decks, learned or not.
- * A word mined into more than one
- * selected deck collapses to a single row keyed by `lemma+reading`, folding
- * the colliding levels with `maxKnowledgeLevel` (higher rank wins) while retaining
- * every card's provenance — otherwise it would violate `replaceSource`'s
- * `(source, lemma, reading)` primary key.
- * With no selected decks it purges prior Anki rows without contacting Anki;
- * the source is unconfigured, not in error.
- */
+// Merge duplicate lemma/reading keys at the highest level while retaining every card's provenance.
+// No selected decks means purge local Anki rows without contacting Anki.
 export async function syncAnki(deps: {
   client: AnkiClient
   db: KnowledgeDb
@@ -91,8 +73,7 @@ export async function syncAnki(deps: {
   for (const card of cards) {
     if (!selectedDecks.has(card.deckName)) continue
     const level = levelFromAnkiCard(card, thresholds)
-    // Defensive only: `levelFromAnkiCard` no longer returns 'unknown' for a real
-    // card, but the type still permits it and an 'unknown' row is meaningless.
+    // The type permits unknown, but unknown words must not produce known_words rows.
     if (level === 'unknown') continue
     const lemma = normalizeAnkiField(card.fields[wordField]?.value ?? '')
     if (lemma === '') continue

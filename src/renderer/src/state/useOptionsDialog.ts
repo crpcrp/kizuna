@@ -124,18 +124,7 @@ export interface UseOptionsDialogResult {
   controller: OptionsDataController
 }
 
-/**
- * Owns the Options dialog's lifecycle: whether it is open, the per-domain
- * optional-integration data behind it (MeCab/Yomitan dictionaries, the Anki
- * connection and its deck/model/field lists, knowledge settings and sync
- * status, and Jimaku credential status), the lazy per-category loading of
- * those domains, and the integration actions that write through the bridge
- * and refresh what they changed.
- *
- * The returned data is also what the subtitle surfaces read for known-word
- * coloring and what the mining flow reads for its target deck, so the domains
- * are fetched once here rather than per consumer.
- */
+// Share integration data with subtitle coloring and mining so each domain is fetched only once.
 export function useOptionsDialog({
   bridge,
   settingsPersistenceRef,

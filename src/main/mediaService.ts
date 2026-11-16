@@ -1,14 +1,3 @@
-// Composition root for the renderer-facing media service. Every concern lives
-// in a focused owner under media/ — picking files and playlists
-// (media/mediaPicker.ts), subtitles (media/subtitleService.ts), ffprobe
-// metadata and folder navigation (media/metadataService.ts), and seekbar
-// previews (media/thumbnailPreview.ts). This file only resolves the injected
-// implementations to their production defaults and delegates each
-// `MediaServiceLike` method to the owner that implements it.
-//
-// index.ts supplies packaged or development binary paths through
-// resourcePaths.ts.
-
 import { readdir } from 'node:fs/promises'
 import { execFfprobe, type FfprobeExec } from './media/ffprobe'
 import { readTextFile, type ReadTextFile } from './media/subtitleLoader'

@@ -68,20 +68,8 @@ function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSe
   }
 }
 
-/**
- * `setSettings` intercepts a plaintext `wanikaniToken`
- * exactly like the earlier token-only slice — it never reaches settings.json
- * or the renderer in plaintext. `sync` is guarded by an in-flight promise so
- * a double "Sync now" click plus the startup `syncIfStale()` never race the
- * same DB tables, and one source failing does not abort the other — each
- * source returns its own `error` rather than the whole call throwing. Each
- * source is additionally floored by `MIN_MANUAL_SYNC_INTERVAL_MS` — a sync
- * within a minute of the last one for that source is a no-op that just
- * returns the current status, so a user mashing "Sync now" can't hammer the
- * WaniKani/AnkiConnect API; `syncIfStale()`'s 24h-scale staleness check
- * (`staleAfterHours`, `isStale`) is comfortably above that floor so it never
- * interacts with it.
- */
+// Keep plaintext tokens out of settings and renderer responses.
+// Serialize syncs per source and isolate their failures; the cooldown prevents API hammering.
 export function createKnowledgeService(deps: CreateKnowledgeServiceDeps) {
   const { db, settings, secrets, fetch, now = Date.now } = deps
   const inFlight: Partial<Record<KnowledgeSource, InFlightSync>> = {}

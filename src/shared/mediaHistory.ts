@@ -83,8 +83,7 @@ export function normalizeMediaPath(
   options: PathNormalizationOptions = {}
 ): string | undefined {
   if (typeof path !== 'string' || path.trim() === '') return undefined
-  // URL media is no longer part of the playback surface. Returning undefined
-  // here also drops stale URL entries while normalizing persisted history.
+  // Playback accepts local files only; discard persisted URL entries too.
   if (isRemoteUrl(path)) return undefined
   const platform = options.platform ?? runtimePlatform()
   const cwd = options.cwd ?? runtimeCwd(platform)

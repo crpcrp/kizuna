@@ -52,13 +52,7 @@ function probeResourceKind(path: string): 'file' | 'directory' | 'missing' {
   }
 }
 
-/**
- * Wires the Windows-only Game OCR runtime to the main-window bridge. The
- * PP-OCR ONNX payload is bundled by `win.extraResources`, so the paths resolve
- * against the same resources root as mpv and MeCab, and the runtime checks
- * them before each arm rather than trusting the installer. Returns `undefined`
- * on other platforms.
- */
+// PP-OCR is bundled only on Windows; validate its runtime files again when arming.
 export function startGameOcr(deps: {
   ipcMain: IpcMain
   settings: SettingsStore
