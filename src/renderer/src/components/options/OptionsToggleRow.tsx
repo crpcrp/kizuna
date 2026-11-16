@@ -1,14 +1,6 @@
 import OptionsToggle from './OptionsToggle'
 
-// One boolean Options setting: title and description on the left, switch on the
-// right. Every boolean row in the dialog goes through here, so the pattern
-// can't drift back one setting at a time.
-//
-// The title block is a `<span>`, not a `<label htmlFor>`: a label would make the
-// title and description toggle the setting too, and a mis-aimed click in a
-// dialog full of switches silently changes playback behaviour. The checkbox
-// keeps its accessible name and description by pointing at that same visible
-// text instead.
+// Use a span rather than a label so clicking descriptive text cannot accidentally toggle a setting.
 
 export interface OptionsToggleRowProps {
   /** The checkbox's own id; the title and description ids derive from it. */

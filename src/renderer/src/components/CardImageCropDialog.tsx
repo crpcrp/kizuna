@@ -10,16 +10,11 @@ import {
   type Rect
 } from '../state/cardImageCrop'
 
-// Crop decision for a mined card's picture. The frame arrives already captured
-// (main's `player.captureFrame`, base64 PNG) because the video lives in mpv's
-// child window and is not readable from the renderer's canvas. The user drags a
-// region over the still, then picks one of four outcomes. Colors come only from
-// theme.css semantic variables (test/repoInvariants.test.ts enforces this).
+// mpv owns the video window, so the renderer must crop a captured still, not the live video.
 
 /** Encodes a region of the captured still to raw base64 JPEG. */
 export type CardImageRenderer = (image: HTMLImageElement, rect: Rect) => string | null
 
-/** Real implementation: an off-screen canvas. Replaced in tests. */
 const renderWithCanvas: CardImageRenderer = (image, rect) =>
   renderJpegBase64(image, rect, document.createElement('canvas'))
 
@@ -31,7 +26,6 @@ export interface CardImageCropDialogProps {
   onSubmit: (jpegBase64: string | null) => void
   /** Abandons the mine entirely — no note is created. */
   onCancel: () => void
-  /** Injected in tests; defaults to the canvas encoder. */
   renderJpeg?: CardImageRenderer
 }
 

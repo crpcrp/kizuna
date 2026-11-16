@@ -3,30 +3,15 @@ import { useState } from 'react'
 import { mediaFileBasename } from '../../../shared/mediaHistory'
 import type { RepeatMode } from '../state/playlist'
 
-// Presentational play-queue panel: the same slide-in
-// column pattern as SubtitleSidebar. Lists every queued entry with the active
-// one highlighted; double-click plays a row; rows drag to reorder; each row has
-// a remove button; the footer cycles repeat and toggles shuffle. All state is
-// owned by the parent (via playlistController) — this component only surfaces
-// choices through callbacks, so it stays a pure render of its props.
-
-/** The three repeat modes in the order the footer button cycles through them. */
 function nextRepeatMode(mode: RepeatMode): RepeatMode {
   return mode === 'off' ? 'all' : mode === 'all' ? 'one' : 'off'
 }
 
-/** Footer label for the current repeat mode. */
 function repeatLabel(mode: RepeatMode): string {
   return mode === 'off' ? 'Repeat: off' : mode === 'all' ? 'Repeat: all' : 'Repeat: one'
 }
 
-/**
- * The entries worth listing. A queue of one entry is just the file that's
- * playing, not a playlist — "Open file…" leaves exactly that behind — so it
- * renders as the empty state. Matches the threshold the queue already uses to
- * decide it owns playback (`playlistController.isPlaybackCurrent`), which the
- * folder auto-advance path depends on.
- */
+/** A single file is not a queue; show the empty state until there are multiple entries. */
 function listedEntries(entries: string[]): string[] {
   return entries.length > 1 ? entries : []
 }
@@ -35,14 +20,11 @@ interface PlaylistSidebarProps {
   entries: string[]
   /** Index of the entry currently playing, or -1 when none. */
   currentIndex: number
-  /** Indices whose last load failed (rendered as "missing"). */
   missing?: number[]
   repeat: RepeatMode
   shuffle: boolean
-  /** Double-click a row to play it. */
   onPlay: (index: number) => void
   onRemove: (index: number) => void
-  /** Drag a row onto another to reorder (from → to). */
   onMove: (from: number, to: number) => void
   onSetRepeat: (mode: RepeatMode) => void
   onToggleShuffle: () => void

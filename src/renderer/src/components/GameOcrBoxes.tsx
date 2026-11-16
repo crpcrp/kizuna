@@ -16,14 +16,12 @@ import InteractiveText, { type InteractiveTextProps } from './InteractiveText'
 
 import './GameOcrBoxes.css'
 
-/** One processed OCR region paired with its resolved display rectangle. */
 export interface GameOcrBoxRegion {
   id: string
   text: string
   layout: GameOcrLayoutResult
   /** Maps continuous token offsets back onto the visible line-broken text. */
   projection?: TextProjection
-  /** Typography fitted to the detected line without changing its bounds. */
   fontSize?: number
   /** Unitless line height that spreads the lines over the detected height. */
   lineHeight?: number
@@ -38,7 +36,6 @@ export interface GameOcrBoxesProps {
   regions: readonly GameOcrBoxRegion[]
   /** Changes when a new capture replaces the current frozen frame. */
   captureKey?: string | number
-  /** Optional controlled active region. */
   activeRegionId?: string | null
   onActiveRegionChange?: (regionId: string | null) => void
   /** Popup highlight returned by the controller, scoped to one OCR region. */
@@ -50,11 +47,6 @@ export interface GameOcrBoxesProps {
   onWordLeave?: InteractiveTextProps['onWordLeave']
 }
 
-/**
- * Renders independent, selectable OCR replacement boxes over a frozen frame.
- * The component deliberately receives resolved layout rather than calculating
- * geometry so collision policy remains owned by gameOcrLayout.ts.
- */
 export default function GameOcrBoxes({
   regions,
   captureKey,

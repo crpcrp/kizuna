@@ -100,7 +100,6 @@ function badgeClass(state: string): string {
   return 'state-badge unknown'
 }
 
-/** Windows-only settings and lifecycle controls for the experimental OCR flow. */
 export default function GameOcrTab({
   active,
   open,

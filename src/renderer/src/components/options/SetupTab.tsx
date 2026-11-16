@@ -6,17 +6,9 @@ import type { OptionsCategory, SettingEntry } from './types'
 import { formatLastSynced } from './KnowledgeTab'
 import OptionsToggleRow from './OptionsToggleRow'
 
-/** How a capability reads at a glance.
- *
- * `missing` and `unconfigured` are deliberately distinct: a missing bundled
- * binary is something the user has to *fix* (a broken install), while an
- * unconfigured integration is simply one they have not opted into. Collapsing
- * them would turn every optional add-on into an apparent defect. `unknown` is
- * the pre-load state — the tab renders before its IPC round-trip resolves, and
- * claiming either "Ready" or "Missing" then would be a guess. */
+/** Missing means broken installation; unconfigured means optional. Unknown must stay neutral while loading. */
 type SetupState = 'ready' | 'missing' | 'unconfigured' | 'unknown'
 
-/** Display label per state; also the badge text. */
 const SETUP_STATE_LABELS: Record<SetupState, string> = {
   ready: 'Ready',
   missing: 'Missing',
@@ -25,13 +17,10 @@ const SETUP_STATE_LABELS: Record<SetupState, string> = {
 }
 
 interface SetupRow {
-  /** Stable key + DOM id suffix. */
   id: string
   name: string
   state: SetupState
-  /** One short sentence of context under the name. */
   note: string
-  /** Filesystem path displayed after the note in a glyph-safe monospace font. */
   path?: string
   /** Tab that actually configures this, when there is one. Informational rows
    * (bundled binaries the user cannot configure from Options) have none. */
@@ -45,7 +34,6 @@ interface SetupRowsInput {
   yomitanDicts: DictInfo[]
   wanikaniConfigured: boolean
   syncStatus: SyncStatus
-  /** Clock for the WaniKani last-sync label, passed in like KnowledgeTab's. */
   nowMs: number
 }
 
@@ -64,8 +52,7 @@ function mecabDictRow(dicts: McDict[], id: 'ipadic' | 'unidic'): SetupState {
   return dict.installed ? 'ready' : 'missing'
 }
 
-/** "3 enabled" / "None enabled" — counts only the dictionaries that actually
- * take part in lookups, since a disabled dictionary contributes nothing. */
+/** Disabled dictionaries do not contribute to lookups. */
 function describeYomitan(dicts: DictInfo[]): { state: SetupState; note: string } {
   const enabled = dicts.filter((d) => d.enabled).length
   if (enabled === 0) {
@@ -83,9 +70,7 @@ function describeYomitan(dicts: DictInfo[]): { state: SetupState; note: string }
   }
 }
 
-/** Connected / Not connected from the last ping, keeping AnkiConnect's own
- * error text when it gave one — "Not connected" alone tells the user nothing
- * about whether Anki is closed or the URL is wrong. */
+/** Keep AnkiConnect’s error text so connection failures remain actionable. */
 function describeAnki(ping: SetupData['anki'] | undefined): {
   state: SetupState
   note: string
@@ -103,7 +88,6 @@ function describeAnki(ping: SetupData['anki'] | undefined): {
   }
 }
 
-/** Configured + last sync, or an explicit "no token yet". */
 function describeWanikani(
   configured: boolean,
   syncStatus: SyncStatus,
@@ -121,12 +105,6 @@ function describeWanikani(
   }
 }
 
-/**
- * Builds every row of the "Setup & integrations" tab from the signals the
- * Options dialog already holds. Pure — the whole tab is one derived value, so
- * the rendering below has no branching of its own and the mapping is testable
- * without a DOM.
- */
 function buildSetupRows({
   setup,
   mecabDicts,
@@ -145,8 +123,6 @@ function buildSetupRows({
     {
       id: 'mpv',
       name: 'mpv',
-      // Bundled and mandatory: mpv starts before the window does, so if this
-      // dialog is on screen at all, playback is running.
       state: 'ready',
       note: 'Bundled playback engine — running.'
     },
@@ -210,9 +186,7 @@ export interface SetupTabProps extends SetupRowsInput {
   active?: boolean
   checkAutomatically: boolean
   onChangeCheckAutomatically: (value: boolean) => void
-  /** Switches the dialog to another tab from an informational setup row. */
   onGoToCategory: (category: OptionsCategory) => void
-  /** Label for a category id, for the "Go to …" buttons. */
   categoryLabel: (category: OptionsCategory) => string
 }
 
@@ -245,8 +219,6 @@ export const SETUP_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** "Setup & integrations" options tab: application maintenance plus an
- * inventory of bundled binaries and optional integrations. */
 export default function SetupTab({
   active = true,
   checkAutomatically,

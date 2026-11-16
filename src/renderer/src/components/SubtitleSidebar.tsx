@@ -18,13 +18,6 @@ import { useSidebarTranslation } from '../state/useSidebarTranslation'
 import SubtitleTranslationPopup from './SubtitleTranslationPopup'
 import { useLatestCallback, useLatestRef } from '../state/useLatestRef'
 
-// Presentational side panel: lists every cue of the current subtitle track,
-// highlights whichever one is active, and jumps playback to a clicked row.
-// Derived almost entirely from props; the one exception is the always-visible
-// search bar (draft query, submitted query, current-match index), which is
-// ephemeral UI state scoped to this component.
-
-/** How long the "Copied to clipboard" toast stays up after a right-click copy. */
 const COPY_TOAST_MS = 1200
 
 /** Shared by every row without a search match, so memoized rows see a stable prop. */
@@ -35,15 +28,11 @@ export interface SubtitleSidebarProps {
   cues: Cue[]
   /** `cueKey` of the currently-active cue (see App.tsx), or undefined if none. */
   activeCueKey?: string
-  /** Whole-track tokenization, keyed by `cueKey` — see `tokenizeAllCues`.
-   * A cue missing from this map (not yet tokenized) falls back to plain text. */
+  /** Missing cue tokenization renders as plain text. */
   tokens: Record<string, Token[]>
-  /** Same shape/semantics as SubtitleOverlay's `levels` prop: undefined disables
-   * coloring, an object (even `{}`) enables it with 'unknown' as the default. */
+  /** Undefined disables coloring; an empty map enables it with 'unknown' as the default. */
   levels?: Record<string, KnowledgeLevel>
-  /** One cue's compound projections (see `useVocabularyPipeline.spansForCue`).
-   * Each row receives only its own slice, so a span change elsewhere in the
-   * track does not re-render it. */
+  /** Pass only this cue’s projections so changes in other cues do not re-render the row. */
   spansForCue?: (cueKey: string) => VocabularySpan[] | undefined
   onSelectCue: (cue: Cue) => void
   onCopyCue?: (cue: Cue) => void
@@ -57,21 +46,12 @@ export interface SubtitleSidebarProps {
   containerRef?: React.RefObject<HTMLElement | null>
 }
 
-/** Pure: scrolls the active row into the middle of the sidebar's scroll
- * container. Wired as the active row's callback ref (React invokes it once
- * the button mounts), so the currently-playing subtitle is visible right
- * when the panel opens — SubtitleSidebar unmounts/remounts on every
- * App.tsx sidebarOpen toggle, so "mounts" and "opens" are the same event. */
+/** A callback ref scrolls on mount, including when the sidebar reopens. */
 function scrollRowIntoView(el: HTMLElement | null): void {
   el?.scrollIntoView({ block: 'center' })
 }
 
-/** Pure: what the search input's Enter/Shift+Enter/Escape should do,
- * factored out of the `onKeyDown` handler so the decision itself is
- * testable without a live keyboard event (see the input's `onKeyDown`,
- * which always calls `stopPropagation()` regardless of this result — that
- * part keeps every keystroke, including plain letters and Space, from
- * reaching App.tsx's window-level keybinding handler). */
+/** The input must also stop propagation so typing cannot trigger player shortcuts. */
 function searchKeyAction(
   key: string,
   shiftKey: boolean,
@@ -85,19 +65,13 @@ function searchKeyAction(
   return undefined
 }
 
-/** Pure: the search row's live counter text — '' while the query is blank
- * (nothing to count), '0/0' when the query has no matches, else 1-based
- * "current/total". */
 function matchCounterText(query: string, currentIndex: number, totalMatches: number): string {
   if (query.trim().length === 0) return ''
   if (totalMatches === 0) return '0/0'
   return `${currentIndex + 1}/${totalMatches}`
 }
 
-/** Pure: splits `text` (already the exact slice a segment set was computed
- * for) into plain runs and `<mark>` runs per `segments`. A lone 'plain'
- * segment covering the whole text renders as the bare string, so a row with
- * no active search collapses back to the original unmarked output. */
+/** Segment offsets refer to the supplied text slice. */
 function renderSegments(
   text: string,
   segments: HighlightSegment[],
@@ -116,11 +90,7 @@ function renderSegments(
   })
 }
 
-/** Pure: clips cue-wide `segments` (offsets into the full cue text) down to
- * a sub-range [rangeStart, rangeStart + rangeLength), rebased to be
- * relative to that sub-range. Segments already fully partition their
- * source range, so intersecting with a sub-range yields a full partition
- * of it too — no gap-filling needed. */
+/** Rebase cue-wide segments to the sub-range; source segments must fully partition the cue. */
 function clipSegments(
   segments: HighlightSegment[],
   rangeStart: number,
@@ -137,10 +107,6 @@ function clipSegments(
   return clipped
 }
 
-/** Pure: renders one cue's text as line-broken plain text (tokens not yet
- * available) or as knowledge-colored token spans (tokens available), with
- * `matches`/`currentMatch` (already filtered to this cue) wrapped in
- * `<mark>`. Exported for direct testing, same as `scrollRowIntoView`. */
 function CueRowContent({
   cue,
   rowTokens,
@@ -170,9 +136,7 @@ function CueRowContent({
       renderTokenContent={(token, itemIndex, fragment) =>
         renderSegments(
           fragment.text,
-          // Search matches are offsets into the cue's display text, so a token
-          // is clipped by where its visible fragment sits, not by its
-          // line-break-free analysis offset.
+          // Search offsets use display text, not line-break-free tokenization offsets.
           clipSegments(segments, fragment.displayStartOffset, fragment.text.length),
           `t${itemIndex}`
         )
@@ -181,10 +145,6 @@ function CueRowContent({
   )
 }
 
-/** Presentational, hook-free row: one cue's clickable button. Kept separate
- * from `SubtitleSidebar` (which owns the search state and calls hooks) so it
- * can be invoked directly in tests; the list renders the memoized
- * `SidebarRow`. */
 function SidebarRowView({
   cue,
   isActive,
@@ -295,16 +255,7 @@ export default function SubtitleSidebar({
   }, [matches])
   const searchActive = searchedQuery.trim().length > 0
 
-  // A new match list (submitted-query edit or track change) always starts back
-  // at the first match — but must never itself trigger the nav-scroll effect
-  // below. Every path that produces a new list goes through `commitSearch`
-  // (query edits) or the track reset below, so the index is reset there rather
-  // than from an effect watching `matches`.
-
-  // A new subtitle track owns a fresh query. Cancelling first keeps an old
-  // track's timer from applying its draft to the replacement track; running
-  // the reset as this effect's cleanup means it fires on exactly the same
-  // track changes as before, and the debounce cancel still covers unmount.
+  // Cancel the old track’s debounce before resetting so it cannot update the replacement track.
   useEffect(() => {
     const debounce = debounceRef.current!
     return () => {
@@ -314,9 +265,7 @@ export default function SubtitleSidebar({
     }
   }, [cues])
 
-  // Scrolls the current-match row into view, but only for explicit
-  // next/previous navigation (navNonce bumps), never merely because the
-  // match list changed underneath — and never on the very first render.
+  // Scroll only for explicit navigation, not result changes or the initial render.
   const displayIndex = matches.length > 0 ? Math.min(currentIndex, matches.length - 1) : 0
   const currentMatch = matches.length > 0 ? matches[displayIndex] : undefined
   const currentMatchKeyRef = useLatestRef(currentMatch?.cueKey)
@@ -340,13 +289,7 @@ export default function SubtitleSidebar({
     debounceRef.current!.flush('')
   }
 
-  // Right-click-to-copy feedback: a small self-dismissing toast anchored
-  // above the row that was copied, using that row's own rect (via
-  // rowElsRef) rather than the click coordinates — same idea as WordPopup
-  // anchoring to the subtitle box. Captured once at copy time, so it stays
-  // put even if that row later unmounts from a search re-filter while the
-  // toast is still up. Re-copying restarts the clock instead of stacking
-  // timers.
+  // Snapshot the row position so the copy toast stays anchored even if filtering unmounts the row.
   function handleCopyCue(cue: Cue): void {
     onCopyCue?.(cue)
     if (onTranslateCue) {

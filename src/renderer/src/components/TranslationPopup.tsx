@@ -10,7 +10,6 @@ export interface TranslationPopupProps {
   title?: string
 }
 
-/** Shared loading/result/error presentation for subtitle and OCR translation. */
 export default function TranslationPopup({
   popup,
   position,

@@ -120,7 +120,6 @@ function UpdateSection({
   )
 }
 
-/** Product information and approved project-resource actions. */
 export default function AboutDialog({
   open,
   info,

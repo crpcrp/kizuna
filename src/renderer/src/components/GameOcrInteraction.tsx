@@ -21,12 +21,6 @@ export interface GameOcrInteractionProps {
   createTranslationRequestId?: () => string
 }
 
-/**
- * Connects existing word-popup and optional selected-text translation behavior
- * to independent OCR text boxes. Game OCR has no video cue or media source,
- * so mining falls back to the same text-only path used when a subtitle has no
- * usable media context.
- */
 export default function GameOcrInteraction({
   regions,
   captureKey,

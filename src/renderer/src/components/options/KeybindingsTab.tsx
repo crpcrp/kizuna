@@ -8,7 +8,6 @@ import {
 import type { KeyBinding, KeyBindings, PlayerKeyAction } from '../../../../shared/playerSettings'
 import type { SettingEntry } from './types'
 
-/** Row order and display label for each rebindable action. */
 const ACTION_ROWS: { action: PlayerKeyAction; label: string }[] = [
   { action: 'togglePause', label: 'Play / Pause' },
   { action: 'toggleFullscreen', label: 'Toggle Fullscreen' },
@@ -63,7 +62,6 @@ export interface KeybindingsTabProps {
 
 const NO_MODIFIERS: ReadonlySet<string> = new Set()
 
-/** Keyboard shortcut settings and their temporary key-capture state. */
 export default function KeybindingsTab({
   active,
   open,

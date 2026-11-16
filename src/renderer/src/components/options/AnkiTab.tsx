@@ -14,7 +14,6 @@ import type { SettingEntry } from './types'
 import OptionsToggleRow from './OptionsToggleRow'
 import AnkiJlptBackfillDialog, { type AnkiJlptBackfillDialogPhase } from './AnkiJlptBackfillDialog'
 
-/** Splits a comma-separated tags input into trimmed, non-empty tags. */
 export function parseTagsInput(rawValue: string): string[] {
   return rawValue
     .split(',')
@@ -22,12 +21,7 @@ export function parseTagsInput(rawValue: string): string[] {
     .filter((tag) => tag !== '')
 }
 
-/**
- * True when `url` points at this machine — the only case in which mined note
- * content (words, readings, sentences) never leaves it. Anything else, including
- * a URL too malformed to parse, is treated as non-loopback so the warning errs
- * toward being shown. An empty URL is "not configured yet", not a warning.
- */
+/** Treat malformed nonempty URLs as remote so the privacy warning fails safe. */
 export function isLoopbackAnkiUrl(url: string): boolean {
   if (url.trim() === '') return true
   let hostname: string
@@ -40,7 +34,6 @@ export function isLoopbackAnkiUrl(url: string): boolean {
   return hostname === 'localhost' || hostname === '[::1]' || /^127\.\d+\.\d+\.\d+$/.test(hostname)
 }
 
-/** Row order + display label for each mapped Anki field. */
 const ANKI_FIELD_ROWS: { field: AnkiField; label: string }[] = [
   { field: 'word', label: 'Word' },
   { field: 'reading', label: 'Reading' },
@@ -147,8 +140,6 @@ export const ANKI_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** "Anki" options tab: AnkiConnect connection, note-type field mapping, and
- * card-creation settings. Owns the transient "Test connection" result. */
 export default function AnkiTab({
   active = true,
   ankiSettings,
@@ -167,12 +158,7 @@ export default function AnkiTab({
   const [ankiPingResult, setAnkiPingResult] = useState<AnkiPing | null>(null)
   const [jlptSetupResult, setJlptSetupResult] = useState<AnkiJlptSetupResult | null>(null)
   const [jlptSetupPending, setJlptSetupPending] = useState(false)
-  // The API key is a secret credential whose change triggers a network reload
-  // (deckNames/modelNames). Mirroring the WaniKani token field, it lives in a
-  // local draft committed only on "Save" — never per keystroke. Otherwise, when
-  // AnkiConnect already requires a key, every partial prefix would force a reload
-  // that rejects on the incomplete key, and optionsData would revert the field to
-  // the previous value, making the key impossible to type in.
+  // Save the API key as a whole: reloading on each partial key would fail and revert the draft.
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const apiKeyConfigured = ankiSettings.apiKey !== ''
 

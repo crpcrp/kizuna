@@ -9,26 +9,17 @@ import type {
 import OptionsToggleRow from './OptionsToggleRow'
 import type { SettingEntry } from './types'
 
-/** Adds or removes exactly one deck from the known-decks array based on the
- * checkbox's new checked state, leaving every other entry untouched (the
- * regression this guards against: a naive rebuild-from-scratch would drop
- * decks that aren't in the currently-rendered `ankiDeckNames` list). */
+/** Preserve selected decks absent from the currently loaded deck list. */
 function toggleDeck(decks: string[], deck: string, checked: boolean): string[] {
   if (checked) return decks.includes(deck) ? decks : [...decks, deck]
   return decks.filter((d) => d !== deck)
 }
 
-/** Parses a number-input's raw string into a valid interval-days count
- * (finite, >= 1), or null when the input isn't valid yet — mirrors
- * parsePopupCountInput's exact idiom. */
 export function parseIntervalDaysInput(rawValue: string): number | null {
   const value = Number(rawValue)
   return Number.isFinite(value) && value >= 1 ? value : null
 }
 
-/** Formats a sync source's lastSyncAt as a short relative-time label for
- * display next to "Sync now" (e.g. "3h ago"). Display-only nicety — `nowMs`
- * is passed in explicitly rather than injecting a clock. */
 export function formatLastSynced(lastSyncAt: string | null, nowMs: number): string {
   if (lastSyncAt === null) return 'never synced'
   const diffMinutes = Math.floor((nowMs - new Date(lastSyncAt).getTime()) / 60000)
@@ -37,7 +28,6 @@ export function formatLastSynced(lastSyncAt: string | null, nowMs: number): stri
   return `${Math.floor(diffMinutes / 60)}h ago`
 }
 
-/** Gives the most recent explicit source-sync outcome a concise, accessible label. */
 function formatSyncOutcome(status: SourceStatus, nowMs: number): string | null {
   switch (status.outcome) {
     case 'synced':
@@ -56,15 +46,7 @@ function formatSyncOutcome(status: SourceStatus, nowMs: number): string | null {
   }
 }
 
-/** Describes where the WaniKani token lives, truthfully in all three states.
- *
- * `undefined` means the knowledge domain hasn't loaded yet (or its IPC load
- * failed) — the tab renders before OptionsMenu's effect resolves. It must not
- * fall back to the `false` wording: on a normal Windows/macOS box safeStorage
- * *is* available, so defaulting to "saved unencrypted" flashes a false security
- * warning on every first open, and a failed load would leave it up for good.
- * The unknown state therefore claims nothing about encryption; only the
- * always-true facts (stored locally, sent to WaniKani) are stated. */
+/** Unknown encryption state must not claim plaintext storage while settings are loading or unavailable. */
 function describeTokenStorage(encryptionAvailable: boolean | undefined): string {
   if (encryptionAvailable === undefined) {
     return 'It is stored locally and sent only to WaniKani over HTTPS to sync your progress.'
@@ -164,9 +146,6 @@ export const KNOWLEDGE_SETTING_ENTRIES: SettingEntry[] = [
   }
 ]
 
-/** "Known words" options tab: WaniKani token, Anki known-decks source,
- * known/well-known thresholds, sync controls, and subtitle coloring. Owns
- * the transient WaniKani token draft input. */
 export default function KnowledgeTab({
   active = true,
   wanikaniConfigured,
@@ -184,10 +163,7 @@ export default function KnowledgeTab({
   const [syncOutcomes, setSyncOutcomes] = useState<Partial<Record<KnowledgeSource, SourceStatus>>>(
     {}
   )
-  // Wall clock the relative-time labels below are rendered against. Reading
-  // `Date.now()` inline would make the render impure; it is sampled once on
-  // mount and re-sampled after each sync instead, which is the only moment a
-  // fresher "…ago"/"available in…" label actually matters.
+  // Sample time outside render; refreshing after sync keeps relative labels current without impure renders.
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   const syncNow = (source: KnowledgeSource): void => {

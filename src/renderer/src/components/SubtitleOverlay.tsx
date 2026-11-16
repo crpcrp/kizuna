@@ -8,51 +8,21 @@ import type { WordPopupTextContext } from '../state/wordLookup'
 import type { VocabularySpan } from '../state/vocabularySpans'
 import InteractiveText from './InteractiveText'
 
-// Presentational overlay: shows the cue the caller resolved as active at the
-// current playback time (App looks it up, so playback ticks that stay inside
-// one cue never reach this component). Derived from props — no internal state; dragging is
-// reported to the caller via onDragStart rather than tracked here, so the
-// component itself stays a pure function of its props.
-//
-// When `tokens` (for the currently-active cue) is provided and non-empty,
-// renders one interactive span per token instead of plain text. Otherwise
-// falls back exactly to the original plain-text rendering — this fallback
-// must never regress since it covers the "not tokenized yet" / "not
-// Japanese" cases.
-
 export interface SubtitleOverlayProps {
-  /** The active cue, or undefined between lines. */
   cue?: Cue
   /** Tokens for the currently-active cue only; caller matches them to the cue. */
   tokens?: Token[]
-  /**
-   * Tokens (by `startOffset`) that should render as visually highlighted,
-   * independent of live mouse hover — e.g. the caller's resolved word popup
-   * may span more tokens than the one actually under the cursor (a
-   * longest-match compound like 閻魔大王 resolved from a click on just 閻魔),
-   * and the highlight should reflect the whole matched word.
-   */
+  /** Highlight the whole matched compound, including tokens beyond the hovered token. */
   highlightedTokens?: Token[]
-  /**
-   * Knowledge level per lemma, used to underline each token by how well the
-   * viewer knows it. `undefined` means coloring is disabled/not yet resolved
-   * and renders no `data-level` attribute at all (no regression for callers
-   * that haven't wired this yet); an object (even `{}`) means coloring is on
-   * and a word missing from the map defaults to `'unknown'`. How a token's
-   * level follows from this map is `tokenLevels` in InteractiveText.
-   */
+  /** Undefined disables coloring; an empty map enables it with 'unknown' as the default. */
   levels?: Record<string, KnowledgeLevel>
   /** Compound projections for this cue; member tokens render as one word. */
   vocabularySpans?: VocabularySpan[]
-  /** Font scale + box position; defaults to DEFAULT_SUBTITLE_STYLE when omitted. */
   style?: SubtitleStyleSettings
   /** The event is optional for callers that only need the token. */
   onWordHover?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
   onWordClick?: (token: Token, event?: React.MouseEvent, context?: WordPopupTextContext) => void
-  /** Fired when the pointer leaves a token span, so the caller can cancel a
-   * pending hover-intent timer for a word merely swept past (see onWordHover
-   * on the caller side) instead of only ever resetting it on the *next*
-   * token's onMouseEnter. */
+  /** Cancel hover intent when a token is swept past without entering another token. */
   onWordLeave?: () => void
   /** Fired on mousedown directly on the subtitle box background (not a word
    * span), so the caller can start tracking a drag-to-reposition gesture. */
@@ -61,13 +31,12 @@ export interface SubtitleOverlayProps {
   dragEnabled?: boolean
 }
 
-/** Base subtitle font size (rem) at fontScale 1, matching the previous fixed 1.1rem. */
+/** Base subtitle font size in rem at fontScale 1. */
 const BASE_SUBTITLE_FONT_REM = 1.1
 
 /** Cross-platform stack with coverage for Japanese compatibility punctuation such as `｡`. */
 const SUBTITLE_FONT_FAMILY = '"Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", sans-serif'
 
-/** Pure: turns SubtitleStyleSettings into the inline style for #subtitle's box. */
 function subtitleBoxStyle(style: SubtitleStyleSettings): React.CSSProperties {
   // Rounded to avoid floating-point artifacts (e.g. 1.1 * 1.5 === 1.6500000000000001) in the CSS value.
   const fontRem = Math.round(BASE_SUBTITLE_FONT_REM * style.fontScale * 1000) / 1000

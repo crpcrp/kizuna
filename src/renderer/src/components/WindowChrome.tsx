@@ -11,40 +11,30 @@ interface WindowControls {
 }
 
 interface WindowChromeProps {
-  /** Injectable for tests; defaults to the preload bridge at click time. */
   controls?: WindowControls
-  /** Whether the window is currently fullscreen; shows the "Window" restore button when true. */
   fullscreen?: boolean
-  /** Loaded media path; its basename is appended to the app name when present. */
   filePath?: string
 }
 
-/** Formats the chrome title for the loaded media, or the app name before a file loads. */
 function chromeTitle(filePath?: string): string {
   if (!filePath) return APP_NAME
   const basename = filePath.split(/[\\/]/).pop()
   return basename ? `${APP_NAME} - ${basename}` : APP_NAME
 }
 
-/**
- * Picks the injected controls or falls back to the preload bridge.
- * Resolved lazily (at click time) so SSR tests never need `window`.
- */
+/** Resolve lazily so server-side renders do not need `window`. */
 function resolveControls(controls?: WindowControls): WindowControls {
   return controls ?? window.kizuna.windowControls
 }
 
-/** Minimize-button handler. */
 function minimizeWindow(controls?: WindowControls): void {
   resolveControls(controls).minimize()
 }
 
-/** Close-button handler. */
 function closeWindow(controls?: WindowControls): void {
   resolveControls(controls).close()
 }
 
-/** Window-button handler: exits fullscreen, restoring the pre-fullscreen size (see windowPair.ts's restorePreFullscreenBounds). */
 function restoreWindow(controls?: WindowControls): void {
   resolveControls(controls).setFullscreen(false)
 }

@@ -55,8 +55,6 @@ export interface OptionsMenuProps {
   gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
 
-/** The complete search index is assembled here, while each entry list stays
- * beside the tab that renders its setting. */
 const SETTING_ENTRIES: SettingEntry[] = [
   ...KEYBINDINGS_SETTING_ENTRIES,
   ...PLAYBACK_SETTING_ENTRIES,
@@ -72,7 +70,6 @@ const SETTING_ENTRIES: SettingEntry[] = [
 
 const FLASH_MS = 1600
 
-/** Options dialog shell: navigation, search, lazy category mounting, and tab composition. */
 export default function OptionsMenu({
   open,
   requestedCategory,
