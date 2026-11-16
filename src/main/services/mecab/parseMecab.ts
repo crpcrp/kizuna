@@ -1,17 +1,5 @@
-// MeCab's default output is `surface\tfeature,feature,...` per line,
-// terminated by a line reading `EOS`. The feature CSV layout differs by
-// dictionary flavor, so the field indices for lemma/reading/pos are chosen
-// per `DictFlavor` (pinned against the captured fixtures in
-// test/fixtures/mecab-{ipadic,unidic}.txt):
-//
-// - IPADIC (9 feature columns): pos = idx 0, lemma (原形) = idx 6, reading
-//   (読み) = idx 7.
-// - UniDic (17 feature columns): pos = idx 0, lemma (dictionary form) =
-//   idx 7, reading = idx 9 (`pron`, the surface pronunciation — preferred
-//   over `lForm` at idx 6, which is the lemma's own reading).
-//
-// Unknown words mark absent fields as `*`; those fall back to the surface
-// form (lemma) or an empty string (reading).
+// MeCab emits surface\tfeatures and a final EOS; absent fields are '*'.
+// IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 9 (surface pron, not lemma lForm).
 
 import type { DictFlavor, Token } from '../../../shared/token'
 
@@ -28,14 +16,7 @@ const FIELD_MAPS: Record<DictFlavor, FieldMap> = {
 
 const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
 
-/**
- * Parses MeCab's raw stdout for a single cue into `Token[]`, using the
- * feature-column layout for `flavor`. Blank lines and the trailing `EOS`
- * marker are skipped. When `sourceText` is supplied, each surface is aligned
- * against it because MeCab omits ordinary whitespace from its output. Newline
- * characters are removed before alignment because token offsets refer to the
- * continuous analysis text, not display line breaks.
- */
+// MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
 export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
   const map = FIELD_MAPS[flavor]
   const tokens: Token[] = []

@@ -57,15 +57,7 @@ interface RawSubject {
   }
 }
 
-/**
- * Parses one `/subjects` page's `data` array, keyed by subject id. Only
- * `vocabulary`/`kana_vocabulary` are kept — kanji and radicals are dropped
- * here, which is what makes a kanji/radical assignment disappear downstream
- * in `toKnownRows` without any special-casing there. The reading is the
- * `readings[]` entry with `primary: true`, falling back to the first entry,
- * falling back to `characters` — `kana_vocabulary` subjects may omit
- * `readings[]` entirely, since the word itself is already kana.
- */
+// Kana vocabulary subjects can omit readings because characters already contains the reading.
 export function parseSubjects(page: unknown[]): Map<number, WkSubject> {
   const map = new Map<number, WkSubject>()
   for (const item of page) {

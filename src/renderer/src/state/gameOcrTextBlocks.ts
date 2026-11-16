@@ -64,16 +64,8 @@ const MIN_ROW_HEIGHT_RATIO = 0.5
 /** Wide enough to read as a gap between words rather than a detector seam. */
 const SEPARATOR_GAP_LINE_HEIGHTS = 0.25
 
-/**
- * Groups one capture's line-level OCR regions using a conservative,
- * resolution-independent geometry heuristic. No input region is modified.
- *
- * Grouping happens twice: side-by-side detections of one visible line become a
- * single line, then closely stacked lines become a block. Both passes are
- * needed for a dialogue menu, where a numbered marker is often detected apart
- * from the option it belongs to and would otherwise be drawn as its own box on
- * top of that option's replacement text.
- */
+// Menu markers can be detected separately; merge fragments into lines before stacking to avoid overlapping boxes.
+// Conservative size-relative gaps avoid joining unrelated UI text across resolutions.
 export function groupGameOcrTextBlocks(regions: readonly OcrRegion[]): GameOcrTextBlock[] {
   const blocks: WorkingBlock[] = []
 

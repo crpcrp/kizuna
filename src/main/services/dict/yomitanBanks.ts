@@ -12,13 +12,7 @@ export interface DictMeta {
   revision: string
   /** Yomitan schema format/version number (e.g. 3). */
   format: number
-  /**
-   * From index.json's optional `frequencyMode` field: 'rank-based' means a
-   * lower value is more common (a position in a ranking), 'occurrence-based'
-   * means a higher value is more common (a raw count). Defaults to
-   * 'rank-based' when absent or unrecognized, matching Yomitan's convention
-   * for dictionaries that predate this field.
-   */
+  /** Yomitan defaults to rank-based (lower is common); occurrence-based counts reverse that order. */
   frequencyMode: FrequencyMode
 }
 
@@ -119,16 +113,7 @@ function isValidTermEntry(entry: unknown): boolean {
   return typeof termTags === 'string'
 }
 
-/**
- * Number of rows `parseTermBank` would return, without building any of them.
- *
- * The import needs a row total up front to size its progress bar and to hand
- * each bank a contiguous id range. Counting the raw bank avoids constructing
- * rows only to discard them, including an extra `normalizeGlossary` and
- * `JSON.stringify` per row.
- * per import. On jitendex (432,643 rows) skipping that construction cuts the
- * counting pass from 5,963 ms to 4,752 ms.
- */
+// Count raw rows without glossary construction; jitendex (432,643 rows) measured 4,752 vs 5,963 ms.
 export function countTermBank(json: unknown): number {
   if (!Array.isArray(json)) return 0
   let count = 0
@@ -164,22 +149,8 @@ export function parseTermBank(json: unknown): TermRow[] {
   return rows
 }
 
-/**
- * Parse a Yomitan v3 `kanji_bank_N.json` array into TermRows.
- *
- * Kanji dictionaries (KANJIDIC and friends) ship `kanji_bank_N.json` instead of
- * `term_bank_N.json`, and each entry is the 6-element tuple:
- * `[character, onyomi, kunyomi, tags, meanings[], stats{}]`. Their bank name
- * and entry shape require their own import path.
- *
- * Each character maps onto one `terms` row so kanji lookups flow through the
- * existing query path unchanged: `expression` is the character, `reading` stays
- * empty (a kanji has no single canonical reading, and a non-empty one here
- * would make it match reading-based lookups for one arbitrary reading), and the
- * on/kun readings become the glossary's first line so they stay visible in the
- * popup. `stats` is dropped — it is reference-book index numbers (Halpern,
- * Heisig, SKIP …), not something the popup shows.
- */
+// Yomitan kanji tuples: [character, onyomi, kunyomi, tags, meanings[], stats{}].
+// Keep reading empty: kanji has no canonical reading; show on/kun in the glossary and omit reference indices.
 export function parseKanjiBank(json: unknown): TermRow[] {
   if (!Array.isArray(json)) return []
   const rows: TermRow[] = []
@@ -241,14 +212,7 @@ function parseFreqValue(raw: unknown): number | null {
   return null
 }
 
-/**
- * Pitch-drop positions from a `mode === 'pitch'` entry's `data.pitches`, or
- * null when the payload isn't the supported Yomitan shape. Only non-negative
- * integers count; a `pitches` element that isn't an object with such a
- * `position` is skipped, and a record left with no position at all is dropped
- * rather than stored as an empty accent (an unknown pitch is not "heiban").
- * Duplicates are removed while preserving source order.
- */
+// Missing pitch is unknown, not heiban; drop records without valid non-negative positions.
 function parsePitchPositions(pitches: unknown): number[] | null {
   if (!Array.isArray(pitches)) return null
   const positions: number[] = []
@@ -261,22 +225,8 @@ function parsePitchPositions(pitches: unknown): number[] | null {
   return positions.length === 0 ? null : positions
 }
 
-/**
- * Parse a Yomitan v3 term_meta_bank_N.json array into TermMetaRows.
- * Each entry is expected to be the 3-element tuple: [expression, mode, data].
- * `mode === 'freq'` and `mode === 'pitch'` entries are handled; other modes are
- * skipped.
- *
- * For `freq`, `data` may be a bare number/numeric-string, a
- * `{ value, displayValue? }` object, or a `{ reading, frequency }` object where
- * `frequency` is itself a number or `{ value, displayValue? }`.
- *
- * For `pitch`, `data` must be a `{ reading, pitches: [{ position }] }` object —
- * see `parsePitchPositions`. The reading is required, because a pitch pattern
- * belongs to one reading of the expression, not to the expression as a whole.
- *
- * Malformed entries are skipped.
- */
+// Yomitan metadata tuples: [expression, mode, data]. Frequency accepts scalars, value/display objects,
+// or reading/frequency objects; pitch requires a reading because accent belongs to that reading.
 export function parseTermMetaBank(json: unknown): TermMetaRow[] {
   if (!Array.isArray(json)) return []
   const rows: TermMetaRow[] = []

@@ -1,10 +1,4 @@
-/**
- * Builds the argv for running MeCab against a given dictionary directory,
- * e.g.:
- *   mecab -d <dicdir>
- * MeCab's default output (one node per line, terminated by `EOS`) is what
- * `parseMecab` expects, so no output-format flags are added.
- */
+// Keep the default node-per-line output with EOS; the parser depends on that format.
 export function buildMecabArgs(dicdir: string): string[] {
   return ['-d', dicdir]
 }

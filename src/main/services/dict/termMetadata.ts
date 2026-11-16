@@ -30,15 +30,7 @@ interface FreqValue {
   display: string | null
 }
 
-/**
- * For each result, look up its frequency value/display in `term_meta` for
- * `freqDictId`, preferring a reading-scoped row over a reading-agnostic one.
- * Issues one `expression IN (...)` query per up-to-`FREQ_CHUNK_SIZE` unique
- * expressions (not one query per result), so duplicate expressions across
- * results and large result sets don't cause N+1 querying. Results with no
- * matching row keep frequency/frequencyDisplay as null. Returns a new array
- * (does not mutate `results` or its entries).
- */
+// Batch unique expressions to avoid N+1 queries; reading-specific metadata takes precedence.
 export function attachFrequencies(
   db: LookupDb,
   results: LookupResult[],
@@ -84,13 +76,7 @@ interface TermMetaPitchRow {
   pitch_positions: string | null
 }
 
-/**
- * Pitch dictionaries commonly ship only term metadata, so their `dict_id` is
- * absent from the displayed term results. Constrain the query to *enabled*
- * dictionaries rather than those results' dictionaries; the subquery still
- * binds the leading `idx_term_meta_expr` column without making a pitch-only
- * dictionary invisible.
- */
+// Pitch-only dictionaries have no term rows, so search all enabled dictionaries.
 function selectPitchByExpressions(expressionCount: number): string {
   const placeholders = Array.from({ length: expressionCount }, () => '?').join(', ')
   return `
@@ -122,18 +108,7 @@ function parseStoredPitchPositions(raw: string | null): number[] | null {
   return positions.length === 0 ? null : positions
 }
 
-/**
- * For each result, attach pitch-drop positions from the first enabled pitch
- * dictionary in dictionary priority order, preferring a row whose normalized
- * reading matches the result's over a reading-agnostic one. Pitch dictionaries
- * commonly contain metadata but no term rows, so limiting this to the result's
- * own dictionary would make their data unreachable.
- *
- * Mirrors `attachFrequencies`' batching — one query per up-to-`FREQ_CHUNK_SIZE`
- * unique expressions, covering every dictionary at once, never one per result
- * or per dictionary. Results with no matching row keep `pitchAccent: null`.
- * Returns a new array (does not mutate `results`).
- */
+// Select the first enabled pitch dictionary by priority, preferring a matching reading.
 export function attachPitchAccents(db: LookupDb, results: LookupResult[]): LookupResult[] {
   const uniqueExpressions = Array.from(new Set(results.map((r) => r.expression)))
   if (uniqueExpressions.length === 0) return results

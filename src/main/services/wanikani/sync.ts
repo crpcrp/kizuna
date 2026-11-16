@@ -28,18 +28,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return chunks
 }
 
-/**
- * Pulls every started vocabulary/kana_vocabulary assignment, resolves their
- * subjects in id-chunked batches, and replaces the whole 'wanikani' slice of
- * `known_words` in one go. A full pull, not incremental: WaniKani's assignment
- * counts are small enough (thousands, not millions) that an `updated_after`
- * sync would add complexity without a meaningful speedup.
- *
- * Kept deliberately light on requests: `subject_types` filters kanji/radical
- * out server-side (never fetched at all), both endpoints are asked for their
- * max `per_page` so no page is smaller than it has to be, and the id-chunk
- * size equals /subjects' max per_page so each chunk is exactly one request.
- */
+// Assignment counts are only thousands, so a full replacement avoids incremental-sync bookkeeping.
 export async function syncWaniKani(deps: {
   client: WaniKaniClient
   db: KnowledgeDb

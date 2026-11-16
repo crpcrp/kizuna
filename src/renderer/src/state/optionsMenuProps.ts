@@ -50,13 +50,6 @@ export interface OptionsMenuPropsInput {
   gameOcr: Omit<GameOcrTabProps, 'active' | 'open'>
 }
 
-/**
- * Assembles the Options dialog's props from the pieces their owners expose:
- * reducer-backed settings, the dialog's own integration data and actions, the
- * playback feature's mpv-output rows, and the vocabulary feature's
- * cache-invalidating rows. Pure wiring — no state and no bridge access, so the
- * settings rows can be exercised without rendering the dialog.
- */
 export function buildOptionsMenuProps({
   open,
   requestedCategory,

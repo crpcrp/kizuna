@@ -1,11 +1,3 @@
-// Playlist controller. Bridges the pure queue model in
-// `playlist.ts` to the media open pipeline and to the EOF push. It is a small
-// subscribable store (same shape as recentFilesController): the renderer reads
-// `getState()` and re-renders on `subscribe`, while `App.tsx` wires the load
-// dependency and the EOF subscription. Loading itself goes through the injected
-// `load` callback (App supplies `recentFilesController.openPath`), so the whole
-// controller is unit-testable without a live player.
-
 import {
   EMPTY_PLAYLIST,
   addEntries,
@@ -43,23 +35,11 @@ export interface PlaylistLoadDeps {
 export interface PlaylistController {
   getState(): PlaylistControllerState
   subscribe(listener: () => void): () => void
-  /**
-   * Whether the queue currently owns playback: it has >1 entry and the file
-   * playing (`filePath`) is exactly its current entry. Only then may the queue
-   * take EOF precedence — merely queueing files behind an unrelated video (which
-   * leaves `currentIndex` at the pure model's default 0 without loading it) must
-   * not let EOF advance from that phantom row and skip entry 0.
-   */
+  /** Queued files behind unrelated playback must not take EOF precedence and skip the first entry. */
   isPlaybackCurrent(filePath: string | undefined): boolean
   /** Appends paths to the queue (drops, multi-select, folder, parsed M3U). */
   addPaths(paths: string[]): void
-  /**
-   * Appends `paths`, and — only when the queue was empty before the append and
-   * `isPlaying` is false — starts the first appended entry through the same
-   * skip-over-broken-entries path `playAt` uses. Returns true when playback was
-   * started. Appending to a non-empty queue, or while something is playing, is
-   * exactly `addPaths`.
-   */
+  /** Starts playback only when adding to an empty queue while idle; returns whether it started. */
   addPathsAndMaybePlay(
     paths: string[],
     isPlaying: boolean,

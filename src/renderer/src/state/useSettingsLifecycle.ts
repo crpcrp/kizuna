@@ -63,13 +63,7 @@ export function useSettingsLifecycle({
   // must unblock offset restoration without allowing the default render state
   // to overwrite an unread settings store.
   const settingsLoadedRef = useRef(false)
-  // The save effect's own settings snapshot from its last run, diffed against
-  // on the next run (see rendererSettingsPatch) so only the field(s) that
-  // actually changed are scheduled — not the whole tracked settings slice every
-  // time. Seeded from the just-loaded settings once the load effect below
-  // resolves (matching what the reducer is about to apply), so the reducer's
-  // one-time `loadSettings` replacement isn't itself mistaken for a user change
-  // and re-saved.
+  // Seed the diff baseline from loaded settings so hydration is not mistaken for a user edit.
   const previousSettingsRef = useRef<RendererSettings>(settings)
 
   useEffect(() => {

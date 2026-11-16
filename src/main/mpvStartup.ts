@@ -1,7 +1,3 @@
-// Extracted from index.ts so the config-enabled/no-config-retry/warning paths are testable
-// without an Electron BrowserWindow or a real mpv process. Every side effect
-// (spawn+connect, dir creation, error reporting, logging) is injected.
-
 /** Argv-shaping options forwarded to `MpvController.start`. */
 export interface MpvStartOptions {
   mpvPath: string
@@ -10,8 +6,6 @@ export interface MpvStartOptions {
   extraArgs?: string[]
 }
 
-/** Shown to the user when their own mpv config broke startup and we retried
- * without it. Exported so the test asserts the exact banner text. */
 const MPV_CONFIG_ERROR_MESSAGE =
   'Your mpv config failed to load, so mpv started with it disabled. Check mpv.conf in the mpv config folder.'
 
@@ -32,16 +26,7 @@ export interface StartMpvWithConfigDeps {
   warn?(err: unknown): void
 }
 
-/**
- * Starts mpv with the user's config settings applied, falling back to a
- * config-disabled launch if the first attempt fails. A broken `mpv.conf`
- * (e.g. `vo=` garbage) can make mpv exit at startup, surfacing as a `start`
- * rejection; `MpvController.start` already killed the process and reset its
- * state, so a retry is safe. When the retry is what succeeds, a banner tells
- * the user their config failed to load. If the user hasn't enabled their own
- * config there's nothing to retry — the original error propagates. If the
- * retry itself fails, that rejection propagates too (no banner).
- */
+// A failed start cleans up mpv, so retrying without a broken user config is safe.
 export async function startMpvWithConfig(deps: StartMpvWithConfigDeps): Promise<void> {
   const { mpvUserConfig, mpvExtraArgs } = deps.settings
   const userConfigDir = mpvUserConfig ? deps.configDir : undefined

@@ -25,16 +25,7 @@ import type { KizunaApi } from '../shared/preloadApi'
 import type { WindowShapeRect } from '../shared/windowShape'
 import { subscribe } from './bridge'
 
-/**
- * The Linux-only `setShape` half of `windowControls`. Shaping applies to the
- * X11 renderer overlay of the two-window pair (see `windowPair.ts`); Windows
- * runs a single embedded window and must not expose the method at all, so the
- * renderer's optional-method check (`useLinuxWindowShape`) stays the one gate.
- *
- * Split out as a pure function with an explicit `platform` so both variants are
- * asserted on either host — reading `process.platform` inline left the Windows
- * shape untested on a Linux runner and vice versa.
- */
+// Expose setShape only for the Linux X11 overlay; Windows uses a single embedded window.
 export function windowShapeApi(
   setShape: (rects: WindowShapeRect[]) => void,
   platform: NodeJS.Platform = process.platform

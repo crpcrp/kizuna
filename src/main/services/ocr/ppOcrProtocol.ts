@@ -38,31 +38,9 @@ const RESULT_KEYS = ['version', 'type', 'requestId', 'regions'] as const
 const ERROR_KEYS = ['version', 'type', 'requestId'] as const
 const REGION_KEYS = ['text', 'confidence', 'quad'] as const
 
-/**
- * `--det-side-len` **sets** the detection input size; it does not cap it.
- *
- * The worker rescales every capture so its longest side is exactly this many
- * pixels, upwards as well as downwards, and detection then costs roughly the
- * square of it. Measured against the vendor fixture on a Ryzen 7 5800X3D, one
- * recognition of the same content at four capture sizes:
- *
- * | capture | at 4000 | at the capture's own longest side |
- * |---|---:|---:|
- * | 960x540 | 1632 ms | 78 ms |
- * | 1280x720 | 1648 ms | 117 ms |
- * | 1920x1080 | 1651 ms | 268 ms |
- * | 2560x1440 | 1761 ms | 602 ms |
- *
- * A 960x540 capture costing the same as a 2560x1440 one is the tell: at 4000
- * the source resolution is irrelevant, because everything is resampled to the
- * same tensor. It is worse than uniform for a tall window — a 1026x795 capture
- * becomes 4000x3099, which is *more* pixels than a 2560x1440 one becomes.
- *
- * The 4000 this replaces was chosen believing it meant "native size". It did
- * not, and the extra region it found on the fixture was a hallucinated `C` at
- * 0.88 confidence, not recall: at the capture's own size the same five lines
- * come back, with their trailing punctuation intact more often.
- */
+// --det-side-len sets, rather than caps, the longest side, upscaling small captures too.
+// Ryzen 7 5800X3D fixture, capture-sized vs 4000: 960x540 78/1632 ms;
+// 1280x720 117/1648 ms; 1920x1080 268/1651 ms; 2560x1440 602/1761 ms.
 const PP_OCR_MIN_DETECTION_SIDE_LENGTH = 960
 
 /** The worker refuses anything larger; it is also the whole-desktop worst case. */
@@ -137,18 +115,7 @@ export type PpOcrMessage =
   | { type: 'error'; requestId?: number }
   | { type: 'result'; requestId: number; regions: unknown }
 
-/**
- * Chooses the detection input size for an armed run.
- *
- * The genuinely correct value is each capture's own longest side, but
- * `--det-side-len` is a startup argument and the capture size is not known
- * until the shortcut is pressed. The largest side any capture can have is the
- * largest display's, so that is the value which leaves the common case — a
- * fullscreen or maximized game — unscaled, and bounds how far a smaller window
- * is scaled up.
- *
- * Pure, and takes physical pixel sides rather than an Electron display list.
- */
+// The size is fixed at worker startup, before capture; use the largest display to avoid scaling fullscreen games.
 export function resolveDetectionSideLength(physicalSides: readonly number[]): number {
   const largest = Math.max(
     PP_OCR_MIN_DETECTION_SIDE_LENGTH,

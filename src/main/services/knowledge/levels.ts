@@ -20,14 +20,7 @@ export function levelFromSrsStage(stage: number): KnowledgeLevel {
   return 'wellKnown'
 }
 
-/**
- * Anki card → level. A suspended card (`queue === -1`) is `wellKnown` by
- * explicit user policy. Buried cards (`queue === -2 | -3`) remain `inDeck`: the
- * card exists but is not in active rotation. `type 0` (fresh card) is `inDeck`;
- * `type 1|3` are (re)learning steps; `type 2` (review) is graded by `interval`
- * against the configured thresholds. Every real card is in some deck, so this
- * never returns 'unknown'.
- */
+// User policy: suspended means wellKnown; buried stays inDeck. Anki types 1/3 are (re)learning, 2 review.
 export function levelFromAnkiCard(card: AnkiCardInfo, t: IntervalThresholds): KnowledgeLevel {
   if (card.queue === -1) return 'wellKnown'
   if (card.queue === -2 || card.queue === -3) return 'inDeck'
@@ -49,13 +42,7 @@ export function isStale(lastSyncAt: string | null, now: number, staleAfterHours:
   return elapsedMs >= staleAfterHours * 60 * 60 * 1000
 }
 
-/**
- * Whether at least `minIntervalMs` has elapsed since `lastSyncAt` (or it's
- * `null` — never synced, so always allowed). This is the floor a manual
- * "Sync now" click is checked against, independent of `isStale`'s
- * hours-scale auto-sync check — it exists to stop rapid repeat clicks from
- * hammering the source's API, not to decide whether a sync is *due*.
- */
+// Rate-limit manual sync independently of the auto-sync staleness policy.
 export function canSyncNow(lastSyncAt: string | null, now: number, minIntervalMs: number): boolean {
   if (lastSyncAt === null) return true
   return now - Date.parse(lastSyncAt) >= minIntervalMs

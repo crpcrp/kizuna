@@ -60,13 +60,6 @@ export interface MediaServiceLike {
   ): Promise<{ dataUrl: string } | null>
 }
 
-/**
- * Registers the media command channels ('media:openFile', 'media:openFiles',
- * 'media:openFolder', 'media:readPlaylist', 'media:savePlaylist', 'media:openSubtitleFile',
- * 'media:enumerateTracks', 'media:loadSubtitle', 'media:loadExternalSubtitle',
- * 'media:getVideoDimensions') against the ipcMain-like object, forwarding each
- * to `service`.
- */
 export function registerMediaBridge<E>(ipc: IpcMainHandleLike<E>, service: MediaServiceLike): void {
   ipc.handle(MEDIA_CHANNELS.openFile, () => service.openFile())
   ipc.handle(MEDIA_CHANNELS.openFiles, () => service.openFiles())

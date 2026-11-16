@@ -1,13 +1,4 @@
-// Runtime half of the app-identity configuration. Turns the
-// process-agnostic strings in `src/shared/appIdentity.json` into the Electron
-// calls and filesystem paths that must agree with what electron-builder
-// packages.
-//
-// Electron derives both `app.getName()` and `app.getPath('userData')` from
-// package.json rather than from electron-builder's `productName`, so an
-// unconfigured build writes its databases to a directory named after the npm
-// package while the installer, shortcut, and executable use the product name.
-// `applyAppIdentity` removes that divergence by setting all three explicitly.
+// Electron defaults to package.json's name, which can differ from the packaged identity.
 
 import { APP_ID, PRODUCT_NAME, USER_DATA_DIR_NAME } from '../shared/appIdentity'
 import { pathApiFor } from './platformPath'
@@ -21,16 +12,7 @@ export interface AppIdentityTarget {
   setPath(name: string, path: string): void
 }
 
-/**
- * The per-user configuration directory the app stores settings and databases
- * in. `appDataRoot` is Electron's `appData` path (`%APPDATA%` on Windows,
- * `$XDG_CONFIG_HOME` or `~/.config` on Linux).
- *
- * Roaming AppData, not the installation directory: the NSIS installer can be
- * pointed at `Program Files`, which a standard user account cannot write to,
- * and Windows would otherwise silently virtualize the writes. This also keeps
- * user data out of the uninstaller's path and survives reinstalls.
- */
+// Keep user data in appData so it survives reinstalls and needs no installation-directory write access.
 function userDataDir(appDataRoot: string, platform: NodeJS.Platform = process.platform): string {
   return pathApiFor(platform).join(appDataRoot, USER_DATA_DIR_NAME)
 }
@@ -43,13 +25,7 @@ export function screenshotsDir(
   return pathApiFor(platform).join(picturesRoot, PRODUCT_NAME)
 }
 
-/**
- * Applies the packaged identity to a running app. Must be called before the
- * `ready` event and before anything reads `app.getPath('userData')`, because
- * Electron caches the resolved path on first access.
- *
- * Returns the resolved user-data directory so callers can log or assert it.
- */
+// Apply before ready and the first userData lookup: Electron caches the resolved path.
 export function applyAppIdentity(
   app: AppIdentityTarget,
   platform: NodeJS.Platform = process.platform

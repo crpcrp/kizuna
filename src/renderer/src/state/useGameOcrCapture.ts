@@ -11,17 +11,7 @@ import {
   type GameOcrCaptureSurface
 } from './gameOcrCaptureStream'
 
-/**
- * Encoding handed to the OCR worker.
- *
- * PNG, and not by preference: the vendored OpenCV inside `ppocr.exe` is built
- * `WITH_JPEG=OFF` / `BUILD_JPEG=OFF` and links only zlib and libpng, so
- * `cv::imdecode` accepts PNG and nothing else. The same frame returns regions
- * as PNG and `request failed: unsupported image format` as JPEG, and the
- * failure is a nasty one because the screenshot appears first and only
- * recognition fails. Changing this means rebuilding and republishing the
- * vendor payload with the matching codec.
- */
+// Vendored OpenCV has WITH_JPEG=OFF / BUILD_JPEG=OFF; JPEG capture requires a rebuilt vendor payload.
 const CAPTURE_MEDIA_TYPE = 'image/png'
 
 export interface GameOcrCaptureBridge {
@@ -50,22 +40,8 @@ export interface UseGameOcrCaptureInput {
   onFrozen(imageSize: OcrImageSize): void
 }
 
-/**
- * Owns the desktop capture streams the frozen frame is taken from.
- *
- * A stream stays open for as long as Game OCR is armed and the window is
- * retained, which is what makes a capture cost one `drawImage` instead of a
- * stream open. Opening one is the expensive part and happens on the first
- * capture of a given window or display, not on every one.
- *
- * Streams are keyed by capture-source id, which covers windows and displays
- * alike; only how many are retained differs, and the freeze request says
- * which kind it is rather than the source id's shape being interpreted here.
- *
- * The overlay is excluded from Windows desktop capture. A recapture can
- * therefore replace its canvas in place without hiding, waiting for a native
- * event, or allowing the old text boxes into the captured pixels.
- */
+// Retain capture streams while armed: opening them is expensive, drawing a frame is cheap.
+// Windows excludes the overlay from capture, so recapture can replace the canvas without hiding it.
 export function useGameOcrCapture({ api, canvasRef, onFrozen }: UseGameOcrCaptureInput): void {
   // The freeze subscription must not be torn down and re-armed every time the
   // frame re-renders, so the newest handler is reached indirectly.
