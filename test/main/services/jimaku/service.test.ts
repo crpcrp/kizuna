@@ -69,12 +69,10 @@ function prepared(
 }
 
 function makeHarness() {
-  let configGeneration = 0
-  const configListeners = new Set<(generation: number) => void>()
+  const configListeners = new Set<() => void>()
   const settings = {
-    getConfigGeneration: vi.fn(() => configGeneration),
     getFolderHint: vi.fn(),
-    onConfigChange: vi.fn((listener: (generation: number) => void) => {
+    onConfigChange: vi.fn((listener: () => void) => {
       configListeners.add(listener)
       return () => configListeners.delete(listener)
     })
@@ -149,8 +147,7 @@ function makeHarness() {
     mediaHistory: history,
     openExternal: async (url) => {
       opened.push(url)
-    },
-    makeId: (kind, counter) => `${kind}-${counter}`
+    }
   })
 
   return {
@@ -161,9 +158,8 @@ function makeHarness() {
     archive,
     history,
     opened,
-    changeConfig(generation: number) {
-      configGeneration = generation
-      for (const listener of configListeners) listener(generation)
+    changeConfig() {
+      for (const listener of configListeners) listener()
     }
   }
 }
@@ -218,7 +214,6 @@ describe('createJimakuService', () => {
         listFiles: vi.fn()
       },
       settings: {
-        getConfigGeneration: vi.fn(() => 0),
         getFolderHint: vi.fn(),
         onConfigChange: vi.fn(() => () => undefined)
       },
@@ -253,7 +248,7 @@ describe('createJimakuService', () => {
     ).resolves.toEqual({ status: 'error', code: 'notAvailable' })
   })
 
-  it('merges both title categories, marks partial results, and caches selected files', async () => {
+  it('merges both title categories, marks partial results, and fetches current results on each explicit request', async () => {
     const harness = makeHarness()
     harness.client.searchEntries.mockImplementation(async ({ anime }) =>
       anime
@@ -287,7 +282,7 @@ describe('createJimakuService', () => {
       allEntriesRequest()
     )
     expect(entrySearch.ok).toBe(true)
-    expect(harness.client.searchEntries).toHaveBeenCalledTimes(2)
+    expect(harness.client.searchEntries).toHaveBeenCalledTimes(4)
 
     const files = await harness.service.listFiles(
       'window-a',
@@ -305,9 +300,9 @@ describe('createJimakuService', () => {
     expect(harness.downloads.prepareDirect).not.toHaveBeenCalled()
 
     await harness.service.listFiles('window-a', started.value.sessionId, ENTRY_ANIME.id)
-    expect(harness.client.listFiles).toHaveBeenCalledOnce()
-    await harness.service.listFiles('window-a', started.value.sessionId, ENTRY_ANIME.id, true)
     expect(harness.client.listFiles).toHaveBeenCalledTimes(2)
+    await harness.service.listFiles('window-a', started.value.sessionId, ENTRY_ANIME.id, true)
+    expect(harness.client.listFiles).toHaveBeenCalledTimes(3)
   })
 
   it('resolves a remembered folder title before listing its files', async () => {
@@ -431,6 +426,28 @@ describe('createJimakuService', () => {
     expect(harness.archive.prepareMember).toHaveBeenCalledOnce()
   })
 
+  it('releases a download that finishes after its sender is disposed', async () => {
+    const { service, client, downloads, history } = makeHarness()
+    client.searchEntries.mockResolvedValue({ ok: true, value: [ENTRY_ANIME] })
+    client.listFiles.mockResolvedValue({ ok: true, value: [SRT_FILE] })
+    const session = service.beginSession('player', '/video.mkv', 1)
+    if (!session.ok) throw new Error('Expected a session')
+    const { sessionId } = session.value
+    await service.searchTitles('player', sessionId, allEntriesRequest())
+    const files = await service.listFiles('player', sessionId, ENTRY_ANIME.id)
+    if (!files.ok || !files.value.files[0]) throw new Error('Expected a candidate')
+
+    const pending = deferred<Awaited<ReturnType<typeof downloads.prepareDirect>>>()
+    downloads.prepareDirect.mockReturnValueOnce(pending.promise)
+    const result = service.prepareFile('player', sessionId, files.value.files[0].candidateId)
+    service.disposeSender('player')
+    const subtitle = prepared(SRT_FILE)
+    pending.resolve({ ok: true, value: subtitle })
+    await expect(result).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
+    expect(downloads.releasePrepared).toHaveBeenCalledWith(subtitle.handle)
+    expect(history.applyPreparedSubtitle).not.toHaveBeenCalled()
+  })
+
   it('drops canceled and superseded completions and isolates senders and media generations', async () => {
     const harness = makeHarness()
     const pending = deferred<JimakuResult<JimakuEntry[]>>()
@@ -517,7 +534,7 @@ describe('createJimakuService', () => {
       query: 'A',
       category: 'anime'
     })
-    harness.changeConfig(1)
+    harness.changeConfig()
     pending.resolve({ ok: true, value: [ENTRY_ANIME] })
     await expect(inFlight).resolves.toEqual({ ok: false, error: { code: 'cancelled' } })
     await expect(
