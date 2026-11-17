@@ -49,6 +49,7 @@ export async function tokenizeActiveCue(
   cache: Map<string, Token[]>,
   tokenizeToken: SubtitleRequestToken = { current: 0 }
 ): Promise<Token[]> {
+  const requestId = ++tokenizeToken.current
   if (!cue) {
     dispatch({ type: 'activeTokensLoaded', tokens: [] })
     return []
@@ -64,7 +65,6 @@ export async function tokenizeActiveCue(
   // Clear old tokens before awaiting MeCab so the new cue displays plain text rather than stale spans.
   dispatch({ type: 'activeTokensLoaded', tokens: [] })
 
-  const requestId = ++tokenizeToken.current
   const tokens = await bridge.tokenize(cueAnalysisText(cue))
   // Return no stale tokens so chained knowledge resolution cannot process a superseded cue.
   if (tokenizeToken.current !== requestId) return []

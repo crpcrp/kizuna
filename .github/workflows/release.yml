@@ -58,10 +58,6 @@ jobs:
               echo 'package.json changed without a version change; skipping release build'
               build=false
             else
-              if [[ "$(jq -r '.version, .packages[""].version' package-lock.json | sort -u)" != "$version" ]]; then
-                echo 'package.json and package-lock.json versions do not match' >&2
-                exit 1
-              fi
               if git rev-parse --verify --quiet "refs/tags/$tag"; then
                 echo "Release tag already exists: $tag" >&2
                 exit 1
@@ -70,6 +66,10 @@ jobs:
             fi
           fi
 
+          if [[ "$build" == true && "$(jq -r '.version, .packages[""].version' package-lock.json | sort -u)" != "$version" ]]; then
+            echo 'package.json and package-lock.json versions do not match' >&2
+            exit 1
+          fi
           echo "build=$build" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -112,8 +112,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           npm run dist
-          node scripts/validate-update-metadata.mjs dist/latest.yml "kizuna-$env:VERSION-setup.exe"
-          Compress-Archive -Path build\notices\* -DestinationPath "dist\kizuna-$env:VERSION-windows-x64-notices.zip"
+          $installer = "kizuna-$env:VERSION-setup.exe"
+          node scripts/validate-update-metadata.mjs dist/latest.yml $installer
+          New-Item -ItemType Directory dist/release
+          Copy-Item -LiteralPath "dist/$installer", "dist/$installer.blockmap", 'dist/latest.yml' -Destination dist/release
+          Compress-Archive -Path build\notices\* -DestinationPath "dist/release/kizuna-$env:VERSION-windows-x64-notices.zip"
 
       - name: Smoke-test installed application
         shell: pwsh
@@ -149,11 +152,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kizuna-windows-x64-release
-          path: |
-            dist/*-setup.exe
-            dist/*-setup.exe.blockmap
-            dist/latest.yml
-            dist/*-notices.zip
+          path: dist/release/
           if-no-files-found: error
           retention-days: 7
 
@@ -199,9 +198,12 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           npm run dist:linux
-          node scripts/validate-update-metadata.mjs dist/latest-linux.yml \
-            "kizuna-$VERSION-linux-x86_64.AppImage" "kizuna-$VERSION-linux-amd64.deb"
-          tar -czf "dist/kizuna-$VERSION-linux-x64-notices.tar.gz" -C build/notices .
+          appimage="kizuna-$VERSION-linux-x86_64.AppImage"
+          deb="kizuna-$VERSION-linux-amd64.deb"
+          node scripts/validate-update-metadata.mjs dist/latest-linux.yml "$appimage" "$deb"
+          mkdir dist/release
+          cp "dist/$appimage" "dist/$deb" dist/latest-linux.yml dist/release/
+          tar -czf "dist/release/kizuna-$VERSION-linux-x64-notices.tar.gz" -C build/notices .
 
       - name: Verify packaged artifacts
         run: npm run smoke:linux
@@ -210,11 +212,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: kizuna-linux-x64-release
-          path: |
-            dist/*.AppImage
-            dist/*.deb
-            dist/latest-linux.yml
-            dist/*-notices.tar.gz
+          path: dist/release/
           if-no-files-found: error
           retention-days: 7
 

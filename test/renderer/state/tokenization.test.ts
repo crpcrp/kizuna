@@ -105,30 +105,28 @@ describe('tokenizeActiveCue', () => {
     expect(result).toEqual([tokenA])
   })
 
-  it('a stale (superseded) request does not dispatch the superseded result (but still clears stale tokens up front)', async () => {
-    const first = deferred<Token[]>()
-    const tokenize = vi.fn().mockReturnValue(first.promise)
-    const bridge: MecabBridge = { tokenize }
-    const dispatch = vi.fn()
-    const cache = new Map<string, Token[]>()
-    const token: SubtitleRequestToken = { current: 0 }
+  it.each([undefined, { start: 2, end: 3, text: 'cached' }])(
+    'ignores pending tokenization after the active cue changes to %j',
+    async (nextCue) => {
+      const first = deferred<Token[]>()
+      const tokenize = vi.fn().mockReturnValue(first.promise)
+      const bridge: MecabBridge = { tokenize }
+      const dispatch = vi.fn()
+      const cache = new Map<string, Token[]>()
+      const token: SubtitleRequestToken = { current: 0 }
 
-    const call = tokenizeActiveCue(bridge, dispatch, cue, cache, token)
-    // Supersede before the bridge call resolves.
-    token.current++
-    first.resolve([tokenA])
-    const result = await call
+      const call = tokenizeActiveCue(bridge, dispatch, cue, cache, token)
+      if (nextCue) cache.set(cueKey(nextCue), [])
+      await tokenizeActiveCue(bridge, dispatch, nextCue, cache, token)
+      dispatch.mockClear()
+      first.resolve([tokenA])
+      const result = await call
 
-    // Only the synchronous empty-clear dispatch happened; the superseded
-    // real result was never dispatched.
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    expect(dispatch.mock.calls[0]).toEqual([{ type: 'activeTokensLoaded', tokens: [] }])
-    // A stale result must not repopulate the cache after an invalidation.
-    expect(cache.has(cueKey(cue))).toBe(false)
-    // The return value is also suppressed for stale requests, so a chained
-    // caller (resolveKnownLevels in App.tsx) treats this as a no-op too.
-    expect(result).toEqual([])
-  })
+      expect(dispatch).not.toHaveBeenCalled()
+      expect(cache.has(cueKey(cue))).toBe(false)
+      expect(result).toEqual([])
+    }
+  )
 })
 
 describe('resolveKnownLevels', () => {
