@@ -328,6 +328,16 @@ describe('Jimaku content storage', () => {
     expect(http.calls).toHaveLength(0)
   })
 
+  it('repairs same-size cache corruption when the subtitle is downloaded again', async () => {
+    const file = fileRecord(42)
+    const { store, cacheRoot } = makeStore({ [file.url]: { bytes: BYTES } })
+    disk.writeFileSync(join(cacheRoot, `${hash(BYTES)}.srt`), Buffer.alloc(BYTES.length))
+    await expect(store.prepareDirect(42, file)).resolves.toMatchObject({ ok: true })
+    await expect(store.readManagedSubtitle(provenance())).resolves.toMatchObject({
+      bytes: Buffer.from(BYTES)
+    })
+  })
+
   it('does not let a pending request block another download', async () => {
     const pending = fileRecord(42)
     const ready = fileRecord(43)

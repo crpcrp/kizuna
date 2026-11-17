@@ -163,7 +163,11 @@ export function createJimakuDownloadStore(
         const contentVersion = createHash('sha256').update(bytes).digest('hex')
         const managedPath = contentPath(contentVersion, format)
         const existing = await fs.stat(managedPath).catch(() => undefined)
-        if (!existing?.isFile() || existing.size !== bytes.byteLength) {
+        const matches =
+          existing?.isFile() &&
+          existing.size === bytes.byteLength &&
+          (await fs.readFile(managedPath)).equals(bytes)
+        if (!matches) {
           const temporary = join(
             deps.cacheRoot,
             `${TEMP_PREFIX}${randomBytes(12).toString('hex')}.tmp`
