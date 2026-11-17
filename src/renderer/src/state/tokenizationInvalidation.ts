@@ -5,6 +5,7 @@ import {
   type KnowledgeBridge,
   type MecabBatchBridge,
   type MecabBridge,
+  resolveKnownLevels,
   tokenizeActiveCue,
   tokenizeAllCues
 } from './tokenization'
@@ -28,14 +29,24 @@ export async function invalidateTokenizationForDictionaryChange({
   sidebarOpen,
   caches: { tokenCache, knownLevelsCache, tokens }
 }: TokenizationInvalidationArgs): Promise<void> {
-  tokens.active.current++
-  tokens.allCues.current++
+  const sidebarRequest = ++tokens.allCues.current
+  tokens.levels.current++
   tokens.allCuesLevels.current++
   tokenCache.clear()
   dispatch({ type: 'resetTokenization' })
 
-  await tokenizeActiveCue(mecab, dispatch, activeCue, tokenCache, tokens.active)
-  if (!sidebarOpen) return
+  const activeTokens = await tokenizeActiveCue(
+    mecab,
+    dispatch,
+    activeCue,
+    tokenCache,
+    tokens.active
+  )
+  if (!sidebarOpen) {
+    await resolveKnownLevels(knowledge, dispatch, activeTokens, knownLevelsCache, tokens.levels)
+    return
+  }
+  if (tokens.allCues.current !== sidebarRequest) return
 
   await tokenizeAllCues(
     mecab,
