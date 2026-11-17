@@ -32,7 +32,7 @@ describe('invalidateTokenizationForDictionaryChange', () => {
 
     const refreshed = invalidateTokenizationForDictionaryChange({
       mecab,
-      knowledge: { levelsFor: vi.fn().mockResolvedValue({}) },
+      knowledge: { levelsFor: vi.fn().mockResolvedValue({ new: 'known' }) },
       dispatch,
       activeCue: cue,
       cues: [cue],
@@ -46,7 +46,40 @@ describe('invalidateTokenizationForDictionaryChange', () => {
 
     expect(dispatch).toHaveBeenCalledWith({ type: 'resetTokenization' })
     expect(caches.tokenCache.get(cueKey(cue))).toEqual(newTokens)
+    expect(dispatch).toHaveBeenCalledWith({ type: 'knownLevelsLoaded', levels: { new: 'known' } })
     expect(dispatch).not.toHaveBeenCalledWith({ type: 'activeTokensLoaded', tokens: oldTokens })
+  })
+
+  it('keeps the newer track when an older refresh finishes tokenizing its active cue', async () => {
+    const pending = deferred<Token[]>()
+    const mecab = {
+      tokenize: vi.fn().mockReturnValueOnce(pending.promise).mockResolvedValue(newTokens),
+      tokenizeBatch: vi.fn().mockResolvedValue([oldTokens])
+    }
+    const args = {
+      mecab,
+      knowledge: { levelsFor: vi.fn().mockResolvedValue({}) },
+      dispatch: vi.fn(),
+      sidebarOpen: true,
+      caches: createVocabularyCaches()
+    }
+    const first = invalidateTokenizationForDictionaryChange({
+      ...args,
+      activeCue: cue,
+      cues: [cue]
+    })
+    await invalidateTokenizationForDictionaryChange({
+      ...args,
+      activeCue: otherCue,
+      cues: [otherCue]
+    })
+    args.dispatch.mockClear()
+    pending.resolve(oldTokens)
+    await first
+
+    expect(args.dispatch).not.toHaveBeenCalled()
+    expect(args.caches.tokenCache.has(cueKey(cue))).toBe(false)
+    expect(mecab.tokenizeBatch).not.toHaveBeenCalled()
   })
 
   it('retokenizes the complete track when the sidebar is open', async () => {
