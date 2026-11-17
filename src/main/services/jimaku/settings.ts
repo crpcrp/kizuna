@@ -39,8 +39,7 @@ export interface JimakuSettingsService {
 
   /** Main-process-only accessors used by the later search service. */
   getApiKey(): string
-  getConfigGeneration(): number
-  onConfigChange(listener: (generation: number) => void): () => void
+  onConfigChange(listener: () => void): () => void
 }
 
 interface CreateJimakuSettingsServiceDeps {
@@ -55,9 +54,8 @@ interface CreateJimakuSettingsServiceDeps {
 export function createJimakuSettingsService(
   deps: CreateJimakuSettingsServiceDeps
 ): JimakuSettingsService {
-  let configGeneration = 0
   let testOutcome: JimakuTestOutcome = { status: 'notTested' }
-  const listeners = new Set<(generation: number) => void>()
+  const listeners = new Set<() => void>()
   const activeTests = new Set<AbortController>()
   const pathOptions = deps.pathOptions ?? {}
 
@@ -97,12 +95,11 @@ export function createJimakuSettingsService(
   }
 
   function invalidateConfiguration(): void {
-    configGeneration++
     testOutcome = { status: 'notTested' }
     for (const controller of activeTests) controller.abort()
     for (const listener of listeners) {
       try {
-        listener(configGeneration)
+        listener()
       } catch {
         // A future consumer must not be able to break credential persistence.
       }
@@ -188,7 +185,6 @@ export function createJimakuSettingsService(
 
   async function testConnection(): Promise<JimakuSettingsStatus> {
     const apiKey = readApiKey()
-    const generation = configGeneration
     if (apiKey === '') {
       testOutcome = { status: 'error', error: { code: 'notConfigured' } }
       return publicStatus()
@@ -211,7 +207,7 @@ export function createJimakuSettingsService(
 
       // A replacement/clear wins over every completion from the old key. The
       // current status is deliberately returned, with no stale outcome.
-      if (generation !== configGeneration || apiKey !== readApiKey()) return publicStatus()
+      if (controller.signal.aborted || apiKey !== readApiKey()) return publicStatus()
 
       testOutcome =
         result?.ok === true
@@ -239,7 +235,6 @@ export function createJimakuSettingsService(
     setFolderHint,
     clearFolderHint,
     getApiKey: readApiKey,
-    getConfigGeneration: () => configGeneration,
     onConfigChange(listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)

@@ -196,10 +196,9 @@ describe('createJimakuSettingsService', () => {
     const oldTest = service.testConnection()
 
     expect(signal).toBeInstanceOf(AbortSignal)
-    expect(service.getConfigGeneration()).toBe(1)
 
     const afterReplace = service.setApiKey('key-b')
-    expect(listener).toHaveBeenCalledWith(2)
+    expect(listener).toHaveBeenCalledOnce()
     expect(signal?.aborted).toBe(true)
     expect(afterReplace.testOutcome).toEqual({ status: 'notTested' })
 
@@ -220,14 +219,12 @@ describe('createJimakuSettingsService', () => {
     const { service } = makeService(client)
     service.setApiKey('key-a')
     const oldTest = service.testConnection()
-    const generation = service.getConfigGeneration()
 
     expect(service.setApiKey('  key-a  ')).toEqual({
       configured: true,
       secretStorageAvailable: true,
       testOutcome: { status: 'notTested' }
     })
-    expect(service.getConfigGeneration()).toBe(generation)
     expect(signal?.aborted).toBe(false)
 
     pending.resolve({ ok: true, value: [] })

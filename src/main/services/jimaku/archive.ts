@@ -1,10 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { unzipSync } from 'fflate'
-import type {
-  JimakuEpisodeRange,
-  JimakuRankedFile,
-  JimakuVideoIdentity
-} from '../../../shared/jimakuMatching'
+import type { JimakuArchiveMember } from '../../../shared/jimaku'
+import type { JimakuVideoIdentity } from '../../../shared/jimakuMatching'
 import { parseJimakuVideoIdentity, rankJimakuFiles } from '../../../shared/jimakuMatching'
 import type { JimakuFileRecord } from './client'
 import type {
@@ -30,19 +27,6 @@ export interface JimakuArchiveError {
 
 export type JimakuArchiveResult<T> =
   { ok: true; value: T } | { ok: false; error: JimakuArchiveError }
-
-export interface JimakuArchiveMember {
-  /** Opaque ID valid only while its package handle is retained. */
-  memberId: string
-  displayName: string
-  format: 'srt' | 'ass' | 'ssa'
-  /** Actual expanded size, not an untrusted ZIP header value. */
-  size: number
-  inferredEpisode?: number
-  inferredEpisodeRange?: JimakuEpisodeRange
-  status: JimakuRankedFile['status']
-  reasons: string[]
-}
 
 export interface JimakuArchiveInspection {
   /** Opaque package ID used by prepareMember. */

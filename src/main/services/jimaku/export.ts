@@ -1,3 +1,6 @@
+import type { MediaHistoryService } from '../mediaHistory'
+import type { JimakuSubtitleProvenance } from '../../../shared/mediaHistory'
+import type { JimakuDownloadStore } from './downloadStore'
 import fs from 'node:fs/promises'
 import type { SaveDialogOptions } from 'electron'
 import { isRemoteUrl } from '../../../shared/mediaFileTypes'
@@ -107,4 +110,64 @@ function errorCode(error: unknown): unknown {
 
 function isMissing(error: unknown): boolean {
   return errorCode(error) === 'ENOENT' || errorCode(error) === 'ENOTDIR'
+}
+
+interface ActiveExportDeps {
+  mediaHistory?: Partial<Pick<MediaHistoryService, 'getPlaybackHistory' | 'isCurrentMedia'>>
+  downloads: Partial<Pick<JimakuDownloadStore, 'readManagedSubtitle'>>
+  subtitleExport?: { showSaveDialog: ShowJimakuSaveDialog; platform?: NodeJS.Platform }
+}
+
+export async function exportActiveSubtitle(
+  deps: ActiveExportDeps,
+  request: JimakuSubtitleExportRequest
+): Promise<JimakuSubtitleExportResult> {
+  const history = deps.mediaHistory
+  const readManagedSubtitle = deps.downloads.readManagedSubtitle
+  const exportOptions = deps.subtitleExport
+  if (
+    !history?.getPlaybackHistory ||
+    !history.isCurrentMedia ||
+    !readManagedSubtitle ||
+    !exportOptions
+  ) {
+    return { status: 'error', code: 'notAvailable' }
+  }
+  const getPlaybackHistory = history.getPlaybackHistory
+  const isCurrentMedia = history.isCurrentMedia
+  if (!isCurrentMedia(request.mediaPath, request.mediaGeneration)) {
+    return { status: 'error', code: 'staleMedia' }
+  }
+
+  const isActive = (): boolean => {
+    try {
+      const selection = getPlaybackHistory(request.mediaPath)?.subtitle
+      return (
+        selection?.mode === 'external' &&
+        selection.provenance !== undefined &&
+        sameProvenance(selection.provenance, request.provenance)
+      )
+    } catch {
+      return false
+    }
+  }
+  if (!isActive()) return { status: 'error', code: 'notAvailable' }
+
+  return exportManagedJimakuSubtitle(request, {
+    readSource: () => readManagedSubtitle(request.provenance),
+    isCurrent: () => isCurrentMedia(request.mediaPath, request.mediaGeneration),
+    isActive,
+    showSaveDialog: exportOptions.showSaveDialog,
+    platform: exportOptions.platform
+  })
+}
+
+function sameProvenance(left: JimakuSubtitleProvenance, right: JimakuSubtitleProvenance): boolean {
+  return (
+    left.provider === right.provider &&
+    left.entryId === right.entryId &&
+    left.fileName === right.fileName &&
+    left.contentVersion === right.contentVersion &&
+    left.archiveMemberName === right.archiveMemberName
+  )
 }
