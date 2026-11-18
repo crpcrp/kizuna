@@ -158,7 +158,12 @@ function installJimakuApi(overrides: FakeKizunaApiOverrides = {}) {
       })),
       listFiles: vi.fn(async () => ({
         ok: true as const,
-        value: { entryId: entry.id, sourcePage: candidate.sourcePage, files: [candidate] }
+        value: {
+          entryId: entry.id,
+          movie: entry.flags.movie,
+          sourcePage: candidate.sourcePage,
+          files: [candidate]
+        }
       })),
       commitPreparedSubtitle: vi.fn(async () => ({
         ok: true as const,
@@ -292,6 +297,7 @@ describe('Jimaku player composition', () => {
           ok: true as const,
           value: {
             entryId: entry.id,
+            movie: entry.flags.movie,
             sourcePage: recommended.sourcePage,
             files: [recommended, excluded]
           }
@@ -329,7 +335,12 @@ describe('Jimaku player composition', () => {
       jimaku: {
         listFiles: vi.fn(async () => ({
           ok: true as const,
-          value: { entryId: entry.id, sourcePage: zip.sourcePage, files: [zip] }
+          value: {
+            entryId: entry.id,
+            movie: entry.flags.movie,
+            sourcePage: zip.sourcePage,
+            files: [zip]
+          }
         })),
         prepareFile: vi.fn(async () => ({ ok: true as const, value: archiveMembers(entry.id) })),
         prepareArchiveMember: vi.fn(async () => ({ ok: true as const, value: prepared }))
@@ -343,10 +354,13 @@ describe('Jimaku player composition', () => {
     await waitFor(() => expect(api.jimaku.listFiles).toHaveBeenCalled())
     fireEvent.click(screen.getByRole('button', { name: 'Choose file…' }))
     await waitFor(() => expect(screen.getByText(/will not guess between ambiguous members/)))
-    expect(screen.getByText('Timing unknown')).toBeTruthy()
+    const memberRow = (name: string) => within(screen.getByText(name).closest('li')!)
+    expect(memberRow('Episode-special.srt').getAllByText('Timing unknown').length).toBeGreaterThan(
+      0
+    )
     expect(api.media.loadExternalSubtitle).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Download and use' })[0])
+    fireEvent.click(memberRow('Episode05.srt').getByRole('button', { name: 'Download and use' }))
     await waitFor(() =>
       expect(api.jimaku.prepareArchiveMember).toHaveBeenCalledWith(
         'session-1',
@@ -359,7 +373,7 @@ describe('Jimaku player composition', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try another' }))
     fireEvent.click(screen.getByRole('button', { name: 'Choose file…' }))
     await screen.findByText(/will not guess between ambiguous members/)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Download and use' })[0])
+    fireEvent.click(memberRow('Episode05.srt').getByRole('button', { name: 'Download and use' }))
     await screen.findByText('This subtitle is already in use.')
     expect(api.media.loadExternalSubtitle).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Revert to previous subtitles' }))
@@ -394,6 +408,7 @@ describe('Jimaku player composition', () => {
           ok: true as const,
           value: {
             entryId: entry.id,
+            movie: entry.flags.movie,
             sourcePage: file(entry.id, 'candidate-1', 'Remembered title 05.srt').sourcePage,
             files: [file(entry.id, 'candidate-1', 'Remembered title 05.srt')]
           }
@@ -545,7 +560,12 @@ describe('Jimaku player composition', () => {
       jimaku: {
         listFiles: vi.fn(async () => ({
           ok: true as const,
-          value: { entryId: entry.id, sourcePage: file.sourcePage, files: [file] }
+          value: {
+            entryId: entry.id,
+            movie: entry.flags.movie,
+            sourcePage: file.sourcePage,
+            files: [file]
+          }
         })),
         prepareFile: vi.fn(async () => ({ ok: true as const, value: prepared })),
         exportActiveSubtitle: vi.fn(async () => ({

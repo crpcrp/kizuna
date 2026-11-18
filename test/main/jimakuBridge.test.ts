@@ -16,7 +16,12 @@ function serviceFake(): JimakuService {
     })),
     listFiles: vi.fn(async () => ({
       ok: true as const,
-      value: { entryId: 1, sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' }, files: [] }
+      value: {
+        entryId: 1,
+        movie: false,
+        sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
+        files: []
+      }
     })),
     prepareFile: vi.fn(async () => ({
       ok: false as const,

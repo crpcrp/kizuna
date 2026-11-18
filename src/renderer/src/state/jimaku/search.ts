@@ -72,7 +72,7 @@ const copyEntries = (entries: readonly JimakuEntry[]): JimakuEntry[] =>
 const copyFiles = (files: readonly JimakuFileCandidate[]): JimakuFileCandidate[] =>
   files.map((file) => ({ ...file, reasons: [...file.reasons] }))
 
-export const copyArchive = (archive: JimakuArchiveMembersResult): JimakuArchiveMembersResult => ({
+const copyArchive = (archive: JimakuArchiveMembersResult): JimakuArchiveMembersResult => ({
   ...archive,
   sourcePage: { ...archive.sourcePage },
   members: archive.members.map((member) => ({
@@ -141,7 +141,7 @@ const rerankFiles = (
     )) ??
   copyFiles(files)
 
-const rerankArchive = (
+export const rerankArchive = (
   archive: JimakuArchiveMembersResult,
   entry: JimakuEntry,
   identity: JimakuVideoIdentity | undefined
@@ -476,7 +476,8 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       getDeps().jimaku.listFiles(sessionId, entry.id, refresh)
     )
     if (!value) return
-    const files = rerankFiles(entry, core.state.identity, copyFiles(value.files))
+    const selectedEntry = { ...entry, flags: { ...entry.flags, movie: value.movie } }
+    const files = rerankFiles(selectedEntry, core.state.identity, value.files)
     if (files.length === 0) {
       set({
         ...core.state,
@@ -490,6 +491,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     set({
       ...core.state,
       phase: { kind: 'choosingFile' },
+      selectedEntry,
       files,
       shownFiles: fileRows(files, false, false),
       showingMoreFiles: false,
@@ -501,7 +503,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     })
   }
 
-  return {
+  const actions: JimakuSearchActions = {
     rememberTitle,
     clearRememberedTitle,
     async open(): Promise<void> {
@@ -668,6 +670,13 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     },
     refresh(): Promise<void> {
       if (
+        core.state.phase.kind === 'error' &&
+        (!core.sessionId || core.state.phase.code === 'invalidSession')
+      ) {
+        core.reset()
+        return actions.open()
+      }
+      if (
         core.state.phase.kind === 'choosingTitle' ||
         (core.state.phase.kind === 'error' && core.state.phase.recovery === 'titles')
       )
@@ -704,4 +713,5 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       }
     }
   }
+  return actions
 }

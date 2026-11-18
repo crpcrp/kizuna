@@ -2,7 +2,7 @@
 import type { JimakuPreparedSubtitleResult } from '../../../../shared/jimaku'
 import type { SubtitleSelectionSnapshot } from '../trackSelection'
 import { versionOf, type JimakuCore, type Operation } from './core'
-import { copyArchive } from './search'
+import { rerankArchive } from './search'
 import type { JimakuController, JimakuSelectionApplyResult } from './types'
 
 export type JimakuPrepareActions = Pick<JimakuController, 'chooseFile' | 'chooseMember' | 'revert'>
@@ -127,6 +127,8 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
       !core.sessionId
     )
       return
+    const entry = core.state.selectedEntry
+    if (!entry) return
     const candidate = core.state.files.find((file) => file.candidateId === candidateId)
     if (!candidate || candidate.format === 'unsupported') return
     if (candidate.status === 'excluded' && !core.state.showingAllFiles) return
@@ -145,7 +147,7 @@ export function createJimakuPrepare(core: JimakuCore): JimakuPrepareActions {
       set({
         ...core.state,
         phase: { kind: 'choosingArchiveMember' },
-        archive: copyArchive(value),
+        archive: rerankArchive(value, entry, core.state.identity),
         selectedFile: candidate,
         selectedMember: undefined,
         notice: undefined
