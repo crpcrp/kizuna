@@ -22,6 +22,9 @@ export function runBounded(
       },
       (err, stdout) => (err ? reject(err) : resolve(stdout))
     )
-    if (options.input !== undefined) child.stdin?.end(options.input, 'utf-8')
+    if (options.input !== undefined && child.stdin) {
+      child.stdin.once('error', reject)
+      child.stdin.end(options.input, 'utf-8')
+    }
   })
 }

@@ -17,6 +17,12 @@ describe('runBounded', () => {
     ).rejects.toMatchObject({ killed: true, signal: 'SIGTERM' })
   })
 
+  it('rejects when the child exits before consuming its input', async () => {
+    await expect(
+      runBounded(node, ['-e', 'process.exit(1)'], { input: 'x'.repeat(8 * 1024 * 1024) })
+    ).rejects.toThrow()
+  })
+
   it('rejects output past the buffer cap', async () => {
     await expect(
       runBounded(node, ['-e', 'process.stdout.write("x".repeat(100))'], { maxBuffer: 10 })

@@ -182,7 +182,6 @@ export function createJimakuService(deps: CreateJimakuServiceDeps) {
   ): Promise<JimakuServiceResult<JimakuTitleSearchResult>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return fail({ code: 'invalidSession' })
-    session.rememberedEntryId = undefined
 
     const query = request.query.trim()
     const category = request.category ?? 'all'
@@ -193,6 +192,7 @@ export function createJimakuService(deps: CreateJimakuServiceDeps) {
     const signal = beginOperation(session)
     const result = await searchCategory(deps.client, category, query, signal)
     if (signal.aborted) return fail({ code: 'cancelled' })
+    session.rememberedEntryId = undefined
     clearSearchResults(session)
     if (!result.ok) return result
     session.entries = new Map(result.value.entries.map((entry) => [entry.id, entry]))
@@ -310,9 +310,9 @@ export function createJimakuService(deps: CreateJimakuServiceDeps) {
   ): Promise<JimakuServiceResult<void>> {
     const session = sessionFor(sender, sessionId)
     if (!session) return fail({ code: 'invalidSession' })
-    const entry = session.entries.get(entryId)
-    if (!entry) return fail({ code: 'invalidEntry' })
-    const url = sourcePage(entry.id).url
+    if (!session.entries.has(entryId) && session.rememberedEntryId !== entryId)
+      return fail({ code: 'invalidEntry' })
+    const url = sourcePage(entryId).url
     try {
       await deps.openExternal(url)
     } catch {
