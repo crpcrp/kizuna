@@ -37,8 +37,8 @@ version.
 
 Open **Actions** → **Release** → **Run workflow**, select the branch to test,
 and run it manually.
-The validation, Windows x64, and Linux x64 jobs execute normally, including
-both package smoke tests, but no tag, draft, or release asset is published.
+Both packages are smoke-tested. The run uploads eight platform assets and
+`SHA256SUMS.txt` as workflow artifacts and attests the assets. Only push events create drafts.
 Use this mode before merging a packaging or release-workflow change.
 
 ## Automatic release after merge
@@ -94,7 +94,7 @@ Download all nine files into one clean directory and run:
 
 ```bash
 sha256sum --check --strict SHA256SUMS.txt
-for asset in kizuna-1.2.3-*; do
+for asset in kizuna-1.2.3-* latest.yml latest-linux.yml; do
   gh attestation verify "$asset" --repo crpcrp/kizuna
 done
 ```

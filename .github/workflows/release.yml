@@ -36,44 +36,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
-        run: |
-          version=$(node -p "require('./package.json').version")
-          tag="v$version"
-          build=true
-          publish=false
-
-          if [[ "$REF_TYPE" == "tag" ]]; then
-            if [[ "$REF_NAME" != "$tag" ]]; then
-              echo "Tag $REF_NAME does not match package.json version $version" >&2
-              exit 1
-            fi
-            if ! git merge-base --is-ancestor HEAD origin/main; then
-              echo 'The tagged commit is not in main history' >&2
-              exit 1
-            fi
-            publish=true
-          elif [[ "$EVENT_NAME" == "push" ]]; then
-            previous_version=$(git show "$EVENT_BEFORE:package.json" | jq -r .version)
-            if [[ "$previous_version" == "$version" ]]; then
-              echo 'package.json changed without a version change; skipping release build'
-              build=false
-            else
-              if git rev-parse --verify --quiet "refs/tags/$tag"; then
-                echo "Release tag already exists: $tag" >&2
-                exit 1
-              fi
-              publish=true
-            fi
-          fi
-
-          if [[ "$build" == true && "$(jq -r '.version, .packages[""].version' package-lock.json | sort -u)" != "$version" ]]; then
-            echo 'package.json and package-lock.json versions do not match' >&2
-            exit 1
-          fi
-          echo "build=$build" >> "$GITHUB_OUTPUT"
-          echo "publish=$publish" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        run: bash .github/scripts/validate-release-ref.sh
 
   build-windows:
     name: Build and smoke-test Windows x64
@@ -225,19 +188,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  publish:
-    name: Create draft pre-release
-    needs: [validate, build-windows, build-linux]
-    if: success() && needs.validate.outputs.publish == 'true'
+  attest:
+    name: Verify release assets and attest provenance
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
       attestations: write
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: kizuna-*-release
+          pattern: kizuna-*-x64-release
           path: dist
           merge-multiple: true
 
@@ -249,6 +211,28 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: dist/SHA256SUMS.txt
+
+      - name: Upload release checksums
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: kizuna-checksums-release
+          path: dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Create draft pre-release
+    needs: [validate, attest]
+    if: needs.validate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: kizuna-*-release
+          path: dist
+          merge-multiple: true
 
       - name: Create draft pre-release
         env:

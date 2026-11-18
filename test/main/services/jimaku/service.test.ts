@@ -305,7 +305,7 @@ describe('createJimakuService', () => {
     expect(harness.client.listFiles).toHaveBeenCalledTimes(3)
   })
 
-  it('resolves a remembered folder title before listing its files', async () => {
+  it('can still list the remembered folder title after cancelling a replacement search', async () => {
     const harness = makeHarness()
     harness.settings.getFolderHint.mockReturnValue({
       entryId: ENTRY_ANIME.id,
@@ -319,6 +319,19 @@ describe('createJimakuService', () => {
     const started = harness.service.beginSession('window-a', '/media/Anime title - 02.mkv', 1)
     expect(started.ok).toBe(true)
     if (!started.ok) throw new Error('Expected the Jimaku session to start.')
+
+    await harness.service.openSourcePage('window-a', started.value.sessionId, ENTRY_ANIME.id)
+    expect(harness.opened).toEqual(['https://jimaku.cc/entry/10'])
+
+    const pending = deferred<JimakuResult<JimakuEntry[]>>()
+    harness.client.searchEntries.mockReturnValueOnce(pending.promise)
+    const search = harness.service.searchTitles('window-a', started.value.sessionId, {
+      query: 'Replacement',
+      category: 'anime'
+    })
+    harness.service.cancelPending('window-a', started.value.sessionId)
+    pending.resolve({ ok: true, value: [] })
+    await expect(search).resolves.toMatchObject({ ok: false, error: { code: 'cancelled' } })
 
     const listed = await harness.service.listFiles(
       'window-a',
