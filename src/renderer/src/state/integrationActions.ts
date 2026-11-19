@@ -12,10 +12,6 @@ import type {
   TranslationSettingsPatch
 } from '../../../shared/translation'
 import type { JimakuSettingsStatus } from '../../../shared/jimaku'
-import {
-  invalidateTokenizationForDictionaryChange,
-  type TokenizationInvalidationArgs
-} from './tokenizationInvalidation'
 import { syncAndRefreshKnowledge, type SyncAndRefreshKnowledgeArgs } from './knowledgeActions'
 
 /** Which options-data domain(s) a category needs loaded when it's shown.
@@ -57,25 +53,6 @@ export function loadCategoryDomains(
   for (const domain of domainsForCategory(category)) {
     void optionsData.load(domain, { force: ALWAYS_REFRESHED.includes(domain) })
   }
-}
-
-export interface MecabDictSelectBridge {
-  selectDict(id: 'ipadic' | 'unidic'): Promise<'ipadic' | 'unidic'>
-}
-
-export interface SelectMecabDictArgs extends Omit<TokenizationInvalidationArgs, 'mecab'> {
-  mecab: TokenizationInvalidationArgs['mecab'] & MecabDictSelectBridge
-  optionsData: OptionsDataController
-  id: 'ipadic' | 'unidic'
-}
-
-/** Switches the active MeCab dictionary: persists the choice, refreshes the
- * cached dictionaries list, then invalidates every cached tokenization and
- * re-tokenizes so the subtitle reflects the new dictionary immediately. */
-export async function selectMecabDict(args: SelectMecabDictArgs): Promise<void> {
-  await args.mecab.selectDict(args.id)
-  void args.optionsData.load('dictionaries', { force: true })
-  await invalidateTokenizationForDictionaryChange(args)
 }
 
 export interface DictImportBridge {

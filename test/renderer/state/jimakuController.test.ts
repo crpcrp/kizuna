@@ -294,6 +294,8 @@ describe('createJimakuController', () => {
       recovery: 'titles'
     })
 
+    h.controller.editIdentity({ query: 'Edited before retry' })
+    expect(h.controller.getState().phase.kind).toBe('error')
     await h.controller.refresh()
     expect(h.controller.getState().phase).toEqual({ kind: 'choosingTitle' })
     await h.controller.search()
@@ -432,6 +434,19 @@ describe('createJimakuController', () => {
     await search
 
     expect(h.controller.getState()).toMatchObject({ phase: { kind: 'choosingTitle' }, entries: [] })
+  })
+
+  it('releases a session returned after the dialog closes', async () => {
+    const h = harness()
+    const pending = deferred<Awaited<ReturnType<FakeJimaku['beginSession']>>>()
+    vi.mocked(h.api.beginSession).mockReturnValueOnce(pending.promise)
+    const opening = h.controller.open()
+    await vi.waitFor(() => expect(h.api.beginSession).toHaveBeenCalledOnce())
+    h.controller.close()
+    pending.resolve(ok({ sessionId: 'abandoned', mediaGeneration: 1 }))
+    await opening
+    expect(h.api.endSession).toHaveBeenCalledWith('abandoned')
+    expect(h.controller.getState().phase.kind).toBe('idle')
   })
 
   it('closes during a download, cancels it, and ignores the late preparation', async () => {

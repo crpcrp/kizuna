@@ -8,10 +8,11 @@ import type { KnowledgeTabProps } from '../components/options/KnowledgeTab'
 import {
   changeKnowledgeSettings,
   saveWanikaniToken,
-  selectMecabDict,
   shouldResyncAnkiForKnowledgePatch,
   syncKnowledgeAndRefresh
 } from './integrationActions'
+import { useLatestCallback } from './useLatestRef'
+import { invalidateTokenizationForDictionaryChange } from './tokenizationInvalidation'
 import { createVocabularyCaches } from './tokenization'
 import { refreshKnownLevels } from './knowledgeActions'
 import type { OptionsDataController } from './optionsData'
@@ -96,24 +97,23 @@ export function useKnowledgeOptions({
 }: UseKnowledgeOptionsInput): UseKnowledgeOptionsResult {
   const { refs, invalidateVocabularySpans } = caches
 
-  // Switches the active MeCab dictionary: persists the choice (via the
-  // settings store, inside selectDict on the main side), then invalidates every
-  // cached tokenization (a cue's tokens depend on which dictionary produced
-  // them) and re-tokenizes the currently-displayed cue so the subtitle
-  // reflects the new dictionary immediately.
-  const handleSelectMecabDict = async (id: 'ipadic' | 'unidic'): Promise<void> => {
-    await selectMecabDict({
+  const refreshTokenization = useLatestCallback(async () => {
+    invalidateVocabularySpans()
+    await invalidateTokenizationForDictionaryChange({
       mecab: bridge.mecab,
       knowledge: bridge.knowledge,
       dispatch,
       activeCue,
       cues,
       sidebarOpen,
-      caches: refs.current,
-      optionsData,
-      id
+      caches: refs.current
     })
-    invalidateVocabularySpans()
+  })
+
+  const handleSelectMecabDict = async (id: 'ipadic' | 'unidic'): Promise<void> => {
+    await bridge.mecab.selectDict(id)
+    void optionsData.load('dictionaries', { force: true })
+    await refreshTokenization()
   }
 
   const handleSyncNow = async (source: KnowledgeSource, force?: boolean): Promise<SyncStatus> => {

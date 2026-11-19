@@ -89,16 +89,17 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps) {
     contextMatches(operation.filePath, operation.loadGeneration) &&
     (operation.sessionId === undefined || core.sessionId === operation.sessionId)
 
-  const clearSession = (): void => {
-    const oldSession = core.sessionId
-    core.sessionId = undefined
-    if (oldSession) {
-      try {
-        void Promise.resolve(getDeps().jimaku.endSession(oldSession)).catch(() => undefined)
-      } catch {
-        // A teardown request must never prevent the renderer state reset.
-      }
+  const endSession = (sessionId: string): void => {
+    try {
+      void Promise.resolve(getDeps().jimaku.endSession(sessionId)).catch(() => undefined)
+    } catch {
+      // A teardown request must never prevent the renderer state reset.
     }
+  }
+
+  const clearSession = (): void => {
+    if (core.sessionId) endSession(core.sessionId)
+    core.sessionId = undefined
   }
 
   const cancelPending = (): void => {
@@ -242,6 +243,7 @@ export function createJimakuCore(getDeps: () => JimakuControllerDeps) {
     contextMatches,
     operationMatches,
     clearSession,
+    endSession,
     cancelPending,
     startOperation,
     abortOperation,

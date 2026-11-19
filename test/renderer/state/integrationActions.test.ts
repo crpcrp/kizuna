@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   loadCategoryDomains,
-  selectMecabDict,
   importYomitanDict,
   setYomitanEnabled,
   setYomitanFallbackOnly,
@@ -18,7 +17,6 @@ import {
   syncKnowledgeAndRefresh
 } from '@src/renderer/src/state/integrationActions'
 import type { OptionsDataController } from '@src/renderer/src/state/optionsData'
-import { createVocabularyCaches } from '@src/renderer/src/state/tokenization'
 import type { PlayerAction } from '@src/renderer/src/state/playerState'
 
 function fakeOptionsData(): OptionsDataController & { load: ReturnType<typeof vi.fn> } {
@@ -43,35 +41,6 @@ describe('loadCategoryDomains', () => {
     expect(optionsData.load.mock.calls).toEqual(
       domains.map((domain) => [domain, { force: domain === 'setup' }])
     )
-  })
-})
-
-describe('selectMecabDict', () => {
-  it('persists the dictionary, force-refreshes it, and re-tokenizes the active cue', async () => {
-    const optionsData = fakeOptionsData()
-    const dispatch = vi.fn<(action: PlayerAction) => void>()
-    const mecab = {
-      selectDict: vi.fn().mockResolvedValue('unidic'),
-      tokenize: vi.fn().mockResolvedValue([]),
-      tokenizeBatch: vi.fn().mockResolvedValue([])
-    }
-    const knowledge = { levelsFor: vi.fn().mockResolvedValue({}) }
-
-    await selectMecabDict({
-      mecab,
-      knowledge,
-      dispatch,
-      activeCue: undefined,
-      cues: [],
-      sidebarOpen: false,
-      caches: createVocabularyCaches(),
-      optionsData,
-      id: 'unidic'
-    })
-
-    expect(mecab.selectDict).toHaveBeenCalledWith('unidic')
-    expect(optionsData.load).toHaveBeenCalledWith('dictionaries', { force: true })
-    expect(dispatch).toHaveBeenCalledWith({ type: 'resetTokenization' })
   })
 })
 
