@@ -228,8 +228,8 @@ export function createJimakuService(deps: CreateJimakuServiceDeps) {
 
     const result = await deps.client.listFiles(entry.id, signal)
     if (signal.aborted) return fail({ code: 'cancelled' })
-    clearFileResults(session)
     if (!result.ok) return result
+    clearFileResults(session)
     return ok(materializeFiles(session.identity, session.candidates, entry, result.value))
   }
 

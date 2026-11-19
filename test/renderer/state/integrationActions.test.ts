@@ -220,9 +220,11 @@ describe('syncKnowledgeAndRefresh', () => {
     const status = await syncKnowledgeAndRefresh({
       knowledge,
       dispatch,
-      activeTokens: [],
-      allCueTokens: {},
-      sidebarOpen: false,
+      getVisibleTokens: () => ({
+        activeTokens: [],
+        allCueTokens: {},
+        sidebarOpen: false
+      }),
       knownLevelsCache: new Map(),
       activeLevelsToken: { current: 0 },
       allCuesLevelsToken: { current: 0 },
@@ -250,9 +252,11 @@ describe('syncKnowledgeAndRefresh', () => {
     await syncKnowledgeAndRefresh({
       knowledge,
       dispatch,
-      activeTokens: [],
-      allCueTokens: {},
-      sidebarOpen: false,
+      getVisibleTokens: () => ({
+        activeTokens: [],
+        allCueTokens: {},
+        sidebarOpen: false
+      }),
       knownLevelsCache: new Map(),
       activeLevelsToken: { current: 0 },
       allCuesLevelsToken: { current: 0 },
