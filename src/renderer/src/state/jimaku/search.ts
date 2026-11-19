@@ -412,7 +412,12 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       (code) => {
         if (code !== 'notConfigured') return false
         clearSession()
-        set({ ...core.state, phase: { kind: 'setupRequired' }, notice: undefined })
+        set({
+          ...core.state,
+          phase: { kind: 'setupRequired' },
+          identity: undefined,
+          notice: undefined
+        })
         return true
       }
     )
@@ -533,8 +538,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
         ...INITIAL_STATE,
         phase: { kind: 'identifying' },
         mediaPath: path,
-        mediaGeneration: current.loadGeneration,
-        identity
+        mediaGeneration: current.loadGeneration
       })
       let status: Awaited<ReturnType<JimakuApi['getStatus']>>
       try {
@@ -554,7 +558,10 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
       } catch {
         started = { ok: false, error: { code: 'network' } }
       }
-      if (!operationMatches(operation)) return
+      if (!operationMatches(operation)) {
+        if (started.ok) core.endSession(started.value.sessionId)
+        return
+      }
       if (!started.ok) {
         if (started.error.code === 'notConfigured') {
           clearSession()
@@ -565,6 +572,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
         return
       }
       if (started.value.mediaGeneration !== current.loadGeneration) {
+        core.endSession(started.value.sessionId)
         fail('staleMedia', 'titles')
         return
       }
