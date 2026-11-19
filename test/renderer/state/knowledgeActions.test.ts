@@ -44,9 +44,11 @@ describe('syncAndRefreshKnowledge', () => {
     const result = await syncAndRefreshKnowledge({
       knowledge,
       dispatch,
-      activeTokens: [activeToken],
-      allCueTokens: { cue: [sidebarToken] },
-      sidebarOpen: true,
+      getVisibleTokens: () => ({
+        activeTokens: [activeToken],
+        allCueTokens: { cue: [sidebarToken] },
+        sidebarOpen: true
+      }),
       knownLevelsCache: cache,
       activeLevelsToken,
       allCuesLevelsToken: { current: 0 }
@@ -94,9 +96,11 @@ describe('syncAndRefreshKnowledge', () => {
     const result = await syncAndRefreshKnowledge({
       knowledge,
       dispatch,
-      activeTokens: [activeToken],
-      allCueTokens: {},
-      sidebarOpen: false,
+      getVisibleTokens: () => ({
+        activeTokens: [activeToken],
+        allCueTokens: {},
+        sidebarOpen: false
+      }),
       knownLevelsCache: new Map([['active', 'known']]),
       activeLevelsToken: { current: 0 },
       allCuesLevelsToken: { current: 0 },
@@ -118,9 +122,11 @@ describe('syncAndRefreshKnowledge', () => {
     await syncAndRefreshKnowledge({
       knowledge,
       dispatch: vi.fn(),
-      activeTokens: [],
-      allCueTokens: {},
-      sidebarOpen: false,
+      getVisibleTokens: () => ({
+        activeTokens: [],
+        allCueTokens: {},
+        sidebarOpen: false
+      }),
       knownLevelsCache: new Map(),
       activeLevelsToken: { current: 0 },
       allCuesLevelsToken: { current: 0 },
@@ -146,9 +152,11 @@ describe('refreshKnownLevels', () => {
     await refreshKnownLevels({
       knowledge: { levelsFor },
       dispatch,
-      activeTokens: [activeToken],
-      allCueTokens: { cue: [sidebarToken] },
-      sidebarOpen: true,
+      getVisibleTokens: () => ({
+        activeTokens: [activeToken],
+        allCueTokens: { cue: [sidebarToken] },
+        sidebarOpen: true
+      }),
       knownLevelsCache: cache,
       activeLevelsToken,
       allCuesLevelsToken
@@ -181,9 +189,11 @@ describe('refreshKnownLevels', () => {
     await refreshKnownLevels({
       knowledge: { levelsFor },
       dispatch,
-      activeTokens: [activeToken],
-      allCueTokens: { cue: [sidebarToken] },
-      sidebarOpen: false,
+      getVisibleTokens: () => ({
+        activeTokens: [activeToken],
+        allCueTokens: { cue: [sidebarToken] },
+        sidebarOpen: false
+      }),
       knownLevelsCache: new Map(),
       activeLevelsToken: { current: 0 },
       allCuesLevelsToken: { current: 0 }

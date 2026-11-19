@@ -424,7 +424,7 @@ export function createJimakuSearch(core: JimakuCore): JimakuSearchActions {
     if (!value) return
     const entries = copyEntries(value.entries)
     const selectedEntry = exactTitle(query, entries)
-    if (entries.length === 0) {
+    if (entries.length === 0 && !value.partial) {
       set({
         ...core.state,
         entries: [],

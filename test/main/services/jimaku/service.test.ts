@@ -91,7 +91,10 @@ function makeHarness() {
       ok: true as const,
       value: { ...ENTRY_ANIME, id }
     })),
-    listFiles: vi.fn(async () => ({ ok: true as const, value: [] as JimakuFileRecord[] }))
+    listFiles: vi.fn(async (): Promise<JimakuResult<JimakuFileRecord[]>> => ({
+      ok: true,
+      value: []
+    }))
   } satisfies Pick<JimakuClient, 'searchEntries' | 'getEntry' | 'listFiles'>
   const downloads = {
     prepareDirect: vi.fn(async (_entryId: number, file: JimakuFileRecord) => ({
@@ -497,6 +500,26 @@ describe('createJimakuService', () => {
         category: 'anime'
       })
     ).resolves.toEqual({ ok: false, error: { code: 'invalidSession' } })
+  })
+
+  it('keeps displayed file choices usable after a failed list refresh', async () => {
+    const h = makeHarness()
+    h.client.searchEntries.mockResolvedValue({ ok: true, value: [ENTRY_ANIME] })
+    h.client.listFiles.mockResolvedValueOnce({ ok: true, value: [SRT_FILE] })
+    const started = h.service.beginSession('window-a', '/media/a.mkv', 1)
+    if (!started.ok) throw new Error('Session did not start')
+    const id = started.value.sessionId
+    await h.service.searchTitles('window-a', id, allEntriesRequest())
+    const listed = await h.service.listFiles('window-a', id, ENTRY_ANIME.id)
+    if (!listed.ok) throw new Error('File listing failed')
+    h.client.listFiles.mockResolvedValueOnce({ ok: false, error: { code: 'network' } })
+    await expect(h.service.listFiles('window-a', id, ENTRY_ANIME.id, true)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'network' }
+    })
+    await expect(
+      h.service.prepareFile('window-a', id, listed.value.files[0]!.candidateId)
+    ).resolves.toMatchObject({ ok: true, value: { kind: 'preparedSubtitle' } })
   })
 
   it('keeps established results reusable when a pending request is canceled', async () => {

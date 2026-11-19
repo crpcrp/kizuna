@@ -9,9 +9,11 @@ export interface KnowledgeSyncBridge extends KnowledgeBridge {
 export interface RefreshKnownLevelsArgs {
   knowledge: KnowledgeBridge
   dispatch: Dispatch
-  activeTokens: Token[]
-  allCueTokens: Record<string, Token[]>
-  sidebarOpen: boolean
+  getVisibleTokens(): {
+    activeTokens: Token[]
+    allCueTokens: Record<string, Token[]>
+    sidebarOpen: boolean
+  }
   knownLevelsCache: Map<string, KnowledgeLevel>
   activeLevelsToken: SubtitleRequestToken
   allCuesLevelsToken: SubtitleRequestToken
@@ -32,20 +34,20 @@ export interface SyncAndRefreshKnowledgeArgs extends RefreshKnownLevelsArgs {
 export async function refreshKnownLevels({
   knowledge,
   dispatch,
-  activeTokens,
-  allCueTokens,
-  sidebarOpen,
+  getVisibleTokens,
   knownLevelsCache,
   activeLevelsToken,
   allCuesLevelsToken
 }: RefreshKnownLevelsArgs): Promise<void> {
   activeLevelsToken.current++
-  allCuesLevelsToken.current++
+  const sidebarGeneration = ++allCuesLevelsToken.current
   knownLevelsCache.clear()
   dispatch({ type: 'resetKnownLevels' })
 
+  const { activeTokens } = getVisibleTokens()
   await resolveKnownLevels(knowledge, dispatch, activeTokens, knownLevelsCache, activeLevelsToken)
-  if (sidebarOpen) {
+  const { sidebarOpen, allCueTokens } = getVisibleTokens()
+  if (sidebarOpen && allCuesLevelsToken.current === sidebarGeneration) {
     await resolveKnownLevels(
       knowledge,
       dispatch,

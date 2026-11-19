@@ -284,6 +284,26 @@ describe('createJimakuController', () => {
     expect(h.controller.getState().selectedEntry?.flags.movie).toBe(true)
   })
 
+  it('allows retry when one search category fails and the other has no matches', async () => {
+    const h = harness()
+    vi.mocked(h.api.searchTitles).mockResolvedValueOnce(
+      ok({
+        entries: [],
+        partial: true,
+        failedCategories: ['anime']
+      })
+    )
+    await h.controller.open()
+    await h.controller.search()
+    expect(h.controller.getState()).toMatchObject({
+      phase: { kind: 'choosingTitle' },
+      partial: true,
+      failedCategories: ['anime']
+    })
+    await h.controller.refresh()
+    expect(h.controller.getState().shownEntries).toHaveLength(1)
+  })
+
   it('retries session initialization after a transient startup failure', async () => {
     const h = harness()
     vi.mocked(h.api.beginSession).mockRejectedValueOnce(new Error('temporarily unavailable'))

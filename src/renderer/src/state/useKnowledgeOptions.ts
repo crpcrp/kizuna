@@ -116,13 +116,13 @@ export function useKnowledgeOptions({
     await refreshTokenization()
   }
 
+  const getVisibleTokens = useLatestCallback(() => ({ activeTokens, allCueTokens, sidebarOpen }))
+
   const handleSyncNow = async (source: KnowledgeSource, force?: boolean): Promise<SyncStatus> => {
     return syncKnowledgeAndRefresh({
       knowledge: bridge.knowledge,
       dispatch,
-      activeTokens,
-      allCueTokens,
-      sidebarOpen,
+      getVisibleTokens,
       knownLevelsCache: refs.current.knownLevelsCache,
       activeLevelsToken: refs.current.tokens.levels,
       allCuesLevelsToken: refs.current.tokens.allCuesLevels,
@@ -140,9 +140,7 @@ export function useKnowledgeOptions({
       await refreshKnownLevels({
         knowledge: bridge.knowledge,
         dispatch,
-        activeTokens,
-        allCueTokens,
-        sidebarOpen,
+        getVisibleTokens,
         knownLevelsCache: refs.current.knownLevelsCache,
         activeLevelsToken: refs.current.tokens.levels,
         allCuesLevelsToken: refs.current.tokens.allCuesLevels
