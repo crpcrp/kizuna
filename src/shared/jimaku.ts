@@ -97,6 +97,7 @@ export interface JimakuTitleSearchResult {
 
 export interface JimakuFileListResult {
   entryId: number
+  movie: boolean
   sourcePage: JimakuSourcePage
   files: JimakuFileCandidate[]
 }

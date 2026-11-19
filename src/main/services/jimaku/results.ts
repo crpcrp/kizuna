@@ -93,6 +93,7 @@ export function materializeFiles(
   }
   return {
     entryId: entry.id,
+    movie: entry.flags.movie,
     sourcePage: sourcePage(entry.id),
     files: candidates
   }

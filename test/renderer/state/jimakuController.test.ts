@@ -111,8 +111,8 @@ function archiveResult(): PrepareResult {
         format: 'srt',
         size: 100,
         inferredEpisode: 2,
-        status: 'eligible',
-        reasons: ['Episode 2']
+        status: 'excluded',
+        reasons: ['Different episode']
       }
     ]
   })
@@ -154,6 +154,7 @@ function harness(
     listFiles: vi.fn().mockResolvedValue(
       ok({
         entryId: 1,
+        movie: false,
         sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
         files: [file('file-1', 'Show - 01.srt')]
       })
@@ -266,6 +267,39 @@ describe('createJimakuController', () => {
     expect(h.api.listFiles).toHaveBeenCalledWith('session-1', 9, false)
   })
 
+  it('uses the resolved movie flag when listing a remembered title', async () => {
+    const h = harness(undefined, { entryId: 1, name: 'Show', category: 'anime', updatedAt: 1 })
+    vi.mocked(h.api.listFiles).mockResolvedValueOnce(
+      ok({
+        entryId: 1,
+        movie: true,
+        sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
+        files: [file('film', 'Show - 02.srt')]
+      })
+    )
+
+    await h.controller.open()
+    await h.controller.chooseTitle(1)
+    expect(h.controller.getState().shownFiles.map((file) => file.candidateId)).toEqual(['film'])
+    expect(h.controller.getState().selectedEntry?.flags.movie).toBe(true)
+  })
+
+  it('retries session initialization after a transient startup failure', async () => {
+    const h = harness()
+    vi.mocked(h.api.beginSession).mockRejectedValueOnce(new Error('temporarily unavailable'))
+    await h.controller.open()
+    expect(h.controller.getState().phase).toEqual({
+      kind: 'error',
+      code: 'network',
+      recovery: 'titles'
+    })
+
+    await h.controller.refresh()
+    expect(h.controller.getState().phase).toEqual({ kind: 'choosingTitle' })
+    await h.controller.search()
+    expect(h.controller.getState().selectedEntry?.id).toBe(1)
+  })
+
   it('saves only an explicit title choice and clears that hint without an episode', async () => {
     const h = harness()
     await openAndLoadFiles(h)
@@ -365,6 +399,7 @@ describe('createJimakuController', () => {
     vi.mocked(h.api.listFiles).mockResolvedValue(
       ok({
         entryId: 1,
+        movie: false,
         sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
         files
       })
@@ -444,6 +479,7 @@ describe('createJimakuController', () => {
     vi.mocked(h.api.listFiles).mockResolvedValue(
       ok({
         entryId: 1,
+        movie: false,
         sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
         files: [file('file-1', 'Show - 01.srt'), file('file-2', 'Show - 01-alt.srt')]
       })
@@ -565,6 +601,7 @@ describe('createJimakuController', () => {
     vi.mocked(h.api.listFiles).mockResolvedValue(
       ok({
         entryId: 1,
+        movie: false,
         sourcePage: { entryId: 1, url: 'https://jimaku.cc/entry/1' },
         files: [file('zip-1', 'Show-pack.zip')]
       })
@@ -575,6 +612,7 @@ describe('createJimakuController', () => {
       ok(prepared('version-member', 'Show - 02.srt'))
     )
 
+    h.controller.editEpisode(2)
     await h.controller.chooseFile('zip-1')
     expect(h.controller.getState()).toMatchObject({
       phase: { kind: 'choosingArchiveMember' },
