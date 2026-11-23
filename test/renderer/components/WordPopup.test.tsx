@@ -6,6 +6,7 @@ import WordPopup from '@src/renderer/src/components/WordPopup'
 import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import { makeLookupResult } from '@test/harness/dictFixtures'
+import { YOMITAN_SOURCE, type GrammarStep } from '@src/shared/inflection'
 
 function noop(): void {}
 
@@ -668,5 +669,100 @@ describe('WordPopup scoped dictionary styles', () => {
     expect(renderPopup({ results: [makeResult({ rules: 'xyz', defTags: '' })] })).not.toContain(
       'word-popup-pos'
     )
+  })
+})
+
+describe('WordPopup grammar chain', () => {
+  afterEach(cleanup)
+
+  const chain: GrammarStep[] = [
+    {
+      kind: { stem: 'irrealis' },
+      surface: '食べ',
+      label: 'irrealis stem (未然形)',
+      explanation: 'Attach ない to the irrealis form.',
+      source: YOMITAN_SOURCE
+    },
+    {
+      kind: 'passive-potential',
+      surface: 'られ',
+      label: 'passive / potential',
+      explanation: 'Indicates an action received.',
+      source: YOMITAN_SOURCE
+    },
+    {
+      kind: 'completion',
+      surface: 'ちゃっ',
+      label: 'completion',
+      explanation: 'Completion of an action.',
+      source: YOMITAN_SOURCE,
+      contractionOf: 'てしまう'
+    }
+  ]
+  const span = { lemma: '食べる', surface: '食べられちゃっ' }
+
+  it('renders stem and suffix parts in order with labels, explanations, and sources', () => {
+    const onOpenGrammarSource = vi.fn()
+    const { getByRole, getByTestId } = render(
+      <WordPopup
+        results={sampleResults}
+        position={{ x: 0, y: 0 }}
+        grammarChain={chain}
+        grammarSpan={span}
+        onOpenGrammarSource={onOpenGrammarSource}
+      />
+    )
+
+    const group = getByRole('group', { name: 'Grammar breakdown' })
+    const parts = [...group.querySelectorAll('button')]
+    expect(parts.map((part) => part.textContent)).toEqual([
+      '食べirrealis stem (未然形)',
+      'られpassive / potential',
+      'ちゃっcompletion'
+    ])
+    expect(parts[0].className).toContain('word-popup-grammar-part--stem')
+    expect(parts[1].className).not.toContain('--stem')
+    expect(parts[1].getAttribute('aria-label')).toBe(
+      'られ: passive / potential. Indicates an action received.'
+    )
+    // The row sits above the lemma's entry, before every dictionary row.
+    expect(
+      getByTestId('word-popup-grammar').compareDocumentPosition(
+        document.querySelector('[data-testid="word-popup-row"]')!
+      ) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+
+    fireEvent.mouseEnter(parts[2])
+    expect(getByTestId('word-popup-grammar').textContent).toContain('Completion of an action.')
+    expect(getByTestId('word-popup-grammar').textContent).toContain('contraction of てしまう')
+
+    fireEvent.focus(parts[1])
+    expect(getByTestId('word-popup-grammar').textContent).toContain('Indicates an action received.')
+    fireEvent.click(getByRole('button', { name: YOMITAN_SOURCE.name }))
+    expect(onOpenGrammarSource).toHaveBeenCalledWith(YOMITAN_SOURCE.url)
+  })
+
+  it('is hidden for an empty chain', () => {
+    expect(renderPopup({ grammarChain: [], grammarSpan: span })).not.toContain('word-popup-grammar')
+  })
+
+  it('is hidden when no entry is the lemma or the highlighted span', () => {
+    expect(
+      renderPopup({
+        results: [makeResult({ expression: '生き', matchedSurface: '生き' })],
+        grammarChain: chain,
+        grammarSpan: { lemma: '生き返る', surface: '生き返っ' }
+      })
+    ).not.toContain('word-popup-grammar')
+  })
+
+  it('shows for an entry whose matched surface is the highlighted span', () => {
+    expect(
+      renderPopup({
+        results: [makeResult({ expression: '食べられる', matchedSurface: span.surface })],
+        grammarChain: chain,
+        grammarSpan: span
+      })
+    ).toContain('word-popup-grammar')
   })
 })

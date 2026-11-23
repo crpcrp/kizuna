@@ -1,4 +1,5 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { appInfoLinkForUrl } from '../../../shared/appInfo'
 import type { Cue } from '../../../shared/cue'
 import type { LookupResult } from '../../../shared/dictionary'
 import type { PopupSortOrder } from '../../../shared/playerSettings'
@@ -17,6 +18,7 @@ import {
 import { useLatestCallback } from './useLatestRef'
 import {
   gameOcrWordPopupPosition,
+  popupGrammarChain,
   wordPopupPosition,
   type WordPopupTextContext
 } from './wordLookup'
@@ -45,6 +47,7 @@ export interface WordPopupBridge {
   anki: Pick<KizunaApi['anki'], 'getSettings' | 'findExisting' | 'addNote' | 'openCard'>
   knowledge: Pick<KizunaApi['knowledge'], 'detailsFor'>
   player: Pick<KizunaApi['player'], 'captureFrame'>
+  appInfo: Pick<KizunaApi['appInfo'], 'openLink'>
 }
 
 export interface UseWordPopupInput {
@@ -97,6 +100,11 @@ export function useWordPopup({
     ankiError,
     ankiExisting
   } = popupState
+  const highlightedTokens = wordPopup?.highlightedTokens
+  const grammarChain = useMemo(
+    () => (highlightedTokens ? popupGrammarChain(highlightedTokens) : []),
+    [highlightedTokens]
+  )
   const [cardImageRequest, setCardImageRequest] = useState<{
     imageBase64: string
     result: LookupResult
@@ -241,6 +249,17 @@ export function useWordPopup({
       token: wordPopup?.token,
       sentence: wordPopup?.sentence,
       provenanceByExpression: wordPopup?.provenanceByExpression,
+      grammarChain,
+      grammarSpan: highlightedTokens?.length
+        ? {
+            lemma: highlightedTokens[0].lemma,
+            surface: highlightedTokens.map((token) => token.surface).join('')
+          }
+        : undefined,
+      onOpenGrammarSource: (url) => {
+        const link = appInfoLinkForUrl(url)
+        if (link) void bridge.appInfo.openLink(link)
+      },
       onClose: closeWordPopup,
       onAddToAnki: handleAddToAnki,
       ankiStatus,

@@ -2,6 +2,7 @@
 // (Electron version lookup, shell, and filesystem access) stay in main.
 
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from './appIdentity'
+import { YOMITAN_SOURCE } from './inflection'
 
 /** Re-exported so UI code has one obvious name to import. */
 export const APP_NAME = PRODUCT_NAME
@@ -12,10 +13,16 @@ export const APP_INFO_LINKS = {
   repository: REPOSITORY_URL,
   license: `${REPOSITORY_URL}/blob/main/LICENSE`,
   issues: `${REPOSITORY_URL}/issues`,
-  jimakuAccount: 'https://jimaku.cc/account'
+  jimakuAccount: 'https://jimaku.cc/account',
+  yomitanTransforms: YOMITAN_SOURCE.url
 } as const
 
 export type AppInfoLink = keyof typeof APP_INFO_LINKS
+
+/** The approved link name for `url`, or undefined when it is not approved. */
+export function appInfoLinkForUrl(url: string): AppInfoLink | undefined {
+  return (Object.keys(APP_INFO_LINKS) as AppInfoLink[]).find((link) => APP_INFO_LINKS[link] === url)
+}
 
 export interface AppInfo {
   name: string

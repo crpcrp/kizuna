@@ -342,7 +342,8 @@ export interface KizunaApi {
   }
 }
 
-/** Untrusted OCR text gets a restricted bridge: no settings writes, file reads, dictionary management, or playback. */
+/** Untrusted OCR text gets a restricted bridge: no settings writes, file reads, dictionary management, or playback.
+ * `appInfo.openLink` only accepts approved link names. */
 export interface KizunaGameOcrApi {
   gameOcr: Pick<
     KizunaApi['gameOcr'],
@@ -363,4 +364,5 @@ export interface KizunaGameOcrApi {
   knowledge: Pick<KizunaApi['knowledge'], 'levelsFor' | 'detailsFor'>
   anki: Pick<KizunaApi['anki'], 'getSettings' | 'findExisting' | 'addNote' | 'openCard'>
   playerSettings: Pick<KizunaApi['playerSettings'], 'getSettings'>
+  appInfo: Pick<KizunaApi['appInfo'], 'openLink'>
 }

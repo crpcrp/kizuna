@@ -358,3 +358,73 @@
   color: var(--text-muted);
   margin-top: 2px;
 }
+
+/* ---- Grammar chain: stem and suffix parts of the conjugated word ---- */
+.word-popup-grammar {
+  /* Match the row's right inset so parts stay clear of the close button. */
+  padding: 6px 48px 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.word-popup-grammar-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 2px;
+}
+.word-popup-grammar-joint {
+  color: var(--text-muted);
+  line-height: 1.6rem;
+}
+.word-popup-grammar-part {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 9em;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  background: var(--control-bg);
+  color: inherit;
+  font: inherit;
+  cursor: default;
+  transition: background var(--transition-fast);
+}
+.word-popup-grammar-part:hover,
+.word-popup-grammar-part:focus-visible {
+  background: var(--control-hover-bg);
+}
+.word-popup-grammar-part--stem {
+  background: transparent;
+  border-color: var(--accent-border);
+}
+.word-popup-grammar-surface {
+  font-size: 1.05rem;
+}
+.word-popup-grammar-label {
+  font-size: var(--label-size);
+  color: var(--text-muted);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.word-popup-grammar-detail {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.word-popup-grammar-explanation {
+  white-space: pre-line;
+}
+.word-popup-grammar-contraction,
+.word-popup-grammar-source {
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.word-popup-grammar-source-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}

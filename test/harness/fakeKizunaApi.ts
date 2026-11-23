@@ -292,6 +292,7 @@ export function fakeGameOcrApi(): FakeGameOcrApi {
     anki: pick(api.anki, ['getSettings', 'findExisting', 'addNote', 'openCard']),
     playerSettings: pick(api.playerSettings, ['getSettings']),
     clipboard: pick(api.clipboard, ['writeText']),
-    translate: pick(api.translate, ['translate', 'cancel'])
+    translate: pick(api.translate, ['translate', 'cancel']),
+    appInfo: pick(api.appInfo, ['openLink'])
   }
 }
