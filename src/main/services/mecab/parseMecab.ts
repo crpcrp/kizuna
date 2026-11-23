@@ -45,6 +45,13 @@ const isGrammarSpanPart = (m: Morpheme): boolean =>
 
 const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
+// UniDic tags a sub-lemma after a hyphen (引く-他動詞, トム-Tom); dictionaries and
+// known words use the bare headword. Morphemes keep the tag (そう-様態 vs そう-伝聞).
+const stripLemmaTag = (lemma: string): string => {
+  const hyphen = lemma.indexOf('-', 1)
+  return hyphen === -1 ? lemma : lemma.slice(0, hyphen)
+}
+
 // MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
 export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
   const map = FIELD_MAPS[flavor]
@@ -76,17 +83,18 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
           : Math.max(alignmentOffset, startOffset + surface.length)
     }
 
+    const lemma = field(fields[map.lemma]) || surface
     const token: Token = {
       surface,
       reading: field(fields[map.reading]),
-      lemma: field(fields[map.lemma]) || surface,
+      lemma: flavor === 'unidic' ? stripLemmaTag(lemma) : lemma,
       pos: fields[map.pos] ?? '',
       startOffset
     }
     const pos1 = field(fields[1])
     const morpheme: Morpheme = {
       surface,
-      lemma: token.lemma,
+      lemma,
       pos: token.pos,
       pos1,
       conjugationType: field(fields[4]),

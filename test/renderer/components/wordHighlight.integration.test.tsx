@@ -9,6 +9,8 @@ import { lookup } from '@src/main/services/dict/lookup'
 import type { LookupDb } from '@src/main/services/dict/lookupDb'
 import SubtitleOverlay from '@src/renderer/src/components/SubtitleOverlay'
 import SubtitleSidebar from '@src/renderer/src/components/SubtitleSidebar'
+import WordPopup from '@src/renderer/src/components/WordPopup'
+import { spanGrammarChain } from '@src/shared/inflection'
 import { cueKey } from '@src/renderer/src/state/tokenization'
 import { type DictLookupBridge, lookupWordPopup } from '@src/renderer/src/state/wordLookup'
 import type { Token } from '@src/shared/token'
@@ -18,7 +20,7 @@ import type { LookupResult } from '@src/shared/dictionary'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
 
-const ROWS = ['生き返る', '生き', '何とかなる', '何とか', '行きたければ', '行き'].map(
+const ROWS = ['生き返る', '生き', '何とかなる', '何とか', '行きたければ', '行き', '引く'].map(
   (expression, index) => ({
     expression,
     reading: expression,
@@ -127,6 +129,37 @@ describe('word popup highlight production path', () => {
       expect(html).toContain(`<span data-token="">ね</span>`)
     }
   )
+})
+
+describe('UniDic tagged lemma', () => {
+  it('shows the grammar row for an extended span (引いて|いる)', async () => {
+    const tokens = parseMecab(
+      'unidic',
+      [
+        '引い\t動詞,一般,*,*,五段-カ行,連用形-イ音便,ヒク,引く-他動詞,引い,ヒイ,引く,ヒク,和,*,*,*,*',
+        'て\t助詞,接続助詞,*,*,*,*,テ,て,て,テ,て,テ,和,*,*,*,*',
+        'いる\t動詞,非自立可能,*,*,上一段-ア行,終止形-一般,イル,居る,いる,イル,いる,イル,和,*,*,*,*',
+        'EOS'
+      ].join('\n')
+    )
+    const popup = await lookupWordPopup(bridge, tokens[0], { x: 0, y: 0 }, null, undefined, tokens)
+    const span = popup.highlightedTokens ?? []
+
+    expect(span.map((token) => token.surface)).toEqual(['引いて', 'いる'])
+    expect(
+      renderToStaticMarkup(
+        <WordPopup
+          results={popup.results}
+          position={{ x: 0, y: 0 }}
+          grammarChain={spanGrammarChain(span)}
+          grammarSpan={{
+            lemma: span[0].lemma,
+            surface: span.map((token) => token.surface).join('')
+          }}
+        />
+      )
+    ).toContain('word-popup-grammar')
+  })
 })
 
 describe('compound knowledge projection rendering', () => {

@@ -681,7 +681,7 @@ export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 3
+export const GRAMMAR_ANALYZER_VERSION = 4
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {

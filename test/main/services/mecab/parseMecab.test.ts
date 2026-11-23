@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { parseMecab } from '@src/main/services/mecab/parseMecab'
 import { fixture } from '@test/paths'
+import { spanGrammarChain } from '@src/shared/inflection'
 import type { Token } from '@src/shared/token'
 
 const IPADIC_FIXTURE = readFileSync(fixture('mecab-ipadic.txt'), 'utf-8')
@@ -329,5 +330,55 @@ describe('parseMecab — conjugation fixtures', () => {
     expect(tokens.filter((token) => 'morphemes' in token).map((token) => token.surface)).toEqual([
       '食べます'
     ])
+  })
+})
+
+describe('parseMecab — UniDic sub-lemma tags', () => {
+  it('strips the tag from the token lemma and keeps it on the morpheme', () => {
+    const stdout = [
+      '引い\t動詞,一般,*,*,五段-カ行,連用形-イ音便,ヒク,引く-他動詞,引い,ヒイ,引く,ヒク,和,*,*,*,*',
+      'ちゃっ\t助動詞,*,*,*,五段-ワア行,連用形-促音便,チャウ,ちゃう,ちゃっ,チャッ,ちゃう,チャウ,和,*,*,*,*',
+      'た\t助動詞,*,*,*,助動詞-タ,終止形-一般,タ,た,た,タ,た,タ,和,*,*,*,*',
+      'トム\t名詞,固有名詞,人名,一般,*,*,トム,トム-Tom,トム,トム,トム,トム,固,*,*,*,*',
+      '-\t補助記号,一般,*,*,*,*,,-,-,,-,,記号,*,*,*,*',
+      'EOS'
+    ].join('\n')
+    const tokens = parseMecab('unidic', stdout)
+
+    expect(summarize(tokens)).toEqual([
+      ['引いちゃった', '引く'],
+      ['トム', 'トム'],
+      ['-', '-']
+    ])
+    expect(tokens[0]?.morphemes?.[0]?.lemma).toBe('引く-他動詞')
+  })
+
+  it('keeps IPADIC lemmas unchanged', () => {
+    const stdout = 'ジェイ-ポップ\t名詞,固有名詞,一般,*,*,*,ジェイ-ポップ,*,*\nEOS\n'
+    expect(parseMecab('ipadic', stdout)[0]?.lemma).toBe('ジェイ-ポップ')
+  })
+
+  it('still tells appearance そう from hearsay そう', () => {
+    const appearance = parseMecab(
+      'unidic',
+      [
+        '降り\t動詞,一般,*,*,上一段-ラ行,連用形-一般,オリル,降りる,降り,オリ,降りる,オリル,和,*,*,*,*',
+        'そう\t形状詞,助動詞語幹,*,*,*,*,ソウ,そう-様態,そう,ソー,そう,ソー,和,*,*,*,*',
+        'EOS'
+      ].join('\n')
+    )
+    const hearsay = parseMecab(
+      'unidic',
+      [
+        '降りる\t動詞,一般,*,*,上一段-ラ行,終止形-一般,オリル,降りる,降りる,オリル,降りる,オリル,和,*,*,*,*',
+        'そう\t形状詞,助動詞語幹,*,*,*,*,ソウ,そう-伝聞,そう,ソー,そう,ソー,和,*,*,*,*',
+        'EOS'
+      ].join('\n')
+    )
+
+    expect(appearance.map((token) => token.lemma)).toEqual(['降りる', 'そう'])
+    expect(hearsay.map((token) => token.lemma)).toEqual(['降りる', 'そう'])
+    expect(spanGrammarChain(appearance).map((step) => step.kind)).toContain('appearance')
+    expect(spanGrammarChain(hearsay).map((step) => step.kind)).not.toContain('appearance')
   })
 })
