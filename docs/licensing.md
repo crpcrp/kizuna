@@ -12,6 +12,7 @@ own license.
 | FFmpeg and ffprobe | GPL-3.0-or-later for the bundled build | Spawned media tools |
 | MeCab | BSD-3-Clause option | Spawned tokenizer |
 | IPADIC | NAIST-2003 | MeCab dictionary |
+| Yomitan Japanese transform descriptions | GPL-3.0-or-later | Grammar-step explanations, copied verbatim from a pinned commit |
 | Electron | MIT, with Chromium and Node notices | Application runtime |
 | Production npm dependencies | Package-specific permissive licenses | Packaged application code |
 
