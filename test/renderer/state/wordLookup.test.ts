@@ -12,7 +12,7 @@ import {
   wordPopupPosition
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
-import { spanGrammarChain, type GrammarStep } from '@src/shared/inflection'
+import { extendGrammarSpan, spanGrammarChain, type GrammarStep } from '@src/shared/inflection'
 import { type DictFlavor, type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -500,7 +500,10 @@ const TE_AUXILIARY_SENTENCES = [
   '書いておきます',
   '読んで いる',
   '読んで、いる',
-  '本がある'
+  '本がある',
+  '開けてある',
+  '死んじゃいけない',
+  '教えていただけます'
 ]
 
 function teAuxiliaryCues(flavor: DictFlavor): Map<string, Token[]> {
@@ -531,7 +534,8 @@ describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flav
   it.each([
     ['読んでいる', ['stem:onbin 読ん', 'te で', 'progressive いる']],
     ['食べてしまった', ['stem:continuative 食べ', 'te て', 'completion しまっ', 'past た']],
-    ['書いておきます', ['stem:onbin 書い', 'te て', 'preparation おき', 'polite ます']]
+    ['書いておきます', ['stem:onbin 書い', 'te て', 'preparation おき', 'polite ます']],
+    ['開けてある', ['stem:continuative 開け', 'te て', 'resultative ある']]
   ])('highlights all of %s and explains the whole span', async (sentence, chain) => {
     const span = await highlight(sentence, 0)
 
@@ -554,6 +558,14 @@ describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flav
   it('does not extend to an independent ある', async () => {
     expect((await highlight('本がある', 1)).map((token) => token.surface)).toEqual(['が'])
   })
+
+  // UniDic lemmatises いけ and いただけ as their godan verbs 行く and 頂く.
+  it.each([
+    ['死んじゃいけない', '死んじゃ'],
+    ['教えていただけます', '教えて']
+  ])('does not read a potential verb in %s as an auxiliary', async (sentence, word) => {
+    expect((await highlight(sentence, 0)).map((token) => token.surface)).toEqual([word])
+  })
 })
 
 // Sentences in the order of the mecab-*-adjective.txt fixtures.
@@ -569,7 +581,11 @@ const ADJECTIVE_SENTENCES = [
   '高すぎる',
   '静かだった',
   '静かではありません',
-  '学生でした'
+  '学生でした',
+  '食べたくない',
+  '降りそうだ',
+  '静かに',
+  '行くんじゃない'
 ]
 
 function adjectiveCues(flavor: DictFlavor): Map<string, Token[]> {
@@ -610,7 +626,9 @@ describe.each(['ipadic', 'unidic'] as const)('adjective and copula spans — %s'
     ['高すぎる', ['stem:adjective-stem 高', 'excess すぎる']],
     ['静かだった', ['copula だっ', 'past た']],
     ['静かではありません', ['copula ではあり', 'polite ませ', 'negative ん']],
-    ['学生でした', ['copula でし', 'past た']]
+    ['学生でした', ['copula でし', 'past た']],
+    ['食べたくない', ['stem:continuative 食べ', 'desire たく', 'negative ない']],
+    ['降りそうだ', ['stem:continuative 降り', 'appearance そう', 'copula だ']]
   ])('highlights all of %s and explains it', async (sentence, chain) => {
     const span = await highlight(sentence)
 
@@ -633,6 +651,17 @@ describe.each(['ipadic', 'unidic'] as const)('adjective and copula spans — %s'
 
   it('does not extend an adjective into the noun it modifies', async () => {
     expect((await highlight('高い山')).map((token) => token.surface)).toEqual(['高い'])
+  })
+
+  it('does not read adverbial に as a copula', async () => {
+    expect((await highlight('静かに')).map((token) => token.surface)).toEqual(['静か'])
+  })
+
+  it('does not explain explanatory ん before じゃない as a copula', () => {
+    const tokens = cues.get('行くんじゃない')!
+    const nasal = tokens.find((token) => token.surface === 'ん')!
+
+    expect(extendGrammarSpan(tokens, [nasal])).toEqual([nasal])
   })
 })
 

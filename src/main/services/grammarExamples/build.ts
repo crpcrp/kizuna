@@ -4,6 +4,7 @@ import * as fs from 'node:fs'
 import Database from 'better-sqlite3'
 import { decode } from 'seek-bzip'
 import {
+  explainsSpan,
   extendGrammarSpan,
   GRAMMAR_ANALYZER_VERSION,
   grammarPatternKey,
@@ -43,15 +44,14 @@ const NATIVE_LEVEL = '5'
 export function wordOccurrences(tokens: Token[]): Occurrence[] {
   const occurrences: Occurrence[] = []
   for (let index = 0; index < tokens.length; index++) {
+    // A noun or na-adjective head (学生|だった) has no morphemes of its own.
     const token = tokens[index]
-    if (!token.morphemes) continue
     const span = extendGrammarSpan(tokens, [token])
     index += span.length - 1
     const steps = spanGrammarChain(span)
     const pattern = grammarPatternKey(steps)
-    const surface = span.map((part) => part.surface).join('')
     // A morpheme without a step would leave the key guessed; skip just this word.
-    if (pattern === '' || steps.map((step) => step.surface).join('') !== surface) continue
+    if (pattern === '' || !explainsSpan(span, steps)) continue
     const last = span[span.length - 1]
     occurrences.push({
       pattern,

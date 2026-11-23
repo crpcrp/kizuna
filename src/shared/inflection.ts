@@ -43,6 +43,8 @@ export type GrammarStepKind =
   | 'obligation'
   | 'excess'
   | 'copula'
+  | 'outward-sign'
+  | 'te-wa'
 
 export interface SourceRef {
   /** e.g. 'Yomitan japanese-transforms.js', 'UniDic manual'. */
@@ -68,16 +70,61 @@ export const YOMITAN_SOURCE: SourceRef = {
   url: 'https://github.com/yomidevs/yomitan/blob/ce1b1bffa0e8819716317f3717932a7fe91e8d52/ext/js/language/ja/japanese-transforms.js'
 }
 
-// Yomitan has no copula transform.
+// Yomitan has no transforms for the copula or these て-form auxiliaries; their
+// steps show a label and source only, since no explanation is written by hand.
 export const COPULA_SOURCE: SourceRef = {
   name: 'Wiktionary: だ',
   url: 'https://en.wiktionary.org/wiki/%E3%81%A0'
 }
 
-const COPULA_EXPLANATION =
-  'Copula: states that the subject is the preceding noun or na-adjective.\n' +
-  'Plain だ, polite です. Past だった / でした; negative ではない, contracted じゃない; ' +
-  'polite negative ではありません.'
+export const AUXILIARY_VERBS_SOURCE: SourceRef = {
+  name: 'Wikipedia: Japanese grammar',
+  url: 'https://en.wikipedia.org/wiki/Japanese_grammar#Auxiliary_verbs'
+}
+export const AGERU_SOURCE: SourceRef = {
+  name: 'Wiktionary: あげる',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%82%E3%81%92%E3%82%8B'
+}
+export const KURERU_SOURCE: SourceRef = {
+  name: 'Wiktionary: くれる',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%8F%E3%82%8C%E3%82%8B'
+}
+export const MORAU_SOURCE: SourceRef = {
+  name: 'Wiktionary: もらう',
+  url: 'https://en.wiktionary.org/wiki/%E3%82%82%E3%82%89%E3%81%86'
+}
+
+interface TeAuxiliary {
+  kind: GrammarStepKind
+  label: string
+  source: SourceRef
+}
+
+// IPADIC lemmas, then UniDic's kanji lemmas for the same auxiliaries.
+const TE_AUXILIARY_STEPS: [string[], TeAuxiliary][] = [
+  [
+    ['ある', '有る'],
+    { kind: 'resultative', label: 'resultative (ある)', source: AUXILIARY_VERBS_SOURCE }
+  ],
+  [['みる', '見る'], { kind: 'attempt', label: 'try (みる)', source: AUXILIARY_VERBS_SOURCE }],
+  [
+    ['くる', '来る'],
+    { kind: 'direction', label: 'direction (くる)', source: AUXILIARY_VERBS_SOURCE }
+  ],
+  [
+    ['いく', 'ゆく', '行く'],
+    { kind: 'direction', label: 'direction (いく)', source: AUXILIARY_VERBS_SOURCE }
+  ],
+  [['あげる', '上げる'], { kind: 'giving', label: 'giving (あげる)', source: AGERU_SOURCE }],
+  [
+    ['さしあげる', '差し上げる'],
+    { kind: 'giving', label: 'giving (さしあげる)', source: AGERU_SOURCE }
+  ],
+  [['くれる', '呉れる'], { kind: 'giving', label: 'giving (くれる)', source: KURERU_SOURCE }],
+  [['くださる', '下さる'], { kind: 'giving', label: 'giving (くださる)', source: KURERU_SOURCE }],
+  [['もらう', '貰う'], { kind: 'receiving', label: 'receiving (もらう)', source: MORAU_SOURCE }],
+  [['いただく', '頂く'], { kind: 'receiving', label: 'receiving (いただく)', source: MORAU_SOURCE }]
+]
 
 const describe = (name: YomitanTransformName): string => YOMITAN_TRANSFORM_DESCRIPTIONS[name]
 
@@ -198,9 +245,11 @@ const isNegative = (m: Morpheme): boolean =>
 const isNominal = (m: Morpheme | undefined): boolean =>
   m?.pos === '名詞' || m?.pos === '形状詞' || m?.pos === '代名詞'
 
-// IPADIC tags copula じゃ 助詞,副助詞; UniDic tags it 助動詞 だ.
+// IPADIC tags copula じゃ 助詞,副助詞; UniDic tags it 助動詞 だ. UniDic also reads
+// adverbial に (静かに) as だ, where IPADIC has a particle.
 const isCopula = (m: Morpheme): boolean =>
-  isAuxiliary(m, 'だ', 'です') || (m.pos === '助詞' && m.pos1 === '副助詞' && m.surface === 'じゃ')
+  (isAuxiliary(m, 'だ', 'です') && m.surface !== 'に') ||
+  (m.pos === '助詞' && m.pos1 === '副助詞' && m.surface === 'じゃ')
 
 /** The copula plus the は and ある of ではある / じゃある, as one step. */
 function copulaStep(
@@ -224,16 +273,20 @@ function copulaStep(
     surface += after.surface
     consumed++
   }
+  // UniDic keeps だろう / でしょう as one morpheme; split off its う to match IPADIC.
+  const volitional = m.conjugationForm === '意志推量形' && surface.endsWith('う')
+  if (volitional) surface = surface.slice(0, -1)
   return {
     steps: [
       {
         kind: 'copula',
         surface,
         label: m.lemma === 'です' ? 'polite copula (です)' : 'copula (だ)',
-        explanation: COPULA_EXPLANATION,
+        explanation: '',
         source: COPULA_SOURCE,
         ...(surface.startsWith('じゃ') ? { contractionOf: 'では' } : {})
-      }
+      },
+      ...(volitional ? [step('volitional', 'う', 'volitional', 'volitional')] : [])
     ],
     consumed
   }
@@ -253,7 +306,19 @@ function suffixSteps(
   })
 
   if (isNominal(previous) && isCopula(m)) return copulaStep(morphemes, index)
-  if (isAuxiliary(m, 'ます')) return one(step('polite', m.surface, 'polite', '-ます'))
+  if (isAuxiliary(m, 'ます')) {
+    // UniDic keeps ましょう as one morpheme; split off its う to match IPADIC ましょ|う.
+    if (m.conjugationForm === '意志推量形' && m.surface.endsWith('う')) {
+      return {
+        steps: [
+          step('polite', m.surface.slice(0, -1), 'polite', '-ます'),
+          step('volitional', 'う', 'volitional', 'volitional')
+        ],
+        consumed: 0
+      }
+    }
+    return one(step('polite', m.surface, 'polite', '-ます'))
+  }
   if (isNegative(m)) {
     // なきゃ / なけりゃ: IPADIC 仮定縮約, UniDic 仮定形-融合.
     if (m.conjugationForm.startsWith('仮定縮約') || m.conjugationForm === '仮定形-融合') {
@@ -275,6 +340,12 @@ function suffixSteps(
         : step('negative', m.surface, 'negative (ん)', '-ん', 'ぬ')
     )
   }
+  // IPADIC lemmatises ず as ぬ; UniDic lemmatises both as ず.
+  if ((m.surface === 'ず' || m.surface === 'ぬ') && isAuxiliary(m, 'ぬ', 'ず')) {
+    return one(
+      step('negative', m.surface, `negative (${m.surface})`, m.surface === 'ず' ? '-ず' : '-ぬ')
+    )
+  }
   // IPADIC lemmatises past だ as だ, sharing it with the copula but not its 特殊・タ type.
   if (isAuxiliary(m, 'た') || (isAuxiliary(m, 'だ') && m.conjugationType === '特殊・タ')) {
     return one(
@@ -285,7 +356,19 @@ function suffixSteps(
   }
   if (m.pos === '助詞' && m.pos1 === '接続助詞' && /^[ちじ]ゃ$/.test(m.surface)) {
     return one(
-      step('te', m.surface, 'て-form + は', '-ちゃ', m.surface === 'ちゃ' ? 'ては' : 'では')
+      step('te-wa', m.surface, 'て-form + は', '-ちゃ', m.surface === 'ちゃ' ? 'ては' : 'では')
+    )
+  }
+  // IPADIC reads contracted ています (知ってます) as て|ます; UniDic reads て as てる.
+  if (isConjunctive(m, 'て', 'で') && next && isAuxiliary(next, 'ます')) {
+    return one(
+      step(
+        'progressive',
+        m.surface,
+        'progressive / state (いる)',
+        '-いる',
+        voiced(m.surface) ? 'でいる' : 'ている'
+      )
     )
   }
   if (isConjunctive(m, 'て', 'で')) return one(step('te', m.surface, 'て-form', '-て'))
@@ -296,7 +379,24 @@ function suffixSteps(
   if (isAuxiliary(m, 'すぎる', '過ぎる'))
     return one(step('excess', m.surface, 'too much (すぎる)', '-すぎる'))
   if (isAuxiliary(m, 'たい')) return one(step('desire', m.surface, 'desire (たい)', '-たい'))
-  if (isAuxiliary(m, 'させる', 'せる')) {
+  // UniDic keeps たがる as one morpheme; IPADIC splits it into た (たい) and がる.
+  if (isAuxiliary(m, 'たがる') && m.surface.startsWith('た')) {
+    return {
+      steps: [
+        step('desire', 'た', 'desire (たい)', '-たい'),
+        step('outward-sign', m.surface.slice(1), 'outward sign (がる)', '-がる')
+      ],
+      consumed: 0
+    }
+  }
+  // UniDic tags がる after an adjective stem 接尾辞,動詞的.
+  if (isAuxiliary(m, 'がる') || (m.lemma === 'がる' && m.pos === '接尾辞')) {
+    return one(step('outward-sign', m.surface, 'outward sign (がる)', '-がる'))
+  }
+  // IPADIC tags the short causative す / さす (書かされる) 動詞,接尾.
+  const shortCausative = isAuxiliary(m, 'す', 'さす')
+  if (shortCausative || isAuxiliary(m, 'させる', 'せる')) {
+    const transform = shortCausative ? 'short causative' : 'causative'
     if (next && isAuxiliary(next, 'られる', 'れる')) {
       // No single Yomitan transform; Yomitan chains causative then potential or passive.
       return {
@@ -305,14 +405,14 @@ function suffixSteps(
             kind: 'causative-passive',
             surface: m.surface + next.surface,
             label: 'causative-passive',
-            explanation: `${describe('causative')}\n${describe('potential or passive')}`,
+            explanation: `${describe(transform)}\n${describe('potential or passive')}`,
             source: YOMITAN_SOURCE
           }
         ],
         consumed: 1
       }
     }
-    return one(step('causative', m.surface, 'causative', 'causative'))
+    return one(step('causative', m.surface, 'causative', transform))
   }
   if (isAuxiliary(m, 'られる', 'れる')) {
     // IPADIC splits ら抜き 食べれる into an ichidan (or カ変) stem plus れる.
@@ -367,8 +467,12 @@ function suffixSteps(
       )
     )
   }
-  const afterTe = previous !== undefined && isConjunctive(previous, 'て', 'で')
-  if (afterTe && isAuxiliary(m, 'いる', '居る')) {
+  // UniDic lemmatises the ちゃ / じゃ of ては / では as て; no auxiliary follows those.
+  const afterTe =
+    previous !== undefined &&
+    isConjunctive(previous, 'て', 'で') &&
+    /^[てで]$/.test(previous.surface)
+  if (afterTe && isAuxiliary(m, 'いる', '居る', 'おる')) {
     return one(step('progressive', m.surface, 'progressive / state (いる)', '-いる'))
   }
   if (afterTe && isAuxiliary(m, 'おく', '置く')) {
@@ -376,6 +480,19 @@ function suffixSteps(
   }
   if (afterTe && isAuxiliary(m, 'しまう', '仕舞う')) {
     return one(step('completion', m.surface, 'completion (しまう)', '-しまう'))
+  }
+  const teAuxiliary =
+    afterTe && isTeAuxiliaryMorpheme(m)
+      ? TE_AUXILIARY_STEPS.find(([lemmas]) => lemmas.includes(m.lemma))?.[1]
+      : undefined
+  if (teAuxiliary) {
+    return one({
+      kind: teAuxiliary.kind,
+      surface: m.surface,
+      label: teAuxiliary.label,
+      explanation: '',
+      source: teAuxiliary.source
+    })
   }
   // IPADIC 名詞,接尾 そう; UniDic lemma そう-様態 (hearsay is そう-伝聞).
   if (m.lemma === 'そう-様態' || (m.lemma === 'そう' && m.pos === '名詞' && m.pos1 === '接尾')) {
@@ -431,41 +548,37 @@ export function grammarChain(dictionaryForm: string, morphemes: Morpheme[]): Gra
     index += consumed
   }
   if (rest.length === 0 && adjectiveEnding === 'く') steps.push(adverbialStep())
+  // A stem with nothing explained after it (UniDic 行っ before たり) says nothing.
+  const onlyStems = steps.every((s) => typeof s.kind === 'object')
+  if (onlyStems && !(steps.length === 1 && form === 'imperative')) return []
   return steps
 }
 
-// IPADIC lemmas, then UniDic's kanji lemmas for the same auxiliaries.
+// UniDic lemmatises a potential (いけ|ない, いただけ|ます) as its godan verb.
+const isGodanPotential = (m: Morpheme): boolean =>
+  m.conjugationType.startsWith('下一段') && !m.lemma.endsWith('る')
+
+// IPADIC tags ある after a て-form 動詞,自立.
+function isTeAuxiliaryMorpheme(m: Morpheme): boolean {
+  return (
+    m.pos === '動詞' &&
+    (m.pos1 === '非自立' || m.pos1 === '非自立可能' || m.lemma === 'ある') &&
+    TE_FORM_AUXILIARY_LEMMAS.has(m.lemma) &&
+    !isGodanPotential(m)
+  )
+}
+
 const TE_FORM_AUXILIARY_LEMMAS = new Set([
   'いる',
   'おる',
   'しまう',
   'おく',
-  'ある',
-  'みる',
-  'くる',
-  'いく',
-  'ゆく',
-  'あげる',
-  'さしあげる',
-  'くれる',
-  'くださる',
-  'もらう',
-  'いただく',
   '居る',
   '仕舞う',
   '置く',
-  '有る',
-  '見る',
-  '来る',
-  '行く',
-  '上げる',
-  '差し上げる',
-  '呉れる',
-  '下さる',
-  '貰う',
-  '頂く'
+  ...TE_AUXILIARY_STEPS.flatMap(([lemmas]) => lemmas)
 ])
-const TE_FORM_ENDINGS = new Set(['て', 'で', 'ちゃ', 'じゃ'])
+const TE_FORM_ENDINGS = new Set(['て', 'で'])
 
 const endsInTeForm = (token: Token): boolean => {
   const last = token.morphemes?.at(-1)
@@ -474,11 +587,7 @@ const endsInTeForm = (token: Token): boolean => {
 
 const isTeFormAuxiliary = (token: Token): boolean => {
   const head = token.morphemes?.[0]
-  return (
-    head?.pos === '動詞' &&
-    (head.pos1 === '非自立' || head.pos1 === '非自立可能') &&
-    TE_FORM_AUXILIARY_LEMMAS.has(head.lemma)
-  )
+  return head !== undefined && isTeAuxiliaryMorpheme(head)
 }
 
 /** Joins auxiliary verbs that directly follow a て-form (読んで|いる) to the popup span. */
@@ -499,28 +608,39 @@ function extendTeFormAuxiliaries(cueTokens: Token[], span: Token[]): Token[] {
   return extended
 }
 
-// Dependent adjectives (UniDic 無い after じゃ) are suffixes, not heads.
-const startsAdjectiveOrCopula = (token: Token): boolean => {
+// Dependent adjectives (UniDic 無い after じゃ) are suffixes, not heads. Verbs
+// extend across split suffixes too (UniDic 食べたく|ない, 行かなく|ちゃ, 降り|そう).
+const startsSuffixedWord = (token: Token): boolean => {
   const head = token.morphemes?.[0]
   if (head?.pos === '形容詞') return head.pos1 !== '非自立' && head.pos1 !== '非自立可能'
-  return token.pos === '名詞' || token.pos === '形状詞' || token.pos === '代名詞'
-}
-
-const explainsSuffixes = (span: Token[]): boolean => {
-  const explained = spanGrammarChain(span)
-    .map((step) => step.surface)
-    .join('')
-  const surface = span.map((token) => token.surface).join('')
-  return explained !== '' && (explained === surface || span[0].surface + explained === surface)
+  // IPADIC tags explanatory ん / の (んじゃない) 名詞,非自立.
+  if (token.lemma === 'ん' || token.lemma === 'の') return false
+  return ['動詞', '名詞', '形状詞', '代名詞'].includes(token.pos)
 }
 
 /**
+ * Whether `steps` cover every kana of `span`; a noun or na-adjective head
+ * (学生|だった) has no stem step of its own.
+ */
+export function explainsSpan(span: Token[], steps: GrammarStep[]): boolean {
+  const explained = steps.map((step) => step.surface).join('')
+  const surface = span.map((token) => token.surface).join('')
+  if (explained === '') return false
+  return (
+    explained === surface ||
+    (['名詞', '形状詞', '代名詞'].includes(span[0].pos) && span[0].surface + explained === surface)
+  )
+}
+
+const explainsSuffixes = (span: Token[]): boolean => explainsSpan(span, spanGrammarChain(span))
+
+/**
  * Extends the popup span across auxiliary verbs after a て-form (読んで|いる) and
- * across the suffixes of an adjective or copula (高く|なかっ|た, 静か|じゃ|なかっ|た).
+ * across the split suffixes of a verb, adjective or copula (高く|なかっ|た, 静か|じゃ|なかっ|た).
  */
 export function extendGrammarSpan(cueTokens: Token[], span: Token[]): Token[] {
   const extended = extendTeFormAuxiliaries(cueTokens, span)
-  if (!extended[0] || !startsAdjectiveOrCopula(extended[0])) return extended
+  if (!extended[0] || !startsSuffixedWord(extended[0])) return extended
 
   let index = cueTokens.findIndex((token) => token.startOffset === extended.at(-1)?.startOffset)
   if (index === -1) return extended
@@ -561,7 +681,7 @@ export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 2
+export const GRAMMAR_ANALYZER_VERSION = 3
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {

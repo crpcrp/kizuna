@@ -174,7 +174,7 @@ describe('parseMecab — conjugation chains', () => {
       'EOS'
     ].join('\n')
 
-    expect(parseMecab('ipadic', stdout)).toEqual([
+    expect(parseMecab('ipadic', stdout)).toMatchObject([
       { surface: '見る', reading: 'ミル', lemma: '見る', pos: '動詞', startOffset: 0 },
       { surface: '食べる', reading: 'タベル', lemma: '食べる', pos: '動詞', startOffset: 2 }
     ])
@@ -187,7 +187,7 @@ describe('parseMecab — conjugation chains', () => {
       'EOS'
     ].join('\n')
 
-    expect(parseMecab('ipadic', stdout)).toEqual([
+    expect(parseMecab('ipadic', stdout)).toMatchObject([
       { surface: '見る', reading: 'ミル', lemma: '見る', pos: '動詞', startOffset: 0 },
       { surface: 'から', reading: 'カラ', lemma: 'から', pos: '助詞', startOffset: 2 }
     ])
@@ -274,6 +274,51 @@ describe('parseMecab — conjugation fixtures', () => {
         pos1: '',
         conjugationType: '助動詞-タ',
         conjugationForm: '終止形-一般'
+      }
+    ])
+  })
+
+  it('keeps the head lemma for IPADIC contracted てる and とく', () => {
+    const stdout = [
+      '読ん\t動詞,自立,*,*,五段・マ行,連用タ接続,読む,ヨン,ヨン',
+      'でる\t動詞,非自立,*,*,一段,基本形,でる,デル,デル',
+      'EOS',
+      'やっ\t動詞,自立,*,*,五段・ラ行,連用タ接続,やる,ヤッ,ヤッ',
+      'とく\t動詞,非自立,*,*,五段・カ行イ音便,基本形,とく,トク,トク',
+      'EOS'
+    ].join('\n')
+
+    expect(summarize(parseMecab('ipadic', stdout))).toEqual([
+      ['読んでる', '読む'],
+      ['やっとく', 'やる']
+    ])
+  })
+
+  it('merges the ちゃ of ては onto the verb', () => {
+    const stdout = [
+      '行か\t動詞,自立,*,*,五段・カ行促音便,未然形,行く,イカ,イカ',
+      'なく\t助動詞,*,*,*,特殊・ナイ,連用テ接続,ない,ナク,ナク',
+      'ちゃ\t助詞,接続助詞,*,*,*,*,ちゃ,チャ,チャ',
+      'EOS'
+    ].join('\n')
+
+    expect(summarize(parseMecab('ipadic', stdout))).toEqual([['行かなくちゃ', '行く']])
+  })
+
+  it('keeps the morpheme of a lone verb for its conjugation form', () => {
+    const stdout = [
+      '書こう\t動詞,一般,*,*,五段-カ行,意志推量形,カク,書く,書こう,カコー,書く,カク,和,*,*,*,*',
+      'EOS'
+    ].join('\n')
+
+    expect(parseMecab('unidic', stdout)[0]?.morphemes).toEqual([
+      {
+        surface: '書こう',
+        lemma: '書く',
+        pos: '動詞',
+        pos1: '一般',
+        conjugationType: '五段-カ行',
+        conjugationForm: '意志推量形'
       }
     ])
   })

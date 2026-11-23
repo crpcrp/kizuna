@@ -108,8 +108,30 @@ describe('status and staleness', () => {
     expect(examples.status()).toMatchObject({
       state: 'ready',
       cached: true,
-      info: { dictionaryId: 'ipadic', exampleCount: 5 }
+      info: { dictionaryId: 'ipadic', exampleCount: 6 }
     })
+  })
+
+  it('rebuilds after a running build when the dictionary changes during it', async () => {
+    writeTatoebaCache(join(dir, 'downloads'))
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const runBuild = vi.fn<BuildRunner>(async (input, onProgress, signal) => {
+      if (runBuild.mock.calls.length === 1) await gate
+      return realBuild(input, onProgress, signal)
+    })
+    const examples = service(runBuild)
+
+    const first = examples.rebuild()
+    dictionary = { id: 'unidic', mecab: { ...mecab, flavor: 'unidic' } }
+    await examples.refresh()
+    release()
+    await first
+
+    await vi.waitFor(() =>
+      expect(examples.status()).toMatchObject({ state: 'ready', info: { dictionaryId: 'unidic' } })
+    )
+    expect(runBuild).toHaveBeenCalledTimes(2)
   })
 
   it('rebuilds offline after the MeCab dictionary changes', async () => {
