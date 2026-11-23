@@ -19,8 +19,18 @@ const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
 // IPADIC tags these contractions 動詞,非自立; UniDic tags them 助動詞.
 const CONTRACTION_VERB_LEMMAS = new Set(['ちゃう', 'じゃう', 'ちまう', 'じまう'])
 
-const isDependentVerb = (m: Morpheme): boolean =>
-  m.pos === '動詞' && (m.pos1 === '非自立' || m.pos1 === '非自立可能')
+const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'じゃ', 'は'])
+
+// Lone tokens the popup may join into a grammar span: te-form auxiliaries
+// (読んで|いる) and adjective or copula parts (高く|なかっ|た, 静か|では|ありません).
+const isGrammarSpanPart = (m: Morpheme): boolean =>
+  (m.pos === '動詞' && (m.pos1 === '非自立' || m.pos1 === '非自立可能')) ||
+  m.pos === '形容詞' ||
+  m.pos === '助動詞' ||
+  m.pos === '接尾辞' ||
+  m.pos1 === '接尾' ||
+  m.pos1 === '助動詞語幹' ||
+  (m.pos === '助詞' && GRAMMAR_PARTICLES.has(m.surface))
 
 const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
@@ -107,9 +117,8 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     previousSurfaceEnd = startOffset + surface.length
   }
 
-  // A lone 非自立 verb may be a te-form auxiliary (読んで|いる) that the popup joins to its verb.
   for (const [token, morphemes] of morphemesByToken) {
-    if (morphemes.length > 1 || isDependentVerb(morphemes[0])) token.morphemes = morphemes
+    if (morphemes.length > 1 || isGrammarSpanPart(morphemes[0])) token.morphemes = morphemes
   }
   return tokens
 }

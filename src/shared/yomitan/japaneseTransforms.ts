@@ -36,6 +36,9 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
   '-そう':
     'Appearing that; looking like.\n' +
     'Usage: Attach そう to the continuative form (連用形) of verbs, or to the stem of adjectives.',
+  '-すぎる':
+    'Shows something "is too..." or someone is doing something "too much".\n' +
+    'Usage: Attach すぎる to the continuative form (連用形) of verbs, or to the stem of adjectives.',
   '-たい':
     '1. Expresses the feeling of desire or hope.\n' +
     '2. Used in ...たいと思います, an indirect way of saying what the speaker intends to do.\n' +
@@ -52,6 +55,7 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
     'Negative form of verbs; a sound change of ぬ.\n' +
     'Usage: Attach ん to the irrealis form (未然形) of verbs.\n' +
     'する becomes せん',
+  '-く': 'Adverbial form of i-adjectives.\n',
   causative:
     'Describes the intention to make someone do something.\n' +
     'Usage: Attach させる to the irrealis form (未然形) of ichidan verbs and くる.\n' +

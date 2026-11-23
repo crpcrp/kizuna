@@ -12,7 +12,7 @@ import {
   wordPopupPosition
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
-import { spanGrammarChain } from '@src/shared/inflection'
+import { spanGrammarChain, type GrammarStep } from '@src/shared/inflection'
 import { type DictFlavor, type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -553,6 +553,86 @@ describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flav
 
   it('does not extend to an independent ある', async () => {
     expect((await highlight('本がある', 1)).map((token) => token.surface)).toEqual(['が'])
+  })
+})
+
+// Sentences in the order of the mecab-*-adjective.txt fixtures.
+const ADJECTIVE_SENTENCES = [
+  '高くなかった',
+  '高ければ',
+  '静かじゃなかった',
+  '美味しそう',
+  '食べすぎた',
+  '高い山',
+  '高かった',
+  '高くて',
+  '高すぎる',
+  '静かだった',
+  '静かではありません',
+  '学生でした'
+]
+
+function adjectiveCues(flavor: DictFlavor): Map<string, Token[]> {
+  const blocks = readFileSync(fixture(`mecab-${flavor}-adjective.txt`), 'utf-8')
+    .split(/^EOS\r?$/m)
+    .filter((block) => block.trim() !== '')
+  return new Map(
+    ADJECTIVE_SENTENCES.map((sentence, index) => [
+      sentence,
+      parseMecab(flavor, blocks[index], sentence)
+    ])
+  )
+}
+
+const stepName = (step: GrammarStep): string =>
+  `${typeof step.kind === 'string' ? step.kind : `stem:${step.kind.stem}`} ${step.surface}`
+
+describe.each(['ipadic', 'unidic'] as const)('adjective and copula spans — %s', (flavor) => {
+  const cues = adjectiveCues(flavor)
+
+  async function highlight(sentence: string): Promise<Token[]> {
+    const tokens = cues.get(sentence)!
+    const bridge: DictLookupBridge = {
+      lookup: vi.fn().mockResolvedValue([makeLookupResult({ expression: tokens[0].lemma })])
+    }
+    const popup = await lookupWordPopup(bridge, tokens[0], { x: 0, y: 0 }, null, 'auto', tokens)
+    return popup.highlightedTokens
+  }
+
+  it.each([
+    ['高くなかった', ['stem:adjective-stem 高', 'negative くなかっ', 'past た']],
+    ['高ければ', ['stem:adjective-stem 高', 'conditional-ba ければ']],
+    ['静かじゃなかった', ['copula じゃ', 'negative なかっ', 'past た']],
+    ['美味しそう', ['stem:adjective-stem 美味し', 'appearance そう']],
+    ['食べすぎた', ['stem:continuative 食べ', 'excess すぎ', 'past た']],
+    ['高かった', ['stem:adjective-stem 高', 'past かった']],
+    ['高くて', ['stem:adjective-stem 高', 'te くて']],
+    ['高すぎる', ['stem:adjective-stem 高', 'excess すぎる']],
+    ['静かだった', ['copula だっ', 'past た']],
+    ['静かではありません', ['copula ではあり', 'polite ませ', 'negative ん']],
+    ['学生でした', ['copula でし', 'past た']]
+  ])('highlights all of %s and explains it', async (sentence, chain) => {
+    const span = await highlight(sentence)
+
+    expect(span.map((token) => token.surface).join('')).toBe(sentence)
+    expect(spanGrammarChain(span).map(stepName)).toEqual(chain)
+  })
+
+  it('marks じゃ as a contraction of では', async () => {
+    const copula = spanGrammarChain(await highlight('静かじゃなかった'))[0]
+
+    expect(copula).toMatchObject({ label: 'copula (だ)', contractionOf: 'では' })
+  })
+
+  it('explains a lone adverbial 高く', () => {
+    expect(spanGrammarChain([cues.get('高くて')![0]]).map(stepName)).toEqual([
+      'stem:adjective-stem 高',
+      'adverbial く'
+    ])
+  })
+
+  it('does not extend an adjective into the noun it modifies', async () => {
+    expect((await highlight('高い山')).map((token) => token.surface)).toEqual(['高い'])
   })
 })
 

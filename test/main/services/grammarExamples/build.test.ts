@@ -3,13 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { buildExamplesDatabase } from '@src/main/services/grammarExamples/build'
+import { buildExamplesDatabase, wordOccurrences } from '@src/main/services/grammarExamples/build'
+import { parseMecab } from '@src/main/services/mecab/parseMecab'
 import { GRAMMAR_ANALYZER_VERSION } from '@src/shared/inflection'
 import {
   fakeTatoebaTokenize,
   SAMPLE_LAST_MODIFIED,
   writeTatoebaCache
 } from '@test/harness/tatoebaFixtures'
+import { fixture } from '@test/paths'
 
 let dir: string
 
@@ -116,5 +118,24 @@ describe('buildExamplesDatabase', () => {
       exampleCount: '5'
     })
     expect(JSON.parse(meta.sources)).toHaveLength(4)
+  })
+})
+
+describe('wordOccurrences', () => {
+  it('records adjective chains and skips copula chains, which have no stem step', () => {
+    const tokens = parseMecab(
+      'ipadic',
+      fs
+        .readFileSync(fixture('mecab-ipadic-adjective.txt'), 'utf-8')
+        .split(/^EOS\r?$/m)
+        .slice(0, 3)
+        .join('EOS\n'),
+      '高くなかった高ければ静かじゃなかった'
+    )
+
+    expect(wordOccurrences(tokens)).toEqual([
+      { pattern: 'negative>past', lemma: '高い', start: 0, end: 6 },
+      { pattern: 'conditional-ba', lemma: '高い', start: 6, end: 10 }
+    ])
   })
 })

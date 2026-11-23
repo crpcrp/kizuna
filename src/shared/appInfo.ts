@@ -2,7 +2,7 @@
 // (Electron version lookup, shell, and filesystem access) stay in main.
 
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from './appIdentity'
-import { YOMITAN_SOURCE } from './inflection'
+import { COPULA_SOURCE, YOMITAN_SOURCE } from './inflection'
 
 /** Re-exported so UI code has one obvious name to import. */
 export const APP_NAME = PRODUCT_NAME
@@ -15,6 +15,7 @@ export const APP_INFO_LINKS = {
   issues: `${REPOSITORY_URL}/issues`,
   jimakuAccount: 'https://jimaku.cc/account',
   yomitanTransforms: YOMITAN_SOURCE.url,
+  wiktionaryCopula: COPULA_SOURCE.url,
   tatoeba: 'https://tatoeba.org',
   tatoebaLicense: 'https://creativecommons.org/licenses/by/2.0/fr/'
 } as const
