@@ -1,6 +1,7 @@
 import * as fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import Database from 'better-sqlite3'
+import type { Shell } from 'electron'
 import {
   configureDictConnection,
   createDictService,
@@ -12,13 +13,23 @@ import type { BinaryPaths } from '../resourcePaths'
 import { createWorkerImporter } from '../services/dict/workerImporter'
 import { isValidMecabDictionaryDir } from '../services/mecab/dictionaryValidation'
 import type { UserUnidicManager } from '../services/mecab/unidic'
+import { registerGrammarExamplesBridge } from '../grammarExamplesBridge'
+import { httpFetch } from '../services/http'
+import {
+  createGrammarExamplesService,
+  workerBuildRunner,
+  type CurrentDictionary
+} from '../services/grammarExamples/service'
+import { pathApiFor } from '../platformPath'
 import type { BootstrapDeps } from './deps'
 
-/** Registers the mecab IPC bridge (tokenize/listDicts/selectDict). */
+/** Registers the mecab IPC bridge (tokenize/listDicts/selectDict) and the Tatoeba
+ * examples built with its active dictionary. */
 export function startMecab(
-  deps: Pick<BootstrapDeps, 'ipcMain' | 'settings'> & {
+  deps: Pick<BootstrapDeps, 'ipcMain' | 'settings' | 'paths' | 'sendToMain'> & {
     binaryPaths: BinaryPaths
     userUnidic: UserUnidicManager
+    shell: Pick<Shell, 'openExternal'>
   }
 ): void {
   const { binaryPaths, userUnidic } = deps
@@ -33,9 +44,40 @@ export function startMecab(
     isValid: (directory) => isValidMecabDictionaryDir(directory),
     settings: deps.settings
   })
-  registerMecabBridge(deps.ipcMain, mecabService, {
-    openUserUnidicDir: () => userUnidic.open()
+  const currentDictionary = (): CurrentDictionary => {
+    const id = mecabService.currentDict()
+    const dict = mecabService.listDicts().find((d) => d.id === id)!
+    return {
+      id,
+      mecab: { mecabPath: binaryPaths.mecabPath, dicdir: dict.dicdir, flavor: dict.flavor }
+    }
+  }
+  const examples = createGrammarExamplesService({
+    dir: deps.paths.grammarExamplesDir,
+    fetch: httpFetch,
+    currentDictionary,
+    runBuild: workerBuildRunner(
+      pathApiFor().join(deps.paths.mainDir, 'grammarExamplesWorker.js'),
+      (workerPath, workerData) => new Worker(workerPath, { workerData })
+    )
   })
+  registerGrammarExamplesBridge(deps.ipcMain, examples, {
+    send: deps.sendToMain,
+    openExternal: (url) => deps.shell.openExternal(url)
+  })
+  registerMecabBridge(
+    deps.ipcMain,
+    {
+      ...mecabService,
+      selectDict: (id) => {
+        const selected = mecabService.selectDict(id)
+        void examples.refresh()
+        return selected
+      }
+    },
+    { openUserUnidicDir: () => userUnidic.open() }
+  )
+  void examples.refresh()
 }
 
 // The import worker uses a separate connection; WAL and a busy timeout allow concurrent reads.

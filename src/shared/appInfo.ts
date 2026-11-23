@@ -14,7 +14,9 @@ export const APP_INFO_LINKS = {
   license: `${REPOSITORY_URL}/blob/main/LICENSE`,
   issues: `${REPOSITORY_URL}/issues`,
   jimakuAccount: 'https://jimaku.cc/account',
-  yomitanTransforms: YOMITAN_SOURCE.url
+  yomitanTransforms: YOMITAN_SOURCE.url,
+  tatoeba: 'https://tatoeba.org',
+  tatoebaLicense: 'https://creativecommons.org/licenses/by/2.0/fr/'
 } as const
 
 export type AppInfoLink = keyof typeof APP_INFO_LINKS

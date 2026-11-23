@@ -4,6 +4,8 @@ import type { PopupSettings } from '../../../../shared/playerSettings'
 import type { McDict } from '../../../../shared/mecab'
 import type { DictInfo, ImportProgress } from '../../../../shared/dictionary'
 import type { SettingEntry } from './types'
+import type { TatoebaExamplesView } from '../../state/useTatoebaExamples'
+import TatoebaExamplesSection from './TatoebaExamplesSection'
 
 interface ImportStatus {
   fileName: string
@@ -45,6 +47,8 @@ export interface DictionariesTabProps extends SettingsTabProps {
   loadError?: string
   onSelectMecabDict: (id: 'ipadic' | 'unidic') => void
   onOpenUserUnidicDir: () => void
+  /** Omitted where the examples cannot be managed. */
+  tatoebaExamples?: TatoebaExamplesView
   /** Imports a picked zip; the caller resolves its on-disk path, so the
    * archive is never read into renderer memory. */
   onImportYomitanDict: (file: File) => Promise<void>
@@ -62,6 +66,13 @@ export const DICTIONARIES_SETTING_ENTRIES: SettingEntry[] = [
     label: 'MeCab dictionary',
     category: 'dictionaries',
     keywords: ['ipadic', 'unidic', 'parser', 'tokenizer']
+  },
+  {
+    id: 'tatoeba-examples',
+    label: 'Example sentences (Tatoeba)',
+    category: 'dictionaries',
+    keywords: ['grammar', 'examples', 'sentences', 'translation'],
+    targetId: 'tatoeba-examples'
   },
   {
     id: 'yomitan-import',
@@ -110,6 +121,7 @@ export default function DictionariesTab({
   loadError,
   onSelectMecabDict,
   onOpenUserUnidicDir,
+  tatoebaExamples,
   onImportYomitanDict,
   subscribeImportProgress,
   onSetYomitanEnabled,
@@ -220,6 +232,8 @@ export default function DictionariesTab({
           Open UniDic folder
         </button>
       </div>
+
+      {tatoebaExamples && <TatoebaExamplesSection view={tatoebaExamples} />}
 
       <div className="options-section">
         <h3>Yomitan dictionaries</h3>

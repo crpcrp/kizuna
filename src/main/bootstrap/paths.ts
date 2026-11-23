@@ -35,6 +35,8 @@ export interface AppPaths {
   dictDb: string
   knowledgeDb: string
   jimakuCacheRoot: string
+  /** Tatoeba example database and its cached downloads. */
+  grammarExamplesDir: string
   /** electron-builder's package-type marker (absent for AppImage and unpackaged builds). */
   packageTypeFile: string
   appUpdateConfigFile: string
@@ -64,6 +66,7 @@ export function resolveAppPaths(inputs: AppPathInputs): AppPaths {
     dictDb: join(userData, 'dict.db'),
     knowledgeDb: join(userData, 'knowledge.db'),
     jimakuCacheRoot: join(userData, 'jimaku'),
+    grammarExamplesDir: join(userData, 'grammar-examples'),
     packageTypeFile: join(resourcesPath, 'package-type'),
     appUpdateConfigFile: join(resourcesPath, 'app-update.yml'),
     preload: join(mainDir, '../preload/index.js'),

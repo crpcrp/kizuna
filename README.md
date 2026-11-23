@@ -130,6 +130,26 @@ The browser extension is unnecessary. Only supported Yomitan-format ZIPs import;
 arbitrary ZIPs or unpacked folders do not. Datasets are not bundled: follow each
 provider's licence and terms. Imported lookups work locally and offline.
 
+### Tatoeba example sentences
+
+Under a conjugated word's grammar breakdown, the word popup can show real
+Japanese–English sentence pairs from [Tatoeba](https://tatoeba.org) that use the
+same grammar pattern, preferring sentences with the same word. Only sentences
+written by native Japanese speakers with a directly linked English translation
+are used. Under Options > Parser & Dictionaries > Example sentences (Tatoeba),
+**Download examples** fetches Tatoeba's Japanese, English, link, and
+user-language exports (about 32 MB as of November 2026; the button shows the
+current size first) and builds the examples on your computer with the selected
+MeCab dictionary. **Update from Tatoeba** fetches newer exports; **Rebuild** and
+the automatic rebuild after a MeCab dictionary change work offline from the
+cached downloads; **Remove** deletes both.
+
+The database and downloads live in the `grammar-examples` folder of Kizuna's
+user-data directory (`%APPDATA%\Kizuna` on Windows, `~/.config/Kizuna` on Linux).
+Tatoeba sentences are licensed under
+[CC BY 2.0 FR](https://creativecommons.org/licenses/by/2.0/fr/); each example
+links to its Tatoeba page.
+
 ## Privacy and network access
 
 Playback, subtitle processing, dictionaries, settings, history, and vocabulary
@@ -138,7 +158,8 @@ or automatic crash upload. Imported dictionary lookup is local and does not
 contact the dictionary source.
 
 Network access is limited to enabled or manual update checks and explicit
-translation, WaniKani sync, AnkiConnect, or [Jimaku](docs/jimaku.md) actions.
+translation, WaniKani sync, AnkiConnect, Tatoeba example download, or
+[Jimaku](docs/jimaku.md) actions.
 Translation sends only selected subtitle or OCR text to Azure; see
 [translation setup](docs/game-ocr.md#translation-setup). A remote AnkiConnect
 endpoint receives mined text and media; plain HTTP does not encrypt it.

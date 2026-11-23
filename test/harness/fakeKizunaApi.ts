@@ -9,6 +9,7 @@ import { makePublicKnowledgeSettings } from '@test/harness/knowledgeFixtures'
 import { DEFAULT_GAME_OCR_SETTINGS, type GameOcrSettings } from '@src/shared/gameOcrSettings'
 import type { GameOcrRuntimeStatus } from '@src/shared/gameOcr'
 import type { JimakuSettingsStatus } from '@src/shared/jimaku'
+import { EMPTY_GRAMMAR_EXAMPLE_PAGE } from '@src/shared/grammarExamples'
 
 export type FakeKizunaApi = {
   [Domain in keyof KizunaApi]: MockedObject<KizunaApi[Domain]>
@@ -134,6 +135,11 @@ export function createFakeKizunaApi(overrides: FakeKizunaApiOverrides = {}): Fak
       selectDict: vi.fn(async () => 'ipadic' as const),
       currentDict: vi.fn(async () => 'ipadic' as const),
       openUserUnidicDir: vi.fn(async () => '')
+    }),
+    grammarExamples: domain({
+      lookup: vi.fn(async () => EMPTY_GRAMMAR_EXAMPLE_PAGE),
+      status: vi.fn(async () => ({ state: 'not-installed' as const, cached: false })),
+      downloadSize: vi.fn(async () => 0)
     }),
     dict: domain({
       importDictFile: vi.fn(async () => ({ dictId: 1, termCount: 0, metaCount: 0 })),
@@ -288,6 +294,7 @@ export function fakeGameOcrApi(): FakeGameOcrApi {
     ]),
     mecab: pick(api.mecab, ['tokenizeBatch']),
     dict: pick(api.dict, ['lookup']),
+    grammarExamples: pick(api.grammarExamples, ['lookup', 'openSentence']),
     knowledge: pick(api.knowledge, ['levelsFor', 'detailsFor']),
     anki: pick(api.anki, ['getSettings', 'findExisting', 'addNote', 'openCard']),
     playerSettings: pick(api.playerSettings, ['getSettings']),

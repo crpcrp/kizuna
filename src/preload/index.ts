@@ -8,6 +8,7 @@ import {
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   GAME_OCR_CHANNELS,
+  GRAMMAR_EXAMPLES_CHANNELS,
   INTEGRATION_CHANNELS,
   JIMAKU_CHANNELS,
   KNOWLEDGE_CHANNELS,
@@ -185,6 +186,19 @@ const api = {
     reorder: (orderedIds) => ipcRenderer.invoke(DICT_CHANNELS.reorder, orderedIds),
     removeDict: (id) => ipcRenderer.invoke(DICT_CHANNELS.remove, id),
     onImportProgress: (cb) => subscribe(DICT_CHANNELS.importProgress, cb)
+  },
+  grammarExamples: {
+    lookup: (patternKey, lemma, offset, limit) =>
+      ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.lookup, patternKey, lemma, offset, limit),
+    status: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.status),
+    downloadSize: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.downloadSize),
+    download: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.download),
+    rebuild: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.rebuild),
+    cancel: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.cancel),
+    remove: () => ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.remove),
+    openSentence: (tatoebaId) =>
+      ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.openSentence, tatoebaId),
+    onStatusChange: (cb) => subscribe(GRAMMAR_EXAMPLES_CHANNELS.statusChanged, cb)
   },
   // AnkiConnect bridge: test the connection, populate Options selects from
   // the running Anki (decks/models/fields), add a note from the WordPopup,

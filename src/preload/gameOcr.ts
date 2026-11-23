@@ -9,6 +9,7 @@ import {
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   GAME_OCR_CHANNELS,
+  GRAMMAR_EXAMPLES_CHANNELS,
   KNOWLEDGE_CHANNELS,
   MECAB_CHANNELS,
   PLAYER_SETTINGS_CHANNELS,
@@ -43,6 +44,12 @@ const api = {
         longestMatchCandidates,
         surface
       )
+  },
+  grammarExamples: {
+    lookup: (patternKey, lemma, offset, limit) =>
+      ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.lookup, patternKey, lemma, offset, limit),
+    openSentence: (tatoebaId) =>
+      ipcRenderer.invoke(GRAMMAR_EXAMPLES_CHANNELS.openSentence, tatoebaId)
   },
   knowledge: {
     levelsFor: (lemmas) => ipcRenderer.invoke(KNOWLEDGE_CHANNELS.levelsFor, lemmas),

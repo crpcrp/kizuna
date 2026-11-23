@@ -12,6 +12,7 @@ import { deferred } from '@test/harness/deferred'
 import { makeToken } from '@test/harness/tokenFixtures'
 import { readGameOcrSelection } from '@src/renderer/src/state/gameOcrSelection'
 import { YOMITAN_SOURCE } from '@src/shared/inflection'
+import { EMPTY_GRAMMAR_EXAMPLE_PAGE } from '@src/shared/grammarExamples'
 import type { Morpheme } from '@src/shared/token'
 
 afterEach(cleanup)
@@ -57,6 +58,10 @@ function bridge(
     knowledge: {
       levelsFor: vi.fn().mockResolvedValue({}),
       detailsFor: vi.fn().mockResolvedValue({})
+    },
+    grammarExamples: {
+      lookup: vi.fn().mockResolvedValue(EMPTY_GRAMMAR_EXAMPLE_PAGE),
+      openSentence: vi.fn().mockResolvedValue(undefined)
     },
     ...overrides
   } as unknown as GameOcrInteractionProps['bridge']
@@ -469,7 +474,7 @@ describe('GameOcrInteraction', () => {
     expect(screen.queryByText('too late')).toBeNull()
   })
 
-  it('shows the grammar chain of a conjugated OCR word and opens its source', async () => {
+  it('shows the grammar chain and examples of a conjugated OCR word and opens their sources', async () => {
     const morpheme = (
       surface: string,
       lemma: string,
@@ -488,11 +493,29 @@ describe('GameOcrInteraction', () => {
     })
     const lookup = vi.fn().mockResolvedValue([makeLookupResult({ expression: '食べる' })])
     const openLink = vi.fn().mockResolvedValue(undefined)
+    const examplesLookup = vi.fn().mockResolvedValue({
+      examples: [
+        {
+          japanese: '食べなかった。',
+          english: 'I did not eat.',
+          start: 0,
+          end: 6,
+          sameWord: true,
+          tatoebaId: 42
+        }
+      ],
+      total: 1,
+      sameWordTotal: 1
+    })
+    const openSentence = vi.fn().mockResolvedValue(undefined)
     const { container } = render(
       <GameOcrFrame onClose={vi.fn()}>
         <GameOcrInteraction
           regions={[region('one', '食べなかった', 0, { tokens: [token] })]}
-          bridge={bridge(lookup, { appInfo: { openLink } })}
+          bridge={bridge(lookup, {
+            appInfo: { openLink },
+            grammarExamples: { lookup: examplesLookup, openSentence }
+          })}
           popupSettings={popupSettings}
         />
       </GameOcrFrame>
@@ -508,5 +531,11 @@ describe('GameOcrInteraction', () => {
     fireEvent.mouseEnter(group.querySelector('button')!)
     fireEvent.click(screen.getByRole('button', { name: YOMITAN_SOURCE.name }))
     expect(openLink).toHaveBeenCalledWith('yomitanTransforms')
+
+    expect(examplesLookup).toHaveBeenCalledWith('negative>past', '食べる', 0, 2)
+    const examples = await screen.findByRole('region', { name: 'Example sentences' })
+    expect(examples.textContent).toContain('“I did not eat.”')
+    fireEvent.click(screen.getByRole('button', { name: /Open sentence 42 on Tatoeba/ }))
+    expect(openSentence).toHaveBeenCalledWith(42)
   })
 })

@@ -128,6 +128,19 @@ export const DICT_CHANNELS = {
   importProgress: 'dict:importProgress'
 } as const
 
+// Tatoeba grammar examples
+export const GRAMMAR_EXAMPLES_CHANNELS = {
+  lookup: 'grammarExamples:lookup',
+  status: 'grammarExamples:status',
+  downloadSize: 'grammarExamples:downloadSize',
+  download: 'grammarExamples:download',
+  rebuild: 'grammarExamples:rebuild',
+  cancel: 'grammarExamples:cancel',
+  remove: 'grammarExamples:remove',
+  openSentence: 'grammarExamples:openSentence',
+  statusChanged: 'grammarExamples:statusChanged'
+} as const
+
 // AnkiConnect
 export const ANKI_CHANNELS = {
   ping: 'anki:ping',

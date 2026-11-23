@@ -430,6 +430,16 @@
 .options-actions-row {
   justify-content: flex-start;
 }
+/* An inline link inside hint text; opened through the approved-link bridge. */
+.options-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link-text);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
 
 /* Status dot in front of a setup row's name — the at-a-glance signal; the
    badge next to it carries the same state in words for screen readers. */

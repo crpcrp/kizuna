@@ -8,11 +8,11 @@ import {
   lookupLinkedWord,
   lookupWordPopup,
   matchedTokenSpan,
-  popupGrammarChain,
   resolvePopupHighlightSpan,
   wordPopupPosition
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
+import { spanGrammarChain } from '@src/shared/inflection'
 import { type DictFlavor, type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -537,7 +537,7 @@ describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flav
 
     expect(span.map((token) => token.surface).join('')).toBe(sentence)
     expect(
-      popupGrammarChain(span).map(
+      spanGrammarChain(span).map(
         (step) =>
           `${typeof step.kind === 'string' ? step.kind : `stem:${step.kind.stem}`} ${step.surface}`
       )
@@ -556,9 +556,9 @@ describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flav
   })
 })
 
-describe('popupGrammarChain', () => {
+describe('spanGrammarChain', () => {
   it('is empty when a span token has no morphemes', () => {
-    expect(popupGrammarChain([makeToken({ surface: '気' }), makeToken({ surface: 'を' })])).toEqual(
+    expect(spanGrammarChain([makeToken({ surface: '気' }), makeToken({ surface: 'を' })])).toEqual(
       []
     )
   })

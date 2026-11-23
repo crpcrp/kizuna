@@ -120,6 +120,7 @@ export function buildOptionsMenuProps({
       loadError: data.dictionariesError,
       onSelectMecabDict: knowledge.onSelectMecabDict,
       onOpenUserUnidicDir: actions.onOpenUserUnidicDir,
+      tatoebaExamples: data.tatoebaExamples,
       onImportYomitanDict: actions.onImportYomitanDict,
       subscribeImportProgress: actions.subscribeImportProgress,
       onSetYomitanEnabled: actions.onSetYomitanEnabled,
