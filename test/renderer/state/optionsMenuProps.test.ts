@@ -85,7 +85,22 @@ function buildInput(patch: Partial<OptionsMenuPropsInput> = {}): OptionsMenuProp
         testOutcome: { status: 'notTested' }
       },
       jimakuError: undefined,
-      setup: undefined
+      setup: undefined,
+      tatoebaExamples: {
+        status: undefined,
+        confirmBytes: undefined,
+        checkingSize: false,
+        sizeError: undefined,
+        onRequestDownload: vi.fn(),
+        onConfirmDownload: vi.fn(),
+        onDismissDownload: vi.fn(),
+        onUpdate: vi.fn(),
+        onRebuild: vi.fn(),
+        onCancel: vi.fn(),
+        onRemove: vi.fn(),
+        onOpenTatoeba: vi.fn(),
+        onOpenLicense: vi.fn()
+      }
     },
     actions: actionsFake(),
     onClose: vi.fn(),

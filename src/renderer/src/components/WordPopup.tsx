@@ -15,6 +15,8 @@ import {
   type GlossaryNode
 } from '../../../shared/structuredGlossary'
 import type { GrammarStep } from '../../../shared/inflection'
+import { patternHasAmbiguousPassive, type GrammarExample } from '../../../shared/grammarExamples'
+import type { GrammarExamplesView } from '../state/useGrammarExamples'
 import type { Token } from '../../../shared/token'
 
 export interface WordPopupProps {
@@ -53,6 +55,8 @@ export interface WordPopupProps {
   /** The highlighted span's head lemma and surface; an entry matching neither gets no chain. */
   grammarSpan?: { lemma: string; surface: string }
   onOpenGrammarSource?: (url: string) => void
+  /** Tatoeba sentences with the same pattern, shown under the grammar chain. */
+  grammarExamples?: GrammarExamplesView
 }
 
 /** Plain glossaries store senses separated by newlines. */
@@ -303,6 +307,88 @@ function GrammarChainRow({
   )
 }
 
+function ExampleSentence({
+  example,
+  onOpen
+}: {
+  example: GrammarExample
+  onOpen: (tatoebaId: number) => void
+}): React.JSX.Element {
+  const { japanese, start, end } = example
+  return (
+    <li
+      className="word-popup-example"
+      data-testid="word-popup-example"
+      data-same-word={example.sameWord || undefined}
+    >
+      <div className="word-popup-example-japanese" lang="ja">
+        {japanese.slice(0, start)}
+        <mark className="word-popup-example-match">{japanese.slice(start, end)}</mark>
+        {japanese.slice(end)}
+        {example.sameWord && <span className="word-popup-example-same">same word</span>}
+      </div>
+      <div className="word-popup-example-english">
+        &ldquo;{example.english}&rdquo;{' '}
+        <button
+          type="button"
+          className="word-popup-example-source"
+          title="Tatoeba, CC BY 2.0 FR"
+          aria-label={`Open sentence ${example.tatoebaId} on Tatoeba (CC BY 2.0 FR)`}
+          onClick={() => onOpen(example.tatoebaId)}
+        >
+          Tatoeba &#x2197;
+        </button>
+      </div>
+    </li>
+  )
+}
+
+function GrammarExamplesList({ view }: { view: GrammarExamplesView }): React.JSX.Element {
+  const remaining = view.total - view.examples.length
+  const expanded = view.examples.length > 2
+  return (
+    <section
+      className="word-popup-examples"
+      aria-label="Example sentences"
+      data-testid="word-popup-examples"
+    >
+      {view.sameWordTotal === 0 && (
+        <div className="word-popup-examples-note">
+          No example with this word; showing the same pattern with other words
+        </div>
+      )}
+      {patternHasAmbiguousPassive(view.patternKey) && (
+        <div className="word-popup-examples-note">Examples may show either meaning</div>
+      )}
+      <ol
+        className={
+          expanded
+            ? 'word-popup-examples-list word-popup-examples-list--expanded'
+            : 'word-popup-examples-list'
+        }
+      >
+        {view.examples.map((example, index) => (
+          <ExampleSentence
+            key={`${example.tatoebaId}-${example.start}-${index}`}
+            example={example}
+            onOpen={view.openSentence}
+          />
+        ))}
+      </ol>
+      {remaining > 0 && (
+        <button
+          type="button"
+          className="word-popup-examples-more"
+          disabled={view.loading}
+          onClick={view.loadMore}
+        >
+          More examples ({remaining})
+        </button>
+      )}
+    </section>
+  )
+}
+
 export default function WordPopup({
   results,
   position,
@@ -321,7 +407,8 @@ export default function WordPopup({
   provenanceByExpression,
   grammarChain = [],
   grammarSpan,
-  onOpenGrammarSource
+  onOpenGrammarSource,
+  grammarExamples
 }: WordPopupProps): React.JSX.Element {
   const open = position !== null
   const shownResults = results.slice(0, maxEntries)
@@ -374,6 +461,9 @@ export default function WordPopup({
                     steps={grammarChain}
                     onOpenSource={onOpenGrammarSource}
                   />
+                )}
+                {index === grammarEntryIndex && grammarExamples && (
+                  <GrammarExamplesList view={grammarExamples} />
                 )}
                 <div
                   className="word-popup-row"

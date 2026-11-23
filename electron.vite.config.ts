@@ -8,8 +8,9 @@ import react from '@vitejs/plugin-react'
 //   preload -> src/preload/index.ts (+ gameOcr.ts, listed below)
 //   renderer-> src/renderer/index.html
 // main's rollupOptions.input is overridden below to add the dictionary-import
-// worker thread and packaged smoke check. Once rollupOptions.input is set,
-// electron-vite's convention lookup is skipped, so index.ts must be listed too.
+// and grammar-example worker threads and packaged smoke check. Once
+// rollupOptions.input is set, electron-vite's convention lookup is skipped,
+// so index.ts must be listed too.
 export default defineConfig({
   main: {
     build: {
@@ -17,6 +18,10 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           importWorker: resolve(__dirname, 'src/main/services/dict/importWorker.ts'),
+          grammarExamplesWorker: resolve(
+            __dirname,
+            'src/main/services/grammarExamples/buildWorker.ts'
+          ),
           smoke: resolve(__dirname, 'src/main/smoke.ts')
         }
       }

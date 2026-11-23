@@ -42,13 +42,22 @@ import {
 } from './optionsData'
 import type { SettingsPersistence } from './settingsPersistence'
 import { errorMessage } from '../util/errorMessage'
+import { useTatoebaExamples, type TatoebaExamplesView } from './useTatoebaExamples'
 
 /** The bridge slice the dialog's own actions use. Everything the *data*
  * controller reads goes through `optionsDataBridge` instead (see
  * state/optionsData.ts), which reaches `window.kizuna` lazily. */
 export type OptionsDialogBridge = Pick<
   KizunaApi,
-  'anki' | 'appInfo' | 'dict' | 'files' | 'jimaku' | 'mecab' | 'playerSettings' | 'translate'
+  | 'anki'
+  | 'appInfo'
+  | 'dict'
+  | 'files'
+  | 'grammarExamples'
+  | 'jimaku'
+  | 'mecab'
+  | 'playerSettings'
+  | 'translate'
 >
 
 export interface UseOptionsDialogInput {
@@ -78,6 +87,7 @@ export interface OptionsDialogData {
   jimakuSettings: JimakuSettingsStatus | undefined
   jimakuError: string | undefined
   setup: SetupData | undefined
+  tatoebaExamples: TatoebaExamplesView
 }
 
 /** Dialog actions that write through the bridge and then refresh the domain
@@ -163,6 +173,8 @@ export function useOptionsDialog({
     () => controller.getState('setup'),
     () => controller.getState('setup')
   )
+
+  const tatoebaExamples = useTatoebaExamples(bridge)
 
   const onCategoryOpen = useCallback(
     (category: OptionsCategory): void => {
@@ -311,7 +323,8 @@ export function useOptionsDialog({
       translationError: translationState.error,
       jimakuSettings: jimakuState.data,
       jimakuError: jimakuState.error,
-      setup: setupState.data
+      setup: setupState.data,
+      tatoebaExamples
     },
     actions,
     controller

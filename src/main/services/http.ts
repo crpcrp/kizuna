@@ -12,7 +12,7 @@ export interface HttpResponse {
 }
 
 export interface HttpRequest {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'HEAD' | 'POST'
   headers?: Record<string, string>
   body?: string
   redirect?: 'follow' | 'error' | 'manual'

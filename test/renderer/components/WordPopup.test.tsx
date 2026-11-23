@@ -7,6 +7,7 @@ import type { LookupResult } from '@src/shared/dictionary'
 import type { KnowledgeDetails } from '@src/shared/knowledge'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { YOMITAN_SOURCE, type GrammarStep } from '@src/shared/inflection'
+import type { GrammarExamplesView } from '@src/renderer/src/state/useGrammarExamples'
 
 function noop(): void {}
 
@@ -764,5 +765,104 @@ describe('WordPopup grammar chain', () => {
         grammarSpan: span
       })
     ).toContain('word-popup-grammar')
+  })
+})
+
+describe('WordPopup — grammar examples', () => {
+  const chain: GrammarStep[] = [
+    {
+      kind: { stem: 'irrealis' },
+      surface: '食べ',
+      label: 'irrealis stem',
+      explanation: '',
+      source: YOMITAN_SOURCE
+    },
+    {
+      kind: 'passive-potential',
+      surface: 'られ',
+      label: 'passive / potential',
+      explanation: '',
+      source: YOMITAN_SOURCE
+    }
+  ]
+  const span = { lemma: '食べる', surface: '食べられ' }
+
+  function view(overrides: Partial<GrammarExamplesView> = {}): GrammarExamplesView {
+    return {
+      patternKey: 'passive-potential',
+      examples: [
+        {
+          japanese: '魚は猫に食べられた。',
+          english: 'The fish was eaten by the cat.',
+          start: 4,
+          end: 8,
+          sameWord: true,
+          tatoebaId: 11
+        },
+        {
+          japanese: '読まれる。',
+          english: 'It is read.',
+          start: 0,
+          end: 4,
+          sameWord: false,
+          tatoebaId: 12
+        }
+      ],
+      total: 16,
+      sameWordTotal: 1,
+      loading: false,
+      loadMore: vi.fn(),
+      openSentence: vi.fn(),
+      ...overrides
+    }
+  }
+
+  function renderExamples(examples: GrammarExamplesView | undefined) {
+    return render(
+      <WordPopup
+        results={sampleResults}
+        position={{ x: 0, y: 0 }}
+        grammarChain={chain}
+        grammarSpan={span}
+        grammarExamples={examples}
+      />
+    )
+  }
+
+  it('highlights the word, marks same-word examples, links sources, and pages', () => {
+    const examples = view()
+    const { getAllByTestId, getByRole } = renderExamples(examples)
+
+    const [same, other] = getAllByTestId('word-popup-example')
+    expect(same.querySelector('mark')?.textContent).toBe('食べられ')
+    expect(same.dataset.sameWord).toBe('true')
+    expect(same.textContent).toContain('same word')
+    expect(same.textContent).toContain('“The fish was eaten by the cat.”')
+    expect(other.dataset.sameWord).toBeUndefined()
+    expect(getByRole('region', { name: 'Example sentences' }).textContent).toContain(
+      'Examples may show either meaning'
+    )
+
+    fireEvent.click(getByRole('button', { name: 'Open sentence 12 on Tatoeba (CC BY 2.0 FR)' }))
+    expect(examples.openSentence).toHaveBeenCalledWith(12)
+    fireEvent.click(getByRole('button', { name: 'More examples (14)' }))
+    expect(examples.loadMore).toHaveBeenCalledOnce()
+  })
+
+  it('notes when no example uses the same word', () => {
+    const { getByRole } = renderExamples(
+      view({ patternKey: 'negative>past', sameWordTotal: 0, total: 2 })
+    )
+    const region = getByRole('region', { name: 'Example sentences' })
+    expect(region.textContent).toContain(
+      'No example with this word; showing the same pattern with other words'
+    )
+    expect(region.textContent).not.toContain('either meaning')
+    expect(region.textContent).not.toContain('More examples')
+  })
+
+  it('is hidden without examples', () => {
+    const { queryByRole } = renderExamples(undefined)
+    expect(queryByRole('region', { name: 'Example sentences' })).toBeNull()
   })
 })

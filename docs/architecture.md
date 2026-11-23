@@ -73,6 +73,12 @@ databases. Settings and media history are also local. WaniKani tokens use
 Electron safe storage when available; the UI warns when the operating system
 cannot provide encrypted storage.
 
+Tatoeba grammar examples are a third, disposable SQLite database. Main downloads
+the exports only on an explicit Options action, caches them, and builds the
+database in a worker with the active MeCab dictionary; a dictionary or analyzer
+change triggers an offline rebuild, and a new database replaces the old one only
+on success. The renderer receives example pages and opens sentence pages by id.
+
 Jimaku's fixed-origin client, encrypted local credential, sender-scoped sessions,
 and managed download cache belong to main; only normalized results and validated
 selections cross preload. [Jimaku](jimaku.md) owns setup, offline restore, and

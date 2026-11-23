@@ -4,10 +4,12 @@ import type { Cue } from '../../../shared/cue'
 import type { LookupResult } from '../../../shared/dictionary'
 import type { PopupSortOrder } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
+import { grammarPatternKey, spanGrammarChain } from '../../../shared/inflection'
 import type { Token } from '../../../shared/token'
 import type { SubtitleOverlayProps } from '../components/SubtitleOverlay'
 import type { WordPopupProps } from '../components/WordPopup'
 import type { MineMediaSource } from './ankiMining'
+import { useGrammarExamples, type GrammarExamplesBridge } from './useGrammarExamples'
 import {
   createHoverDebouncer,
   createPopupController,
@@ -18,7 +20,6 @@ import {
 import { useLatestCallback } from './useLatestRef'
 import {
   gameOcrWordPopupPosition,
-  popupGrammarChain,
   wordPopupPosition,
   type WordPopupTextContext
 } from './wordLookup'
@@ -48,6 +49,7 @@ export interface WordPopupBridge {
   knowledge: Pick<KizunaApi['knowledge'], 'detailsFor'>
   player: Pick<KizunaApi['player'], 'captureFrame'>
   appInfo: Pick<KizunaApi['appInfo'], 'openLink'>
+  grammarExamples: GrammarExamplesBridge
 }
 
 export interface UseWordPopupInput {
@@ -102,8 +104,13 @@ export function useWordPopup({
   } = popupState
   const highlightedTokens = wordPopup?.highlightedTokens
   const grammarChain = useMemo(
-    () => (highlightedTokens ? popupGrammarChain(highlightedTokens) : []),
+    () => (highlightedTokens ? spanGrammarChain(highlightedTokens) : []),
     [highlightedTokens]
+  )
+  const grammarExamples = useGrammarExamples(
+    bridge.grammarExamples,
+    grammarPatternKey(grammarChain),
+    highlightedTokens?.[0]?.lemma ?? ''
   )
   const [cardImageRequest, setCardImageRequest] = useState<{
     imageBase64: string
@@ -250,6 +257,7 @@ export function useWordPopup({
       sentence: wordPopup?.sentence,
       provenanceByExpression: wordPopup?.provenanceByExpression,
       grammarChain,
+      grammarExamples,
       grammarSpan: highlightedTokens?.length
         ? {
             lemma: highlightedTokens[0].lemma,

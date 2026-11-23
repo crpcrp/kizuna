@@ -428,3 +428,61 @@
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* ---- Tatoeba example sentences for the grammar pattern ---- */
+.word-popup-examples {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.9rem;
+}
+.word-popup-examples-note {
+  margin-bottom: 4px;
+  font-size: var(--label-size);
+  color: var(--text-muted);
+}
+.word-popup-examples-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.word-popup-examples-list--expanded {
+  max-height: 14em;
+  overflow-y: auto;
+}
+.word-popup-example + .word-popup-example {
+  margin-top: 6px;
+}
+.word-popup-example-match {
+  background: var(--accent-soft-bg);
+  color: inherit;
+  border-radius: 2px;
+}
+.word-popup-example-same {
+  margin-left: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-chip);
+  font-size: var(--label-size);
+  color: var(--text-secondary);
+}
+.word-popup-example-english {
+  color: var(--text-secondary);
+}
+.word-popup-example-source,
+.word-popup-examples-more {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link-text);
+  font: inherit;
+  font-size: var(--label-size);
+  cursor: pointer;
+}
+.word-popup-examples-more {
+  margin-top: 6px;
+  text-decoration: underline;
+}
+.word-popup-examples-more:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}

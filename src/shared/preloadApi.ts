@@ -4,6 +4,7 @@ import type { Cue } from './cue'
 import type { SubtitleEncoding } from './subtitleEncoding'
 import type { Token } from './token'
 import type { McDict } from './mecab'
+import type { GrammarExamplePage, GrammarExamplesStatus } from './grammarExamples'
 import type {
   ImportResult,
   FrequencyMode,
@@ -232,6 +233,25 @@ export interface KizunaApi {
     /** Advisory progress push while an importDictFile call is in flight. */
     onImportProgress(cb: (value: ImportProgress) => void): () => void
   }
+  grammarExamples: {
+    /** Tatoeba examples for a grammar pattern; empty when none are installed or they are out of date. */
+    lookup(
+      patternKey: string,
+      lemma: string,
+      offset: number,
+      limit: number
+    ): Promise<GrammarExamplePage>
+    status(): Promise<GrammarExamplesStatus>
+    /** Compressed size of the Tatoeba exports, from the server. */
+    downloadSize(): Promise<number>
+    /** Downloads changed exports, then rebuilds; resolves when both finish. */
+    download(): Promise<void>
+    rebuild(): Promise<void>
+    cancel(): Promise<void>
+    remove(): Promise<void>
+    openSentence(tatoebaId: number): Promise<void>
+    onStatusChange(cb: (status: GrammarExamplesStatus) => void): () => void
+  }
   anki: {
     ping(): Promise<AnkiPing>
     deckNames(): Promise<string[]>
@@ -361,6 +381,7 @@ export interface KizunaGameOcrApi {
   clipboard: KizunaApi['clipboard']
   translate: Pick<KizunaApi['translate'], 'translate' | 'cancel'>
   dict: Pick<KizunaApi['dict'], 'lookup'>
+  grammarExamples: Pick<KizunaApi['grammarExamples'], 'lookup' | 'openSentence'>
   knowledge: Pick<KizunaApi['knowledge'], 'levelsFor' | 'detailsFor'>
   anki: Pick<KizunaApi['anki'], 'getSettings' | 'findExisting' | 'addNote' | 'openCard'>
   playerSettings: Pick<KizunaApi['playerSettings'], 'getSettings'>

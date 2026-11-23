@@ -151,7 +151,7 @@ function bootstrap(lifecycle: AppLifecycleCoordinator, hasLaunchPath: boolean): 
   })
   const mediaHistory = startMediaHistory({ ipcMain, paths, store: historyStore })
   startMedia({ ipcMain, paths, binaryPaths, mediaHistory })
-  startMecab({ ...deps, binaryPaths, userUnidic })
+  startMecab({ ...deps, binaryPaths, userUnidic, shell })
   startDict(deps)
   startAnki({ ...deps, ffmpegPath: binaryPaths.ffmpegPath })
   startKnowledge(deps)
