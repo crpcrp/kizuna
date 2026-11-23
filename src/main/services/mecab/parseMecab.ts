@@ -19,6 +19,9 @@ const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
 // IPADIC tags these contractions 動詞,非自立; UniDic tags them 助動詞.
 const CONTRACTION_VERB_LEMMAS = new Set(['ちゃう', 'じゃう', 'ちまう', 'じまう'])
 
+const isDependentVerb = (m: Morpheme): boolean =>
+  m.pos === '動詞' && (m.pos1 === '非自立' || m.pos1 === '非自立可能')
+
 const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
 // MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
@@ -104,8 +107,9 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     previousSurfaceEnd = startOffset + surface.length
   }
 
+  // A lone 非自立 verb may be a te-form auxiliary (読んで|いる) that the popup joins to its verb.
   for (const [token, morphemes] of morphemesByToken) {
-    if (morphemes.length > 1) token.morphemes = morphemes
+    if (morphemes.length > 1 || isDependentVerb(morphemes[0])) token.morphemes = morphemes
   }
   return tokens
 }
