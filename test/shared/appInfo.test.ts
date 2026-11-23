@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import packageMetadata from '../../package.json'
 import { APP_INFO_LINKS, APP_NAME, appInfoLinkForUrl, createAppInfo } from '@src/shared/appInfo'
-import { COPULA_SOURCE, YOMITAN_SOURCE } from '@src/shared/inflection'
+import {
+  AGERU_SOURCE,
+  AUXILIARY_VERBS_SOURCE,
+  COPULA_SOURCE,
+  KURERU_SOURCE,
+  MORAU_SOURCE,
+  YOMITAN_SOURCE
+} from '@src/shared/inflection'
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from '@src/shared/appIdentity'
 
 describe('APP_NAME', () => {
@@ -37,6 +44,10 @@ describe('createAppInfo', () => {
       jimakuAccount: 'https://jimaku.cc/account',
       yomitanTransforms: YOMITAN_SOURCE.url,
       wiktionaryCopula: COPULA_SOURCE.url,
+      wikipediaAuxiliaryVerbs: AUXILIARY_VERBS_SOURCE.url,
+      wiktionaryAgeru: AGERU_SOURCE.url,
+      wiktionaryKureru: KURERU_SOURCE.url,
+      wiktionaryMorau: MORAU_SOURCE.url,
       tatoeba: 'https://tatoeba.org',
       tatoebaLicense: 'https://creativecommons.org/licenses/by/2.0/fr/'
     })

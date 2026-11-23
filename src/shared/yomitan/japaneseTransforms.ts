@@ -56,6 +56,25 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
     'Usage: Attach ん to the irrealis form (未然形) of verbs.\n' +
     'する becomes せん',
   '-く': 'Adverbial form of i-adjectives.\n',
+  '-ず':
+    '1. Negative form of verbs.\n' +
+    '2. Continuative form (連用形) of the particle ぬ (nu).\n' +
+    'Usage: Attach ず to the irrealis form (未然形) of verbs.',
+  '-ぬ':
+    'Negative form of verbs.\n' +
+    'Usage: Attach ぬ to the irrealis form (未然形) of verbs.\n' +
+    'する becomes せぬ',
+  'short causative':
+    'Contraction of the causative form.\n' +
+    'Describes the intention to make someone do something.\n' +
+    'Usage: Attach す to the irrealis form (未然形) of godan verbs.\n' +
+    'Attach さす to the dictionary form (終止形) of ichidan verbs.\n' +
+    'する becomes さす, くる becomes こさす.\n' +
+    'It itself conjugates as an godan verb.',
+  '-がる':
+    '1. Shows subject’s feelings contrast with what is thought/known about them.\n' +
+    "2. Indicates subject's behavior (stands out).\n" +
+    'Usage: Attach がる to the stem of i-adjectives. It itself conjugates as a godan verb.',
   causative:
     'Describes the intention to make someone do something.\n' +
     'Usage: Attach させる to the irrealis form (未然形) of ichidan verbs and くる.\n' +

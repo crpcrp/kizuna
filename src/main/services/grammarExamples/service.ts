@@ -191,6 +191,7 @@ export function createGrammarExamplesService(
   let job: Job | undefined
   let running: Promise<void> = Promise.resolve()
   let error: string | undefined
+  let refreshAfterJob = false
 
   const stale = (info: StoredInfo): boolean =>
     info.analyzerVersion !== GRAMMAR_ANALYZER_VERSION ||
@@ -264,8 +265,22 @@ export function createGrammarExamplesService(
       .finally(() => {
         job = undefined
         emit()
+        if (refreshAfterJob) {
+          refreshAfterJob = false
+          void refresh()
+        }
       })
     return running
+  }
+
+  // A dictionary switch during a job is picked up once that job ends.
+  async function refresh(): Promise<void> {
+    if (job) {
+      refreshAfterJob = true
+      return
+    }
+    if (open && cached && stale(open.info)) await start('building', build)
+    else emit()
   }
 
   return {
@@ -310,11 +325,7 @@ export function createGrammarExamplesService(
       error = undefined
       emit()
     },
-    async refresh() {
-      if (job) return
-      if (open && cached && stale(open.info)) await start('building', build)
-      else emit()
-    },
+    refresh,
     lookup(patternKey, lemma, offset, limit) {
       if (!open || stale(open.info)) return EMPTY_GRAMMAR_EXAMPLE_PAGE
       const size = Math.min(limit, MAX_PAGE)

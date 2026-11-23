@@ -52,7 +52,7 @@ describe('buildExamplesDatabase', () => {
       .all()
     db.close()
 
-    // Sentence 5 is a learner's, 6 has no translation, 7 has no conjugated word.
+    // Sentence 5 is a learner's and 6 has no translation.
     expect(rows).toEqual([
       {
         pattern: 'negative>past',
@@ -87,6 +87,15 @@ describe('buildExamplesDatabase', () => {
         end: 12,
         english: 'He seems not to write, but he read it.'
       },
+      // A noun head has no stem step; the copula still explains the rest.
+      {
+        pattern: 'copula',
+        lemma: '本',
+        id: 7,
+        start: 0,
+        end: 3,
+        english: "It's a book."
+      },
       {
         pattern: 'te>progressive',
         lemma: '読む',
@@ -96,7 +105,7 @@ describe('buildExamplesDatabase', () => {
         english: 'I am reading a book.'
       }
     ])
-    expect(count).toBe(5)
+    expect(count).toBe(6)
     expect(progress.at(0)).toBe(0)
     expect(progress.at(-1)).toBe(100)
   })
@@ -115,14 +124,14 @@ describe('buildExamplesDatabase', () => {
       dictionaryId: 'ipadic',
       analyzerVersion: String(GRAMMAR_ANALYZER_VERSION),
       exportDate: SAMPLE_LAST_MODIFIED,
-      exampleCount: '5'
+      exampleCount: '6'
     })
     expect(JSON.parse(meta.sources)).toHaveLength(4)
   })
 })
 
 describe('wordOccurrences', () => {
-  it('records adjective chains and skips copula chains, which have no stem step', () => {
+  it('records adjective and copula chains', () => {
     const tokens = parseMecab(
       'ipadic',
       fs
@@ -135,7 +144,8 @@ describe('wordOccurrences', () => {
 
     expect(wordOccurrences(tokens)).toEqual([
       { pattern: 'negative>past', lemma: '高い', start: 0, end: 6 },
-      { pattern: 'conditional-ba', lemma: '高い', start: 6, end: 10 }
+      { pattern: 'conditional-ba', lemma: '高い', start: 6, end: 10 },
+      { pattern: 'copula>negative>past', lemma: '静か', start: 10, end: 18 }
     ])
   })
 })

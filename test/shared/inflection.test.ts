@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { grammarChain, type GrammarStep } from '@src/shared/inflection'
+import { grammarChain, YOMITAN_SOURCE, type GrammarStep } from '@src/shared/inflection'
 import {
   YOMITAN_TRANSFORM_DESCRIPTIONS,
   type YomitanTransformName
@@ -246,7 +246,7 @@ const CASES: Case[] = [
     steps: [
       ['stem:irrealis', '書か'],
       ['negative', 'なく', ['negative']],
-      ['te', 'ちゃ', ['-ちゃ'], 'ては']
+      ['te-wa', 'ちゃ', ['-ちゃ'], 'ては']
     ],
     difference: "Yomitan's -ちゃ rules only follow verb stems, so it shows no chain."
   },
@@ -326,6 +326,92 @@ const CASES: Case[] = [
       ['stem:adjective-stem', '美味し'],
       ['nominal', 'さ', ['-さ']]
     ]
+  },
+  {
+    word: '書かず',
+    yomitan: ['-ず'],
+    steps: [
+      ['stem:irrealis', '書か'],
+      ['negative', 'ず', ['-ず']]
+    ]
+  },
+  {
+    word: '飲みたがる',
+    yomitan: ['-たい', '-がる'],
+    steps: [
+      ['stem:continuative', '飲み'],
+      ['desire', 'た', ['-たい']],
+      ['outward-sign', 'がる', ['-がる']]
+    ]
+  },
+  {
+    word: '見ましょう',
+    yomitan: ['-ます', 'volitional'],
+    steps: [
+      ['stem:continuative', '見'],
+      ['polite', 'ましょ', ['-ます']],
+      ['volitional', 'う', ['volitional']]
+    ]
+  },
+  {
+    word: '書いてます',
+    yomitan: ['-て', '-いる', '-ます'],
+    steps: [
+      ['stem:onbin', '書い'],
+      ['progressive', 'て', ['-いる'], 'ている'],
+      ['polite', 'ます', ['-ます']]
+    ],
+    difference: 'The い of ています is dropped, so the て step is part of its contractionOf.'
+  },
+  {
+    word: '書いてみる',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['attempt', 'みる']
+    ],
+    difference: 'Yomitan has no -てみる transform; the step shows a label and source only.'
+  },
+  {
+    word: '書いてくれた',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['giving', 'くれ'],
+      ['past', 'た', ['-た']]
+    ],
+    difference: 'Yomitan has no -てくれる transform; the step shows a label and source only.'
+  },
+  {
+    word: '書いてもらう',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['receiving', 'もらう']
+    ],
+    difference: 'Yomitan has no -てもらう transform; the step shows a label and source only.'
+  },
+  {
+    word: '書いてある',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['resultative', 'ある']
+    ],
+    difference: 'Yomitan has no -てある transform; the step shows a label and source only.'
+  },
+  {
+    word: '学生だろう',
+    yomitan: null,
+    steps: [
+      ['copula', 'だろ'],
+      ['volitional', 'う', ['volitional']]
+    ],
+    difference: 'Yomitan has no copula transform.'
   }
 ]
 
@@ -388,7 +474,9 @@ describe('grammarChain', () => {
     for (const step of chains.flat()) {
       expect(step.source.name).not.toBe('')
       expect(step.source.url).toMatch(/^https:\/\//)
-      expect(step.explanation).not.toBe('')
+      // Steps Yomitan does not cover show a label only rather than hand-written text.
+      if (step.source === YOMITAN_SOURCE) expect(step.explanation).not.toBe('')
+      else expect(step.explanation).toBe('')
     }
     expect(chains.at(-1)?.map(kindName)).toEqual(['stem:imperative'])
   })
@@ -408,6 +496,20 @@ describe('grammarChain', () => {
       'polite',
       'past'
     ])
+  })
+
+  it('reads the IPADIC short causative す, where UniDic lemmatises 書かす', () => {
+    const [stem, causative, passive] = WORDS.ipadic.get('書かされる') ?? []
+    expect(stem).toBeDefined()
+    expect(grammarChain('書く', [stem, causative, passive]).map(kindName)).toEqual([
+      'stem:irrealis',
+      'causative-passive'
+    ])
+  })
+
+  it('returns no steps for a stem with nothing explained after it', () => {
+    const [stem] = WORDS.ipadic.get('書いた') ?? []
+    expect(grammarChain('書く', [stem])).toEqual([])
   })
 
   it('returns no steps for an unconjugated word', () => {

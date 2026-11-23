@@ -15,16 +15,27 @@ const FIELD_MAPS: Record<DictFlavor, FieldMap> = {
   unidic: { pos: 0, lemma: 7, reading: 9 }
 }
 
-const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
+const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり', 'ちゃ', 'じゃ'])
 // IPADIC tags these contractions 動詞,非自立; UniDic tags them 助動詞.
-const CONTRACTION_VERB_LEMMAS = new Set(['ちゃう', 'じゃう', 'ちまう', 'じまう'])
+const CONTRACTION_VERB_LEMMAS = new Set([
+  'ちゃう',
+  'じゃう',
+  'ちまう',
+  'じまう',
+  'てる',
+  'でる',
+  'とく',
+  'どく'
+])
 
-const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'じゃ', 'は'])
+const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は'])
 
 // Lone tokens the popup may join into a grammar span: te-form auxiliaries
 // (読んで|いる) and adjective or copula parts (高く|なかっ|た, 静か|では|ありません).
+// Lone verbs keep theirs for the stem of a split suffix (降り|そう), a lone
+// imperative or UniDic volitional (書こう), and IPADIC's 自立 ある after て.
 const isGrammarSpanPart = (m: Morpheme): boolean =>
-  (m.pos === '動詞' && (m.pos1 === '非自立' || m.pos1 === '非自立可能')) ||
+  m.pos === '動詞' ||
   m.pos === '形容詞' ||
   m.pos === '助動詞' ||
   m.pos === '接尾辞' ||
