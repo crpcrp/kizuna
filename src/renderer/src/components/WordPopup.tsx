@@ -1,6 +1,6 @@
 import './WordPopup.css'
 import type { WordPopupPosition } from '../state/wordLookup'
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { pitchAccentValue, priorityWeight, type LookupResult } from '../../../shared/dictionary'
 import {
   isKnowledgeSourceDetail,
@@ -14,6 +14,7 @@ import {
   sanitizeGlossaryCss,
   type GlossaryNode
 } from '../../../shared/structuredGlossary'
+import type { GrammarStep } from '../../../shared/inflection'
 import type { Token } from '../../../shared/token'
 
 export interface WordPopupProps {
@@ -47,6 +48,11 @@ export interface WordPopupProps {
   canGoBack?: boolean
   /** Supplemental knowledge-source details for the word that opened this popup. */
   provenanceByExpression?: Readonly<Record<string, KnowledgeDetails>>
+  /** Stem and suffixes of the highlighted span, shown above the entry for `grammarSpan`. */
+  grammarChain?: GrammarStep[]
+  /** The highlighted span's head lemma and surface; an entry matching neither gets no chain. */
+  grammarSpan?: { lemma: string; surface: string }
+  onOpenGrammarSource?: (url: string) => void
 }
 
 /** Plain glossaries store senses separated by newlines. */
@@ -215,6 +221,88 @@ function scopeDictCss(dictId: number, css: string): string {
   return `@scope ([data-dict-id="${dictId}"]) {\n${safe}\n}`
 }
 
+function grammarStepName(step: GrammarStep): string {
+  const contraction = step.contractionOf ? ` Contraction of ${step.contractionOf}.` : ''
+  const explanation = step.explanation ? ` ${step.explanation}` : ''
+  return `${step.surface}: ${step.label}.${explanation}${contraction}`
+}
+
+function GrammarChainRow({
+  steps,
+  onOpenSource
+}: {
+  steps: GrammarStep[]
+  onOpenSource?: (url: string) => void
+}): React.JSX.Element {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
+  const active = activeIndex === null ? undefined : steps[activeIndex]
+  return (
+    <div
+      className="word-popup-grammar"
+      data-testid="word-popup-grammar"
+      onMouseLeave={(event) => {
+        if (!event.currentTarget.contains(document.activeElement)) setActiveIndex(null)
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setActiveIndex(null)
+      }}
+    >
+      <div className="word-popup-grammar-parts" role="group" aria-label="Grammar breakdown">
+        {steps.map((step, index) => (
+          <Fragment key={index}>
+            {index > 0 && (
+              <span className="word-popup-grammar-joint" aria-hidden="true">
+                ─
+              </span>
+            )}
+            <button
+              type="button"
+              className={
+                typeof step.kind === 'object'
+                  ? 'word-popup-grammar-part word-popup-grammar-part--stem'
+                  : 'word-popup-grammar-part'
+              }
+              aria-label={grammarStepName(step)}
+              onMouseEnter={() => setActiveIndex(index)}
+              onFocus={() => setActiveIndex(index)}
+              onClick={() => setActiveIndex(index)}
+            >
+              <span className="word-popup-grammar-surface">{step.surface}</span>
+              <span className="word-popup-grammar-label">{step.label}</span>
+            </button>
+          </Fragment>
+        ))}
+      </div>
+      {active && (
+        <div className="word-popup-grammar-detail" role="note">
+          {active.explanation && (
+            <div className="word-popup-grammar-explanation">{active.explanation}</div>
+          )}
+          {active.contractionOf && (
+            <div className="word-popup-grammar-contraction">
+              contraction of {active.contractionOf}
+            </div>
+          )}
+          <div className="word-popup-grammar-source">
+            Source:{' '}
+            {onOpenSource ? (
+              <button
+                type="button"
+                className="word-popup-grammar-source-link"
+                onClick={() => onOpenSource(active.source.url)}
+              >
+                {active.source.name}
+              </button>
+            ) : (
+              active.source.name
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function WordPopup({
   results,
   position,
@@ -230,11 +318,22 @@ export default function WordPopup({
   onLinkClick,
   onBack,
   canGoBack = false,
-  provenanceByExpression
+  provenanceByExpression,
+  grammarChain = [],
+  grammarSpan,
+  onOpenGrammarSource
 }: WordPopupProps): React.JSX.Element {
   const open = position !== null
   const shownResults = results.slice(0, maxEntries)
   const stylesheets = dictStylesheets(shownResults)
+  // A compound or prefix entry (生き for 生き返った) must not show the conjugated word's chain.
+  const grammarEntryIndex =
+    grammarChain.length > 0 && grammarSpan
+      ? shownResults.findIndex(
+          (result) =>
+            result.expression === grammarSpan.lemma || result.matchedSurface === grammarSpan.surface
+        )
+      : -1
 
   return (
     <div
@@ -267,134 +366,143 @@ export default function WordPopup({
             const provenance = provenanceByExpression?.[result.expression]
             const sourceBadges = knowledgeSourceBadges(provenance)
             return (
-              <div
-                className="word-popup-row"
-                data-testid="word-popup-row"
-                data-priority={priority || undefined}
-                data-dict-id={result.dictId}
-                key={index}
-              >
-                <div className="word-popup-headword">
-                  <span className="word-popup-expression">
-                    {showFurigana ? (
-                      <ruby>
-                        {result.expression}
-                        <rt className="word-popup-furigana">{result.reading}</rt>
-                      </ruby>
-                    ) : (
-                      result.expression
-                    )}
-                  </span>
-                  {priority && (
-                    <span
-                      className="word-popup-priority"
-                      title="Common word"
-                      aria-label="Common word"
-                    >
-                      &#x2605; common
-                    </span>
-                  )}
-                  {result.jlptLevel !== null && (
-                    <span
-                      className="word-popup-jlpt-level"
-                      role="note"
-                      aria-label={`Approximate JLPT vocabulary level: ${result.jlptLevel}`}
-                      title="Community-sourced estimate; the JLPT does not publish official vocabulary lists."
-                    >
-                      JLPT {result.jlptLevel} · approx.
-                    </span>
-                  )}
-                  {result.frequency !== null && (
-                    <span className="word-popup-frequency">
-                      {result.frequencyDisplay ?? String(result.frequency)}
-                    </span>
-                  )}
-                  {pitchAccent !== '' && (
-                    <span
-                      className="word-popup-pitch-accent"
-                      role="note"
-                      aria-label={`Pitch accent: ${pitchAccent}`}
-                    >
-                      Pitch {pitchAccent}
-                    </span>
-                  )}
-                  <span className="word-popup-dict-badge">{result.dictTitle}</span>
-                  {onAddToAnki &&
-                    (ankiStatus !== 'idle' ? (
-                      <span className="word-popup-anki-status" data-anki-status={ankiStatus}>
-                        {ankiStatus === 'adding' && '…'}
-                        {ankiStatus === 'added' && '✓ Added'}
-                        {ankiStatus === 'updated' && '✓ Updated'}
-                        {ankiStatus === 'error' && `✕ ${ankiError ?? ''}`}
-                      </span>
-                    ) : ankiExisting[result.expression] ? (
-                      <button
-                        type="button"
-                        className="word-popup-anki-button word-popup-anki-button--open"
-                        onClick={() =>
-                          duplicatePolicy === 'overwrite'
-                            ? onAddToAnki(result)
-                            : onOpenAnkiCard?.(ankiExisting[result.expression].cardId)
-                        }
-                      >
-                        {duplicatePolicy === 'overwrite' ? 'Update Anki' : 'Open in Anki'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="word-popup-anki-button"
-                        onClick={() => onAddToAnki(result)}
-                      >
-                        &#xFF0B; Anki
-                      </button>
-                    ))}
-                </div>
-                {sourceBadges.length > 0 ? (
-                  <div className="word-popup-provenance" aria-label="Word knowledge sources">
-                    {sourceBadges.map((badge, badgeIndex) => (
-                      <span
-                        className={`word-popup-provenance-badge word-popup-provenance-badge--${badge.source}`}
-                        key={`${badge.source}-${badgeIndex}`}
-                      >
-                        {badge.label}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                {pos.length > 0 && (
-                  <div className="word-popup-pos-row">
-                    {pos.map((label) => (
-                      <span className="word-popup-pos" key={label}>
-                        {label}
-                      </span>
-                    ))}
-                  </div>
+              <Fragment key={index}>
+                {index === grammarEntryIndex && (
+                  <GrammarChainRow
+                    // A new word resets the selected part.
+                    key={grammarChain.map((step) => step.surface).join('|')}
+                    steps={grammarChain}
+                    onOpenSource={onOpenGrammarSource}
+                  />
                 )}
-                <div className="word-popup-senses">
-                  {entries.map((entry, senseIndex) => {
-                    const content = renderGlossaryNode(
-                      entry,
-                      `sense-${index}-${senseIndex}`,
-                      onLinkClick
-                    )
-                    if (content === null) return null
-                    // A structured-content entry may number its own senses; do not double-number it.
-                    return entries.length > 1 ? (
-                      <div className="word-popup-sense-group" key={senseIndex}>
-                        <span className="word-popup-sense-number">{senseIndex + 1}</span>
-                        <div className="word-popup-sense-content">{content}</div>
-                      </div>
-                    ) : (
-                      <div
-                        className="word-popup-sense-content word-popup-sense-content--solo"
-                        key={senseIndex}
+                <div
+                  className="word-popup-row"
+                  data-testid="word-popup-row"
+                  data-priority={priority || undefined}
+                  data-dict-id={result.dictId}
+                >
+                  <div className="word-popup-headword">
+                    <span className="word-popup-expression">
+                      {showFurigana ? (
+                        <ruby>
+                          {result.expression}
+                          <rt className="word-popup-furigana">{result.reading}</rt>
+                        </ruby>
+                      ) : (
+                        result.expression
+                      )}
+                    </span>
+                    {priority && (
+                      <span
+                        className="word-popup-priority"
+                        title="Common word"
+                        aria-label="Common word"
                       >
-                        {content}
-                      </div>
-                    )
-                  })}
+                        &#x2605; common
+                      </span>
+                    )}
+                    {result.jlptLevel !== null && (
+                      <span
+                        className="word-popup-jlpt-level"
+                        role="note"
+                        aria-label={`Approximate JLPT vocabulary level: ${result.jlptLevel}`}
+                        title="Community-sourced estimate; the JLPT does not publish official vocabulary lists."
+                      >
+                        JLPT {result.jlptLevel} · approx.
+                      </span>
+                    )}
+                    {result.frequency !== null && (
+                      <span className="word-popup-frequency">
+                        {result.frequencyDisplay ?? String(result.frequency)}
+                      </span>
+                    )}
+                    {pitchAccent !== '' && (
+                      <span
+                        className="word-popup-pitch-accent"
+                        role="note"
+                        aria-label={`Pitch accent: ${pitchAccent}`}
+                      >
+                        Pitch {pitchAccent}
+                      </span>
+                    )}
+                    <span className="word-popup-dict-badge">{result.dictTitle}</span>
+                    {onAddToAnki &&
+                      (ankiStatus !== 'idle' ? (
+                        <span className="word-popup-anki-status" data-anki-status={ankiStatus}>
+                          {ankiStatus === 'adding' && '…'}
+                          {ankiStatus === 'added' && '✓ Added'}
+                          {ankiStatus === 'updated' && '✓ Updated'}
+                          {ankiStatus === 'error' && `✕ ${ankiError ?? ''}`}
+                        </span>
+                      ) : ankiExisting[result.expression] ? (
+                        <button
+                          type="button"
+                          className="word-popup-anki-button word-popup-anki-button--open"
+                          onClick={() =>
+                            duplicatePolicy === 'overwrite'
+                              ? onAddToAnki(result)
+                              : onOpenAnkiCard?.(ankiExisting[result.expression].cardId)
+                          }
+                        >
+                          {duplicatePolicy === 'overwrite' ? 'Update Anki' : 'Open in Anki'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="word-popup-anki-button"
+                          onClick={() => onAddToAnki(result)}
+                        >
+                          &#xFF0B; Anki
+                        </button>
+                      ))}
+                  </div>
+                  {sourceBadges.length > 0 ? (
+                    <div className="word-popup-provenance" aria-label="Word knowledge sources">
+                      {sourceBadges.map((badge, badgeIndex) => (
+                        <span
+                          className={`word-popup-provenance-badge word-popup-provenance-badge--${badge.source}`}
+                          key={`${badge.source}-${badgeIndex}`}
+                        >
+                          {badge.label}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {pos.length > 0 && (
+                    <div className="word-popup-pos-row">
+                      {pos.map((label) => (
+                        <span className="word-popup-pos" key={label}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="word-popup-senses">
+                    {entries.map((entry, senseIndex) => {
+                      const content = renderGlossaryNode(
+                        entry,
+                        `sense-${index}-${senseIndex}`,
+                        onLinkClick
+                      )
+                      if (content === null) return null
+                      // A structured-content entry may number its own senses; do not double-number it.
+                      return entries.length > 1 ? (
+                        <div className="word-popup-sense-group" key={senseIndex}>
+                          <span className="word-popup-sense-number">{senseIndex + 1}</span>
+                          <div className="word-popup-sense-content">{content}</div>
+                        </div>
+                      ) : (
+                        <div
+                          className="word-popup-sense-content word-popup-sense-content--solo"
+                          key={senseIndex}
+                        >
+                          {content}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
+              </Fragment>
             )
           })
         )}

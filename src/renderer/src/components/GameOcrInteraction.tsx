@@ -14,7 +14,7 @@ export interface GameOcrInteractionProps {
   regions: readonly GameOcrBoxRegion[]
   /** The capture/session identity used to invalidate old popup requests. */
   captureKey?: string | number
-  bridge: Pick<KizunaGameOcrApi, 'dict' | 'anki' | 'knowledge'> &
+  bridge: Pick<KizunaGameOcrApi, 'dict' | 'anki' | 'knowledge' | 'appInfo'> &
     Partial<Pick<KizunaGameOcrApi, 'translate'>>
   popupSettings?: PopupSettings
   translationEnabled?: boolean

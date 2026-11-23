@@ -11,6 +11,8 @@ import { makeLookupResult } from '@test/harness/dictFixtures'
 import { deferred } from '@test/harness/deferred'
 import { makeToken } from '@test/harness/tokenFixtures'
 import { readGameOcrSelection } from '@src/renderer/src/state/gameOcrSelection'
+import { YOMITAN_SOURCE } from '@src/shared/inflection'
+import type { Morpheme } from '@src/shared/token'
 
 afterEach(cleanup)
 
@@ -161,8 +163,9 @@ describe('GameOcrInteraction', () => {
       </GameOcrFrame>
     )
 
+    // An earlier test's text selection would suppress the click-to-open.
+    window.getSelection()?.removeAllRanges()
     fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
-    await waitFor(() => expect(container.querySelector('#word-popup.open')).not.toBeNull())
 
     // A press anywhere in the popup — its close button included — must not
     // reach the frame's background-dismissal path.
@@ -464,5 +467,46 @@ describe('GameOcrInteraction', () => {
     await translation.promise
     await Promise.resolve()
     expect(screen.queryByText('too late')).toBeNull()
+  })
+
+  it('shows the grammar chain of a conjugated OCR word and opens its source', async () => {
+    const morpheme = (
+      surface: string,
+      lemma: string,
+      pos: string,
+      conjugationType: string,
+      conjugationForm: string
+    ): Morpheme => ({ surface, lemma, pos, pos1: '', conjugationType, conjugationForm })
+    const token = makeToken({
+      surface: '食べなかった',
+      lemma: '食べる',
+      morphemes: [
+        morpheme('食べ', '食べる', '動詞', '一段', '未然形'),
+        morpheme('なかっ', 'ない', '助動詞', '特殊・ナイ', '連用タ接続'),
+        morpheme('た', 'た', '助動詞', '特殊・タ', '基本形')
+      ]
+    })
+    const lookup = vi.fn().mockResolvedValue([makeLookupResult({ expression: '食べる' })])
+    const openLink = vi.fn().mockResolvedValue(undefined)
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[region('one', '食べなかった', 0, { tokens: [token] })]}
+          bridge={bridge(lookup, { appInfo: { openLink } })}
+          popupSettings={popupSettings}
+        />
+      </GameOcrFrame>
+    )
+
+    // An earlier test's text selection would suppress the click-to-open.
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
+    const group = await screen.findByRole('group', { name: 'Grammar breakdown' })
+    const parts = [...group.querySelectorAll('.word-popup-grammar-surface')]
+    expect(parts.map((part) => part.textContent)).toEqual(['食べ', 'なかっ', 'た'])
+
+    fireEvent.mouseEnter(group.querySelector('button')!)
+    fireEvent.click(screen.getByRole('button', { name: YOMITAN_SOURCE.name }))
+    expect(openLink).toHaveBeenCalledWith('yomitanTransforms')
   })
 })

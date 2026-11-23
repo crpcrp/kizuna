@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import packageMetadata from '../../package.json'
-import { APP_INFO_LINKS, APP_NAME, createAppInfo } from '@src/shared/appInfo'
+import { APP_INFO_LINKS, APP_NAME, appInfoLinkForUrl, createAppInfo } from '@src/shared/appInfo'
+import { YOMITAN_SOURCE } from '@src/shared/inflection'
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from '@src/shared/appIdentity'
 
 describe('APP_NAME', () => {
@@ -33,7 +34,13 @@ describe('createAppInfo', () => {
       repository: REPOSITORY_URL,
       license: `${REPOSITORY_URL}/blob/main/LICENSE`,
       issues: `${REPOSITORY_URL}/issues`,
-      jimakuAccount: 'https://jimaku.cc/account'
+      jimakuAccount: 'https://jimaku.cc/account',
+      yomitanTransforms: YOMITAN_SOURCE.url
     })
+  })
+
+  it('maps only approved URLs back to link names', () => {
+    expect(appInfoLinkForUrl(YOMITAN_SOURCE.url)).toBe('yomitanTransforms')
+    expect(appInfoLinkForUrl('https://example.com')).toBeUndefined()
   })
 })

@@ -5,6 +5,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import {
   ANKI_CHANNELS,
+  APP_INFO_CHANNELS,
   CLIPBOARD_CHANNELS,
   DICT_CHANNELS,
   GAME_OCR_CHANNELS,
@@ -58,6 +59,9 @@ const api = {
   },
   clipboard: {
     writeText: (text) => ipcRenderer.invoke(CLIPBOARD_CHANNELS.writeText, text)
+  },
+  appInfo: {
+    openLink: (link) => ipcRenderer.invoke(APP_INFO_CHANNELS.openLink, link)
   },
   translate: {
     translate: (text, requestId) =>
