@@ -266,6 +266,23 @@
       }
     },
     {
+      "id": "yomitan-japanese-transforms",
+      "name": "Yomitan Japanese inflection descriptions",
+      "version": "26.11.10.0-6-gce1b1bf",
+      "license": "GPL-3.0-or-later",
+      "copyright": "Copyright (C) 2024-2026 Yomitan Authors.",
+      "bundled": "source",
+      "sourceRoot": "src/shared/yomitan",
+      "licenseFiles": ["licenses/yomitan/LICENSE"],
+      "notes": [
+        "Kizuna ships the English description text of selected Japanese transforms from ext/js/language/ja/japanese-transforms.js, copied verbatim to explain grammar steps."
+      ],
+      "copyleft": true,
+      "source": {
+        "code": "https://github.com/yomidevs/yomitan/tree/ce1b1bffa0e8819716317f3717932a7fe91e8d52"
+      }
+    },
+    {
       "id": "electron",
       "name": "Electron",
       "license": "MIT",
