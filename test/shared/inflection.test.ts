@@ -13,7 +13,9 @@ const LEMMA_COLUMN: Record<DictFlavor, number> = { ipadic: 6, unidic: 7 }
 // Every MeCab row of each fixture word, keyed by the word's surface.
 function readWords(flavor: DictFlavor): Map<string, Morpheme[]> {
   const words = new Map<string, Morpheme[]>()
-  const text = readFileSync(fixture(`mecab-${flavor}-grammar.txt`), 'utf-8')
+  const text = ['grammar', 'forms']
+    .map((name) => readFileSync(fixture(`mecab-${flavor}-${name}.txt`), 'utf-8'))
+    .join('')
   for (const block of text.split(/^EOS$/m)) {
     const morphemes = block
       .split(/\r?\n/)
@@ -412,6 +414,112 @@ const CASES: Case[] = [
       ['volitional', 'う', ['volitional']]
     ],
     difference: 'Yomitan has no copula transform.'
+  },
+  {
+    word: '食べなさい',
+    yomitan: ['-なさい'],
+    steps: [
+      ['stem:continuative', '食べ'],
+      ['polite-imperative', 'なさい', ['-なさい']]
+    ]
+  },
+  {
+    word: '行ったり',
+    yomitan: ['-たり'],
+    steps: [
+      ['stem:onbin', '行っ'],
+      ['tari', 'たり', ['-たり']]
+    ]
+  },
+  {
+    word: '読んだり',
+    yomitan: ['-たり'],
+    steps: [
+      ['stem:onbin', '読ん'],
+      ['tari', 'だり', ['-たり']]
+    ]
+  },
+  {
+    word: '高かったり',
+    yomitan: ['-たり'],
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['tari', 'かったり', ['-たり']]
+    ]
+  },
+  {
+    word: '高そう',
+    yomitan: ['-そう'],
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['appearance', 'そう', ['-そう']]
+    ]
+  },
+  {
+    word: '行くそうだ',
+    yomitan: null,
+    steps: [
+      ['hearsay', 'そう'],
+      ['copula', 'だ']
+    ],
+    difference: 'Yomitan has no hearsay そう transform; the step shows a label and source only.'
+  },
+  {
+    word: '高いそうです',
+    yomitan: null,
+    steps: [
+      ['hearsay', 'そう'],
+      ['copula', 'です']
+    ],
+    difference: 'Yomitan has no hearsay そう transform; the step shows a label and source only.'
+  },
+  {
+    word: '高いです',
+    yomitan: null,
+    steps: [['polite', 'です']],
+    difference: 'Yomitan has no adjective + です transform; the step shows a label and source only.'
+  },
+  {
+    word: '高かったです',
+    yomitan: null,
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['past', 'かった', ['-た']],
+      ['polite', 'です']
+    ],
+    difference: 'Yomitan has no adjective + です transform; the step shows a label and source only.'
+  },
+  {
+    word: '勉強している',
+    yomitan: null,
+    steps: [
+      ['suru', 'し'],
+      ['te', 'て', ['-て']],
+      ['progressive', 'いる', ['-いる']]
+    ],
+    difference:
+      'Yomitan deinflects 勉強する as one verb; Kizuna explains する as a label-only step.'
+  },
+  {
+    word: '勉強させられた',
+    yomitan: null,
+    steps: [
+      ['suru', 'さ'],
+      ['causative-passive', 'せられ', ['causative', 'potential or passive']],
+      ['past', 'た', ['-た']]
+    ],
+    difference:
+      'Yomitan deinflects 勉強する as one verb; Kizuna explains する as a label-only step.'
+  },
+  {
+    word: '心配した',
+    yomitan: null,
+    steps: [
+      ['suru', 'し'],
+      ['past', 'た', ['-た']]
+    ],
+    difference:
+      'Yomitan deinflects 心配する as one verb; Kizuna explains する as a label-only step.'
   }
 ]
 
@@ -447,6 +555,11 @@ describe('grammarChain', () => {
     for (const { word } of CASES) {
       expect(chainOf('unidic', word), word).toEqual(chainOf('ipadic', word))
     }
+  })
+
+  it('labels the する of a verbal noun by its conjugation form', () => {
+    expect(chainOf('ipadic', '勉強させられた')[0].label).toBe('する (irrealis)')
+    expect(chainOf('ipadic', '勉強している')[0].label).toBe('する (continuative)')
   })
 
   it('labels the sound change of an onbin stem', () => {

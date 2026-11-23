@@ -148,4 +148,22 @@ describe('wordOccurrences', () => {
       { pattern: 'copula>negative>past', lemma: '静か', start: 10, end: 18 }
     ])
   })
+  it.each(['ipadic', 'unidic'] as const)(
+    'records a verbal noun and a hearsay chain — %s',
+    (flavor) => {
+      const blocks = fs
+        .readFileSync(fixture(`mecab-${flavor}-forms.txt`), 'utf-8')
+        .split(/^EOS\r?$/m)
+      const tokens = parseMecab(
+        flavor,
+        [blocks[9], blocks[4]].join('EOS\n'),
+        '勉強している行くそうだ'
+      )
+
+      expect(wordOccurrences(tokens)).toEqual([
+        { pattern: 'suru>te>progressive', lemma: '勉強', start: 0, end: 6 },
+        { pattern: 'hearsay>copula', lemma: '行く', start: 6, end: 11 }
+      ])
+    }
+  )
 })

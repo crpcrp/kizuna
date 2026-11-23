@@ -27,15 +27,19 @@ const CONTRACTION_VERB_LEMMAS = new Set([
   'とく',
   'どく'
 ])
+// なさい after a 連用形 verb: IPADIC 動詞,非自立 なさる, UniDic 動詞,非自立可能 為さる.
+const POLITE_IMPERATIVE_LEMMAS = new Set(['なさる', '為さる'])
 
-const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は'])
+const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は', 'たり', 'だり'])
 
 // Lone tokens the popup may join into a grammar span: te-form auxiliaries
 // (読んで|いる) and adjective or copula parts (高く|なかっ|た, 静か|では|ありません).
 // Lone verbs keep theirs for the stem of a split suffix (降り|そう), a lone
 // imperative or UniDic volitional (書こう), and IPADIC's 自立 ある after て.
+// IPADIC's only 名詞,特殊 is hearsay そう (行く|そう).
 const isGrammarSpanPart = (m: Morpheme): boolean =>
   m.pos === '動詞' ||
+  (m.pos === '名詞' && m.pos1 === '特殊') ||
   m.pos === '形容詞' ||
   m.pos === '助動詞' ||
   m.pos === '接尾辞' ||
@@ -109,7 +113,12 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
         pos1 === '接続助詞' &&
         VERB_CONJUNCTION_SUFFIXES.has(token.surface)) ||
       (token.pos === '動詞' &&
-        (pos1 === '接尾' || (pos1 === '非自立' && CONTRACTION_VERB_LEMMAS.has(token.lemma))))
+        (pos1 === '接尾' ||
+          (pos1 === '非自立' && CONTRACTION_VERB_LEMMAS.has(token.lemma)) ||
+          ((pos1 === '非自立' || pos1 === '非自立可能') &&
+            POLITE_IMPERATIVE_LEMMAS.has(token.lemma) &&
+            previous !== undefined &&
+            continuativeVerbTokens.has(previous))))
     const extendsVerb =
       contiguous &&
       previous?.pos === '動詞' &&
