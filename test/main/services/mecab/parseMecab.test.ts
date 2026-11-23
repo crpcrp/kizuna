@@ -379,6 +379,17 @@ describe('parseMecab — UniDic sub-lemma tags', () => {
     expect(appearance.map((token) => token.lemma)).toEqual(['降りる', 'そう'])
     expect(hearsay.map((token) => token.lemma)).toEqual(['降りる', 'そう'])
     expect(spanGrammarChain(appearance).map((step) => step.kind)).toContain('appearance')
-    expect(spanGrammarChain(hearsay).map((step) => step.kind)).not.toContain('appearance')
+    expect(spanGrammarChain(hearsay).map((step) => step.kind)).toEqual(['hearsay'])
   })
+
+  it.each(['ipadic', 'unidic'] as const)(
+    'keeps the head verb lemma before なさい — %s',
+    (flavor) => {
+      const [tabenasai] = readFileSync(fixture(`mecab-${flavor}-forms.txt`), 'utf-8').split(
+        /^EOS$/m
+      )
+
+      expect(summarize(parseMecab(flavor, tabenasai))).toEqual([['食べなさい', '食べる']])
+    }
+  )
 })

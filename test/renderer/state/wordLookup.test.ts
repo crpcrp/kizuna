@@ -12,7 +12,13 @@ import {
   wordPopupPosition
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
-import { extendGrammarSpan, spanGrammarChain, type GrammarStep } from '@src/shared/inflection'
+import {
+  explainsSpan,
+  extendGrammarSpan,
+  grammarPatternKey,
+  spanGrammarChain,
+  type GrammarStep
+} from '@src/shared/inflection'
 import { type DictFlavor, type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
@@ -662,6 +668,77 @@ describe.each(['ipadic', 'unidic'] as const)('adjective and copula spans — %s'
     const nasal = tokens.find((token) => token.surface === 'ん')!
 
     expect(extendGrammarSpan(tokens, [nasal])).toEqual([nasal])
+  })
+})
+
+// Sentences in the order of the mecab-*-forms.txt fixtures.
+const FORMS_SENTENCES = [
+  '食べなさい',
+  '行ったり',
+  '読んだり',
+  '高かったり',
+  '行くそうだ',
+  '高いそうです',
+  '高そう',
+  '高いです',
+  '高かったです',
+  '勉強している',
+  '勉強させられた',
+  '心配した',
+  '勉強が好き',
+  '本だそうだ',
+  '行く人'
+]
+
+describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flavor) => {
+  const blocks = readFileSync(fixture(`mecab-${flavor}-forms.txt`), 'utf-8')
+    .split(/^EOS\r?$/m)
+    .filter((block) => block.trim() !== '')
+  const cues = new Map(
+    FORMS_SENTENCES.map((sentence, index) => [
+      sentence,
+      parseMecab(flavor, blocks[index], sentence)
+    ])
+  )
+  const highlight = (sentence: string): Token[] => {
+    const tokens = cues.get(sentence)!
+    return extendGrammarSpan(tokens, [tokens[0]])
+  }
+
+  it.each([
+    ['食べなさい', 'polite-imperative'],
+    ['行ったり', 'tari'],
+    ['読んだり', 'tari'],
+    ['高かったり', 'tari'],
+    ['行くそうだ', 'hearsay>copula'],
+    ['高いそうです', 'hearsay>copula'],
+    ['高そう', 'appearance'],
+    ['高いです', 'polite'],
+    ['高かったです', 'past>polite'],
+    ['勉強している', 'suru>te>progressive'],
+    ['勉強させられた', 'suru>causative-passive>past'],
+    ['心配した', 'suru>past']
+  ])('highlights all of %s and explains it as %s', (sentence, pattern) => {
+    const span = highlight(sentence)
+    const steps = spanGrammarChain(span)
+
+    expect(span.map((token) => token.surface).join('')).toBe(sentence)
+    expect(grammarPatternKey(steps)).toBe(pattern)
+    expect(explainsSpan(span, steps)).toBe(true)
+  })
+
+  it.each([
+    ['勉強が好き', '勉強'],
+    ['行く人', '行く']
+  ])('does not extend %s past its head', (sentence, head) => {
+    expect(highlight(sentence).map((token) => token.surface)).toEqual([head])
+  })
+
+  it('reads hearsay after a copula without taking the noun for a verbal noun', () => {
+    const span = highlight('本だそうだ')
+
+    expect(span.map((token) => token.surface).join('')).toBe('本だそうだ')
+    expect(grammarPatternKey(spanGrammarChain(span))).toBe('copula>hearsay>copula')
   })
 })
 

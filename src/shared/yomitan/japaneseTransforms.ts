@@ -32,6 +32,9 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
     'Contraction of -しまう.\n' +
     shimauEnglishDescription +
     'Usage: Attach しまう after the て-form of verbs, contract てしまう into ちまう.',
+  '-なさい':
+    'Polite imperative suffix.\n' +
+    'Usage: Attach なさい after the continuative form (連用形) of verbs.',
   '-しまう': shimauEnglishDescription + 'Usage: Attach しまう after the て-form of verbs.',
   '-そう':
     'Appearing that; looking like.\n' +
@@ -51,6 +54,10 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
     'て-form.\n' +
     'It has a myriad of meanings. Primarily, it is a conjunctive particle that connects two clauses together.\n' +
     'Usage: Attach て to the continuative form (連用形) of verbs after euphonic change form, くて to the stem of i-adjectives.',
+  '-たり':
+    '1. Shows two actions occurring back and forth (when used with two verbs).\n' +
+    '2. Shows examples of actions and states (when used with multiple verbs and adjectives).\n' +
+    'Usage: Attach たり to the continuative form (連用形) of verbs after euphonic change form, かったり to the stem of i-adjectives',
   '-ん':
     'Negative form of verbs; a sound change of ぬ.\n' +
     'Usage: Attach ん to the irrealis form (未然形) of verbs.\n' +
