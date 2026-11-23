@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import packageMetadata from '../../package.json'
 import { APP_INFO_LINKS, APP_NAME, appInfoLinkForUrl, createAppInfo } from '@src/shared/appInfo'
-import { YOMITAN_SOURCE } from '@src/shared/inflection'
+import { COPULA_SOURCE, YOMITAN_SOURCE } from '@src/shared/inflection'
 import { COPYRIGHT, PRODUCT_NAME, REPOSITORY_URL } from '@src/shared/appIdentity'
 
 describe('APP_NAME', () => {
@@ -36,6 +36,7 @@ describe('createAppInfo', () => {
       issues: `${REPOSITORY_URL}/issues`,
       jimakuAccount: 'https://jimaku.cc/account',
       yomitanTransforms: YOMITAN_SOURCE.url,
+      wiktionaryCopula: COPULA_SOURCE.url,
       tatoeba: 'https://tatoeba.org',
       tatoebaLicense: 'https://creativecommons.org/licenses/by/2.0/fr/'
     })
@@ -43,6 +44,7 @@ describe('createAppInfo', () => {
 
   it('maps only approved URLs back to link names', () => {
     expect(appInfoLinkForUrl(YOMITAN_SOURCE.url)).toBe('yomitanTransforms')
+    expect(appInfoLinkForUrl(COPULA_SOURCE.url)).toBe('wiktionaryCopula')
     expect(appInfoLinkForUrl('https://example.com')).toBeUndefined()
   })
 })

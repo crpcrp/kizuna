@@ -25,7 +25,7 @@ export interface Token {
   pos: string
   /** Index of `surface` within the cue string, for span rendering. */
   startOffset: number
-  /** MeCab rows merged into this token; present when there are two or more, or for a lone 非自立 verb. */
+  /** MeCab rows merged into this token; present when there are two or more, or for a lone grammar part (adjective, auxiliary, suffix). */
   morphemes?: Morpheme[]
 }
 

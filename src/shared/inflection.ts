@@ -41,6 +41,8 @@ export type GrammarStepKind =
   | 'adverbial'
   | 'nominal'
   | 'obligation'
+  | 'excess'
+  | 'copula'
 
 export interface SourceRef {
   /** e.g. 'Yomitan japanese-transforms.js', 'UniDic manual'. */
@@ -65,6 +67,17 @@ export const YOMITAN_SOURCE: SourceRef = {
   name: 'Yomitan japanese-transforms.js',
   url: 'https://github.com/yomidevs/yomitan/blob/ce1b1bffa0e8819716317f3717932a7fe91e8d52/ext/js/language/ja/japanese-transforms.js'
 }
+
+// Yomitan has no copula transform.
+export const COPULA_SOURCE: SourceRef = {
+  name: 'Wiktionary: だ',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%A0'
+}
+
+const COPULA_EXPLANATION =
+  'Copula: states that the subject is the preceding noun or na-adjective.\n' +
+  'Plain だ, polite です. Past だった / でした; negative ではない, contracted じゃない; ' +
+  'polite negative ではありません.'
 
 const describe = (name: YomitanTransformName): string => YOMITAN_TRANSFORM_DESCRIPTIONS[name]
 
@@ -178,6 +191,54 @@ const isConjunctive = (m: Morpheme, ...lemmas: string[]): boolean =>
 
 const voiced = (surface: string): boolean => /^[でど]/.test(surface)
 
+// UniDic tags ない after an adjective or copula as 形容詞,非自立可能 無い.
+const isNegative = (m: Morpheme): boolean =>
+  isAuxiliary(m, 'ない') || (m.pos === '形容詞' && (m.lemma === 'ない' || m.lemma === '無い'))
+
+const isNominal = (m: Morpheme | undefined): boolean =>
+  m?.pos === '名詞' || m?.pos === '形状詞' || m?.pos === '代名詞'
+
+// IPADIC tags copula じゃ 助詞,副助詞; UniDic tags it 助動詞 だ.
+const isCopula = (m: Morpheme): boolean =>
+  isAuxiliary(m, 'だ', 'です') || (m.pos === '助詞' && m.pos1 === '副助詞' && m.surface === 'じゃ')
+
+/** The copula plus the は and ある of ではある / じゃある, as one step. */
+function copulaStep(
+  morphemes: Morpheme[],
+  index: number
+): { steps: GrammarStep[]; consumed: number } {
+  const m = morphemes[index]
+  let surface = m.surface
+  let consumed = 0
+  const next = morphemes[index + 1]
+  if (m.surface === 'で' && next?.pos === '助詞' && next.surface === 'は') {
+    surface += next.surface
+    consumed++
+  }
+  const after = morphemes[index + 1 + consumed]
+  if (
+    (surface === 'では' || surface === 'じゃ') &&
+    after?.pos === '動詞' &&
+    (after.lemma === 'ある' || after.lemma === '有る')
+  ) {
+    surface += after.surface
+    consumed++
+  }
+  return {
+    steps: [
+      {
+        kind: 'copula',
+        surface,
+        label: m.lemma === 'です' ? 'polite copula (です)' : 'copula (だ)',
+        explanation: COPULA_EXPLANATION,
+        source: COPULA_SOURCE,
+        ...(surface.startsWith('じゃ') ? { contractionOf: 'では' } : {})
+      }
+    ],
+    consumed
+  }
+}
+
 /** Steps for `morphemes[index]`; `consumed` counts extra morphemes the steps cover. */
 function suffixSteps(
   morphemes: Morpheme[],
@@ -191,8 +252,9 @@ function suffixSteps(
     consumed: 0
   })
 
+  if (isNominal(previous) && isCopula(m)) return copulaStep(morphemes, index)
   if (isAuxiliary(m, 'ます')) return one(step('polite', m.surface, 'polite', '-ます'))
-  if (isAuxiliary(m, 'ない')) {
+  if (isNegative(m)) {
     // なきゃ / なけりゃ: IPADIC 仮定縮約, UniDic 仮定形-融合.
     if (m.conjugationForm.startsWith('仮定縮約') || m.conjugationForm === '仮定形-融合') {
       return {
@@ -231,6 +293,8 @@ function suffixSteps(
     return one(step('conditional-ba', m.surface, 'conditional (ば)', '-ば'))
   if (isAuxiliary(m, 'う', 'よう'))
     return one(step('volitional', m.surface, 'volitional', 'volitional'))
+  if (isAuxiliary(m, 'すぎる', '過ぎる'))
+    return one(step('excess', m.surface, 'too much (すぎる)', '-すぎる'))
   if (isAuxiliary(m, 'たい')) return one(step('desire', m.surface, 'desire (たい)', '-たい'))
   if (isAuxiliary(m, 'させる', 'せる')) {
     if (next && isAuxiliary(next, 'られる', 'れる')) {
@@ -324,6 +388,8 @@ function suffixSteps(
   return { steps: [], consumed: 0 }
 }
 
+const adverbialStep = (): GrammarStep => step('adverbial', 'く', 'adverbial (く)', '-く')
+
 /**
  * Ordered, surface-aligned grammar steps of a conjugated word, starting with the
  * head word's stem. `dictionaryForm` is the head word's lemma; an unconjugated
@@ -335,8 +401,17 @@ export function grammarChain(dictionaryForm: string, morphemes: Morpheme[]): Gra
 
   const steps: GrammarStep[] = []
   let form = stemFormOf(head, rest[0])
-  // Adjective conjugation beyond the stem belongs to #567.
-  if (head.pos === '形容詞' && form !== 'adjective-stem') form = undefined
+  // Yomitan attaches くない, かった, くて, ければ to the adjective stem, so the
+  // inflected ending joins the next step.
+  let adjectiveEnding = ''
+  if (head.pos === '形容詞' && form !== 'adjective-stem') {
+    form = undefined
+    const ending = /(?:く|かっ|けれ)$/.exec(head.surface)?.[0]
+    if (ending && head.surface.length > ending.length) {
+      steps.push(stemStep('adjective-stem', head.surface.slice(0, -ending.length)))
+      adjectiveEnding = ending
+    }
+  }
   // UniDic keeps the volitional as one word (書こう); split off its う to match IPADIC.
   if (form === 'volitional' && rest.length === 0 && head.surface.endsWith('う')) {
     steps.push(stemStep(form, head.surface.slice(0, -1)))
@@ -347,9 +422,15 @@ export function grammarChain(dictionaryForm: string, morphemes: Morpheme[]): Gra
 
   for (let index = 1; index < morphemes.length; index++) {
     const { steps: found, consumed } = suffixSteps(morphemes, index)
+    if (index === 1 && found[0]) {
+      found[0] = { ...found[0], surface: adjectiveEnding + found[0].surface }
+    } else if (index === 1 && adjectiveEnding === 'く') {
+      steps.push(adverbialStep())
+    }
     steps.push(...found)
     index += consumed
   }
+  if (rest.length === 0 && adjectiveEnding === 'く') steps.push(adverbialStep())
   return steps
 }
 
@@ -401,7 +482,7 @@ const isTeFormAuxiliary = (token: Token): boolean => {
 }
 
 /** Joins auxiliary verbs that directly follow a て-form (読んで|いる) to the popup span. */
-export function extendTeFormAuxiliaries(cueTokens: Token[], span: Token[]): Token[] {
+function extendTeFormAuxiliaries(cueTokens: Token[], span: Token[]): Token[] {
   const last = span.at(-1)
   let index = cueTokens.findIndex((token) => token.startOffset === last?.startOffset)
   if (index === -1) return span
@@ -418,21 +499,69 @@ export function extendTeFormAuxiliaries(cueTokens: Token[], span: Token[]): Toke
   return extended
 }
 
-/** Grammar chain of a highlighted span; empty when a span token carries no morphemes. */
+// Dependent adjectives (UniDic 無い after じゃ) are suffixes, not heads.
+const startsAdjectiveOrCopula = (token: Token): boolean => {
+  const head = token.morphemes?.[0]
+  if (head?.pos === '形容詞') return head.pos1 !== '非自立' && head.pos1 !== '非自立可能'
+  return token.pos === '名詞' || token.pos === '形状詞' || token.pos === '代名詞'
+}
+
+const explainsSuffixes = (span: Token[]): boolean => {
+  const explained = spanGrammarChain(span)
+    .map((step) => step.surface)
+    .join('')
+  const surface = span.map((token) => token.surface).join('')
+  return explained !== '' && (explained === surface || span[0].surface + explained === surface)
+}
+
+/**
+ * Extends the popup span across auxiliary verbs after a て-form (読んで|いる) and
+ * across the suffixes of an adjective or copula (高く|なかっ|た, 静か|じゃ|なかっ|た).
+ */
+export function extendGrammarSpan(cueTokens: Token[], span: Token[]): Token[] {
+  const extended = extendTeFormAuxiliaries(cueTokens, span)
+  if (!extended[0] || !startsAdjectiveOrCopula(extended[0])) return extended
+
+  let index = cueTokens.findIndex((token) => token.startOffset === extended.at(-1)?.startOffset)
+  if (index === -1) return extended
+  while (index + 1 < cueTokens.length) {
+    const previous = cueTokens[index]
+    const next = cueTokens[index + 1]
+    if (next.startOffset !== previous.startOffset + previous.surface.length) break
+    if (!explainsSuffixes([...extended, next])) break
+    extended.push(next)
+    index++
+  }
+  return extended
+}
+
+const headMorpheme = (token: Token): Morpheme => ({
+  surface: token.surface,
+  lemma: token.lemma,
+  pos: token.pos,
+  pos1: '',
+  conjugationType: '',
+  conjugationForm: ''
+})
+
+/**
+ * Grammar chain of a highlighted span; empty when a token after the head carries
+ * no morphemes. An unconjugated head such as a noun before a copula needs none.
+ */
 export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
-  const [head] = highlightedTokens
-  if (!head || highlightedTokens.some((token) => !token.morphemes)) return []
-  return grammarChain(
-    head.lemma,
-    highlightedTokens.flatMap((token) => token.morphemes ?? [])
-  )
+  const [head, ...rest] = highlightedTokens
+  if (!head || rest.some((token) => !token.morphemes)) return []
+  return grammarChain(head.lemma, [
+    ...(head.morphemes ?? [headMorpheme(head)]),
+    ...rest.flatMap((token) => token.morphemes ?? [])
+  ])
 }
 
 /**
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 1
+export const GRAMMAR_ANALYZER_VERSION = 2
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {

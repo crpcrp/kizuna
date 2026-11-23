@@ -4,7 +4,7 @@ import * as fs from 'node:fs'
 import Database from 'better-sqlite3'
 import { decode } from 'seek-bzip'
 import {
-  extendTeFormAuxiliaries,
+  extendGrammarSpan,
   GRAMMAR_ANALYZER_VERSION,
   grammarPatternKey,
   spanGrammarChain
@@ -45,7 +45,7 @@ export function wordOccurrences(tokens: Token[]): Occurrence[] {
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index]
     if (!token.morphemes) continue
-    const span = extendTeFormAuxiliaries(tokens, [token])
+    const span = extendGrammarSpan(tokens, [token])
     index += span.length - 1
     const steps = spanGrammarChain(span)
     const pattern = grammarPatternKey(steps)

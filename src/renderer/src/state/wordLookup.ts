@@ -1,6 +1,6 @@
 import { clamp } from '../../../shared/math'
 import { type FrequencyMode, type LookupResult } from '../../../shared/dictionary'
-import { extendTeFormAuxiliaries } from '../../../shared/inflection'
+import { extendGrammarSpan } from '../../../shared/inflection'
 import { type Token } from '../../../shared/token'
 
 /** Anchor position (viewport px) the word popup renders near. */
@@ -263,7 +263,7 @@ export async function lookupWordPopup(
     bridge,
     buildWordLookupRequest(token, freqDictId, sortOrder, cueTokens)
   )
-  const highlightedTokens = extendTeFormAuxiliaries(
+  const highlightedTokens = extendGrammarSpan(
     cueTokens,
     results.length > 0 ? resolvePopupHighlightSpan(cueTokens, token, results[0]) : [token]
   )
