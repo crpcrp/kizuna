@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { parseMecab } from '@src/main/services/mecab/parseMecab'
 import {
   type DictLookupBridge,
   buildLongestMatchCandidates,
@@ -6,13 +8,15 @@ import {
   lookupLinkedWord,
   lookupWordPopup,
   matchedTokenSpan,
+  popupGrammarChain,
   resolvePopupHighlightSpan,
   wordPopupPosition
 } from '@src/renderer/src/state/wordLookup'
 import { type LookupResult } from '@src/shared/dictionary'
-import { type Token } from '@src/shared/token'
+import { type DictFlavor, type Token } from '@src/shared/token'
 import { makeLookupResult } from '@test/harness/dictFixtures'
 import { makeToken } from '@test/harness/tokenFixtures'
+import { fixture } from '@test/paths'
 
 describe('wordPopupPosition', () => {
   it('anchors at the subtitle box’s horizontal center / top when a rect is given', () => {
@@ -486,5 +490,76 @@ describe('buildLongestMatchCandidates', () => {
     })
 
     expect(buildLongestMatchCandidates([tabeta], tabeta)).toEqual(['食べた', '食べ', '食'])
+  })
+})
+
+// Sentences in the order of the mecab-*-te-auxiliary.txt fixtures.
+const TE_AUXILIARY_SENTENCES = [
+  '読んでいる',
+  '食べてしまった',
+  '書いておきます',
+  '読んで いる',
+  '読んで、いる',
+  '本がある'
+]
+
+function teAuxiliaryCues(flavor: DictFlavor): Map<string, Token[]> {
+  const blocks = readFileSync(fixture(`mecab-${flavor}-te-auxiliary.txt`), 'utf-8')
+    .split(/^EOS\r?$/m)
+    .filter((block) => block.trim() !== '')
+  return new Map(
+    TE_AUXILIARY_SENTENCES.map((sentence, index) => [
+      sentence,
+      parseMecab(flavor, blocks[index], sentence)
+    ])
+  )
+}
+
+describe.each(['ipadic', 'unidic'] as const)('te-form auxiliaries — %s', (flavor) => {
+  const cues = teAuxiliaryCues(flavor)
+
+  async function highlight(sentence: string, clicked: number): Promise<Token[]> {
+    const tokens = cues.get(sentence)!
+    const token = tokens[clicked]
+    const bridge: DictLookupBridge = {
+      lookup: vi.fn().mockResolvedValue([makeLookupResult({ expression: token.lemma })])
+    }
+    const popup = await lookupWordPopup(bridge, token, { x: 0, y: 0 }, null, 'auto', tokens)
+    return popup.highlightedTokens
+  }
+
+  it.each([
+    ['読んでいる', ['stem:onbin 読ん', 'te で', 'progressive いる']],
+    ['食べてしまった', ['stem:continuative 食べ', 'te て', 'completion しまっ', 'past た']],
+    ['書いておきます', ['stem:onbin 書い', 'te て', 'preparation おき', 'polite ます']]
+  ])('highlights all of %s and explains the whole span', async (sentence, chain) => {
+    const span = await highlight(sentence, 0)
+
+    expect(span.map((token) => token.surface).join('')).toBe(sentence)
+    expect(
+      popupGrammarChain(span).map(
+        (step) =>
+          `${typeof step.kind === 'string' ? step.kind : `stem:${step.kind.stem}`} ${step.surface}`
+      )
+    ).toEqual(chain)
+  })
+
+  it.each(['読んで いる', '読んで、いる'])(
+    'does not extend across a break in %s',
+    async (sentence) => {
+      expect((await highlight(sentence, 0)).map((token) => token.surface)).toEqual(['読んで'])
+    }
+  )
+
+  it('does not extend to an independent ある', async () => {
+    expect((await highlight('本がある', 1)).map((token) => token.surface)).toEqual(['が'])
+  })
+})
+
+describe('popupGrammarChain', () => {
+  it('is empty when a span token has no morphemes', () => {
+    expect(popupGrammarChain([makeToken({ surface: '気' }), makeToken({ surface: 'を' })])).toEqual(
+      []
+    )
   })
 })

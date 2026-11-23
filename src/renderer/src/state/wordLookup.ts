@@ -1,5 +1,6 @@
 import { clamp } from '../../../shared/math'
 import { type FrequencyMode, type LookupResult } from '../../../shared/dictionary'
+import { grammarChain, type GrammarStep } from '../../../shared/inflection'
 import { type Token } from '../../../shared/token'
 
 /** Anchor position (viewport px) the word popup renders near. */
@@ -249,6 +250,81 @@ export function resolvePopupHighlightSpan(
   return span
 }
 
+// IPADIC lemmas, then UniDic's kanji lemmas for the same auxiliaries.
+const TE_FORM_AUXILIARY_LEMMAS = new Set([
+  'いる',
+  'おる',
+  'しまう',
+  'おく',
+  'ある',
+  'みる',
+  'くる',
+  'いく',
+  'ゆく',
+  'あげる',
+  'さしあげる',
+  'くれる',
+  'くださる',
+  'もらう',
+  'いただく',
+  '居る',
+  '仕舞う',
+  '置く',
+  '有る',
+  '見る',
+  '来る',
+  '行く',
+  '上げる',
+  '差し上げる',
+  '呉れる',
+  '下さる',
+  '貰う',
+  '頂く'
+])
+const TE_FORM_ENDINGS = new Set(['て', 'で', 'ちゃ', 'じゃ'])
+
+const endsInTeForm = (token: Token): boolean => {
+  const last = token.morphemes?.at(-1)
+  return last?.pos === '助詞' && last.pos1 === '接続助詞' && TE_FORM_ENDINGS.has(last.surface)
+}
+
+const isTeFormAuxiliary = (token: Token): boolean => {
+  const head = token.morphemes?.[0]
+  return (
+    head?.pos === '動詞' &&
+    (head.pos1 === '非自立' || head.pos1 === '非自立可能') &&
+    TE_FORM_AUXILIARY_LEMMAS.has(head.lemma)
+  )
+}
+
+/** Joins auxiliary verbs that directly follow a て-form (読んで|いる) to the popup span. */
+function extendTeFormAuxiliaries(cueTokens: Token[], span: Token[]): Token[] {
+  const last = span.at(-1)
+  let index = cueTokens.findIndex((token) => token.startOffset === last?.startOffset)
+  if (index === -1) return span
+
+  const extended = [...span]
+  while (index + 1 < cueTokens.length) {
+    const previous = cueTokens[index]
+    const next = cueTokens[index + 1]
+    const contiguous = next.startOffset === previous.startOffset + previous.surface.length
+    if (!contiguous || !endsInTeForm(previous) || !isTeFormAuxiliary(next)) break
+    extended.push(next)
+    index++
+  }
+  return extended
+}
+
+/** Grammar chain of a popup span; empty when a span token carries no morphemes. */
+export function popupGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
+  const [head] = highlightedTokens
+  if (!head || highlightedTokens.some((token) => !token.morphemes)) return []
+  return grammarChain(
+    head.lemma,
+    highlightedTokens.flatMap((token) => token.morphemes ?? [])
+  )
+}
+
 // With auto sort order, omit the override so the dictionary chooses its rank or occurrence mode.
 export async function lookupWordPopup(
   bridge: DictLookupBridge,
@@ -262,8 +338,10 @@ export async function lookupWordPopup(
     bridge,
     buildWordLookupRequest(token, freqDictId, sortOrder, cueTokens)
   )
-  const highlightedTokens =
+  const highlightedTokens = extendTeFormAuxiliaries(
+    cueTokens,
     results.length > 0 ? resolvePopupHighlightSpan(cueTokens, token, results[0]) : [token]
+  )
   return { results, position, highlightedTokens }
 }
 
