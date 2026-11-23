@@ -1,7 +1,8 @@
 // MeCab emits surface\tfeatures and a final EOS; absent fields are '*'.
 // IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 9 (surface pron, not lemma lForm).
+// Both: pos1 1, conjugation type 4, conjugation form 5.
 
-import type { DictFlavor, Token } from '../../../shared/token'
+import type { DictFlavor, Morpheme, Token } from '../../../shared/token'
 
 interface FieldMap {
   pos: number
@@ -15,6 +16,10 @@ const FIELD_MAPS: Record<DictFlavor, FieldMap> = {
 }
 
 const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり'])
+// IPADIC tags these contractions 動詞,非自立; UniDic tags them 助動詞.
+const CONTRACTION_VERB_LEMMAS = new Set(['ちゃう', 'じゃう', 'ちまう', 'じまう'])
+
+const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
 // MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
 export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
@@ -22,6 +27,7 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
   const tokens: Token[] = []
   const suffixedTokens = new Set<Token>()
   const continuativeVerbTokens = new Set<Token>()
+  const morphemesByToken = new Map<Token, Morpheme[]>()
   const alignmentText = sourceText?.replace(/[\r\n]/g, '')
   let outputOffset = 0
   let alignmentOffset = 0
@@ -46,15 +52,21 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
           : Math.max(alignmentOffset, startOffset + surface.length)
     }
 
-    const rawLemma = fields[map.lemma]
-    const rawReading = fields[map.reading]
-
-    const token = {
+    const token: Token = {
       surface,
-      reading: rawReading && rawReading !== '*' ? rawReading : '',
-      lemma: rawLemma && rawLemma !== '*' ? rawLemma : surface,
+      reading: field(fields[map.reading]),
+      lemma: field(fields[map.lemma]) || surface,
       pos: fields[map.pos] ?? '',
       startOffset
+    }
+    const pos1 = field(fields[1])
+    const morpheme: Morpheme = {
+      surface,
+      lemma: token.lemma,
+      pos: token.pos,
+      pos1,
+      conjugationType: field(fields[4]),
+      conjugationForm: field(fields[5])
     }
 
     const previous = tokens.at(-1)
@@ -62,8 +74,10 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     const isConjugationSuffix =
       token.pos === '助動詞' ||
       (token.pos === '助詞' &&
-        fields[1] === '接続助詞' &&
-        VERB_CONJUNCTION_SUFFIXES.has(token.surface))
+        pos1 === '接続助詞' &&
+        VERB_CONJUNCTION_SUFFIXES.has(token.surface)) ||
+      (token.pos === '動詞' &&
+        (pos1 === '接尾' || (pos1 === '非自立' && CONTRACTION_VERB_LEMMAS.has(token.lemma))))
     const extendsVerb =
       contiguous &&
       previous?.pos === '動詞' &&
@@ -72,15 +86,17 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
           continuativeVerbTokens.has(previous) &&
           !suffixedTokens.has(previous)))
     if (previous && extendsVerb) {
-      if (token.pos === '動詞') previous.lemma = previous.surface + token.lemma
+      if (!isConjugationSuffix) previous.lemma = previous.surface + token.lemma
       previous.surface += token.surface
       previous.reading += token.reading
+      morphemesByToken.get(previous)?.push(morpheme)
       if (isConjugationSuffix) suffixedTokens.add(previous)
       if (token.pos === '動詞' && fields[5]?.startsWith('連用'))
         continuativeVerbTokens.add(previous)
       else continuativeVerbTokens.delete(previous)
     } else {
       tokens.push(token)
+      morphemesByToken.set(token, [morpheme])
       if (token.pos === '動詞' && fields[5]?.startsWith('連用')) continuativeVerbTokens.add(token)
     }
 
@@ -88,5 +104,8 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     previousSurfaceEnd = startOffset + surface.length
   }
 
+  for (const [token, morphemes] of morphemesByToken) {
+    if (morphemes.length > 1) token.morphemes = morphemes
+  }
   return tokens
 }

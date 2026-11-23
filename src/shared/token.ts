@@ -3,6 +3,18 @@ import { isNonNegativeSafeInteger, isRecord } from './guards'
 /** Which MeCab dictionary produced a token, since the feature-CSV layout differs. */
 export type DictFlavor = 'ipadic' | 'unidic'
 
+export interface Morpheme {
+  surface: string
+  lemma: string
+  pos: string
+  /** Subcategory, e.g. 接尾 / 非自立 / 非自立可能 / 接続助詞; '' when absent. */
+  pos1: string
+  /** Conjugation type (五段・ラ行 / 下一段-バ行); '' when absent. */
+  conjugationType: string
+  /** Conjugation form (連用タ接続 / 連用形-促音便); '' when absent. */
+  conjugationForm: string
+}
+
 export interface Token {
   surface: string
   /** Kana reading; '' if unknown. */
@@ -13,6 +25,20 @@ export interface Token {
   pos: string
   /** Index of `surface` within the cue string, for span rendering. */
   startOffset: number
+  /** MeCab rows merged into this token; present only when there are two or more. */
+  morphemes?: Morpheme[]
+}
+
+function isMorpheme(value: unknown): value is Morpheme {
+  return (
+    isRecord(value) &&
+    typeof value.surface === 'string' &&
+    typeof value.lemma === 'string' &&
+    typeof value.pos === 'string' &&
+    typeof value.pos1 === 'string' &&
+    typeof value.conjugationType === 'string' &&
+    typeof value.conjugationForm === 'string'
+  )
 }
 
 export function isToken(value: unknown): value is Token {
@@ -22,7 +48,9 @@ export function isToken(value: unknown): value is Token {
     typeof value.reading === 'string' &&
     typeof value.lemma === 'string' &&
     typeof value.pos === 'string' &&
-    isNonNegativeSafeInteger(value.startOffset)
+    isNonNegativeSafeInteger(value.startOffset) &&
+    (value.morphemes === undefined ||
+      (Array.isArray(value.morphemes) && value.morphemes.every(isMorpheme)))
   )
 }
 

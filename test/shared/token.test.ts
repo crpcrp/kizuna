@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { isGrammarToken, isSymbolToken } from '@src/shared/token'
+import { isGrammarToken, isSymbolToken, isToken } from '@src/shared/token'
 
 describe('isSymbolToken', () => {
   it('is true for ipadic symbol POS (top-level "記号")', () => {
@@ -52,5 +52,33 @@ describe('isGrammarToken', () => {
     expect(isGrammarToken({ pos: '動詞,自立' })).toBe(false)
     expect(isGrammarToken({ pos: '接続詞' })).toBe(false)
     expect(isGrammarToken({ pos: '感動詞' })).toBe(false)
+  })
+})
+
+describe('isToken', () => {
+  const token = {
+    surface: '書かれる',
+    reading: 'カカレル',
+    lemma: '書く',
+    pos: '動詞',
+    startOffset: 0
+  }
+  const morpheme = {
+    surface: '書か',
+    lemma: '書く',
+    pos: '動詞',
+    pos1: '自立',
+    conjugationType: '五段・カ行イ音便',
+    conjugationForm: '未然形'
+  }
+
+  it('accepts a token with or without well-formed morphemes', () => {
+    expect(isToken(token)).toBe(true)
+    expect(isToken({ ...token, morphemes: [morpheme] })).toBe(true)
+  })
+
+  it('rejects a malformed morphemes entry', () => {
+    expect(isToken({ ...token, morphemes: [{ ...morpheme, pos1: undefined }] })).toBe(false)
+    expect(isToken({ ...token, morphemes: morpheme })).toBe(false)
   })
 })
