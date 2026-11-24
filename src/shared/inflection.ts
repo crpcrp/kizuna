@@ -390,7 +390,16 @@ function suffixSteps(
     next !== undefined &&
     isAuxiliary(next, 'た')
   ) {
-    return { steps: [step('past', m.surface + next.surface, 'past', '-た')], consumed: 1 }
+    const surface = m.surface + next.surface
+    const conditional = next.conjugationForm.startsWith('仮定')
+    return {
+      steps: [
+        conditional
+          ? step('conditional-tara', surface, 'conditional (たら)', '-たら')
+          : step('past', surface, 'past', '-た')
+      ],
+      consumed: 1
+    }
   }
   // 高く|あり|ませ|ん: the polite negative of an i-adjective.
   if (

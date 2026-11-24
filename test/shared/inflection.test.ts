@@ -729,6 +729,15 @@ describe('grammarChain', () => {
     expect(chain.map(kindName)).not.toContain('negative')
   })
 
+  it('reads ませんでしたら as a たら conditional', () => {
+    const [stem, polite, negative, desu, past] = WORDS.ipadic.get('書きませんでした') ?? []
+    const tara: Morpheme = { ...past, surface: 'たら', conjugationForm: '仮定形' }
+    expect(grammarChain('書く', [stem, polite, negative, desu, tara]).at(-1)).toMatchObject({
+      kind: 'conditional-tara',
+      surface: 'でしたら'
+    })
+  })
+
   it('explains an IPADIC compound lemmatised with its suffix verb', () => {
     const morphemes = WORDS.ipadic.get('書きすぎる') ?? []
     expect(grammarChain('書きすぎる', morphemes).map(kindName)).toEqual([
