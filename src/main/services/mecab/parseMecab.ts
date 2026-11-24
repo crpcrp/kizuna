@@ -58,6 +58,38 @@ const stripLemmaTag = (lemma: string): string => {
   return hyphen === -1 ? lemma : lemma.slice(0, hyphen)
 }
 
+const surfaceOf = (line: string | undefined): string => line?.slice(0, line.indexOf('\t')) ?? ''
+const featuresOf = (line: string | undefined): string[] =>
+  line?.slice(line.indexOf('\t') + 1).split(',') ?? []
+
+/**
+ * IPADIC reads ていただけません as て|い|た|だけ|ませ|ん ("was only …"), though だけ never
+ * takes ます; rejoin いただけ, as IPADIC tags it before ます itself.
+ */
+function repairIpadicLines(lines: string[]): string[] {
+  const repaired: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const [te, i_, ta, dake, masu] = lines.slice(i - 1, i + 4)
+    if (
+      i > 0 &&
+      /^[てで]$/.test(surfaceOf(te)) &&
+      featuresOf(te)[1] === '接続助詞' &&
+      surfaceOf(i_) === 'い' &&
+      featuresOf(i_)[6] === 'いる' &&
+      surfaceOf(ta) === 'た' &&
+      surfaceOf(dake) === 'だけ' &&
+      featuresOf(dake)[1] === '副助詞' &&
+      featuresOf(masu)[6] === 'ます'
+    ) {
+      repaired.push('いただけ\t動詞,自立,*,*,一段,連用形,いただける,イタダケ,イタダケ')
+      i += 2
+    } else {
+      repaired.push(lines[i])
+    }
+  }
+  return repaired
+}
+
 // MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
 export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
   const map = FIELD_MAPS[flavor]
@@ -70,7 +102,8 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
   let alignmentOffset = 0
   let previousSurfaceEnd: number | undefined
 
-  for (const line of stdout.split(/\r?\n/)) {
+  const lines = stdout.split(/\r?\n/)
+  for (const line of flavor === 'ipadic' ? repairIpadicLines(lines) : lines) {
     if (line === '' || line === 'EOS') continue
 
     const tabIndex = line.indexOf('\t')

@@ -721,7 +721,10 @@ const FORMS_SENTENCES = [
   '勉強できない',
   '書いてもらえる',
   '書いていただけます',
-  '学校では'
+  '学校では',
+  '書いていただけません',
+  '書いていただけです',
+  '言や'
 ]
 
 describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flavor) => {
@@ -778,7 +781,8 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     ['学生ではありません', 'copula>polite>negative'],
     ['勉強できない', 'potential>negative'],
     ['書いてもらえる', 'te>receiving'],
-    ['書いていただけます', 'te>receiving>polite']
+    ['書いていただけます', 'te>receiving>polite'],
+    ['書いていただけません', 'te>receiving>polite>negative']
   ])('highlights all of %s and explains it as %s', (sentence, pattern) => {
     const span = highlight(sentence)
     const steps = spanGrammarChain(span)
@@ -794,6 +798,23 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     ['学校では', '学校']
   ])('does not extend %s past its head', (sentence, head) => {
     expect(highlight(sentence).map((token) => token.surface)).toEqual([head])
+  })
+
+  it('keeps IPADIC いた|だけ before です as was-only', () => {
+    expect(highlight('書いていただけです').map((token) => token.surface)).not.toContain('いただけ')
+  })
+
+  it('explains a わ-row contracted ば where the dictionary reads it as a verb', () => {
+    const tokens = cues.get('言や')!
+    expect(tokens.map((token) => token.surface)).toEqual(
+      flavor === 'unidic' ? ['言や'] : ['言', 'や']
+    )
+    if (flavor === 'unidic') {
+      expect(spanGrammarChain(tokens).map((step) => [step.surface, step.contractionOf])).toEqual([
+        ['言', undefined],
+        ['や', 'えば']
+      ])
+    }
   })
 
   it('reads hearsay after a copula without taking the noun for a verbal noun', () => {

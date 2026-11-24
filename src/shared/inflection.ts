@@ -718,16 +718,17 @@ const isPotentialVerb = (m: Morpheme): boolean =>
   m.conjugationType.startsWith('下一段') &&
   (!m.lemma.endsWith('る') || (m.conjugationType === '下一段-ラ行' && !m.lemma.endsWith('れる')))
 
-// The e-row kana a contracted ば ending stands for: 書きゃ ← 書けば, 読めりゃ ← 読めれば.
-const UNCONTRACTED_ROW: Record<string, string> = {
-  き: 'け',
-  ぎ: 'げ',
-  し: 'せ',
-  ち: 'て',
-  に: 'ね',
-  び: 'べ',
-  み: 'め',
-  り: 'れ'
+// What a contracted ば ending stands for: 書きゃ ← 書けば, 読めりゃ ← 読めれば, 言や ← 言えば.
+const UNCONTRACTED_BA: Record<string, string> = {
+  きゃ: 'けば',
+  ぎゃ: 'げば',
+  しゃ: 'せば',
+  ちゃ: 'てば',
+  にゃ: 'ねば',
+  びゃ: 'べば',
+  みゃ: 'めば',
+  りゃ: 'れば',
+  や: 'えば'
 }
 
 /**
@@ -737,10 +738,12 @@ const UNCONTRACTED_ROW: Record<string, string> = {
 function splitContractedBa(m: Morpheme, steps: GrammarStep[]): GrammarStep[] {
   if (!m.conjugationForm.startsWith('仮定縮約') && m.conjugationForm !== '仮定形-融合') return steps
   const adjectival = isAdjectival(m)
-  const part = (adjectival ? /(?:けりゃ|きゃ)$/ : /[きぎしちにびみり]ゃ$/).exec(m.surface)?.[0]
+  const part = (adjectival ? /(?:けりゃ|きゃ)$/ : /(?:[きぎしちにびみり]ゃ|や)$/).exec(
+    m.surface
+  )?.[0]
   const last = steps.at(-1)
   if (!part || !last?.surface.endsWith(part) || last.surface === part) return steps
-  const contractionOf = adjectival ? 'ければ' : `${UNCONTRACTED_ROW[part[0]]}ば`
+  const contractionOf = adjectival ? 'ければ' : UNCONTRACTED_BA[part]
   return [
     ...steps.slice(0, -1),
     { ...last, surface: last.surface.slice(0, -part.length) },
