@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  allowPermissionRequest,
   applyNavigationGuards,
   applyReloadGuard,
   registerWindowControls,
@@ -61,6 +62,20 @@ describe('applyNavigationGuards', () => {
     applyNavigationGuards(wc)
 
     expect(wc.openHandler!()).toEqual({ action: 'deny' })
+  })
+})
+
+describe('allowPermissionRequest', () => {
+  it('allows video-only media capture for Game OCR', () => {
+    expect(allowPermissionRequest('media', ['video'])).toBe(true)
+    expect(allowPermissionRequest('media', [])).toBe(true)
+  })
+
+  it('denies microphone access and every other permission', () => {
+    expect(allowPermissionRequest('media', ['audio', 'video'])).toBe(false)
+    expect(allowPermissionRequest('notifications', undefined)).toBe(false)
+    expect(allowPermissionRequest('geolocation', undefined)).toBe(false)
+    expect(allowPermissionRequest('openExternal', undefined)).toBe(false)
   })
 })
 
