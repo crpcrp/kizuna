@@ -129,10 +129,16 @@ describe('parseMecab captured 悟空 output', () => {
     ])
   })
 
-  it('keeps UniDic surface, pronunciation lemma, and reading', () => {
+  it('keeps UniDic surface, pronunciation lemma, and kana reading', () => {
     expect(parseMecab('unidic', UNIDIC_GOKUU_FIXTURE)).toEqual([
-      { surface: '悟空', reading: 'ゴクー', lemma: 'ゴクウ', pos: '名詞', startOffset: 0 }
+      { surface: '悟空', reading: 'ゴクウ', lemma: 'ゴクウ', pos: '名詞', startOffset: 0 }
     ])
+  })
+
+  it('falls back to the UniDic 2.1.2 pronunciation, which has no kana column', () => {
+    const stdout =
+      '悟空\t名詞,固有名詞,人名,名,*,*,ゴクウ,ゴクウ,悟空,ゴクー,悟空,ゴクー,固,*,*,*,*\nEOS\n'
+    expect(parseMecab('unidic', stdout)[0].reading).toBe('ゴクー')
   })
 })
 

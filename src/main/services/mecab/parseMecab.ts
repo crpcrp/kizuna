@@ -1,5 +1,6 @@
 // MeCab emits surface\tfeatures and a final EOS; absent fields are '*'.
-// IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 9 (surface pron, not lemma lForm).
+// IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 20 (kana spelling, ベンキョウ),
+// falling back to 9 (pronunciation, ベンキョー) for UniDic 2.1.2, which has no column 20.
 // Both: pos1 1, conjugation type 4, conjugation form 5.
 
 import type { DictFlavor, Morpheme, Token } from '../../../shared/token'
@@ -8,11 +9,12 @@ interface FieldMap {
   pos: number
   lemma: number
   reading: number
+  fallbackReading?: number
 }
 
 const FIELD_MAPS: Record<DictFlavor, FieldMap> = {
   ipadic: { pos: 0, lemma: 6, reading: 7 },
-  unidic: { pos: 0, lemma: 7, reading: 9 }
+  unidic: { pos: 0, lemma: 7, reading: 20, fallbackReading: 9 }
 }
 
 const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり', 'ちゃ', 'じゃ'])
@@ -125,7 +127,9 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     const lemma = field(fields[map.lemma]) || surface
     const token: Token = {
       surface,
-      reading: field(fields[map.reading]),
+      reading:
+        field(fields[map.reading]) ||
+        (map.fallbackReading === undefined ? '' : field(fields[map.fallbackReading])),
       lemma: flavor === 'unidic' ? stripLemmaTag(lemma) : lemma,
       pos: fields[map.pos] ?? '',
       startOffset
