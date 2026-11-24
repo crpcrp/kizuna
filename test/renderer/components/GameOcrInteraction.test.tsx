@@ -538,4 +538,40 @@ describe('GameOcrInteraction', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open sentence 42 on Tatoeba/ }))
     expect(openSentence).toHaveBeenCalledWith(42)
   })
+
+  it('hides a grammar chain that leaves part of the word unexplained', async () => {
+    const morpheme = (surface: string, lemma: string, pos: string, form = ''): Morpheme => ({
+      surface,
+      lemma,
+      pos,
+      pos1: '',
+      conjugationType: form ? '特殊' : '',
+      conjugationForm: form
+    })
+    const token = makeToken({
+      surface: '食べなかったぞ',
+      lemma: '食べる',
+      morphemes: [
+        { ...morpheme('食べ', '食べる', '動詞', '未然形'), conjugationType: '一段' },
+        morpheme('なかっ', 'ない', '助動詞', '連用タ接続'),
+        morpheme('た', 'た', '助動詞', '基本形'),
+        morpheme('ぞ', 'ぞ', '助詞')
+      ]
+    })
+    const lookup = vi.fn().mockResolvedValue([makeLookupResult({ expression: '食べる' })])
+    const { container } = render(
+      <GameOcrFrame onClose={vi.fn()}>
+        <GameOcrInteraction
+          regions={[region('one', '食べなかったぞ', 0, { tokens: [token] })]}
+          bridge={bridge(lookup)}
+          popupSettings={popupSettings}
+        />
+      </GameOcrFrame>
+    )
+
+    window.getSelection()?.removeAllRanges()
+    fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
+    await waitFor(() => expect(container.querySelector('#word-popup.open')).not.toBeNull())
+    expect(screen.queryByRole('group', { name: 'Grammar breakdown' })).toBeNull()
+  })
 })

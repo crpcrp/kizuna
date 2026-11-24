@@ -409,10 +409,7 @@ const CASES: Case[] = [
   {
     word: '学生だろう',
     yomitan: null,
-    steps: [
-      ['copula', 'だろ'],
-      ['volitional', 'う', ['volitional']]
-    ],
+    steps: [['conjecture', 'だろう']],
     difference: 'Yomitan has no copula transform.'
   },
   {
@@ -520,6 +517,133 @@ const CASES: Case[] = [
     ],
     difference:
       'Yomitan deinflects 心配する as one verb; Kizuna explains する as a label-only step.'
+  },
+  {
+    word: '書きませんでした',
+    yomitan: ['-ます', 'negative', '-た'],
+    steps: [
+      ['stem:continuative', '書き'],
+      ['polite', 'ませ', ['-ます']],
+      ['negative', 'ん', ['negative']],
+      ['past', 'でした', ['-た']]
+    ]
+  },
+  {
+    word: '書きたいです',
+    yomitan: null,
+    steps: [
+      ['stem:continuative', '書き'],
+      ['desire', 'たい', ['-たい']],
+      ['polite', 'です']
+    ],
+    difference: 'Yomitan has no adjective + です transform; the step shows a label and source only.'
+  },
+  {
+    word: '書くでしょう',
+    yomitan: null,
+    steps: [['conjecture', 'でしょう']],
+    difference: 'Yomitan has no でしょう transform; the step shows a label and source only.'
+  },
+  {
+    word: '高いだろう',
+    yomitan: null,
+    steps: [['conjecture', 'だろう']],
+    difference: 'Yomitan has no だろう transform; the step shows a label and source only.'
+  },
+  {
+    word: '書かねば',
+    yomitan: ['-ねば'],
+    steps: [
+      ['stem:irrealis', '書か'],
+      ['negative-conditional', 'ねば', ['-ねば']]
+    ]
+  },
+  {
+    word: '書き終わった',
+    yomitan: ['-た'],
+    steps: [
+      ['stem:onbin', '書き終わっ'],
+      ['past', 'た', ['-た']]
+    ]
+  },
+  {
+    word: 'いらっしゃいます',
+    yomitan: ['-ます'],
+    steps: [
+      ['stem:continuative', 'いらっしゃい'],
+      ['polite', 'ます', ['-ます']]
+    ]
+  },
+  {
+    word: 'よかった',
+    yomitan: ['-た'],
+    steps: [
+      ['stem:adjective-stem', 'よ'],
+      ['past', 'かった', ['-た']]
+    ]
+  },
+  {
+    word: 'よさそう',
+    yomitan: ['-そう'],
+    steps: [
+      ['stem:adjective-stem', 'よ'],
+      ['appearance', 'さそう', ['-そう']]
+    ]
+  },
+  {
+    word: '高くありませんでした',
+    yomitan: null,
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['polite', 'くありませ'],
+      ['negative', 'ん', ['negative']],
+      ['past', 'でした', ['-た']]
+    ],
+    difference: 'Yomitan has no くありません rule; the polite step shows a label and source only.'
+  },
+  {
+    word: '書いても',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['concessive', 'も']
+    ],
+    difference: 'Yomitan has no -ても transform; the step shows a label and source only.'
+  },
+  {
+    word: '高くても',
+    yomitan: null,
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['te', 'くて', ['-て']],
+      ['concessive', 'も']
+    ],
+    difference: 'Yomitan has no -ても transform; the step shows a label and source only.'
+  },
+  {
+    word: '書くな',
+    yomitan: null,
+    steps: [['prohibitive', 'な']],
+    difference: 'Yomitan has no prohibitive な transform; the step shows a label and source only.'
+  },
+  {
+    word: '書いちゃおう',
+    yomitan: ['-ちゃう', 'volitional'],
+    steps: [
+      ['stem:onbin', '書い'],
+      ['completion', 'ちゃお', ['-ちゃう'], 'てしまう'],
+      ['volitional', 'う', ['volitional']]
+    ]
+  },
+  {
+    word: '書くそうだ',
+    yomitan: null,
+    steps: [
+      ['hearsay', 'そう'],
+      ['copula', 'だ']
+    ],
+    difference: 'Yomitan has no hearsay そう transform; the step shows a label and source only.'
   }
 ]
 
@@ -566,9 +690,60 @@ describe('grammarChain', () => {
     expect(chainOf('ipadic', '読んだ')[0].label).toBe('continuative stem, ん sound change (連用形)')
   })
 
-  it('reads IPADIC ら抜き as potential; UniDic hides it in one morpheme', () => {
+  it('reads IPADIC ら抜き as potential; UniDic keeps it in one morpheme', () => {
     expect(chainOf('ipadic', '食べれる').map(kindName)).toEqual(['stem:irrealis', 'potential'])
-    expect(chainOf('unidic', '食べれる')).toEqual([])
+    expect(chainOf('unidic', '食べれる').map((s) => [kindName(s), s.surface])).toEqual([
+      ['potential', '食べれる']
+    ])
+  })
+
+  // IPADIC lists 読める as a verb of its own, so only UniDic shows the potential.
+  it('reads a UniDic godan potential as potential', () => {
+    expect(chainOf('unidic', '読めなかった').map(kindName)).toEqual([
+      'potential',
+      'negative',
+      'past'
+    ])
+    expect(chainOf('ipadic', '読めなかった').map(kindName)).toEqual([
+      'stem:irrealis',
+      'negative',
+      'past'
+    ])
+  })
+
+  it('does not read IPADIC explanatory ん after a dictionary form as negative', () => {
+    const morpheme = (surface: string, lemma: string, type: string, form: string): Morpheme => ({
+      surface,
+      lemma,
+      pos: surface === '書く' ? '動詞' : '助動詞',
+      pos1: surface === '書く' ? '自立' : '',
+      conjugationType: type,
+      conjugationForm: form
+    })
+    const chain = grammarChain('書く', [
+      morpheme('書く', '書く', '五段・カ行イ音便', '基本形'),
+      morpheme('ん', 'ん', '不変化型', '基本形'),
+      morpheme('でし', 'です', '特殊・デス', '連用形'),
+      morpheme('た', 'た', '特殊・タ', '基本形')
+    ])
+    expect(chain.map(kindName)).not.toContain('negative')
+  })
+
+  it('reads ませんでしたら as a たら conditional', () => {
+    const [stem, polite, negative, desu, past] = WORDS.ipadic.get('書きませんでした') ?? []
+    const tara: Morpheme = { ...past, surface: 'たら', conjugationForm: '仮定形' }
+    expect(grammarChain('書く', [stem, polite, negative, desu, tara]).at(-1)).toMatchObject({
+      kind: 'conditional-tara',
+      surface: 'でしたら'
+    })
+  })
+
+  it('explains an IPADIC compound lemmatised with its suffix verb', () => {
+    const morphemes = WORDS.ipadic.get('書きすぎる') ?? []
+    expect(grammarChain('書きすぎる', morphemes).map(kindName)).toEqual([
+      'stem:continuative',
+      'excess'
+    ])
   })
 
   it('cites a source for every step', () => {

@@ -17,6 +17,11 @@ export const YOMITAN_TRANSFORM_DESCRIPTIONS = {
     '2. Shows a trigger for a latter stated perception or judgment.\n' +
     'Usage: Attach ば to the hypothetical form (仮定形) of verbs and i-adjectives.',
   '-ゃ': 'Contraction of -ば.',
+  '-ねば':
+    '1. Shows a hypothetical negation; if not ...\n' +
+    '2. Shows a must. Used with or without ならぬ.\n' +
+    'Usage: Attach ねば to the irrealis form (未然形) of verbs.\n' +
+    'する becomes せねば',
   '-ちゃ':
     'Contraction of ～ては.\n' +
     '1. Explains how something always happens under the condition that it marks.\n' +

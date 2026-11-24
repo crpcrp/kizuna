@@ -30,12 +30,13 @@ const CONTRACTION_VERB_LEMMAS = new Set([
 // なさい after a 連用形 verb: IPADIC 動詞,非自立 なさる, UniDic 動詞,非自立可能 為さる.
 const POLITE_IMPERATIVE_LEMMAS = new Set(['なさる', '為さる'])
 
-const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は', 'たり', 'だり'])
+const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は', 'たり', 'だり', 'も'])
 
 // Lone tokens the popup may join into a grammar span: te-form auxiliaries
 // (読んで|いる) and adjective or copula parts (高く|なかっ|た, 静か|では|ありません).
 // Lone verbs keep theirs for the stem of a split suffix (降り|そう), a lone
 // imperative or UniDic volitional (書こう), and IPADIC's 自立 ある after て.
+// Lone も and sentence-final な keep theirs for ても and prohibitive 書く|な.
 // IPADIC's only 名詞,特殊 is hearsay そう (行く|そう).
 const isGrammarSpanPart = (m: Morpheme): boolean =>
   m.pos === '動詞' ||
@@ -45,7 +46,8 @@ const isGrammarSpanPart = (m: Morpheme): boolean =>
   m.pos === '接尾辞' ||
   m.pos1 === '接尾' ||
   m.pos1 === '助動詞語幹' ||
-  (m.pos === '助詞' && GRAMMAR_PARTICLES.has(m.surface))
+  (m.pos === '助詞' && GRAMMAR_PARTICLES.has(m.surface)) ||
+  (m.pos === '助詞' && m.pos1 === '終助詞' && m.surface === 'な')
 
 const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
