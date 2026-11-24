@@ -108,7 +108,7 @@ describe('status and staleness', () => {
     expect(examples.status()).toMatchObject({
       state: 'ready',
       cached: true,
-      info: { dictionaryId: 'ipadic', exampleCount: 6 }
+      info: { dictionaryId: 'ipadic', exampleCount: 7 }
     })
   })
 

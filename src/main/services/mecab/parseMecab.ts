@@ -38,7 +38,8 @@ const GRAMMAR_PARTICLES = new Set(['て', 'で', 'ば', 'ちゃ', 'じゃ', 'は
 // (読んで|いる) and adjective or copula parts (高く|なかっ|た, 静か|では|ありません).
 // Lone verbs keep theirs for the stem of a split suffix (降り|そう), a lone
 // imperative or UniDic volitional (書こう), and IPADIC's 自立 ある after て.
-// Lone も and sentence-final な keep theirs for ても and prohibitive 書く|な.
+// Lone も and sentence-final な and じゃん keep theirs for ても, prohibitive 書く|な
+// and UniDic's 書いた|じゃん.
 // IPADIC's only 名詞,特殊 is hearsay そう (行く|そう).
 const isGrammarSpanPart = (m: Morpheme): boolean =>
   m.pos === '動詞' ||
@@ -49,7 +50,7 @@ const isGrammarSpanPart = (m: Morpheme): boolean =>
   m.pos1 === '接尾' ||
   m.pos1 === '助動詞語幹' ||
   (m.pos === '助詞' && GRAMMAR_PARTICLES.has(m.surface)) ||
-  (m.pos === '助詞' && m.pos1 === '終助詞' && m.surface === 'な')
+  (m.pos === '助詞' && m.pos1 === '終助詞' && (m.surface === 'な' || m.surface === 'じゃん'))
 
 const field = (value: string | undefined): string => (value && value !== '*' ? value : '')
 
@@ -78,10 +79,23 @@ const contractedCompletionForm = (next: string | undefined): string | undefined 
   return undefined
 }
 
+// IPADIC reads contracted ていて (待ってて, 読んでて) as a te-form then てる or a case
+// particle て; UniDic reads it as てる then a te-form.
+const isContractedTeite = (line: string, next: string | undefined): boolean => {
+  const [pos, pos1, , , , form, lemma] = featuresOf(next)
+  return (
+    /^[てで]$/.test(surfaceOf(line)) &&
+    featuresOf(line)[1] === '接続助詞' &&
+    surfaceOf(next) === 'て' &&
+    ((pos === '動詞' && lemma === 'てる' && form === '連用形') ||
+      (pos === '助詞' && pos1 === '格助詞'))
+  )
+}
+
 /**
- * Rewrites two IPADIC misreadings as IPADIC tags them elsewhere: ていただけません as
- * て|い|た|だけ|ませ|ん ("was only …"), though だけ never takes ます, and じゃう as
- * じゃ (ては) plus an interjection.
+ * Rewrites IPADIC misreadings as IPADIC tags them elsewhere: ていただけません as
+ * て|い|た|だけ|ませ|ん ("was only …"), though だけ never takes ます, じゃう as
+ * じゃ (ては) plus an interjection, and contracted ていて.
  */
 function repairIpadicLines(lines: string[]): string[] {
   const repaired: string[] = []
@@ -110,6 +124,13 @@ function repairIpadicLines(lines: string[]): string[] {
       const kana = toKatakana(joined)
       repaired.push(
         `${joined}\t動詞,非自立,*,*,五段・ワ行促音便,${completionForm},${surface}う,${kana},${kana}`
+      )
+      i++
+    } else if (isContractedTeite(line, next) && featuresOf(lines[i + 2])[0] !== '助動詞') {
+      const kana = toKatakana(surface)
+      repaired.push(
+        `${surface}\t動詞,非自立,*,*,一段,連用形,${surface}る,${kana},${kana}`,
+        'て\t助詞,接続助詞,*,*,*,*,て,テ,テ'
       )
       i++
     } else {

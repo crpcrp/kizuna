@@ -21,7 +21,6 @@ const IPADIC_OUTPUT: Record<string, string[]> = {
   '手紙を書かなかった。': [NOUN('手紙', 'テガミ'), WO, KAKA, NAKAT, TA, PERIOD],
   '書かなかった。': [KAKA, NAKAT, TA, PERIOD],
   '読まなかった。': ['読ま\t動詞,自立,*,*,五段・マ行,未然形,読む,ヨマ,ヨマ', NAKAT, TA, PERIOD],
-  // らしい has no grammar step, so 書かないらしい is skipped but 読んだ is kept.
   '書かないらしいが、読んだ。': [
     KAKA,
     'ない\t助動詞,*,*,*,特殊・ナイ,基本形,ない,ナイ,ナイ',

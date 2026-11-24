@@ -78,7 +78,14 @@ describe('buildExamplesDatabase', () => {
         end: 6,
         english: "I didn't read it."
       },
-      // 書かないらしい has an unexplained らしい; only that word is skipped.
+      {
+        pattern: 'negative>seeming',
+        lemma: '書く',
+        id: 4,
+        start: 0,
+        end: 7,
+        english: 'He seems not to write, but he read it.'
+      },
       {
         pattern: 'past',
         lemma: '読む',
@@ -105,7 +112,7 @@ describe('buildExamplesDatabase', () => {
         english: 'I am reading a book.'
       }
     ])
-    expect(count).toBe(6)
+    expect(count).toBe(7)
     expect(progress.at(0)).toBe(0)
     expect(progress.at(-1)).toBe(100)
   })
@@ -124,13 +131,32 @@ describe('buildExamplesDatabase', () => {
       dictionaryId: 'ipadic',
       analyzerVersion: String(GRAMMAR_ANALYZER_VERSION),
       exportDate: SAMPLE_LAST_MODIFIED,
-      exampleCount: '6'
+      exampleCount: '7'
     })
     expect(JSON.parse(meta.sources)).toHaveLength(4)
   })
 })
 
 describe('wordOccurrences', () => {
+  it('skips only a word with an unexplained morpheme', () => {
+    const tokens = parseMecab(
+      'ipadic',
+      [
+        '書か\t動詞,自立,*,*,五段・カ行イ音便,未然形,書く,カカ,カカ',
+        'ざる\t助動詞,*,*,*,特殊・ヌ,体言接続,ぬ,ザル,ザル',
+        'を\t助詞,格助詞,一般,*,*,*,を,ヲ,ヲ',
+        '得\t動詞,自立,*,*,一段,未然形,得る,エ,エ',
+        'ない\t助動詞,*,*,*,特殊・ナイ,基本形,ない,ナイ,ナイ',
+        'EOS'
+      ].join('\n'),
+      '書かざるを得ない'
+    )
+
+    expect(wordOccurrences(tokens)).toEqual([
+      { pattern: 'negative', lemma: '得る', start: 5, end: 8 }
+    ])
+  })
+
   it('records adjective and copula chains', () => {
     const tokens = parseMecab(
       'ipadic',

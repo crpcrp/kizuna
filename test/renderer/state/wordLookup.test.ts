@@ -730,7 +730,16 @@ const FORMS_SENTENCES = [
   '飲んじゃいたい',
   '飲んでた',
   '飲んでなかった',
-  '来させる'
+  '来させる',
+  '行ったらしい',
+  '学生らしい',
+  '行くべきだ',
+  '行くなら',
+  '学生なら',
+  '書いたじゃん',
+  '行くまい',
+  '待ってて',
+  '読んでて'
 ]
 
 describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flavor) => {
@@ -794,7 +803,16 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     ['飲んじゃいたい', 'completion>desire'],
     ['飲んでた', 'progressive>past'],
     ['飲んでなかった', 'progressive>negative>past'],
-    ['来させる', 'causative']
+    ['来させる', 'causative'],
+    ['行ったらしい', 'past>seeming'],
+    ['学生らしい', 'seeming'],
+    ['行くべきだ', 'obligation>copula'],
+    ['行くなら', 'conditional-nara'],
+    ['学生なら', 'conditional-nara'],
+    ['書いたじゃん', 'past>assertion'],
+    ['行くまい', 'negative-volitional'],
+    ['待ってて', 'progressive>te'],
+    ['読んでて', 'progressive>te']
   ])('highlights all of %s and explains it as %s', (sentence, pattern) => {
     const span = highlight(sentence)
     const steps = spanGrammarChain(span)
@@ -802,6 +820,7 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     expect(span.map((token) => token.surface).join('')).toBe(sentence)
     expect(grammarPatternKey(steps)).toBe(pattern)
     expect(explainsSpan(span, steps)).toBe(true)
+    for (const step of steps) expect(step.source.url).toMatch(/^https:\/\//)
   })
 
   it.each([
