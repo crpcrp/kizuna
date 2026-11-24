@@ -10,7 +10,7 @@ import {
   type IpcMainEvent,
   type IpcMainInvokeEvent
 } from 'electron'
-import { registerWindowControls, sendToWindow } from './windowOptions'
+import { allowPermissionRequest, registerWindowControls, sendToWindow } from './windowOptions'
 import { LAUNCH_CHANNELS } from '../shared/ipcChannels'
 import { createAppLifecycleCoordinator, type AppLifecycleCoordinator } from './appLifecycle'
 import { MpvController } from './mpv/controller'
@@ -225,6 +225,15 @@ if (!gotSingleInstanceLock) {
   })
 
   app.whenReady().then(() => {
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, permission, callback, details) =>
+        callback(
+          allowPermissionRequest(
+            permission,
+            'mediaTypes' in details ? details.mediaTypes : undefined
+          )
+        )
+    )
     registerWindowControls<IpcMainEvent, IpcMainInvokeEvent>(
       ipcMain,
       (event) => {

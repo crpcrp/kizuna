@@ -37,3 +37,6 @@ resources/*
 /scripts/vm-*.sh
 /scripts/wsl-dev-shell.sh
 /scripts/linux-dev.sh
+
+# Local test and debug output
+*.log

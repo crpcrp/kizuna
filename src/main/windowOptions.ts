@@ -92,6 +92,15 @@ export function applyNavigationGuards(webContents: NavigationGuardTarget): void 
   webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
 }
 
+// Electron grants every permission by default. Game OCR's desktop capture is
+// the only one the app uses, so microphone, notifications, geolocation, etc. stay denied.
+export function allowPermissionRequest(
+  permission: string,
+  mediaTypes: readonly string[] | undefined
+): boolean {
+  return permission === 'media' && !mediaTypes?.includes('audio')
+}
+
 export interface InputGuardTarget {
   on(
     event: 'before-input-event',
