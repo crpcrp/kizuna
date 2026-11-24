@@ -687,7 +687,23 @@ const FORMS_SENTENCES = [
   '心配した',
   '勉強が好き',
   '本だそうだ',
-  '行く人'
+  '行く人',
+  '書きませんでした',
+  '書きたいです',
+  '書くでしょう',
+  '高いだろう',
+  '書かねば',
+  '書き終わった',
+  '書きすぎる',
+  'いらっしゃいます',
+  'よかった',
+  'よさそう',
+  '高くありませんでした',
+  '書いても',
+  '高くても',
+  '書くな',
+  '書いちゃおう',
+  '書くそうだ'
 ]
 
 describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flavor) => {
@@ -717,7 +733,23 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     ['高かったです', 'past>polite'],
     ['勉強している', 'suru>te>progressive'],
     ['勉強させられた', 'suru>causative-passive>past'],
-    ['心配した', 'suru>past']
+    ['心配した', 'suru>past'],
+    ['書きませんでした', 'polite>negative>past'],
+    ['書きたいです', 'desire>polite'],
+    ['書くでしょう', 'conjecture'],
+    ['高いだろう', 'conjecture'],
+    ['書かねば', 'negative-conditional'],
+    ['書き終わった', 'past'],
+    ['書きすぎる', 'excess'],
+    ['いらっしゃいます', 'polite'],
+    ['よかった', 'past'],
+    ['よさそう', 'appearance'],
+    ['高くありませんでした', 'polite>negative>past'],
+    ['書いても', 'te>concessive'],
+    ['高くても', 'te>concessive'],
+    ['書くな', 'prohibitive'],
+    ['書いちゃおう', 'completion>volitional'],
+    ['書くそうだ', 'hearsay>copula']
   ])('highlights all of %s and explains it as %s', (sentence, pattern) => {
     const span = highlight(sentence)
     const steps = spanGrammarChain(span)

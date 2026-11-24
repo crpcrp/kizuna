@@ -4,7 +4,7 @@ import type { Cue } from '../../../shared/cue'
 import type { LookupResult } from '../../../shared/dictionary'
 import type { PopupSortOrder } from '../../../shared/playerSettings'
 import type { KizunaApi } from '../../../shared/preloadApi'
-import { grammarPatternKey, spanGrammarChain } from '../../../shared/inflection'
+import { explainsSpan, grammarPatternKey, spanGrammarChain } from '../../../shared/inflection'
 import type { Token } from '../../../shared/token'
 import type { SubtitleOverlayProps } from '../components/SubtitleOverlay'
 import type { WordPopupProps } from '../components/WordPopup'
@@ -103,10 +103,12 @@ export function useWordPopup({
     ankiExisting
   } = popupState
   const highlightedTokens = wordPopup?.highlightedTokens
-  const grammarChain = useMemo(
-    () => (highlightedTokens ? spanGrammarChain(highlightedTokens) : []),
-    [highlightedTokens]
-  )
+  // A chain that leaves part of the span unexplained would misalign its parts.
+  const grammarChain = useMemo(() => {
+    if (!highlightedTokens) return []
+    const steps = spanGrammarChain(highlightedTokens)
+    return explainsSpan(highlightedTokens, steps) ? steps : []
+  }, [highlightedTokens])
   const grammarExamples = useGrammarExamples(
     bridge.grammarExamples,
     grammarPatternKey(grammarChain),
