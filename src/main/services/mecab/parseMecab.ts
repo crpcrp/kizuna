@@ -1,5 +1,6 @@
 // MeCab emits surface\tfeatures and a final EOS; absent fields are '*'.
-// IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 9 (surface pron, not lemma lForm).
+// IPADIC: POS 0, lemma 6, reading 7. UniDic: POS 0, lemma 7, reading 20 (kana spelling, ベンキョウ),
+// falling back to 9 (pronunciation, ベンキョー) for UniDic 2.1.2, which has no column 20.
 // Both: pos1 1, conjugation type 4, conjugation form 5.
 
 import type { DictFlavor, Morpheme, Token } from '../../../shared/token'
@@ -8,11 +9,12 @@ interface FieldMap {
   pos: number
   lemma: number
   reading: number
+  fallbackReading?: number
 }
 
 const FIELD_MAPS: Record<DictFlavor, FieldMap> = {
   ipadic: { pos: 0, lemma: 6, reading: 7 },
-  unidic: { pos: 0, lemma: 7, reading: 9 }
+  unidic: { pos: 0, lemma: 7, reading: 20, fallbackReading: 9 }
 }
 
 const VERB_CONJUNCTION_SUFFIXES = new Set(['て', 'で', 'ば', 'たり', 'ちゃ', 'じゃ'])
@@ -58,6 +60,38 @@ const stripLemmaTag = (lemma: string): string => {
   return hyphen === -1 ? lemma : lemma.slice(0, hyphen)
 }
 
+const surfaceOf = (line: string | undefined): string => line?.slice(0, line.indexOf('\t')) ?? ''
+const featuresOf = (line: string | undefined): string[] =>
+  line?.slice(line.indexOf('\t') + 1).split(',') ?? []
+
+/**
+ * IPADIC reads ていただけません as て|い|た|だけ|ませ|ん ("was only …"), though だけ never
+ * takes ます; rejoin いただけ, as IPADIC tags it before ます itself.
+ */
+function repairIpadicLines(lines: string[]): string[] {
+  const repaired: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const [te, i_, ta, dake, masu] = lines.slice(i - 1, i + 4)
+    if (
+      i > 0 &&
+      /^[てで]$/.test(surfaceOf(te)) &&
+      featuresOf(te)[1] === '接続助詞' &&
+      surfaceOf(i_) === 'い' &&
+      featuresOf(i_)[6] === 'いる' &&
+      surfaceOf(ta) === 'た' &&
+      surfaceOf(dake) === 'だけ' &&
+      featuresOf(dake)[1] === '副助詞' &&
+      featuresOf(masu)[6] === 'ます'
+    ) {
+      repaired.push('いただけ\t動詞,自立,*,*,一段,連用形,いただける,イタダケ,イタダケ')
+      i += 2
+    } else {
+      repaired.push(lines[i])
+    }
+  }
+  return repaired
+}
+
 // MeCab omits whitespace; align surfaces to the analysis text, whose offsets exclude display newlines.
 export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: string): Token[] {
   const map = FIELD_MAPS[flavor]
@@ -70,7 +104,8 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
   let alignmentOffset = 0
   let previousSurfaceEnd: number | undefined
 
-  for (const line of stdout.split(/\r?\n/)) {
+  const lines = stdout.split(/\r?\n/)
+  for (const line of flavor === 'ipadic' ? repairIpadicLines(lines) : lines) {
     if (line === '' || line === 'EOS') continue
 
     const tabIndex = line.indexOf('\t')
@@ -92,7 +127,9 @@ export function parseMecab(flavor: DictFlavor, stdout: string, sourceText?: stri
     const lemma = field(fields[map.lemma]) || surface
     const token: Token = {
       surface,
-      reading: field(fields[map.reading]),
+      reading:
+        field(fields[map.reading]) ||
+        (map.fallbackReading === undefined ? '' : field(fields[map.fallbackReading])),
       lemma: flavor === 'unidic' ? stripLemmaTag(lemma) : lemma,
       pos: fields[map.pos] ?? '',
       startOffset
