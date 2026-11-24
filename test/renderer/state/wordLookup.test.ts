@@ -724,7 +724,13 @@ const FORMS_SENTENCES = [
   '学校では',
   '書いていただけません',
   '書いていただけです',
-  '言や'
+  '言や',
+  '遊んじゃう',
+  'やっちゃえ',
+  '飲んじゃいたい',
+  '飲んでた',
+  '飲んでなかった',
+  '来させる'
 ]
 
 describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flavor) => {
@@ -782,7 +788,13 @@ describe.each(['ipadic', 'unidic'] as const)('grammar forms spans — %s', (flav
     ['勉強できない', 'potential>negative'],
     ['書いてもらえる', 'te>receiving'],
     ['書いていただけます', 'te>receiving>polite'],
-    ['書いていただけません', 'te>receiving>polite>negative']
+    ['書いていただけません', 'te>receiving>polite>negative'],
+    ['遊んじゃう', 'completion'],
+    ['やっちゃえ', 'completion'],
+    ['飲んじゃいたい', 'completion>desire'],
+    ['飲んでた', 'progressive>past'],
+    ['飲んでなかった', 'progressive>negative>past'],
+    ['来させる', 'causative']
   ])('highlights all of %s and explains it as %s', (sentence, pattern) => {
     const span = highlight(sentence)
     const steps = spanGrammarChain(span)

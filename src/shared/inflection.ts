@@ -208,7 +208,8 @@ const STEM_FORM_PREFIXES: [string, StemForm][] = [
   ['語幹', 'adjective-stem']
 ]
 
-// Ichidan 未然形 and 連用形 are spelled alike and MeCab picks either; what follows decides.
+// Ichidan 未然形 and 連用形 are spelled alike, as are kanji 来 (こ / き), and MeCab
+// picks either; what follows decides.
 const IRREALIS_SUFFIX_LEMMAS = new Set([
   'ない',
   'ん',
@@ -219,11 +220,13 @@ const IRREALIS_SUFFIX_LEMMAS = new Set([
   'られる',
   'れる'
 ])
-const isIchidan = (m: Morpheme): boolean => /^(?:[上下]?一段)/.test(m.conjugationType)
+const hasAmbiguousStem = (m: Morpheme): boolean =>
+  /^(?:[上下]?一段)/.test(m.conjugationType) ||
+  (/^カ(?:変|行変格)/.test(m.conjugationType) && m.surface.endsWith('来'))
 
 function stemFormOf(head: Morpheme, next: Morpheme | undefined): StemForm | undefined {
   const form = STEM_FORM_PREFIXES.find(([prefix]) => head.conjugationForm.startsWith(prefix))?.[1]
-  if ((form === 'irrealis' || form === 'continuative') && isIchidan(head) && next) {
+  if ((form === 'irrealis' || form === 'continuative') && hasAmbiguousStem(head) && next) {
     return IRREALIS_SUFFIX_LEMMAS.has(next.lemma) ? 'irrealis' : 'continuative'
   }
   // UniDic tags the い of いらっしゃい|ます and ござい|ます as an イ音便 too.
@@ -493,8 +496,13 @@ function suffixSteps(
       step('te-wa', m.surface, 'て-form + は', '-ちゃ', m.surface === 'ちゃ' ? 'ては' : 'では')
     )
   }
-  // IPADIC reads contracted ています (知ってます) as て|ます; UniDic reads て as てる.
-  if (isConjunctive(m, 'て', 'で') && next && isAuxiliary(next, 'ます')) {
+  // Contracted ています / ていた / ていない read as て|ます, で|た, で|ない (知ってます, 飲んでた).
+  if (
+    isConjunctive(m, 'て', 'で') &&
+    !isAdjectival(previous) &&
+    next &&
+    (isAuxiliary(next, 'ます', 'た') || isNegative(next))
+  ) {
     return one(
       step(
         'progressive',
@@ -982,7 +990,7 @@ export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 7
+export const GRAMMAR_ANALYZER_VERSION = 8
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {
