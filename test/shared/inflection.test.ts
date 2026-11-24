@@ -644,6 +644,113 @@ const CASES: Case[] = [
       ['copula', 'だ']
     ],
     difference: 'Yomitan has no hearsay そう transform; the step shows a label and source only.'
+  },
+  {
+    word: '書きゃ',
+    yomitan: ['-ば', '-ゃ'],
+    steps: [
+      ['stem:conditional', '書'],
+      ['conditional-ba', 'きゃ', ['-ば'], 'けば']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '待ちゃ',
+    yomitan: ['-ば', '-ゃ'],
+    steps: [
+      ['stem:conditional', '待'],
+      ['conditional-ba', 'ちゃ', ['-ば'], 'てば']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '高けりゃ',
+    yomitan: ['-ば', '-ゃ'],
+    steps: [
+      ['stem:adjective-stem', '高'],
+      ['conditional-ba', 'けりゃ', ['-ば'], 'ければ']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '書かせりゃ',
+    yomitan: ['causative', '-ば', '-ゃ'],
+    steps: [
+      ['stem:irrealis', '書か'],
+      ['causative', 'せ', ['causative']],
+      ['conditional-ba', 'りゃ', ['-ば'], 'れば']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '書きたけりゃ',
+    yomitan: ['-たい', '-ば', '-ゃ'],
+    steps: [
+      ['stem:continuative', '書き'],
+      ['desire', 'た', ['-たい']],
+      ['conditional-ba', 'けりゃ', ['-ば'], 'ければ']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '書かなけりゃ',
+    yomitan: ['negative', '-ば', '-ゃ'],
+    steps: [
+      ['stem:irrealis', '書か'],
+      ['negative', 'な', ['negative']],
+      ['conditional-ba', 'けりゃ', ['-ば'], 'ければ']
+    ],
+    difference: "Yomitan's -ゃ contraction step is Kizuna's contractionOf on the ば step."
+  },
+  {
+    word: '学生ではなく',
+    yomitan: null,
+    steps: [
+      ['copula', 'では'],
+      ['negative', 'なく', ['negative']]
+    ],
+    difference: 'Yomitan has no copula transform.'
+  },
+  {
+    word: '学生ではありません',
+    yomitan: null,
+    steps: [
+      ['copula', 'ではあり'],
+      ['polite', 'ませ', ['-ます']],
+      ['negative', 'ん', ['negative']]
+    ],
+    difference: 'Yomitan has no copula transform.'
+  },
+  {
+    word: '勉強できない',
+    yomitan: null,
+    steps: [
+      ['potential', 'でき'],
+      ['negative', 'ない', ['negative']]
+    ],
+    difference:
+      'Yomitan deinflects 勉強できる as one verb; Kizuna explains できる as a label-only step.'
+  },
+  {
+    word: '書いてもらえる',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['receiving', 'もらえる']
+    ],
+    difference: 'Yomitan has no -てもらう transform; the step shows a label and source only.'
+  },
+  {
+    word: '書いていただけます',
+    yomitan: null,
+    steps: [
+      ['stem:onbin', '書い'],
+      ['te', 'て', ['-て']],
+      ['receiving', 'いただけ'],
+      ['polite', 'ます', ['-ます']]
+    ],
+    difference: 'Yomitan has no -ていただく transform; the step shows a label and source only.'
   }
 ]
 
@@ -684,6 +791,17 @@ describe('grammarChain', () => {
   it('labels the する of a verbal noun by its conjugation form', () => {
     expect(chainOf('ipadic', '勉強させられた')[0].label).toBe('する (irrealis)')
     expect(chainOf('ipadic', '勉強している')[0].label).toBe('する (continuative)')
+  })
+
+  it('labels できる after a verbal noun as the potential of する', () => {
+    expect(chainOf('ipadic', '勉強できない')[0].label).toBe('potential (できる, irrealis)')
+    expect(chainOf('unidic', '書いてもらえる')[2].label).toBe('receiving, potential (もらえる)')
+  })
+
+  it('does not read a locative で before は as a copula', () => {
+    const morphemes = WORDS.ipadic.get('学校では') ?? []
+    expect(morphemes).toHaveLength(3)
+    expect(grammarChain('学校', morphemes)).toEqual([])
   })
 
   it('labels the sound change of an onbin stem', () => {

@@ -119,6 +119,10 @@ export const MORAU_SOURCE: SourceRef = {
   name: 'Wiktionary: もらう',
   url: 'https://en.wiktionary.org/wiki/%E3%82%82%E3%82%89%E3%81%86'
 }
+export const DEKIRU_SOURCE: SourceRef = {
+  name: 'Wiktionary: できる',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%A7%E3%81%8D%E3%82%8B'
+}
 
 interface TeAuxiliary {
   kind: GrammarStepKind
@@ -265,6 +269,7 @@ const labelStep = (
 ): GrammarStep => ({ kind, surface, label, explanation: '', source })
 
 const SURU_LEMMAS = new Set(['する', '為る'])
+const DEKIRU_LEMMAS = new Set(['できる', '出来る'])
 const SURU_FORM_NAMES: Partial<Record<StemForm, string>> = {
   irrealis: 'irrealis',
   continuative: 'continuative',
@@ -306,6 +311,23 @@ const isCopula = (m: Morpheme): boolean =>
   (isAuxiliary(m, 'だ', 'です') && m.surface !== 'に') ||
   (m.pos === '助詞' && m.pos1 === '副助詞' && m.surface === 'じゃ')
 
+const isAru = (m: Morpheme | undefined): boolean =>
+  m?.pos === '動詞' && (m.lemma === 'ある' || m.lemma === '有る')
+
+// Both dictionaries tag the で of 学生ではなく / ではありません a case particle.
+function isCaseParticleCopula(morphemes: Morpheme[], index: number): boolean {
+  const [m, next, after] = morphemes.slice(index, index + 3)
+  return (
+    m.pos === '助詞' &&
+    m.pos1 === '格助詞' &&
+    m.surface === 'で' &&
+    next?.pos === '助詞' &&
+    next.surface === 'は' &&
+    after !== undefined &&
+    (isNegative(after) || isAru(after))
+  )
+}
+
 /** The copula plus the は and ある of ではある / じゃある, as one step. */
 function copulaStep(
   morphemes: Morpheme[],
@@ -320,11 +342,7 @@ function copulaStep(
     consumed++
   }
   const after = morphemes[index + 1 + consumed]
-  if (
-    (surface === 'では' || surface === 'じゃ') &&
-    after?.pos === '動詞' &&
-    (after.lemma === 'ある' || after.lemma === '有る')
-  ) {
+  if ((surface === 'では' || surface === 'じゃ') && isAru(after)) {
     surface += after.surface
     consumed++
   }
@@ -379,7 +397,9 @@ function suffixSteps(
     consumed: 0
   })
 
-  if (isNominal(previous) && isCopula(m)) return copulaStep(morphemes, index)
+  if (isNominal(previous) && (isCopula(m) || isCaseParticleCopula(morphemes, index))) {
+    return copulaStep(morphemes, index)
+  }
   const conjecture = conjectureStep(morphemes, index)
   if (conjecture) return conjecture
   // ません|でし|た: Yomitan reads でした as the past of ません.
@@ -403,8 +423,7 @@ function suffixSteps(
   }
   // 高く|あり|ませ|ん: the polite negative of an i-adjective.
   if (
-    m.pos === '動詞' &&
-    (m.lemma === 'ある' || m.lemma === '有る') &&
+    isAru(m) &&
     previous?.surface.endsWith('く') &&
     isAdjectival(previous) &&
     next !== undefined &&
@@ -426,20 +445,15 @@ function suffixSteps(
     const name = form && SURU_FORM_NAMES[form]
     return one(labelStep('suru', m.surface, name ? `する (${name})` : 'する', SURU_SOURCE))
   }
-  if (isAuxiliary(m, 'ます')) return one(step('polite', m.surface, 'polite', '-ます'))
-  if (isNegative(m)) {
-    // なきゃ / なけりゃ: IPADIC 仮定縮約, UniDic 仮定形-融合.
-    if (m.conjugationForm.startsWith('仮定縮約') || m.conjugationForm === '仮定形-融合') {
-      return {
-        steps: [
-          step('negative', m.surface.slice(0, 1), 'negative', 'negative'),
-          step('conditional-ba', m.surface.slice(1), 'conditional (ば)', '-ば', 'ければ')
-        ],
-        consumed: 0
-      }
-    }
-    return one(step('negative', m.surface, 'negative', 'negative'))
+  // できる, the potential of する, after a verbal noun (勉強|でき|ない).
+  if (index === 1 && isNominal(previous) && m.pos === '動詞' && DEKIRU_LEMMAS.has(m.lemma)) {
+    const form = stemFormOf(m, next)
+    const name = form && SURU_FORM_NAMES[form]
+    const label = name ? `potential (できる, ${name})` : 'potential (できる)'
+    return one(labelStep('potential', m.surface, label, DEKIRU_SOURCE))
   }
+  if (isAuxiliary(m, 'ます')) return one(step('polite', m.surface, 'polite', '-ます'))
+  if (isNegative(m)) return one(step('negative', m.surface, 'negative', 'negative'))
   // IPADIC lemma ん, UniDic lemma ず; ません is the plain polite negative.
   // IPADIC can read explanatory ん after a dictionary form (書くんでした) as negative ん.
   if (m.surface === 'ん' && isAuxiliary(m, 'ん', 'ず') && !isDictionaryForm(previous)) {
@@ -630,6 +644,12 @@ function suffixSteps(
   if (afterTe && isAuxiliary(m, 'しまう', '仕舞う')) {
     return one(step('completion', m.surface, 'completion (しまう)', '-しまう'))
   }
+  const receiving = afterTe ? receivingPotential(m) : undefined
+  if (receiving) {
+    return one(
+      labelStep('receiving', m.surface, `receiving, potential (${receiving})`, MORAU_SOURCE)
+    )
+  }
   const teAuxiliary =
     afterTe && isTeAuxiliaryMorpheme(m)
       ? TE_AUXILIARY_STEPS.find(([lemmas]) => lemmas.includes(m.lemma))?.[1]
@@ -698,6 +718,36 @@ const isPotentialVerb = (m: Morpheme): boolean =>
   m.conjugationType.startsWith('下一段') &&
   (!m.lemma.endsWith('る') || (m.conjugationType === '下一段-ラ行' && !m.lemma.endsWith('れる')))
 
+// The e-row kana a contracted ば ending stands for: 書きゃ ← 書けば, 読めりゃ ← 読めれば.
+const UNCONTRACTED_ROW: Record<string, string> = {
+  き: 'け',
+  ぎ: 'げ',
+  し: 'せ',
+  ち: 'て',
+  に: 'ね',
+  び: 'べ',
+  み: 'め',
+  り: 'れ'
+}
+
+/**
+ * Splits a contracted ば (書きゃ, 高けりゃ, 書かせりゃ; IPADIC 仮定縮約, UniDic 仮定形-融合)
+ * off the last of `steps`, which ends with `m`.
+ */
+function splitContractedBa(m: Morpheme, steps: GrammarStep[]): GrammarStep[] {
+  if (!m.conjugationForm.startsWith('仮定縮約') && m.conjugationForm !== '仮定形-融合') return steps
+  const adjectival = isAdjectival(m)
+  const part = (adjectival ? /(?:けりゃ|きゃ)$/ : /[きぎしちにびみり]ゃ$/).exec(m.surface)?.[0]
+  const last = steps.at(-1)
+  if (!part || !last?.surface.endsWith(part) || last.surface === part) return steps
+  const contractionOf = adjectival ? 'ければ' : `${UNCONTRACTED_ROW[part[0]]}ば`
+  return [
+    ...steps.slice(0, -1),
+    { ...last, surface: last.surface.slice(0, -part.length) },
+    step('conditional-ba', part, 'conditional (ば)', '-ば', contractionOf)
+  ]
+}
+
 /**
  * Ordered, surface-aligned grammar steps of a conjugated word, starting with the
  * head word's stem. `dictionaryForm` is the head word's lemma; an unconjugated
@@ -714,7 +764,9 @@ export function grammarChain(dictionaryForm: string, allMorphemes: Morpheme[]): 
   let form = stemFormOf(head, rest[0])
   if (isPotentialVerb(head)) {
     form = undefined
-    steps.push(step('potential', head.surface, 'potential', 'potential'))
+    steps.push(
+      ...splitContractedBa(head, [step('potential', head.surface, 'potential', 'potential')])
+    )
   }
   // Yomitan attaches くない, かった, くて, ければ to the adjective stem, so the
   // inflected ending joins the next step.
@@ -726,6 +778,8 @@ export function grammarChain(dictionaryForm: string, allMorphemes: Morpheme[]): 
     form = undefined
   } else if (head.pos === '形容詞' && form !== 'adjective-stem') {
     form = undefined
+    const contracted = splitContractedBa(head, [stemStep('adjective-stem', head.surface)])
+    if (contracted.length > 1) steps.push(...contracted)
     const ending = /(?:く|かっ|けれ)$/.exec(head.surface)?.[0]
     if (ending && head.surface.length > ending.length) {
       steps.push(stemStep('adjective-stem', head.surface.slice(0, -ending.length)))
@@ -737,12 +791,14 @@ export function grammarChain(dictionaryForm: string, allMorphemes: Morpheme[]): 
     steps.push(stemStep(form, head.surface.slice(0, -1)))
     steps.push(volitionalStep())
   } else if (form) {
-    steps.push(stemStep(form, head.surface))
+    steps.push(...splitContractedBa(head, [stemStep(form, head.surface)]))
   }
 
   for (let index = 1; index < morphemes.length; index++) {
-    const { steps: found, consumed } = suffixSteps(morphemes, index)
     const m = morphemes[index]
+    const result = suffixSteps(morphemes, index)
+    const consumed = result.consumed
+    const found = consumed === 0 ? splitContractedBa(m, result.steps) : result.steps
     // UniDic keeps a volitional ending in one morpheme (ましょう, ちゃおう); split off its う to match IPADIC.
     const last = found.at(-1)
     if (
@@ -769,8 +825,23 @@ export function grammarChain(dictionaryForm: string, allMorphemes: Morpheme[]): 
   return steps
 }
 
+// IPADIC lists もらえる and いただける (自立) as verbs; UniDic reads them as potentials of 貰う and 頂く.
+const RECEIVING_POTENTIALS: Record<string, string> = {
+  もらう: 'もらえる',
+  貰う: 'もらえる',
+  いただく: 'いただける',
+  頂く: 'いただける'
+}
+
+function receivingPotential(m: Morpheme): string | undefined {
+  if (m.pos !== '動詞') return undefined
+  if (m.lemma === 'もらえる' || m.lemma === 'いただける') return m.lemma
+  return isPotentialVerb(m) ? RECEIVING_POTENTIALS[m.lemma] : undefined
+}
+
 // IPADIC tags ある after a て-form 動詞,自立.
 function isTeAuxiliaryMorpheme(m: Morpheme): boolean {
+  if (receivingPotential(m)) return true
   return (
     m.pos === '動詞' &&
     (m.pos1 === '非自立' || m.pos1 === '非自立可能' || m.lemma === 'ある') &&
@@ -863,15 +934,18 @@ export function extendGrammarSpan(cueTokens: Token[], span: Token[]): Token[] {
   const contiguous = (at: number): boolean =>
     at < cueTokens.length &&
     cueTokens[at].startOffset === cueTokens[at - 1].startOffset + cueTokens[at - 1].surface.length
+  // Longest run first: IPADIC splits でしょ|う after an adjective, and both
+  // dictionaries split 学生|で|は|なく into lone tokens.
+  const runAt = (start: number): Token[] => {
+    for (let size = 3; size > 0; size--) {
+      const run = cueTokens.slice(start, start + size)
+      const joined = run.length === size && run.every((_, i) => contiguous(start + i))
+      if (joined && explainsSuffixes([...extended, ...run])) return run
+    }
+    return []
+  }
   while (contiguous(index + 1)) {
-    // Two tokens first: IPADIC splits でしょ|う and だろ|う after an adjective.
-    const pair = contiguous(index + 2) ? cueTokens.slice(index + 1, index + 3) : []
-    const added =
-      pair.length === 2 && explainsSuffixes([...extended, ...pair])
-        ? pair
-        : explainsSuffixes([...extended, cueTokens[index + 1]])
-          ? [cueTokens[index + 1]]
-          : []
+    const added = runAt(index + 1)
     if (added.length === 0) break
     extended.push(...added)
     index += added.length
@@ -905,7 +979,7 @@ export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 6
+export const GRAMMAR_ANALYZER_VERSION = 7
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {
