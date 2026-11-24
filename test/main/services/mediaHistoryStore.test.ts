@@ -16,7 +16,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createMediaHistoryFile,
   createMediaHistoryStore,
-  legacyMediaHistory,
   type MediaHistoryIO
 } from '@src/main/services/mediaHistoryStore'
 import type { MediaHistory } from '@src/shared/mediaHistory'
@@ -99,32 +98,8 @@ describe('createMediaHistoryStore', () => {
     })
   })
 
-  it('migrates the legacy settings.json history once when no history file exists', async () => {
-    const settingsText = JSON.stringify({ mecabDictId: 'ipadic', mediaHistory: historyAt(42) })
-    const legacy = vi.fn(() => legacyMediaHistory(settingsText))
-    const first = controlledIo()
-    const store = createMediaHistoryStore(first.io, { platform: 'posix', legacy })
-
-    expect(store.get()).toEqual(historyAt(42))
-    await flushMicrotasks()
-    first.pending[0].resolve()
-    await store.flush()
-    expect(JSON.parse(first.stored()!)).toEqual(historyAt(42))
-
-    // The next start reads its own file and never consults settings.json again.
-    legacy.mockClear()
-    const reopened = createMediaHistoryStore(controlledIo(first.stored()).io, {
-      platform: 'posix',
-      legacy
-    })
-    expect(reopened.get()).toEqual(historyAt(42))
-    expect(legacy).not.toHaveBeenCalled()
-  })
-
-  it('starts empty when neither a history file nor a legacy key exists', () => {
-    const store = createMediaHistoryStore(controlledIo().io, {
-      legacy: () => legacyMediaHistory('not json')
-    })
+  it('starts empty when no history file exists', () => {
+    const store = createMediaHistoryStore(controlledIo().io)
     expect(store.get()).toEqual({ recentFiles: [], playbackByPath: {} })
   })
 

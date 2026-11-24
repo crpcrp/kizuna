@@ -8,7 +8,6 @@ import {
   type MediaHistory,
   type PathNormalizationOptions
 } from '../../shared/mediaHistory'
-import { isRecord } from '../../shared/guards'
 
 export interface MediaHistoryIO {
   read(): string | undefined
@@ -24,8 +23,6 @@ export interface MediaHistoryStore {
 }
 
 export interface MediaHistoryStoreOptions extends PathNormalizationOptions {
-  /** Raw pre-split `settings.mediaHistory`, read only when no history file exists yet. */
-  legacy?: () => unknown
   /** Called once per run of consecutive write failures. Defaults to `console.warn`. */
   onWriteError?: (error: unknown) => void
 }
@@ -53,12 +50,6 @@ export function createMediaHistoryFile(path: string): MediaHistoryIO {
   }
 }
 
-/** Extracts the legacy `mediaHistory` key from raw settings.json text. */
-export function legacyMediaHistory(settingsText: string | undefined): unknown {
-  const parsed = safeParse(settingsText)
-  return isRecord(parsed) ? parsed.mediaHistory : undefined
-}
-
 function defaultOnWriteError(error: unknown): void {
   console.warn('[kizuna] failed to save playback history; will retry', error)
 }
@@ -67,10 +58,8 @@ export function createMediaHistoryStore(
   io: MediaHistoryIO,
   options: MediaHistoryStoreOptions = {}
 ): MediaHistoryStore {
-  const { legacy, onWriteError = defaultOnWriteError, ...pathOptions } = options
-  const stored = safeParse(io.read())
-  const migrating = stored === undefined && legacy !== undefined
-  let current = normalizeMediaHistory(migrating ? legacy() : stored, pathOptions)
+  const { onWriteError = defaultOnWriteError, ...pathOptions } = options
+  let current = normalizeMediaHistory(safeParse(io.read()), pathOptions)
   let dirty = false
   let queued = false
   let queue: Promise<void> = Promise.resolve()
@@ -99,11 +88,6 @@ export function createMediaHistoryStore(
       }
     })
     return queue
-  }
-
-  if (migrating) {
-    dirty = true
-    void save()
   }
 
   return {

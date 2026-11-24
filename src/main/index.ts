@@ -124,7 +124,6 @@ function bootstrap(lifecycle: AppLifecycleCoordinator, hasLaunchPath: boolean): 
     appRoot: paths.appRoot
   })
   const userUnidic = createUserUnidicManager({ userDataDir: paths.userData, shell })
-  // Read history before any settings write can drop the legacy key.
   const historyStore = createAppMediaHistoryStore(paths)
   const settings = createSettingsStore(createSettingsFile(paths.settingsFile))
   const deps: BootstrapDeps = {
