@@ -1,0 +1,22 @@
+{
+  "lastOpenFolder": "/videos",
+  "recentFiles": [
+    { "path": "/videos/b.mkv", "openedAt": 3 },
+    { "path": "/videos/a.mkv", "openedAt": 1 }
+  ],
+  "playbackByPath": {
+    "/videos/a.mkv": {
+      "positionSeconds": 42,
+      "durationSeconds": 1420,
+      "audioTrack": { "id": 2, "language": "jpn", "title": "Japanese", "codec": "aac" },
+      "subtitle": { "mode": "track", "track": { "id": 3, "language": "jpn", "codec": "ass" } },
+      "updatedAt": 2
+    },
+    "/videos/b.mkv": {
+      "positionSeconds": 300,
+      "subtitle": { "mode": "external", "path": "/videos/b.ja.srt", "encoding": "shift_jis" },
+      "subtitleOffsetsByVersion": { "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": -1.5 },
+      "updatedAt": 4
+    }
+  }
+}

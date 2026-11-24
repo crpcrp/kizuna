@@ -10,23 +10,12 @@ import { createMediaHistoryService, type MediaHistoryService } from '../services
 import {
   createMediaHistoryFile,
   createMediaHistoryStore,
-  legacyMediaHistory,
   type MediaHistoryStore
 } from '../services/mediaHistoryStore'
-import { createSettingsFile } from '../services/settingsFile'
 import type { AppPaths } from './paths'
 
-/**
- * Playback history lives in its own file. On first run it is seeded from the
- * `mediaHistory` key that older versions kept in settings.json; the settings
- * store drops that key on its next write, so read history before any settings
- * write can happen.
- */
 export function createAppMediaHistoryStore(paths: AppPaths): MediaHistoryStore {
-  const settingsFile = createSettingsFile(paths.settingsFile)
-  return createMediaHistoryStore(createMediaHistoryFile(paths.playbackHistoryFile), {
-    legacy: () => legacyMediaHistory(settingsFile.read())
-  })
+  return createMediaHistoryStore(createMediaHistoryFile(paths.playbackHistoryFile))
 }
 
 /** Builds playback history over `store` and registers its IPC bridge. */
