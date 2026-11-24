@@ -51,6 +51,10 @@ export type GrammarStepKind =
   | 'negative-conditional'
   | 'prohibitive'
   | 'concessive'
+  | 'conditional-nara'
+  | 'seeming'
+  | 'negative-volitional'
+  | 'assertion'
 
 export interface SourceRef {
   /** e.g. 'Yomitan japanese-transforms.js', 'UniDic manual'. */
@@ -122,6 +126,26 @@ export const MORAU_SOURCE: SourceRef = {
 export const DEKIRU_SOURCE: SourceRef = {
   name: 'Wiktionary: できる',
   url: 'https://en.wiktionary.org/wiki/%E3%81%A7%E3%81%8D%E3%82%8B'
+}
+export const NARA_SOURCE: SourceRef = {
+  name: 'Wiktionary: なら',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%AA%E3%82%89'
+}
+export const RASHII_SOURCE: SourceRef = {
+  name: 'Wiktionary: らしい',
+  url: 'https://en.wiktionary.org/wiki/%E3%82%89%E3%81%97%E3%81%84'
+}
+export const BESHI_SOURCE: SourceRef = {
+  name: 'Wiktionary: べし',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%B9%E3%81%97'
+}
+export const MAI_SOURCE: SourceRef = {
+  name: 'Wiktionary: まい',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%BE%E3%81%84'
+}
+export const JAN_SOURCE: SourceRef = {
+  name: 'Wiktionary: じゃん',
+  url: 'https://en.wiktionary.org/wiki/%E3%81%98%E3%82%83%E3%82%93'
 }
 
 interface TeAuxiliary {
@@ -208,7 +232,8 @@ const STEM_FORM_PREFIXES: [string, StemForm][] = [
   ['語幹', 'adjective-stem']
 ]
 
-// Ichidan 未然形 and 連用形 are spelled alike and MeCab picks either; what follows decides.
+// Ichidan 未然形 and 連用形 are spelled alike, as are kanji 来 (こ / き), and MeCab
+// picks either; what follows decides.
 const IRREALIS_SUFFIX_LEMMAS = new Set([
   'ない',
   'ん',
@@ -219,11 +244,13 @@ const IRREALIS_SUFFIX_LEMMAS = new Set([
   'られる',
   'れる'
 ])
-const isIchidan = (m: Morpheme): boolean => /^(?:[上下]?一段)/.test(m.conjugationType)
+const hasAmbiguousStem = (m: Morpheme): boolean =>
+  /^(?:[上下]?一段)/.test(m.conjugationType) ||
+  (/^カ(?:変|行変格)/.test(m.conjugationType) && m.surface.endsWith('来'))
 
 function stemFormOf(head: Morpheme, next: Morpheme | undefined): StemForm | undefined {
   const form = STEM_FORM_PREFIXES.find(([prefix]) => head.conjugationForm.startsWith(prefix))?.[1]
-  if ((form === 'irrealis' || form === 'continuative') && isIchidan(head) && next) {
+  if ((form === 'irrealis' || form === 'continuative') && hasAmbiguousStem(head) && next) {
     return IRREALIS_SUFFIX_LEMMAS.has(next.lemma) ? 'irrealis' : 'continuative'
   }
   // UniDic tags the い of いらっしゃい|ます and ござい|ます as an イ音便 too.
@@ -295,9 +322,9 @@ const isNegative = (m: Morpheme): boolean =>
 const isNominal = (m: Morpheme | undefined): boolean =>
   m?.pos === '名詞' || m?.pos === '形状詞' || m?.pos === '代名詞'
 
-// たい and ない conjugate as i-adjectives.
+// たい, ない and らしい conjugate as i-adjectives.
 const isAdjectival = (m: Morpheme | undefined): boolean =>
-  m !== undefined && (m.pos === '形容詞' || isNegative(m) || isAuxiliary(m, 'たい'))
+  m !== undefined && (m.pos === '形容詞' || isNegative(m) || isAuxiliary(m, 'たい', 'らしい'))
 
 /** Whether `morphemes[index]` ends an i-adjective: 高い, 高かっ|た, 高く|ない, 書き|たい. */
 function endsAdjective(morphemes: Morpheme[], index: number): boolean {
@@ -397,8 +424,32 @@ function suffixSteps(
     consumed: 0
   })
 
-  if (isNominal(previous) && (isCopula(m) || isCaseParticleCopula(morphemes, index))) {
+  // IPADIC lemmatises past だら as だ too, but types it 特殊・タ.
+  if (isCopula(m) && m.conjugationType !== '特殊・タ' && m.conjugationForm.startsWith('仮定')) {
+    return one(labelStep('conditional-nara', m.surface, 'conditional (なら)', NARA_SOURCE))
+  }
+  // べき is attributive, so a copula may follow it (行くべきだ).
+  const takesCopula = isNominal(previous) || (previous && isAuxiliary(previous, 'べし'))
+  if (takesCopula && (isCopula(m) || isCaseParticleCopula(morphemes, index))) {
     return copulaStep(morphemes, index)
+  }
+  if (isAuxiliary(m, 'らしい')) {
+    return one(labelStep('seeming', m.surface, 'apparently / -like (らしい)', RASHII_SOURCE))
+  }
+  if (isAuxiliary(m, 'べし')) {
+    return one(labelStep('obligation', m.surface, 'should (べき)', BESHI_SOURCE))
+  }
+  if (isAuxiliary(m, 'まい')) {
+    return one(
+      labelStep('negative-volitional', m.surface, 'negative volitional (まい)', MAI_SOURCE)
+    )
+  }
+  // IPADIC tags じゃん 助動詞; UniDic 助詞,終助詞.
+  if (m.surface === 'じゃん' && (m.pos === '助動詞' || m.pos1 === '終助詞')) {
+    return one({
+      ...labelStep('assertion', m.surface, "isn't it (じゃん)", JAN_SOURCE),
+      contractionOf: 'じゃないか'
+    })
   }
   const conjecture = conjectureStep(morphemes, index)
   if (conjecture) return conjecture
@@ -493,8 +544,13 @@ function suffixSteps(
       step('te-wa', m.surface, 'て-form + は', '-ちゃ', m.surface === 'ちゃ' ? 'ては' : 'では')
     )
   }
-  // IPADIC reads contracted ています (知ってます) as て|ます; UniDic reads て as てる.
-  if (isConjunctive(m, 'て', 'で') && next && isAuxiliary(next, 'ます')) {
+  // Contracted ています / ていた / ていない read as て|ます, で|た, で|ない (知ってます, 飲んでた).
+  if (
+    isConjunctive(m, 'て', 'で') &&
+    !isAdjectival(previous) &&
+    next &&
+    (isAuxiliary(next, 'ます', 'た') || isNegative(next))
+  ) {
     return one(
       step(
         'progressive',
@@ -982,7 +1038,7 @@ export function spanGrammarChain(highlightedTokens: Token[]): GrammarStep[] {
  * Bump when `grammarChain` or `spanGrammarChain` changes its output, so stored
  * example databases built with the older analyzer are rebuilt.
  */
-export const GRAMMAR_ANALYZER_VERSION = 7
+export const GRAMMAR_ANALYZER_VERSION = 8
 
 /** Ordered suffix step kinds, stem excluded, e.g. `causative>passive-potential>negative>past`. */
 export function grammarPatternKey(steps: GrammarStep[]): string {

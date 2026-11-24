@@ -312,6 +312,21 @@ describe('parseMecab — conjugation fixtures', () => {
     expect(summarize(parseMecab('ipadic', stdout))).toEqual([['行かなくちゃ', '行く']])
   })
 
+  it('keeps the じゃ of じゃいけない as ては rather than じゃう', () => {
+    const stdout = [
+      '飲ん\t動詞,自立,*,*,五段・マ行,連用タ接続,飲む,ノン,ノン',
+      'じゃ\t助詞,接続助詞,*,*,*,*,じゃ,ジャ,ジャ',
+      'いけ\t動詞,非自立,*,*,一段,未然形,いける,イケ,イケ',
+      'ない\t助動詞,*,*,*,特殊・ナイ,基本形,ない,ナイ,ナイ',
+      'EOS'
+    ].join('\n')
+
+    expect(summarize(parseMecab('ipadic', stdout))).toEqual([
+      ['飲んじゃ', '飲む'],
+      ['いけない', 'いける']
+    ])
+  })
+
   it('keeps the morpheme of a lone verb for its conjugation form', () => {
     const stdout = [
       '書こう\t動詞,一般,*,*,五段-カ行,意志推量形,カク,書く,書こう,カコー,書く,カク,和,*,*,*,*',

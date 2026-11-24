@@ -804,6 +804,10 @@ describe('grammarChain', () => {
     expect(grammarChain('学校', morphemes)).toEqual([])
   })
 
+  it('reads a UniDic 連用形 kanji 来 before させる as irrealis', () => {
+    expect(chainOf('unidic', '来させる')[0]).toMatchObject({ kind: { stem: 'irrealis' } })
+  })
+
   it('labels the sound change of an onbin stem', () => {
     expect(chainOf('ipadic', '読んだ')[0].label).toBe('continuative stem, ん sound change (連用形)')
   })
