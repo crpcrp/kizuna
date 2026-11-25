@@ -163,6 +163,14 @@ function mergeKnowledgeRows(
   }
 }
 
+export function mergeDetails(a: KnowledgeDetails, b: KnowledgeDetails): KnowledgeDetails {
+  return {
+    level: maxKnowledgeLevel(a.level, b.level),
+    sourceKinds: [...new Set([...a.sourceKinds, ...b.sourceKinds])].sort(sourceKindOrder),
+    sources: [...a.sources, ...b.sources]
+  }
+}
+
 function sortDetails(details: Record<string, KnowledgeDetails>): Record<string, KnowledgeDetails> {
   return Object.fromEntries(
     Object.entries(details).sort(([left], [right]) => (left === right ? 0 : left < right ? -1 : 1))

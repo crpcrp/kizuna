@@ -6,6 +6,8 @@ import type { SecretCodec } from '../secrets'
 import { encodeSecret, readSecret } from '../secrets'
 import type { HttpFetch } from '../http'
 import type {
+  KnowledgeDetails,
+  KnowledgeLevel,
   KnowledgeSource,
   PublicKnowledgeSettings,
   SourceStatus,
@@ -18,6 +20,7 @@ import {
   detailsFor as detailsForDb,
   levelsFor as levelsForDb,
   getSyncState,
+  mergeDetails,
   countBySource,
   replaceSource,
   clearSyncState
@@ -53,6 +56,8 @@ export interface CreateKnowledgeServiceDeps {
   jlptSnapshot?: JlptVocabularySnapshot
   /** Defaults to the pinned bundled kanji snapshot; injected for export tests. */
   jlptKanjiSnapshot?: JlptKanjiSnapshot
+  /** Other dictionary spellings per lemma, so a card for 御主 also covers お主. */
+  spellingVariants?: (lemmas: string[]) => Record<string, string[]>
 }
 
 function toPublic(k: KnowledgeSettings, secrets: SecretCodec): PublicKnowledgeSettings {
@@ -297,9 +302,31 @@ export function createKnowledgeService(deps: CreateKnowledgeServiceDeps) {
     return getSettings()
   }
 
+  function detailsWithVariants(lemmas: string[]): Record<string, KnowledgeDetails> {
+    const result = detailsForDb(db, lemmas)
+    const variants = deps.spellingVariants?.(lemmas) ?? {}
+    const variantDetails = detailsForDb(db, [...new Set(Object.values(variants).flat())])
+    for (const [lemma, spellings] of Object.entries(variants)) {
+      for (const spelling of spellings) {
+        const detail = variantDetails[spelling]
+        if (!detail) continue
+        const existing = result[lemma]
+        result[lemma] = existing ? mergeDetails(existing, detail) : detail
+      }
+    }
+    return result
+  }
+
+  function levelsWithVariants(lemmas: string[]): Record<string, KnowledgeLevel> {
+    if (!deps.spellingVariants) return levelsForDb(db, lemmas)
+    return Object.fromEntries(
+      Object.entries(detailsWithVariants(lemmas)).map(([lemma, d]) => [lemma, d.level])
+    )
+  }
+
   return {
-    levelsFor: (lemmas: string[]) => Promise.resolve(levelsForDb(db, lemmas)),
-    detailsFor: (lemmas: string[]) => Promise.resolve(detailsForDb(db, lemmas)),
+    levelsFor: (lemmas: string[]) => Promise.resolve(levelsWithVariants(lemmas)),
+    detailsFor: (lemmas: string[]) => Promise.resolve(detailsWithVariants(lemmas)),
     jlptCoverageReport: coverageReportService.jlptCoverageReport,
     jlptUnknownItems: exportService.jlptUnknownItems,
     sync,

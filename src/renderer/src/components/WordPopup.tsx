@@ -389,6 +389,44 @@ function GrammarExamplesList({ view }: { view: GrammarExamplesView }): React.JSX
   )
 }
 
+function GrammarSection({
+  steps,
+  examples,
+  onOpenSource
+}: {
+  steps: GrammarStep[]
+  examples?: GrammarExamplesView
+  onOpenSource?: (url: string) => void
+}): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const preview = examples?.examples.find((example) => example.sameWord)
+  return (
+    <section className="word-popup-grammar-section" aria-label="Grammar">
+      <div className="word-popup-grammar-summary">
+        {!expanded && preview && examples && (
+          <ol className="word-popup-examples-list">
+            <ExampleSentence example={preview} onOpen={examples.openSentence} />
+          </ol>
+        )}
+        <button
+          type="button"
+          className="word-popup-grammar-toggle"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? '▾ Hide breakdown' : '▸ Show breakdown'}
+        </button>
+      </div>
+      {expanded && (
+        <>
+          <GrammarChainRow steps={steps} onOpenSource={onOpenSource} />
+          {examples && <GrammarExamplesList view={examples} />}
+        </>
+      )}
+    </section>
+  )
+}
+
 export default function WordPopup({
   results,
   position,
@@ -455,15 +493,13 @@ export default function WordPopup({
             return (
               <Fragment key={index}>
                 {index === grammarEntryIndex && (
-                  <GrammarChainRow
-                    // A new word resets the selected part.
+                  <GrammarSection
+                    // A new word collapses the section and resets the selected part.
                     key={grammarChain.map((step) => step.surface).join('|')}
                     steps={grammarChain}
+                    examples={grammarExamples}
                     onOpenSource={onOpenGrammarSource}
                   />
-                )}
-                {index === grammarEntryIndex && grammarExamples && (
-                  <GrammarExamplesList view={grammarExamples} />
                 )}
                 <div
                   className="word-popup-row"

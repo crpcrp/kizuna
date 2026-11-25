@@ -11,6 +11,7 @@ import {
 import { createMecabService, registerMecabBridge } from '../mecabBridge'
 import type { BinaryPaths } from '../resourcePaths'
 import { createWorkerImporter } from '../services/dict/workerImporter'
+import { spellingVariants } from '../services/dict/variants'
 import { isValidMecabDictionaryDir } from '../services/mecab/dictionaryValidation'
 import type { UserUnidicManager } from '../services/mecab/unidic'
 import { registerGrammarExamplesBridge } from '../grammarExamplesBridge'
@@ -81,7 +82,9 @@ export function startMecab(
 }
 
 // The import worker uses a separate connection; WAL and a busy timeout allow concurrent reads.
-export function startDict(deps: Pick<BootstrapDeps, 'ipcMain' | 'paths' | 'sendToMain'>): void {
+export function startDict(
+  deps: Pick<BootstrapDeps, 'ipcMain' | 'paths' | 'sendToMain'>
+): (lemmas: string[]) => Record<string, string[]> {
   const dbPath = deps.paths.dictDb
   const db = new Database(dbPath)
   configureDictConnection(db)
@@ -91,4 +94,5 @@ export function startDict(deps: Pick<BootstrapDeps, 'ipcMain' | 'paths' | 'sendT
     createWorker: (workerPath, workerData) => new Worker(workerPath, { workerData })
   })
   registerDictBridge(deps.ipcMain, createDictService({ db, importer }), deps.sendToMain)
+  return (lemmas) => spellingVariants(db, lemmas)
 }

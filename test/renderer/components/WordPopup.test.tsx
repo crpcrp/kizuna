@@ -714,6 +714,7 @@ describe('WordPopup grammar chain', () => {
       />
     )
 
+    fireEvent.click(getByRole('button', { name: '▸ Show breakdown' }))
     const group = getByRole('group', { name: 'Grammar breakdown' })
     const parts = [...group.querySelectorAll('button')]
     expect(parts.map((part) => part.textContent)).toEqual([
@@ -829,9 +830,27 @@ describe('WordPopup — grammar examples', () => {
     )
   }
 
+  it('collapses to one same-word example until the breakdown is expanded', () => {
+    const examples = view()
+    const { getAllByTestId, getByRole, queryByRole } = renderExamples(examples)
+
+    expect(getAllByTestId('word-popup-example').map((e) => e.dataset.sameWord)).toEqual(['true'])
+    expect(queryByRole('group', { name: 'Grammar breakdown' })).toBeNull()
+    expect(queryByRole('region', { name: 'Example sentences' })).toBeNull()
+    fireEvent.click(getByRole('button', { name: 'Open sentence 11 on Tatoeba (CC BY 2.0 FR)' }))
+    expect(examples.openSentence).toHaveBeenCalledWith(11)
+
+    const toggle = getByRole('button', { name: '▸ Show breakdown' })
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(getByRole('group', { name: 'Grammar breakdown' })).toBeTruthy()
+    expect(getAllByTestId('word-popup-example')).toHaveLength(2)
+  })
+
   it('highlights the word, marks same-word examples, links sources, and pages', () => {
     const examples = view()
     const { getAllByTestId, getByRole } = renderExamples(examples)
+    fireEvent.click(getByRole('button', { name: '▸ Show breakdown' }))
 
     const [same, other] = getAllByTestId('word-popup-example')
     expect(same.querySelector('mark')?.textContent).toBe('食べられ')
@@ -853,6 +872,7 @@ describe('WordPopup — grammar examples', () => {
     const { getByRole } = renderExamples(
       view({ patternKey: 'negative>past', sameWordTotal: 0, total: 2 })
     )
+    fireEvent.click(getByRole('button', { name: '▸ Show breakdown' }))
     const region = getByRole('region', { name: 'Example sentences' })
     expect(region.textContent).toContain(
       'No example with this word; showing the same pattern with other words'
@@ -862,7 +882,8 @@ describe('WordPopup — grammar examples', () => {
   })
 
   it('is hidden without examples', () => {
-    const { queryByRole } = renderExamples(undefined)
+    const { getByRole, queryByRole } = renderExamples(undefined)
+    fireEvent.click(getByRole('button', { name: '▸ Show breakdown' }))
     expect(queryByRole('region', { name: 'Example sentences' })).toBeNull()
   })
 })

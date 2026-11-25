@@ -524,6 +524,7 @@ describe('GameOcrInteraction', () => {
     // An earlier test's text selection would suppress the click-to-open.
     window.getSelection()?.removeAllRanges()
     fireEvent.click(container.querySelector('[data-token]')!, { clientX: 40, clientY: 40 })
+    fireEvent.click(await screen.findByRole('button', { name: '▸ Show breakdown' }))
     const group = await screen.findByRole('group', { name: 'Grammar breakdown' })
     const parts = [...group.querySelectorAll('.word-popup-grammar-surface')]
     expect(parts.map((part) => part.textContent)).toEqual(['食べ', 'なかっ', 'た'])

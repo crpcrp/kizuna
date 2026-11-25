@@ -8,7 +8,8 @@ import type { BootstrapDeps } from './deps'
 
 // Keep knowledge.db separate from dict.db because their lifecycles are independent.
 export function startKnowledge(
-  deps: Pick<BootstrapDeps, 'ipcMain' | 'settings' | 'secrets' | 'paths'>
+  deps: Pick<BootstrapDeps, 'ipcMain' | 'settings' | 'secrets' | 'paths'>,
+  spellingVariants: (lemmas: string[]) => Record<string, string[]>
 ): void {
   const db = new Database(deps.paths.knowledgeDb)
   initSchema(db)
@@ -16,7 +17,8 @@ export function startKnowledge(
     db: db as unknown as KnowledgeDb,
     settings: deps.settings,
     secrets: deps.secrets,
-    fetch: httpFetch
+    fetch: httpFetch,
+    spellingVariants
   })
   registerKnowledgeBridge(deps.ipcMain, knowledgeService)
   void knowledgeService

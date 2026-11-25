@@ -249,6 +249,33 @@ describe('createKnowledgeService', () => {
     })
   })
 
+  it('credits a lemma with knowledge stored under another spelling of its entry', async () => {
+    const metadata = {
+      source: 'anki' as const,
+      deck: 'Listening',
+      intervalDays: 3,
+      cardId: 1,
+      noteId: 2
+    }
+    replaceSource(
+      asKnowledgeDb(db),
+      'anki',
+      [{ source: 'anki', lemma: '御主', reading: '', level: 'learning', metadata }],
+      't0'
+    )
+    const service = serviceWith({
+      settings: createSettingsStore(fakeIo()),
+      secrets: identityCodec,
+      spellingVariants: (lemmas): Record<string, string[]> =>
+        lemmas.includes('お主') ? { お主: ['御主'] } : {}
+    })
+
+    expect(await service.detailsFor(['お主', 'おぬし'])).toEqual({
+      お主: { level: 'learning', sourceKinds: ['anki'], sources: [metadata] }
+    })
+    expect(await service.levelsFor(['お主', 'おぬし'])).toEqual({ お主: 'learning' })
+  })
+
   it('jlptCoverageReport uses current local status without starting a sync', async () => {
     const http = fakeHttp({})
     const snapshot: JlptVocabularySnapshot = {
