@@ -11,8 +11,8 @@ import {
 } from '@src/main/services/settings'
 import { createSettingsFile } from '@src/main/services/settingsFile'
 import { fakeIo } from '@test/harness/fakeSettingsIo'
-// Synthetic non-default settings serialized with the v0.5.0 mergeSettings implementation.
-import releasedSettings from '@test/fixtures/v0.5.0/settings.json'
+// Synthetic non-default settings serialized by the floor release's mergeSettings.
+import releasedSettings from '@test/fixtures/v0.5.1/settings.json'
 
 const tempDirs: string[] = []
 function tempDir(): string {
@@ -178,7 +178,7 @@ describe('settings normalization', () => {
     )
   })
 
-  it('loads and rewrites settings emitted by v0.5.0 without changing values', () => {
+  it('loads and rewrites settings emitted by v0.5.1 without changing values', () => {
     const io = fakeIo(JSON.stringify(releasedSettings))
     const store = createSettingsStore(io, { platform: 'posix' })
     expect(store.get()).toEqual(releasedSettings)
