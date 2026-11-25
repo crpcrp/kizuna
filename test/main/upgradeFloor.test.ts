@@ -1,5 +1,5 @@
 // Data written by the oldest supported upgrade source (see "Upgrade floor" in
-// docs/releasing.md) must load without loss. v0.5.1 produces identical output.
+// docs/releasing.md) must load without loss. v0.5.0 produced identical output.
 import { readFileSync } from 'node:fs'
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
@@ -9,7 +9,7 @@ import { createMediaHistoryStore } from '@src/main/services/mediaHistoryStore'
 import { mergeSettings } from '@src/main/services/settings'
 import { fixture } from '@test/paths'
 
-const read = (name: string): string => readFileSync(fixture('v0.5.0', name), 'utf-8')
+const read = (name: string): string => readFileSync(fixture('v0.5.1', name), 'utf-8')
 
 function dump(db: Database.Database): Record<string, unknown[]> {
   const tables = db
@@ -31,7 +31,7 @@ function columnsOf(db: Database.Database, table: string): string[] {
   return rows.map((row) => row.name)
 }
 
-describe('upgrade from v0.5.0', () => {
+describe('upgrade from v0.5.1', () => {
   it('keeps every setting', () => {
     const settings = JSON.parse(read('settings.json')) as unknown
     expect(mergeSettings(settings, { platform: 'posix' })).toEqual(settings)

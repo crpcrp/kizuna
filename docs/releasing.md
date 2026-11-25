@@ -9,7 +9,7 @@ unsigned. Signing awaits acceptance by an open-source signing service.
 ## Upgrade floor
 
 Data written by the two releases before the current one must upgrade cleanly
-(with 0.6.0 current: 0.5.1 and 0.5.0). Migrations and compatibility shims for
+(with 0.6.1 current: 0.6.0 and 0.5.1). Migrations and compatibility shims for
 anything older are removed; users on older versions install a floor release
 and start it once first. `test/main/upgradeFloor.test.ts` loads fixtures from
 the floor release; regenerate them when the floor moves.
